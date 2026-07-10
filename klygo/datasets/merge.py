@@ -1,0 +1,166 @@
+import random
+import shutil
+from pathlib import Path
+
+from klygo.validators.datasets import Merge as DatasetMerge
+from klygo.archive import extract
+from klygo.io import write_yaml
+from ._utils import _safe_copy, _safe_move, _read_class_names, _remap_label_file
+
+
+def merge(
+    sources: list[str | Path],
+    output: str | Path,
+    overwrite: bool = False,
+    verbose: bool = True,
+) -> None:
+    
+    params = DatasetMerge(
+        sources=sources,
+        output=output,
+        overwrite=overwrite,
+        verbose=verbose
+    )
+
+    # 1. Setup temporary workspace directory
+    merge_workspace = params.output.parent / f".temp_merge_workspace_{random.randint(1000, 9999)}"
+    if merge_workspace.exists():
+        shutil.rmtree(merge_workspace)
+    
+    images_merge_dir = merge_workspace / "images"
+    labels_merge_dir = merge_workspace / "labels"
+    images_merge_dir.mkdir(parents=True, exist_ok=True)
+    labels_merge_dir.mkdir(parents=True, exist_ok=True)
+
+    # First pass: collect classes from all sources to build global class list
+    # and map local IDs to global IDs
+    global_names = []
+    source_classes_info = []
+
+    for idx, src in enumerate(params.sources):
+        is_zip = src.is_file()
+        temp_extract_dir = None
+
+        if is_zip:
+            temp_extract_dir = params.output.parent / f".temp_merge_extract_{idx}_{random.randint(1000, 9999)}"
+            if temp_extract_dir.exists():
+                shutil.rmtree(temp_extract_dir)
+            extract(
+                source=src,
+                output=temp_extract_dir, 
+                overwrite=True,
+                verbose=False
+            )
+            src_base = temp_extract_dir
+        else:
+            src_base = src
+
+        curr_names = _read_class_names(src_base, temp_extract_dir, extra_cleanups=[merge_workspace])
+
+        # Record mapping
+        source_classes_info.append({
+            "names": curr_names,
+            "temp_extract_dir": temp_extract_dir,
+            "src_base": src_base,
+            "is_zip": is_zip
+        })
+
+        # Append unique class names to global list
+        for name in curr_names:
+            if name not in global_names:
+                global_names.append(name)
+
+    # 2. Build map and check if ID modifications are needed
+    class_maps = []
+    needs_remapping = []
+
+    for info in source_classes_info:
+        mapping = {}
+        info_names = info["names"]
+        for local_id, name in enumerate(info_names):
+            global_id = global_names.index(name)
+            mapping[local_id] = global_id
+
+        class_maps.append(mapping)
+        
+        needs_remap = any(local_id != global_id for local_id, global_id in mapping.items())
+        needs_remapping.append(needs_remap)
+
+    # 3. Second pass: copy/move images and labels (remapping class IDs in label files if needed)
+    for idx, info in enumerate(source_classes_info):
+        src_base = info["src_base"]
+        is_zip = info["is_zip"]
+        temp_extract_dir = info["temp_extract_dir"]
+        class_map = class_maps[idx]
+        needs_remap = needs_remapping[idx]
+
+        images_src = src_base / "images"
+        labels_src = src_base / "labels"
+
+        if not images_src.exists():
+            if temp_extract_dir and temp_extract_dir.exists():
+                shutil.rmtree(temp_extract_dir)
+            if merge_workspace.exists():
+                shutil.rmtree(merge_workspace)
+            raise FileNotFoundError(f"images directory not found under {src_base}")
+
+        image_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+        image_files = sorted([
+            f for f in images_src.iterdir()
+            if f.is_file() and f.suffix.lower() in image_extensions
+        ])
+
+        # Copy/Move files with prefix `src{idx}_`
+        for img_path in image_files:
+            lbl_path = labels_src / (img_path.stem + ".txt")
+            img_dest = images_merge_dir / f"src{idx}_{img_path.name}"
+            lbl_dest = labels_merge_dir / f"src{idx}_{img_path.stem}.txt"
+            
+            # Copy/Move image
+            if is_zip:
+                _safe_move(img_path, img_dest)
+            else:
+                _safe_copy(img_path, img_dest)
+
+            # Copy/Move label
+            if lbl_path.exists() and lbl_path.is_file():
+                if needs_remap:
+                    try:
+                        _remap_label_file(lbl_path, lbl_dest, class_map)
+                        if is_zip:
+                            lbl_path.unlink()
+                    except Exception:
+                        if is_zip:
+                            _safe_move(lbl_path, lbl_dest)
+                        else:
+                            _safe_copy(lbl_path, lbl_dest)
+                else:
+                    if is_zip:
+                        _safe_move(lbl_path, lbl_dest)
+                    else:
+                        _safe_copy(lbl_path, lbl_dest)
+
+        if temp_extract_dir and temp_extract_dir.exists():
+            shutil.rmtree(temp_extract_dir)
+
+    # 4. Write unified data.yaml
+    yaml_data = {
+        "path": "/content/data",
+        "train": "images/train",
+        "val": "images/val",
+        "nc": len(global_names),
+        "names": global_names
+    }
+    write_yaml(merge_workspace / "data.yaml", yaml_data, overwrite=True, verbose=verbose)
+
+    # 5. Compress to the output ZIP file manually to ensure no parent folder in ZIP
+    from zipfile import ZipFile, ZIP_DEFLATED
+    with ZipFile(params.output, mode="w", compression=ZIP_DEFLATED) as zf:
+        all_files = sorted(f for f in merge_workspace.rglob("*") if f.is_file())
+        for file in all_files:
+            arcname = file.relative_to(merge_workspace)
+            zf.write(file, arcname=arcname)
+
+    # 6. Cleanup
+    if merge_workspace.exists():
+        shutil.rmtree(merge_workspace)

@@ -7,6 +7,7 @@ Chào mừng đến với tài liệu hướng dẫn sử dụng **klygo**.
 ## Mục lục
 
 - [klygo.archive](../docs/archive/README.md) — Nén, giải nén, và xử lý file nén
+- [klygo.datasets](../docs/datasets/README.md) — Phân chia, Repartition, Gộp và Tách bộ dữ liệu YOLO
 - [klygo.io](../docs/io/README.md) — Đọc/ghi file cấu hình (YAML, JSON, TOML)
 - [klygo.models](../docs/models/README.md) — Nhận diện vật thể & Mô hình học sâu (Kernel)
 
@@ -31,6 +32,8 @@ klygo/
 │   ├── info.py
 │   ├── modify.py
 │   └── transform.py
+├── datasets/       # Quản lý bộ dữ liệu YOLO
+│   └── dataset.py
 ├── io/             # Đọc/ghi file cấu hình
 │   ├── config.py
 │   ├── read.py
@@ -38,3 +41,4 @@ klygo/
 └── models/         # Nhận diện vật thể
     └── kernel.py
 ```
+
