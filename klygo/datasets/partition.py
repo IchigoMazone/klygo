@@ -6,7 +6,7 @@ from pathlib import Path
 from klygo.validators.datasets import Partition, Repartition
 from klygo.archive import extract
 from klygo.io import read_yaml, write_yaml
-from ._utils import _safe_copy, _safe_move, _scan_dataset_files
+from ._utils import _safe_copy, _safe_move, _scan_dataset_files, _find_dataset_root
 
 
 def _execute_partition(params: Partition) -> None:
@@ -36,7 +36,7 @@ def _execute_partition(params: Partition) -> None:
             overwrite=True,
             verbose=params.verbose
         )
-        src_base = temp_extract_dir
+        src_base = _find_dataset_root(temp_extract_dir)
     else:
         src_base = params.source
 
@@ -177,3 +177,96 @@ def repartition(
         verbose=verbose
     )
     _execute_partition(params)
+
+
+def unpartition(
+    source: str | Path,
+    output: str | Path,
+    overwrite: bool = False,
+    verbose: bool = True,
+) -> None:
+    """Convert a train/val/test partitioned dataset back to a flat raw format.
+
+    Moves all images from images/train, images/val, images/test into images/,
+    and all labels from labels/train, labels/val, labels/test into labels/.
+    Updates or creates data.yaml at output root to match the flat structure.
+    """
+    source = Path(source)
+    output = Path(output)
+    
+    if output.exists() and not overwrite:
+        raise FileExistsError(f"output already exists: {output}")
+
+    is_zip = source.is_file()
+    temp_extract_dir = None
+
+    if is_zip:
+        temp_extract_dir = output.parent / f".temp_unpartition_extract_{random.randint(1000, 9999)}"
+        if temp_extract_dir.exists():
+            shutil.rmtree(temp_extract_dir)
+        extract(source, temp_extract_dir, overwrite=True, verbose=False)
+        src_base = _find_dataset_root(temp_extract_dir)
+    else:
+        src_base = source
+
+    images_src = src_base / "images"
+    labels_src = src_base / "labels"
+
+    # We need to find all sub-split files
+    pairs = _scan_dataset_files(images_src, labels_src)
+
+    # Prepare temp output dir
+    temp_out = output.parent / f".temp_unpartition_out_{random.randint(1000, 9999)}"
+    if temp_out.exists():
+        shutil.rmtree(temp_out)
+
+    images_dest = temp_out / "images"
+    labels_dest = temp_out / "labels"
+    images_dest.mkdir(parents=True, exist_ok=True)
+    labels_dest.mkdir(parents=True, exist_ok=True)
+
+    for img_path, lbl_path, rel_img, rel_lbl in pairs:
+        # We flatten by using their rel_img name
+        # e.g., images/train/img1.jpg -> img1.jpg
+        img_name = rel_img.name
+        lbl_name = rel_lbl.name if rel_lbl else None
+
+        _safe_copy(img_path, images_dest / img_name)
+        if lbl_path and lbl_path.exists() and lbl_name:
+            _safe_copy(lbl_path, labels_dest / lbl_name)
+
+    # Read original yaml names if exists
+    yaml_src = src_base / "data.yaml"
+    names = []
+    if yaml_src.exists():
+        yaml_data = read_yaml(yaml_src, verbose=False)
+        names = yaml_data.get("names", [])
+
+    # Write new data.yaml
+    new_yaml = {
+        "path": str(output.resolve()) if not output.name.endswith(".zip") else str(output.parent.resolve()),
+        "train": "images",
+        "val": "",
+        "test": "",
+        "nc": len(names),
+        "names": names
+    }
+    write_yaml(temp_out / "data.yaml", new_yaml, overwrite=True, verbose=False)
+
+    # Clean up temp extract
+    if temp_extract_dir and temp_extract_dir.exists():
+        shutil.rmtree(temp_extract_dir)
+
+    # Put to final output
+    if output.name.endswith(".zip"):
+        from klygo.archive import compress
+        compress(temp_out, output, overwrite=overwrite, verbose=verbose)
+        shutil.rmtree(temp_out)
+    else:
+        if output.exists() and overwrite:
+            if output.is_dir():
+                shutil.rmtree(output)
+            else:
+                output.unlink()
+        temp_out.rename(output)
+

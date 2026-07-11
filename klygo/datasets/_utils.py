@@ -41,6 +41,30 @@ def _safe_copy(src: Path, dst: Path) -> None:
     shutil.copy2(str(src), str(dst))
 
 
+def _find_dataset_root(extracted_dir: Path) -> Path:
+    """Find the actual dataset root after ZIP extraction.
+
+    When a ZIP is created via ``compress("my_dataset/", ...)``, the archive
+    stores entries as ``my_dataset/data.yaml``, ``my_dataset/images/...``,
+    etc.  After extraction the dataset lives one level deeper than the
+    extraction directory.  This helper detects that situation and returns
+    the correct base path.
+
+    Returns *extracted_dir* itself when ``data.yaml`` sits at the root,
+    or the single nested subdirectory that contains it.
+    """
+    if (extracted_dir / "data.yaml").exists():
+        return extracted_dir
+
+    # Look one level deep for a nested dataset root
+    subdirs = [d for d in extracted_dir.iterdir() if d.is_dir()]
+    for sub in subdirs:
+        if (sub / "data.yaml").exists():
+            return sub
+
+    return extracted_dir
+
+
 def _read_class_names(
     src_base: Path,
     temp_extract_dir: Path | None = None,

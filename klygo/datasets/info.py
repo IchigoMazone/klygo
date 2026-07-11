@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from klygo.archive import extract
-from ._utils import _read_class_names, _scan_dataset_files
+from ._utils import _read_class_names, _scan_dataset_files, _find_dataset_root
 
 
 def get_dataset_info(source: str | Path) -> dict[str, Any]:
@@ -24,7 +24,7 @@ def get_dataset_info(source: str | Path) -> dict[str, Any]:
         if temp_extract_dir.exists():
             shutil.rmtree(temp_extract_dir)
         extract(source=source, output=temp_extract_dir, overwrite=True, verbose=False)
-        src_base = temp_extract_dir
+        src_base = _find_dataset_root(temp_extract_dir)
     else:
         src_base = source
 

@@ -6,7 +6,7 @@ from pathlib import Path
 from klygo.validators.datasets import RemapClasses as DatasetRemapClasses
 from klygo.archive import extract
 from klygo.io import read_yaml, write_yaml
-from ._utils import _safe_copy, _read_class_names, _scan_dataset_files, _remap_label_file
+from ._utils import _safe_copy, _read_class_names, _scan_dataset_files, _remap_label_file, _find_dataset_root
 
 
 def remap_classes(
@@ -39,7 +39,7 @@ def remap_classes(
             overwrite=True,
             verbose=False
         )
-        src_base = temp_extract_dir
+        src_base = _find_dataset_root(temp_extract_dir)
     else:
         src_base = params.source
 

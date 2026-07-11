@@ -155,13 +155,13 @@ ar.merge(["part1.zip", "part2.zip"], "merged.zip", overwrite=True, verbose=True)
 Chia nhỏ một file ZIP lớn thành các phần nhỏ hơn có dung lượng nén giới hạn.
 * **Cú pháp:** `ar.split(source, size, output_dir=".", overwrite=False, verbose=True) -> list[str]`
 * **Tham số:**
-  * `size`: Kích thước nén tối đa của mỗi phần (tính bằng bytes).
+  * `size`: Kích thước nén tối đa của mỗi phần (tính bằng MB, hỗ trợ cả số thực).
   * `output_dir`: Thư mục lưu các phần được tạo ra.
 * **Ví dụ sử dụng:**
 ```python
 import klygo.archive as ar
 
 # Chia nhỏ file ZIP thành các phần tối đa 10 MB, lưu vào thư mục parts
-parts = ar.split("large_data.zip", size=10_000_000, output_dir="parts/", overwrite=True)
+parts = ar.split("large_data.zip", size=10, output_dir="parts/", overwrite=True)
 print(parts)  # ['parts/large_data_part_001.zip', ...]
 ```

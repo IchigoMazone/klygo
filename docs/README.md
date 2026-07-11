@@ -10,6 +10,7 @@ Chào mừng đến với tài liệu hướng dẫn sử dụng **klygo**.
 - [klygo.datasets](../docs/datasets/README.md) — Phân chia, Repartition, Gộp và Tách bộ dữ liệu YOLO
 - [klygo.io](../docs/io/README.md) — Đọc/ghi file cấu hình (YAML, JSON, TOML)
 - [klygo.models](../docs/models/README.md) — Nhận diện vật thể & Mô hình học sâu (Kernel)
+- [klygo.visualize](../docs/visualize/README.md) — Trực quan hóa, hiển thị, crop vật thể & vẽ bounding box
 
 ---
 
@@ -26,19 +27,9 @@ uv add klygo
 ```
 klygo/
 ├── archive/        # Xử lý file nén (.zip)
-│   ├── compress.py
-│   ├── extract.py
-│   ├── list.py
-│   ├── info.py
-│   ├── modify.py
-│   └── transform.py
 ├── datasets/       # Quản lý bộ dữ liệu YOLO
-│   └── dataset.py
 ├── io/             # Đọc/ghi file cấu hình
-│   ├── config.py
-│   ├── read.py
-│   └── write.py
-└── models/         # Nhận diện vật thể
-    └── kernel.py
+├── models/         # Nhận diện vật thể
+└── visualize/      # Trực quan hóa, biểu diễn ảnh & crop bboxes
 ```
 

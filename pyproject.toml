@@ -1,19 +1,21 @@
 [project]
 name = "klygo"
-version = "0.1.0"
-description = "Add your description here"
+version = "1.0.3"
+description = "Python utilities for archive, config and zero-shot detection"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10,<4.0"
+
 dependencies = [
-    "numpy>=2.5.1",
-    "opencv-python>=5.0.0.93",
-    "pillow>=12.3.0",
-    "pydantic>=2.13.4",
-    "python-box>=7.4.1",
-    "pyyaml>=6.0.3",
-    "ruamel-yaml>=0.19.1",
-    "tomlkit>=0.15.0",
-    "torch>=2.13.0",
-    "tqdm>=4.68.4",
-    "transformers>=5.13.0",
+    "numpy>=2.0",
+    "opencv-python>=4.10",
+    "pillow>=11.0",
+    "pydantic>=2.0",
+    "python-box>=7.0",
+    "pyyaml>=6.0",
+    "ruamel-yaml>=0.18",
+    "tomlkit>=0.13",
+    "torch>=2.7,<3.0",
+    "tqdm>=4.66",
+    "transformers>=4.50,<5.0",
+    "matplotlib>=3.5",
 ]

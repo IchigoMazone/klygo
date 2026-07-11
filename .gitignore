@@ -5,6 +5,8 @@ build/
 dist/
 wheels/
 *.egg-info
+uv.lock
+.pypirc
 
 # Virtual environments
 .venv

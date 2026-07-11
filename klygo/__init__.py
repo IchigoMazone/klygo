@@ -4,8 +4,9 @@ from . import io
 from . import models
 from . import utils
 from . import validators
+from . import visualize
 
-__version__ = "1.0.1"
+__version__ = "1.0.3"
 __author__ = "IchigoMazone"
 
 __all__ = [
@@ -15,4 +16,5 @@ __all__ = [
     "models",
     "utils",
     "validators",
+    "visualize",
 ]

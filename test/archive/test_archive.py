@@ -1,8 +1,14 @@
+import sys
+import pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent.parent))
+
 from klygo.archive import *
 
 if __name__ == "__main__":
 
-    src = "test/data.zip"
+    import pathlib
+    test_dir = pathlib.Path(__file__).parent.parent
+    src = str(test_dir / "data.zip")
 
     # 1. list_files
     files = list_files(src)
@@ -43,7 +49,7 @@ if __name__ == "__main__":
     merge(["test_new.zip", "test_v.zip"], "test_merged.zip", overwrite=True, verbose=True)
 
     # 10. split
-    parts = split(src, size=5_000_000, output_dir="test_parts", overwrite=True, verbose=True)
+    parts = split(src, size=5, output_dir="test_parts", overwrite=True, verbose=True)
     print(f"split: {len(parts)} parts -> {parts}")
 
     print("\nALL TESTS PASSED")

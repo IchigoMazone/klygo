@@ -100,20 +100,35 @@ io.write_file("out/config.yaml", data, overwrite=True, verbose=True)
 ```
 
 ### 9. Config
-Lớp khởi tạo đối tượng cấu hình hỗ trợ tự động mở rộng đường dẫn tương đối.
+Lớp khởi tạo đối tượng cấu hình hỗ trợ tự động mở rộng đường dẫn tương đối và chuyển đổi định dạng.
 * **Khởi tạo:** `config = io.Config(src)` (với `src` là đường dẫn tệp cấu hình nguồn).
 
-#### .imread
-Đọc cấu hình nguồn, trả về đối tượng `Box` hỗ trợ truy cập bằng thuộc tính.
-* **Cú pháp:** `config.imread(verbose=True) -> Box`
+#### .read
+Đọc cấu hình nguồn, trả về đối tượng `Box` hỗ trợ truy cập bằng thuộc tính (dot-notation).
+* **Cú pháp:** `config.read(verbose=True) -> Box`
 * **Ví dụ sử dụng:**
 ```python
 import klygo.io as io
 
 config = io.Config("config.yaml")
-cfg = config.imread(verbose=True)
+cfg = config.read(verbose=True)
 print(cfg.dataset.train_path)
 ```
+
+#### .imread (Deprecated)
+Đọc cấu hình nguồn (alias tương thích ngược của `.read()`). Ném cảnh báo `DeprecationWarning`.
+
+#### .to_dict
+Chuyển đổi dữ liệu cấu hình đã parse thành một `dict` Python tiêu chuẩn.
+* **Cú pháp:** `config.to_dict() -> dict`
+
+#### .to_json
+Xuất cấu hình đã parse ra chuỗi định dạng JSON.
+* **Cú pháp:** `config.to_json(indent=4) -> str`
+
+#### .create_default (Static Method)
+Khởi tạo tự động một file cấu hình YAML mẫu (default template) và trả về đối tượng `Config` tương ứng.
+* **Cú pháp:** `Config.create_default(path, default_data=None, overwrite=False, verbose=True) -> Config`
 
 #### .export_file
 Xuất cấu hình hiện tại sang định dạng cấu hình khác.
@@ -123,7 +138,7 @@ Xuất cấu hình hiện tại sang định dạng cấu hình khác.
 import klygo.io as io
 
 config = io.Config("config.yaml")
-config.imread()
+config.read()
 # Xuất sang file config.json trong thư mục 'out'
 config.export_file("config", ".json", output_dir="out/", overwrite=True)
 ```

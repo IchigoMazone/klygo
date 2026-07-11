@@ -5,7 +5,7 @@ from pathlib import Path
 from klygo.validators.datasets import Split as DatasetSplit
 from klygo.archive import extract
 from klygo.io import write_yaml
-from ._utils import _safe_copy, _read_class_names, _scan_dataset_files
+from ._utils import _safe_copy, _read_class_names, _scan_dataset_files, _find_dataset_root
 
 
 def split(
@@ -44,7 +44,7 @@ def split(
             overwrite=True,
             verbose=False
         )
-        src_base = temp_extract_dir
+        src_base = _find_dataset_root(temp_extract_dir)
     else:
         src_base = params.source
 

@@ -50,7 +50,7 @@ class Config:
 
             self._keys.pop()
 
-    def imread(self, verbose: bool = True) -> Box:
+    def read(self, verbose: bool = True) -> Box:
         """Load the config file and return a dot-accessible :class:`Box`.
 
         If the config contains a ``default.root`` key, any string value
@@ -69,16 +69,96 @@ class Config:
 
         Examples
         --------
-        >>> cfg = Config("config.yaml").imread()
+        >>> cfg = Config("config.yaml").read()
         >>> print(cfg.model.lr)
         0.001
         """
         self._cfg = dict(read_file(self._params.src, verbose=verbose))
 
-        if "default" in self._cfg and "root" in self._cfg["default"]:
+        if "default" in self._cfg and isinstance(self._cfg["default"], dict) and "root" in self._cfg["default"]:
             self._traverse(self._cfg)
 
         return Box(self._cfg)
+
+    def imread(self, verbose: bool = True) -> Box:
+        """Deprecated alias for Config.read(). Use Config.read() instead."""
+        import warnings
+        warnings.warn(
+            "`imread` is deprecated and will be removed in a future version. "
+            "Use `read()` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.read(verbose=verbose)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the parsed config into a standard Python dict.
+
+        Returns
+        -------
+        dict
+            Standard Python dictionary representing config contents.
+        """
+        return dict(self._cfg)
+
+    def to_json(self, indent: int = 4) -> str:
+        """Convert the parsed config into a JSON string.
+
+        Parameters
+        ----------
+        indent : int, optional
+            Number of spaces for indentation. Default is 4.
+
+        Returns
+        -------
+        str
+            JSON string representing config contents.
+        """
+        import json
+        return json.dumps(self._cfg, ensure_ascii=False, indent=indent)
+
+    @staticmethod
+    def create_default(
+        path: str | Path,
+        default_data: dict[str, Any] | None = None,
+        overwrite: bool = False,
+        verbose: bool = True,
+    ) -> "Config":
+        """Initialize a default template configuration file.
+
+        Parameters
+        ----------
+        path : str or Path
+            Path to the output configuration file.
+        default_data : dict, optional
+            Default config dictionary data to write. If not provided,
+            a standard default configuration template is written.
+        overwrite : bool, optional
+            If *True*, overwrite the config file if it already exists.
+            Default is *False*.
+        verbose : bool, optional
+            If *True* (default), display progress bar.
+
+        Returns
+        -------
+        Config
+            Config instance configured with the created file.
+        """
+        if default_data is None:
+            default_data = {
+                "default": {
+                    "root": "./data",
+                },
+                "model": {
+                    "name": "yolov8n",
+                    "epochs": 100,
+                    "batch": 16,
+                    "lr": 0.01,
+                }
+            }
+        path = Path(path)
+        write_file(path, default_data, overwrite=overwrite, verbose=verbose)
+        return Config(path)
 
     def export_file(
         self,
@@ -118,7 +198,7 @@ class Config:
         Examples
         --------
         >>> cfg = Config("config.yaml")
-        >>> cfg.imread()
+        >>> cfg.read()
         >>> cfg.export_file("config", ".json", output_dir="out/")
         """
         params = ExportFile(
@@ -138,7 +218,7 @@ class Config:
         # Resolve output directory
         if output_dir is not None:
             out_dir = Path(output_dir)
-        elif "default" in self._cfg and "root" in self._cfg["default"]:
+        elif "default" in self._cfg and isinstance(self._cfg["default"], dict) and "root" in self._cfg["default"]:
             out_dir = Path(self._cfg["default"]["root"])
         else:
             out_dir = Path(".")

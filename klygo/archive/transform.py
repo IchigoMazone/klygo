@@ -104,7 +104,7 @@ def merge(
 
 def split(
     source: str | Path,
-    size: int,
+    size: int | float,
     output_dir: str | Path = ".",
     overwrite: bool = False,
     verbose: bool = True,
@@ -113,8 +113,8 @@ def split(
 
     Files are distributed across parts greedily: a new part is started
     whenever adding the next file would cause the current part's
-    *compressed* size to exceed ``size``. Each individual file always
-    goes into exactly one part (files are never split across archives).
+    *compressed* size to exceed ``size`` (specified in MB). Each individual
+    file always goes into exactly one part (files are never split across archives).
 
     Output files are named ``{stem}_part_NNN{suffix}`` where ``NNN``
     is a zero-padded three-digit counter (e.g. ``data_part_001.zip``).
@@ -123,9 +123,9 @@ def split(
     ----------
     source : str or Path
         Path to the archive file to split.
-    size : int
-        Maximum *compressed* size in bytes for each output part.
-        Must be a positive integer.
+    size : int or float
+        Maximum *compressed* size in MB for each output part.
+        Must be a positive number.
     output_dir : str or Path, optional
         Directory where the part files will be written.
         Created automatically if it does not exist.
@@ -151,7 +151,7 @@ def split(
         If ``source`` does not exist.
     ValueError
         If ``source`` is not a supported archive format, or ``size`` is
-        not a positive integer.
+        not a positive number.
     FileExistsError
         If a part file already exists and ``overwrite`` is *False*.
 
@@ -159,7 +159,7 @@ def split(
     --------
     Split into 5 MB parts:
 
-    >>> parts = split("large_dataset.zip", size=5_000_000, output_dir="parts/")
+    >>> parts = split("large_dataset.zip", size=5, output_dir="parts/")
     >>> print(parts)
     ['parts/large_dataset_part_001.zip', 'parts/large_dataset_part_002.zip']
     """

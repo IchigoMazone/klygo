@@ -5,7 +5,7 @@ from pathlib import Path
 from klygo.validators.datasets import Merge as DatasetMerge
 from klygo.archive import extract
 from klygo.io import write_yaml
-from ._utils import _safe_copy, _safe_move, _read_class_names, _remap_label_file
+from ._utils import _safe_copy, _safe_move, _read_class_names, _remap_label_file, _scan_dataset_files, _find_dataset_root
 
 
 def merge(
@@ -51,7 +51,7 @@ def merge(
                 overwrite=True,
                 verbose=False
             )
-            src_base = temp_extract_dir
+            src_base = _find_dataset_root(temp_extract_dir)
         else:
             src_base = src
 
@@ -104,17 +104,16 @@ def merge(
                 shutil.rmtree(merge_workspace)
             raise FileNotFoundError(f"images directory not found under {src_base}")
 
-        image_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-        image_files = sorted([
-            f for f in images_src.iterdir()
-            if f.is_file() and f.suffix.lower() in image_extensions
-        ])
+        pairs = _scan_dataset_files(images_src, labels_src)
 
         # Copy/Move files with prefix `src{idx}_`
-        for img_path in image_files:
-            lbl_path = labels_src / (img_path.stem + ".txt")
-            img_dest = images_merge_dir / f"src{idx}_{img_path.name}"
-            lbl_dest = labels_merge_dir / f"src{idx}_{img_path.stem}.txt"
+        for img_path, lbl_path, rel_img, rel_lbl in pairs:
+            # Flatten split path into unique name
+            # e.g. train/img1.jpg -> src0_train_img1.jpg
+            flat_img_name = "_".join(rel_img.parts) if len(rel_img.parts) > 1 else rel_img.name
+            flat_lbl_name = "_".join(rel_lbl.parts) if len(rel_lbl.parts) > 1 else rel_lbl.name
+            img_dest = images_merge_dir / f"src{idx}_{flat_img_name}"
+            lbl_dest = labels_merge_dir / f"src{idx}_{flat_lbl_name}"
             
             # Copy/Move image
             if is_zip:
@@ -123,7 +122,7 @@ def merge(
                 _safe_copy(img_path, img_dest)
 
             # Copy/Move label
-            if lbl_path.exists() and lbl_path.is_file():
+            if lbl_path and lbl_path.exists() and lbl_path.is_file():
                 if needs_remap:
                     try:
                         _remap_label_file(lbl_path, lbl_dest, class_map)

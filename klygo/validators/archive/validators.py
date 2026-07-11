@@ -245,12 +245,12 @@ class Split:
     def __init__(
         self,
         source: str | Path,
-        size: int,
+        size: int | float,
         output_dir: str | Path,
         overwrite: bool,
     ) -> None:
         validate_type(source, (str, Path), "source")
-        validate_type(size, int, "size")
+        validate_type(size, (int, float), "size")
         validate_type(output_dir, (str, Path), "output_dir")
         validate_type(overwrite, bool, "overwrite")
 
@@ -260,9 +260,9 @@ class Split:
         _check_zip_source(source)
 
         if size <= 0:
-            raise ValueError(f"size must be a positive integer, got {size}")
+            raise ValueError(f"size must be a positive number, got {size}")
 
         self.source = source
-        self.size = size
+        self.size = int(size * 1024 * 1024)
         self.output_dir = output_dir
         self.overwrite = overwrite

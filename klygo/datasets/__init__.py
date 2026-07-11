@@ -1,4 +1,4 @@
-from .partition import partition, repartition
+from .partition import partition, repartition, unpartition
 from .merge import merge
 from .split import split
 from .remap import remap_classes
@@ -7,6 +7,7 @@ from .info import get_dataset_info
 __all__ = [
     "partition",
     "repartition",
+    "unpartition",
     "merge",
     "split",
     "remap_classes",
