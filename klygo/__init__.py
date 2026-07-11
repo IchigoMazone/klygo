@@ -6,7 +6,7 @@ from . import utils
 from . import validators
 from . import visualize
 
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 __author__ = "IchigoMazone"
 
 __all__ = [

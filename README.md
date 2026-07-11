@@ -146,7 +146,7 @@ Xem tài liệu đầy đủ tại docs/visualize/README.md.
 ## Cài đặt
 
 ```bash
-git clone https://github.com/your-username/klygo.git
+git clone https://github.com/IchigoMazone/klygo.git
 cd klygo
 uv sync
 ```
