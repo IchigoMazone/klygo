@@ -7,72 +7,42 @@ from klygo.validators.archive import Extract, ExtractFile
 
 
 def extract(
-    source: str | Path,
-    output: str | Path = ".",
+    archive_path: str | Path,
+    output_dir: str | Path = ".",
     overwrite: bool = False,
     verbose: bool = True,
 ) -> None:
-    """Extract all contents of an archive to a directory.
+    """
+    Tác dụng:
+    - Giải nén toàn bộ file lưu trữ vào thư mục đích
 
-    The full directory structure stored inside the archive is
-    recreated under ``output``. The output directory is created
-    automatically if it does not exist.
+    Đầu vào:
+    - archive_path: Đường dẫn file lưu trữ
+    - output_dir: Đường dẫn thư mục đầu ra
+    - overwrite: Trạng thái cho phép ghi đè
+    - verbose: Trạng thái hiển thị tiến trình
 
-    Parameters
-    ----------
-    source : str or Path
-        Path to the archive file to extract (e.g. ``"data.zip"``).
-    output : str or Path, optional
-        Directory where the archive contents will be extracted.
-        Defaults to the current working directory (``"."``).
-    overwrite : bool, optional
-        If *True*, overwrite files that already exist in ``output``.
-        If *False* (default) and conflicting files exist, raises
-        ``FileExistsError`` listing the first offending names.
-    verbose : bool, optional
-        If *True* (default), display a coloured progress bar and print
-        the total number of extracted files on completion.
+    Đầu ra:
+    - Không trả về dữ liệu
 
-    Returns
-    -------
-    None
+    Ngoại lệ:
+    - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Raises
-    ------
-    TypeError
-        If any argument has the wrong type.
-    FileNotFoundError
-        If ``source`` does not exist.
-    ValueError
-        If ``source`` is not a supported archive format.
-    FileExistsError
-        If files in the archive already exist at the destination
-        and ``overwrite`` is *False*.
-
-    Examples
-    --------
-    Extract to a specific folder:
-
-    >>> extract("data.zip", output="data/")
-
-    Extract and overwrite any existing files:
-
-    >>> extract("data.zip", output="data/", overwrite=True)
-
-    Extract silently:
-
-    >>> extract("data.zip", output="data/", verbose=False)
+    Nguồn: TrinhNhuNhat_12072026.
     """
 
     params = Extract(
-        source=source,
-        output=output,
+        archive_path=archive_path,
+        output_dir=output_dir,
         overwrite=overwrite,
         verbose=verbose,
     )
 
-    source_path: Path = params.source
-    output_path: Path = params.output
+    source_path: Path = params.archive_path
+    output_path: Path = params.output_dir
 
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -112,61 +82,44 @@ def extract(
 
 
 def extract_file(
-    source: str | Path,
+    archive_path: str | Path,
     filename: str,
-    output: str | Path = ".",
+    output_dir: str | Path = ".",
     overwrite: bool = False,
 ) -> None:
-    """Extract a single file from an archive without unpacking everything.
+    """
+    Tác dụng:
+    - Giải nén một file cụ thể từ file lưu trữ
 
-    Use :func:`list_files` to discover the exact ``filename`` string
-    as it is stored inside the archive, then pass that value here.
+    Đầu vào:
+    - archive_path: Đường dẫn file lưu trữ
+    - filename: Tham số filename của hàm
+    - output_dir: Đường dẫn thư mục đầu ra
+    - overwrite: Trạng thái cho phép ghi đè
 
-    Parameters
-    ----------
-    source : str or Path
-        Path to the archive file.
-    filename : str
-        Path of the target file *inside* the archive, exactly as returned
-        by :func:`list_files` (e.g. ``"images/frame_001.jpg"``).
-    output : str or Path, optional
-        Directory where the file will be written.
-        Defaults to the current working directory (``"."``).
-    overwrite : bool, optional
-        If *True*, overwrite the file if it already exists at the destination.
-        Default is *False*.
+    Đầu ra:
+    - Không trả về dữ liệu
 
-    Returns
-    -------
-    None
+    Ngoại lệ:
+    - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - KeyError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Raises
-    ------
-    TypeError
-        If any argument has the wrong type.
-    FileNotFoundError
-        If ``source`` does not exist.
-    KeyError
-        If ``filename`` is not found inside the archive.
-    FileExistsError
-        If the destination file already exists and ``overwrite`` is *False*.
-
-    Examples
-    --------
-    >>> extract_file("data.zip", "images/frame_001.jpg", output="out/")
+    Nguồn: TrinhNhuNhat_12072026.
     """
 
     params = ExtractFile(
-        source=source,
+        archive_path=archive_path,
         filename=filename,
-        output=output,
+        output_dir=output_dir,
         overwrite=overwrite,
     )
 
-    output_path: Path = params.output
+    output_path: Path = params.output_dir
     output_path.mkdir(parents=True, exist_ok=True)
 
-    with ZipFile(params.source, mode="r") as zf:
+    with ZipFile(params.archive_path, mode="r") as zf:
         names = zf.namelist()
         if params.filename not in names:
             raise KeyError(
@@ -180,4 +133,5 @@ def extract_file(
                 f"file already exists: {target}. Use overwrite=True."
             )
 
-        zf.extract(params.filename, path=output_path)
+        with open(target, "wb") as file:
+            file.write(zf.read(params.filename))

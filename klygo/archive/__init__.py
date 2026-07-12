@@ -4,6 +4,7 @@ from .list import list_files, search
 from .info import get_info, test
 from .modify import add, remove
 from .transform import merge, split
+from .human_size import human_size
 
 __all__ = [
     "compress",
@@ -17,4 +18,5 @@ __all__ = [
     "remove",
     "merge",
     "split",
+    "human_size",
 ]

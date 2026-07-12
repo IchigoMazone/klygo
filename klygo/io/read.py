@@ -12,6 +12,21 @@ _yaml = YAML()
 
 
 def _read_with_bar(path: Path, verbose: bool, desc: str, parser_func: Any) -> Any:
+    """
+    Tác dụng:
+    - Thực hiện chức năng _read_with_bar
+
+    Đầu vào:
+    - path: Đường dẫn file
+    - verbose: Trạng thái hiển thị tiến trình
+    - desc: Tham số desc của hàm
+    - parser_func: Tham số parser_func của hàm
+
+    Đầu ra:
+    - Kết quả xử lý của hàm
+
+    Nguồn: TrinhNhuNhat_12072026.
+    """
     bar = (
         tqdm(
             total=1,
@@ -35,34 +50,38 @@ def _read_with_bar(path: Path, verbose: bool, desc: str, parser_func: Any) -> An
 
 
 def read_yaml(path: str | Path, verbose: bool = True) -> Any:
-    """Read a YAML or YML file and return its contents.
+    """
+    Tác dụng:
+    - Đọc dữ liệu từ file YAML
 
-    Parameters
-    ----------
-    path : str or Path
-        Path to the ``.yaml`` or ``.yml`` file.
-    verbose : bool, optional
-        If *True* (default), display a progress bar.
+    Đầu vào:
+    - path: Đường dẫn file
+    - verbose: Trạng thái hiển thị tiến trình
 
-    Returns
-    -------
-    Any
-        Parsed contents of the file (usually a dict or list).
+    Đầu ra:
+    - Kết quả xử lý của hàm
 
-    Raises
-    ------
-    FileNotFoundError
-        If ``path`` does not exist.
-    ValueError
-        If ``path`` is not a file or has an unsupported extension.
+    Ngoại lệ:
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Examples
-    --------
-    >>> data = read_yaml("config.yaml")
+    Nguồn: TrinhNhuNhat_12072026.
     """
     params = ReadFile(path=path, verbose=verbose)
 
     def _parse():
+        """
+        Tác dụng:
+        - Thực hiện chức năng _parse
+
+        Đầu vào:
+        - Không có tham số đầu vào
+
+        Đầu ra:
+        - Kết quả xử lý của hàm
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         with open(params.path, "r", encoding="utf-8") as f:
             return _yaml.load(f)
 
@@ -70,34 +89,38 @@ def read_yaml(path: str | Path, verbose: bool = True) -> Any:
 
 
 def read_json(path: str | Path, verbose: bool = True) -> Any:
-    """Read a JSON file and return its contents.
+    """
+    Tác dụng:
+    - Đọc dữ liệu từ file JSON
 
-    Parameters
-    ----------
-    path : str or Path
-        Path to the ``.json`` file.
-    verbose : bool, optional
-        If *True* (default), display a progress bar.
+    Đầu vào:
+    - path: Đường dẫn file
+    - verbose: Trạng thái hiển thị tiến trình
 
-    Returns
-    -------
-    Any
-        Parsed contents of the file.
+    Đầu ra:
+    - Kết quả xử lý của hàm
 
-    Raises
-    ------
-    FileNotFoundError
-        If ``path`` does not exist.
-    ValueError
-        If ``path`` is not a file or has an unsupported extension.
+    Ngoại lệ:
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Examples
-    --------
-    >>> data = read_json("config.json")
+    Nguồn: TrinhNhuNhat_12072026.
     """
     params = ReadFile(path=path, verbose=verbose)
 
     def _parse():
+        """
+        Tác dụng:
+        - Thực hiện chức năng _parse
+
+        Đầu vào:
+        - Không có tham số đầu vào
+
+        Đầu ra:
+        - Kết quả xử lý của hàm
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         with open(params.path, "r", encoding="utf-8") as f:
             return json.load(f)
 
@@ -105,34 +128,38 @@ def read_json(path: str | Path, verbose: bool = True) -> Any:
 
 
 def read_toml(path: str | Path, verbose: bool = True) -> Any:
-    """Read a TOML file and return its contents.
+    """
+    Tác dụng:
+    - Đọc dữ liệu từ file TOML
 
-    Parameters
-    ----------
-    path : str or Path
-        Path to the ``.toml`` file.
-    verbose : bool, optional
-        If *True* (default), display a progress bar.
+    Đầu vào:
+    - path: Đường dẫn file
+    - verbose: Trạng thái hiển thị tiến trình
 
-    Returns
-    -------
-    Any
-        Parsed contents of the file (usually a dict).
+    Đầu ra:
+    - Kết quả xử lý của hàm
 
-    Raises
-    ------
-    FileNotFoundError
-        If ``path`` does not exist.
-    ValueError
-        If ``path`` is not a file or has an unsupported extension.
+    Ngoại lệ:
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Examples
-    --------
-    >>> data = read_toml("config.toml")
+    Nguồn: TrinhNhuNhat_12072026.
     """
     params = ReadFile(path=path, verbose=verbose)
 
     def _parse():
+        """
+        Tác dụng:
+        - Thực hiện chức năng _parse
+
+        Đầu vào:
+        - Không có tham số đầu vào
+
+        Đầu ra:
+        - Kết quả xử lý của hàm
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         with open(params.path, "r", encoding="utf-8") as f:
             return tomlkit.load(f).unwrap()
 
@@ -140,33 +167,22 @@ def read_toml(path: str | Path, verbose: bool = True) -> Any:
 
 
 def read_file(path: str | Path, verbose: bool = True) -> Any:
-    """Read any supported config file, auto-detecting the format from its extension.
+    """
+    Tác dụng:
+    - Đọc dữ liệu từ file cấu hình được hỗ trợ
 
-    Supported formats: ``.yaml``, ``.yml``, ``.json``, ``.toml``.
+    Đầu vào:
+    - path: Đường dẫn file
+    - verbose: Trạng thái hiển thị tiến trình
 
-    Parameters
-    ----------
-    path : str or Path
-        Path to the config file.
-    verbose : bool, optional
-        If *True* (default), display a progress bar.
+    Đầu ra:
+    - Kết quả xử lý của hàm
 
-    Returns
-    -------
-    Any
-        Parsed contents of the file.
+    Ngoại lệ:
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Raises
-    ------
-    FileNotFoundError
-        If ``path`` does not exist.
-    ValueError
-        If ``path`` is not a supported format.
-
-    Examples
-    --------
-    >>> data = read_file("config.toml")   # format auto-detected
-    >>> data = read_file("params.json")
+    Nguồn: TrinhNhuNhat_12072026.
     """
     params = ReadFile(path=path, verbose=verbose)
     suffix = params.path.suffix.lower()

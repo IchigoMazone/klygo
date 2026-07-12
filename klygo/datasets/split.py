@@ -17,7 +17,29 @@ def split(
     overwrite: bool = False,
     verbose: bool = True,
 ) -> None:
-    
+
+    """
+    Tác dụng:
+    - Chia dữ liệu thành nhiều phần theo cấu hình
+
+    Đầu vào:
+    - source: File hoặc thư mục đầu vào
+    - output_dir: Đường dẫn thư mục đầu ra
+    - by_class: Tham số by_class của hàm
+    - class_groups: Tham số class_groups của hàm
+    - ratios: Tham số ratios của hàm
+    - overwrite: Trạng thái cho phép ghi đè
+    - verbose: Trạng thái hiển thị tiến trình
+
+    Đầu ra:
+    - Không trả về dữ liệu
+
+    Ngoại lệ:
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+    Nguồn: TrinhNhuNhat_12072026.
+    """
     params = DatasetSplit(
         source=source,
         output_dir=output_dir,
@@ -39,8 +61,8 @@ def split(
         if temp_extract_dir.exists():
             shutil.rmtree(temp_extract_dir)
         extract(
-            source=params.source,
-            output=temp_extract_dir,
+            archive_path=params.source,
+            output_dir=temp_extract_dir,
             overwrite=True,
             verbose=False
         )
@@ -104,7 +126,7 @@ def split(
                 if lbl and lbl.exists() and lbl.is_file():
                     with open(lbl, "r", encoding="utf-8", errors="ignore") as f:
                         lines = f.readlines()
-                    
+
                     matched_lines = []
                     for line in lines:
                         parts = line.strip().split()

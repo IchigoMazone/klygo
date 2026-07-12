@@ -4,87 +4,57 @@ from pathlib import Path
 from tqdm import tqdm
 
 from klygo.validators.archive import Compress
-from klygo.archive._utils import _human_size
+from klygo.archive.human_size import human_size
 
 
 def compress(
     source: str | Path,
-    output: str | Path,
+    output_path: str | Path,
     format: str = "zip",
     overwrite: bool = False,
     verbose: bool = True,
 ) -> None:
-    """Compress a file or directory into a ZIP archive.
+    """
+    Tác dụng:
+    - Nén file hoặc thư mục thành file lưu trữ
 
-    When ``source`` is a directory, all files are added recursively
-    while preserving the internal directory structure. Parent-level
-    directory name is kept as the root inside the archive.
+    Đầu vào:
+    - source: File hoặc thư mục đầu vào
+    - output_path: Đường dẫn file đầu ra
+    - format: Tham số format của hàm
+    - overwrite: Trạng thái cho phép ghi đè
+    - verbose: Trạng thái hiển thị tiến trình
 
-    Parameters
-    ----------
-    source : str or Path
-        Path to the file or directory to compress.
-    output : str or Path
-        Destination path for the archive (e.g. ``"data.zip"``).
-        Parent directories are created automatically if they do not exist.
-    format : str, optional
-        Archive format. Currently only ``"zip"`` is supported.
-        Default is ``"zip"``.
-    overwrite : bool, optional
-        If *True*, silently overwrite ``output`` when it already exists.
-        If *False* (default) and ``output`` exists, raises ``FileExistsError``.
-    verbose : bool, optional
-        If *True* (default), display a coloured progress bar and print
-        the final archive size on completion.
+    Đầu ra:
+    - Không trả về dữ liệu
 
-    Returns
-    -------
-    None
+    Ngoại lệ:
+    - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Raises
-    ------
-    TypeError
-        If any argument has the wrong type.
-    FileNotFoundError
-        If ``source`` does not exist.
-    FileExistsError
-        If ``output`` already exists and ``overwrite`` is *False*.
-    ValueError
-        If ``format`` is not supported, or ``output`` has the wrong extension.
-
-    Examples
-    --------
-    Compress a single file:
-
-    >>> compress("report.csv", "report.zip")
-
-    Compress an entire directory, overwriting any existing archive:
-
-    >>> compress("my_dataset/", "dataset.zip", overwrite=True)
-
-    Compress silently (no progress bar):
-
-    >>> compress("images/", "images.zip", verbose=False)
+    Nguồn: TrinhNhuNhat_12072026.
     """
 
     params = Compress(
         source=source,
-        output=output,
+        output_path=output_path,
         format=format,
         overwrite=overwrite,
         verbose=verbose,
     )
 
-    source_path: Path = params.source
-    output_path: Path = params.output
+    source_item: Path = params.source
+    output_path = params.output_path
 
     # Collect all files to compress
-    if source_path.is_dir():
+    if source_item.is_dir():
         all_files: list[Path] = sorted(
-            f for f in source_path.rglob("*") if f.is_file()
+            f for f in source_item.rglob("*") if f.is_file()
         )
     else:
-        all_files = [source_path]
+        all_files = [source_item]
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -102,8 +72,8 @@ def compress(
         )
         for file in all_files:
             arcname = (
-                file.relative_to(source_path.parent)
-                if source_path.is_dir()
+                file.relative_to(source_item.parent)
+                if source_item.is_dir()
                 else file.name
             )
             zf.write(file, arcname=arcname)
@@ -116,4 +86,4 @@ def compress(
 
     if verbose:
         total_size = output_path.stat().st_size
-        print(f"Done. Archive size: {_human_size(total_size)}")
+        print(f"Done. Archive size: {human_size(total_size)}")

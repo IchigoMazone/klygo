@@ -1,0 +1,8 @@
+[default]
+root = "./data"
+
+[model]
+name = "yolov8n"
+epochs = 100
+batch = 16
+lr = 0.01

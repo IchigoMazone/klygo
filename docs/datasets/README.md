@@ -25,7 +25,7 @@ from klygo.datasets import partition
 
 partition(
     source="path/to/data.zip",     # Tệp ZIP hoặc thư mục chứa ảnh & nhãn gốc
-    output="path/to/output_dir",   # Thư mục đích chứa kết quả chia tập
+    target="path/to/output_dir",   # File ZIP hoặc thư mục đích
     ratios=(0.8,),                 # Tỷ lệ tập train. Val/test sẽ chia đều phần còn lại
     overwrite=True,                # Ghi đè nếu output đã tồn tại
     verbose=True
@@ -49,7 +49,7 @@ from klygo.datasets import repartition
 
 repartition(
     source="path/to/partitioned_dataset",  # Thư mục dataset đã chia tập
-    output="path/to/partitioned_dataset",  # Lưu ghi đè trực tiếp (in-place)
+    target="path/to/partitioned_dataset",  # Lưu ghi đè trực tiếp
     ratios=(0.7, 0.2, 0.1),                # Tỷ lệ mới
     overwrite=True,
     verbose=True
@@ -72,7 +72,7 @@ from klygo.datasets import merge
 
 merge(
     sources=["path/to/dataset1", "path/to/dataset2.zip"], # Danh sách các nguồn
-    output="path/to/merged_dataset.zip",                  # Tệp ZIP đích
+    output_path="path/to/merged_dataset.zip",             # Tệp ZIP đích
     overwrite=True,
     verbose=True
 )
@@ -137,7 +137,7 @@ from klygo.datasets import remap_classes
 
 remap_classes(
     source="path/to/dataset.zip",
-    output="path/to/remapped_dataset.zip",
+    target="path/to/remapped_dataset.zip",
     class_map={0: 1, "apple": "red_apple"}, # Đổi ID 0 thành 1 và đổi tên lớp
     overwrite=True
 )
@@ -164,5 +164,3 @@ from klygo.datasets import get_dataset_info
 info = get_dataset_info("path/to/dataset.zip")
 print(info)
 ```
-
-

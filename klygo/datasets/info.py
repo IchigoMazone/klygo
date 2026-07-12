@@ -9,8 +9,19 @@ from ._utils import _read_class_names, _scan_dataset_files, _find_dataset_root
 
 def get_dataset_info(source: str | Path) -> dict[str, Any]:
     """
-    Inspects a YOLO dataset (directory or ZIP) and returns details about classes, 
-    number of images, labels, and split structure.
+    Tác dụng:
+    - Lấy thông tin thống kê của dataset
+
+    Đầu vào:
+    - source: File hoặc thư mục đầu vào
+
+    Đầu ra:
+    - Kết quả xử lý của hàm
+
+    Ngoại lệ:
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+    Nguồn: TrinhNhuNhat_12072026.
     """
     source = Path(source)
     if not source.exists():
@@ -23,26 +34,31 @@ def get_dataset_info(source: str | Path) -> dict[str, Any]:
         temp_extract_dir = source.parent / f".temp_info_extract_{random.randint(1000, 9999)}"
         if temp_extract_dir.exists():
             shutil.rmtree(temp_extract_dir)
-        extract(source=source, output=temp_extract_dir, overwrite=True, verbose=False)
+        extract(
+            archive_path=source,
+            output_dir=temp_extract_dir,
+            overwrite=True,
+            verbose=False,
+        )
         src_base = _find_dataset_root(temp_extract_dir)
     else:
         src_base = source
 
     try:
         classes = _read_class_names(src_base, temp_extract_dir)
-        
+
         images_dir = src_base / "images"
         labels_dir = src_base / "labels"
-        
+
         if not images_dir.exists():
             raise FileNotFoundError("images directory not found in dataset")
-            
+
         pairs = _scan_dataset_files(images_dir, labels_dir)
-        
+
         total_images = len(pairs)
         total_labels = sum(1 for p in pairs if p[1] is not None)
         unlabeled_images = total_images - total_labels
-        
+
         # Analyze split structure
         split_counts = {}
         for img_path, lbl_path, rel_img, rel_lbl in pairs:

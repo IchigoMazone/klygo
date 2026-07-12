@@ -10,6 +10,24 @@ class ReadFile:
     """Validate parameters for reading a config/data file."""
 
     def __init__(self, path: str | Path, verbose: bool = True) -> None:
+        """
+        Tác dụng:
+        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
+
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - path: Đường dẫn file
+        - verbose: Trạng thái hiển thị tiến trình
+
+        Đầu ra:
+        - Không trả về dữ liệu
+
+        Ngoại lệ:
+        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+        - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         validate_type(path, (str, Path), "path")
         validate_type(verbose, bool, "verbose")
         path = Path(path)
@@ -38,6 +56,26 @@ class WriteFile:
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
+        """
+        Tác dụng:
+        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
+
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - path: Đường dẫn file
+        - data: Dữ liệu cần xử lý
+        - overwrite: Trạng thái cho phép ghi đè
+        - verbose: Trạng thái hiển thị tiến trình
+
+        Đầu ra:
+        - Không trả về dữ liệu
+
+        Ngoại lệ:
+        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+        - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         validate_type(path, (str, Path), "path")
         validate_type(overwrite, bool, "overwrite")
         validate_type(verbose, bool, "verbose")
@@ -61,23 +99,42 @@ class WriteFile:
 
 
 class ConfigSource:
-    """Validate the source path for Config.__init__."""
+    """Validate the file path for Config.__init__."""
 
-    def __init__(self, src: str | Path) -> None:
-        validate_type(src, (str, Path), "src")
-        src = Path(src)
+    def __init__(self, config_path: str | Path) -> None:
+        """
+        Tác dụng:
+        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
 
-        if not src.exists():
-            raise FileNotFoundError(f"config file does not exist: {src}")
-        if not src.is_file():
-            raise ValueError(f"src must be a file, got directory: {src}")
-        if src.suffix.lower() not in _SUPPORTED:
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - config_path: Đường dẫn file cấu hình
+
+        Đầu ra:
+        - Không trả về dữ liệu
+
+        Ngoại lệ:
+        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+        - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
+        validate_type(config_path, (str, Path), "config_path")
+        config_path = Path(config_path)
+
+        if not config_path.exists():
+            raise FileNotFoundError(f"config file does not exist: {config_path}")
+        if not config_path.is_file():
             raise ValueError(
-                f"unsupported config format: {src.suffix!r}, "
+                f"config_path must be a file, got directory: {config_path}"
+            )
+        if config_path.suffix.lower() not in _SUPPORTED:
+            raise ValueError(
+                f"unsupported config format: {config_path.suffix!r}, "
                 f"supported: {sorted(_SUPPORTED)}"
             )
 
-        self.src = src
+        self.config_path = config_path
 
 
 class ExportFile:
@@ -91,6 +148,26 @@ class ExportFile:
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
+        """
+        Tác dụng:
+        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
+
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - name: Tham số name của hàm
+        - suffix: Tham số suffix của hàm
+        - output_dir: Đường dẫn thư mục đầu ra
+        - overwrite: Trạng thái cho phép ghi đè
+        - verbose: Trạng thái hiển thị tiến trình
+
+        Đầu ra:
+        - Không trả về dữ liệu
+
+        Ngoại lệ:
+        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         validate_type(name, str, "name")
         validate_type(suffix, str, "suffix")
         validate_type(output_dir, (str, Path), "output_dir")
@@ -106,8 +183,12 @@ class ExportFile:
                 f"supported: {sorted(_SUPPORTED)}"
             )
 
+        output_dir = Path(output_dir)
+        if output_dir.exists() and not output_dir.is_dir():
+            raise ValueError(f"output_dir must be a directory, got file: {output_dir}")
+
         self.name = name
         self.suffix = suffix
-        self.output_dir = Path(output_dir)
+        self.output_dir = output_dir
         self.overwrite = overwrite
         self.verbose = verbose

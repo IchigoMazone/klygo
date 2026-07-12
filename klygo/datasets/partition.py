@@ -11,7 +11,22 @@ from ._utils import _safe_copy, _safe_move, _scan_dataset_files, _find_dataset_r
 
 def _execute_partition(params: Partition) -> None:
     # 1. Ratios extraction
-    if len(params.ratios) == 1: 
+    """
+    Tác dụng:
+    - Thực hiện chức năng _execute_partition
+
+    Đầu vào:
+    - params: Tham số params của hàm
+
+    Đầu ra:
+    - Không trả về dữ liệu
+
+    Ngoại lệ:
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+    Nguồn: TrinhNhuNhat_12072026.
+    """
+    if len(params.ratios) == 1:
         train = params.ratios[0]
         val = test = (1 - train) / 2
     elif len(params.ratios) == 2:
@@ -27,12 +42,12 @@ def _execute_partition(params: Partition) -> None:
     # 2. Source handling (temp extract if ZIP)
     temp_extract_dir = None
     if is_zip:
-        temp_extract_dir = params.output.parent / f".temp_partition_extract_{random.randint(1000, 9999)}"
+        temp_extract_dir = params.target.parent / f".temp_partition_extract_{random.randint(1000, 9999)}"
         if temp_extract_dir.exists():
             shutil.rmtree(temp_extract_dir)
         extract(
-            source=params.source,
-            output=temp_extract_dir, 
+            archive_path=params.source,
+            output_dir=temp_extract_dir,
             overwrite=True,
             verbose=params.verbose
         )
@@ -75,7 +90,7 @@ def _execute_partition(params: Partition) -> None:
     }
 
     # 5. Setup temporary destination directory
-    temp_output_dir = params.output.parent / f".temp_partition_out_{random.randint(1000, 9999)}"
+    temp_output_dir = params.target.parent / f".temp_partition_out_{random.randint(1000, 9999)}"
     if temp_output_dir.exists():
         shutil.rmtree(temp_output_dir)
     temp_output_dir.mkdir(parents=True, exist_ok=True)
@@ -103,7 +118,7 @@ def _execute_partition(params: Partition) -> None:
     yaml_src = src_base / "data.yaml"
     if yaml_src.exists():
         yaml_data = read_yaml(yaml_src, verbose=False)
-        yaml_data["path"] = str(params.output.resolve().as_posix())
+        yaml_data["path"] = str(params.target.resolve().as_posix())
         yaml_data["train"] = "images/train"
         yaml_data["val"] = "images/val"
         if test_pairs:
@@ -119,42 +134,58 @@ def _execute_partition(params: Partition) -> None:
         shutil.rmtree(temp_extract_dir)
 
     # 9. Replace target directory atomically
-    if params.output.exists():
+    if params.target.exists():
         for _ in range(10):
             try:
-                if params.output.is_dir():
-                    shutil.rmtree(params.output)
+                if params.target.is_dir():
+                    shutil.rmtree(params.target)
                 else:
-                    params.output.unlink()
+                    params.target.unlink()
                 break
             except PermissionError:
                 time.sleep(0.05)
         else:
-            if params.output.is_dir():
-                shutil.rmtree(params.output)
+            if params.target.is_dir():
+                shutil.rmtree(params.target)
             else:
-                params.output.unlink()
+                params.target.unlink()
 
     for _ in range(10):
         try:
-            temp_output_dir.rename(params.output)
+            temp_output_dir.rename(params.target)
             break
         except PermissionError:
             time.sleep(0.05)
     else:
-        temp_output_dir.rename(params.output)
+        temp_output_dir.rename(params.target)
 
 
 def partition(
     source: str | Path,
-    output: str | Path,
+    target: str | Path,
     ratios: tuple[float],
     overwrite: bool = False,
     verbose: bool = True,
 ) -> None:
+    """
+    Tác dụng:
+    - Chia dataset thành các tập train, validation và test
+
+    Đầu vào:
+    - source: File hoặc thư mục đầu vào
+    - target: File hoặc thư mục đầu ra
+    - ratios: Tham số ratios của hàm
+    - overwrite: Trạng thái cho phép ghi đè
+    - verbose: Trạng thái hiển thị tiến trình
+
+    Đầu ra:
+    - Không trả về dữ liệu
+
+    Nguồn: TrinhNhuNhat_12072026.
+    """
     params = Partition(
         source=source,
-        output=output,
+        target=target,
         ratios=ratios,
         overwrite=overwrite,
         verbose=verbose
@@ -164,14 +195,30 @@ def partition(
 
 def repartition(
     source: str | Path,
-    output: str | Path,
+    target: str | Path,
     ratios: tuple[float],
     overwrite: bool = False,
     verbose: bool = True,
 ) -> None:
+    """
+    Tác dụng:
+    - Chia lại dataset theo các tỉ lệ mới
+
+    Đầu vào:
+    - source: File hoặc thư mục đầu vào
+    - target: File hoặc thư mục đầu ra
+    - ratios: Tham số ratios của hàm
+    - overwrite: Trạng thái cho phép ghi đè
+    - verbose: Trạng thái hiển thị tiến trình
+
+    Đầu ra:
+    - Không trả về dữ liệu
+
+    Nguồn: TrinhNhuNhat_12072026.
+    """
     params = Repartition(
         source=source,
-        output=output,
+        target=target,
         ratios=ratios,
         overwrite=overwrite,
         verbose=verbose
@@ -181,27 +228,39 @@ def repartition(
 
 def unpartition(
     source: str | Path,
-    output: str | Path,
+    target: str | Path,
     overwrite: bool = False,
     verbose: bool = True,
 ) -> None:
-    """Convert a train/val/test partitioned dataset back to a flat raw format.
+    """
+    Tác dụng:
+    - Chuyển dataset đã chia tập về cấu trúc phẳng
 
-    Moves all images from images/train, images/val, images/test into images/,
-    and all labels from labels/train, labels/val, labels/test into labels/.
-    Updates or creates data.yaml at output root to match the flat structure.
+    Đầu vào:
+    - source: File hoặc thư mục đầu vào
+    - target: File hoặc thư mục đầu ra
+    - overwrite: Trạng thái cho phép ghi đè
+    - verbose: Trạng thái hiển thị tiến trình
+
+    Đầu ra:
+    - Không trả về dữ liệu
+
+    Ngoại lệ:
+    - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+    Nguồn: TrinhNhuNhat_12072026.
     """
     source = Path(source)
-    output = Path(output)
-    
-    if output.exists() and not overwrite:
-        raise FileExistsError(f"output already exists: {output}")
+    target = Path(target)
+
+    if target.exists() and not overwrite:
+        raise FileExistsError(f"target already exists: {target}")
 
     is_zip = source.is_file()
     temp_extract_dir = None
 
     if is_zip:
-        temp_extract_dir = output.parent / f".temp_unpartition_extract_{random.randint(1000, 9999)}"
+        temp_extract_dir = target.parent / f".temp_unpartition_extract_{random.randint(1000, 9999)}"
         if temp_extract_dir.exists():
             shutil.rmtree(temp_extract_dir)
         extract(source, temp_extract_dir, overwrite=True, verbose=False)
@@ -216,7 +275,7 @@ def unpartition(
     pairs = _scan_dataset_files(images_src, labels_src)
 
     # Prepare temp output dir
-    temp_out = output.parent / f".temp_unpartition_out_{random.randint(1000, 9999)}"
+    temp_out = target.parent / f".temp_unpartition_out_{random.randint(1000, 9999)}"
     if temp_out.exists():
         shutil.rmtree(temp_out)
 
@@ -244,7 +303,7 @@ def unpartition(
 
     # Write new data.yaml
     new_yaml = {
-        "path": str(output.resolve()) if not output.name.endswith(".zip") else str(output.parent.resolve()),
+        "path": str(target.resolve()) if not target.name.endswith(".zip") else str(target.parent.resolve()),
         "train": "images",
         "val": "",
         "test": "",
@@ -258,15 +317,14 @@ def unpartition(
         shutil.rmtree(temp_extract_dir)
 
     # Put to final output
-    if output.name.endswith(".zip"):
+    if target.name.endswith(".zip"):
         from klygo.archive import compress
-        compress(temp_out, output, overwrite=overwrite, verbose=verbose)
+        compress(temp_out, target, overwrite=overwrite, verbose=verbose)
         shutil.rmtree(temp_out)
     else:
-        if output.exists() and overwrite:
-            if output.is_dir():
-                shutil.rmtree(output)
+        if target.exists() and overwrite:
+            if target.is_dir():
+                shutil.rmtree(target)
             else:
-                output.unlink()
-        temp_out.rename(output)
-
+                target.unlink()
+        temp_out.rename(target)

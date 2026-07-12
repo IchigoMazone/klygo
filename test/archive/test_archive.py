@@ -27,7 +27,7 @@ if __name__ == "__main__":
     print(f"search 'frame_1*.jpg': {len(found)} matches -> {found[:3]}")
 
     # 5. extract_file
-    extract_file(src, files[0], output="test_single", overwrite=True)
+    extract_file(src, files[0], output_dir="test_single", overwrite=True)
     print(f"extract_file: OK -> {files[0]}")
 
     # 6. compress

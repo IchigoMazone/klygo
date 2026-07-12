@@ -10,9 +10,18 @@ import klygo.archive as ar
 
 ## Hướng dẫn chi tiết từng API
 
+### human_size
+Chuyển kích thước byte thành chuỗi dễ đọc.
+
+```python
+import klygo.archive as ar
+
+print(ar.human_size(1048576))  # 1.00 MB
+```
+
 ### 1. compress
 Nén một file hoặc toàn bộ thư mục thành file ZIP.
-* **Cú pháp:** `ar.compress(source, output, format="zip", overwrite=False, verbose=True)`
+* **Cú pháp:** `ar.compress(source, output_path, format="zip", overwrite=False, verbose=True)`
 * **Tham số:**
   * `source`: File hoặc thư mục cần nén.
   * `output`: Đường dẫn lưu file ZIP đầu ra.
@@ -28,9 +37,9 @@ ar.compress("data_dir/", "data.zip", overwrite=True, verbose=True)
 
 ### 2. extract
 Giải nén toàn bộ nội dung archive vào một thư mục.
-* **Cú pháp:** `ar.extract(source, output=".", overwrite=False, verbose=True)`
+* **Cú pháp:** `ar.extract(archive_path, output_dir=".", overwrite=False, verbose=True)`
 * **Tham số:**
-  * `source`: Đường dẫn file ZIP đầu vào.
+  * `archive_path`: Đường dẫn file ZIP đầu vào.
   * `output`: Thư mục đích giải nén.
   * `overwrite`: Ghi đè lên các tệp đã có tại thư mục đích.
   * `verbose`: Hiển thị thanh tiến trình màu xanh lam.
@@ -39,14 +48,14 @@ Giải nén toàn bộ nội dung archive vào một thư mục.
 import klygo.archive as ar
 
 # Giải nén toàn bộ file ZIP vào thư mục 'extracted'
-ar.extract("data.zip", output="extracted/", overwrite=True, verbose=True)
+ar.extract("data.zip", output_dir="extracted/", overwrite=True, verbose=True)
 ```
 
 ### 3. extract_file
 Giải nén một file cụ thể từ file ZIP.
-* **Cú pháp:** `ar.extract_file(source, filename, output=".", overwrite=False)`
+* **Cú pháp:** `ar.extract_file(archive_path, filename, output_dir=".", overwrite=False)`
 * **Tham số:**
-  * `source`: Đường dẫn file ZIP.
+  * `archive_path`: Đường dẫn file ZIP.
   * `filename`: Tên/đường dẫn chính xác của file cần giải nén bên trong ZIP.
   * `output`: Thư mục đích giải nén.
   * `overwrite`: Ghi đè lên tệp nếu đã tồn tại tại đích.
@@ -55,12 +64,12 @@ Giải nén một file cụ thể từ file ZIP.
 import klygo.archive as ar
 
 # Chỉ giải nén tệp 'images/001.jpg' trong file nén ra thư mục 'out'
-ar.extract_file("data.zip", "images/001.jpg", output="out/", overwrite=True)
+ar.extract_file("data.zip", "images/001.jpg", output_dir="out/", overwrite=True)
 ```
 
 ### 4. list_files
 Liệt kê toàn bộ đường dẫn file chứa trong archive.
-* **Cú pháp:** `ar.list_files(source) -> list[str]`
+* **Cú pháp:** `ar.list_files(archive_path) -> list[str]`
 * **Ví dụ sử dụng:**
 ```python
 import klygo.archive as ar
@@ -72,7 +81,7 @@ print(files)
 
 ### 5. search
 Tìm kiếm các file bên trong archive khớp với biểu thức glob pattern.
-* **Cú pháp:** `ar.search(source, pattern) -> list[str]`
+* **Cú pháp:** `ar.search(archive_path, pattern) -> list[str]`
 * **Ví dụ sử dụng:**
 ```python
 import klygo.archive as ar
@@ -84,7 +93,7 @@ print(jpg_files)
 
 ### 6. get_info
 Trả về metadata tổng quan của file nén (không giải nén).
-* **Cú pháp:** `ar.get_info(source) -> dict`
+* **Cú pháp:** `ar.get_info(archive_path) -> dict`
 * **Ví dụ sử dụng:**
 ```python
 import klygo.archive as ar
@@ -97,7 +106,7 @@ print(f"Kích thước nén: {info['compressed_size']} bytes")
 
 ### 7. test
 Kiểm tra tính toàn vẹn của tệp ZIP bằng CRC32 checksum.
-* **Cú pháp:** `ar.test(source) -> bool`
+* **Cú pháp:** `ar.test(archive_path) -> bool`
 * **Ví dụ sử dụng:**
 ```python
 import klygo.archive as ar
@@ -112,9 +121,9 @@ except ValueError as e:
 
 ### 8. add
 Thêm một hoặc nhiều file/thư mục vào tệp ZIP đã tồn tại.
-* **Cú pháp:** `ar.add(source, files, verbose=True)`
+* **Cú pháp:** `ar.add(archive_path, files, verbose=True)`
 * **Tham số:**
-  * `source`: File ZIP hiện có.
+  * `archive_path`: File ZIP hiện có.
   * `files`: Tên file hoặc list các đường dẫn cần thêm.
   * `verbose`: Hiển thị thanh tiến trình màu vàng.
 * **Ví dụ sử dụng:**
@@ -127,7 +136,7 @@ ar.add("data.zip", ["new_image.jpg", "config.json"], verbose=True)
 
 ### 9. remove
 Xóa một hoặc nhiều file ra khỏi tệp ZIP.
-* **Cú pháp:** `ar.remove(source, files)`
+* **Cú pháp:** `ar.remove(archive_path, files)`
 * **Ví dụ sử dụng:**
 ```python
 import klygo.archive as ar
@@ -138,9 +147,9 @@ ar.remove("data.zip", "temp_log.txt")
 
 ### 10. merge
 Gộp hai hoặc nhiều file ZIP nguồn thành một file ZIP mới duy nhất.
-* **Cú pháp:** `ar.merge(sources, output, overwrite=False, verbose=True)`
+* **Cú pháp:** `ar.merge(archive_paths, output_path, overwrite=False, verbose=True)`
 * **Tham số:**
-  * `sources`: Danh sách các đường dẫn file ZIP nguồn.
+  * `archive_paths`: Danh sách các đường dẫn file ZIP nguồn.
   * `output`: Đường dẫn ZIP gộp đầu ra.
   * `verbose`: Hiển thị thanh tiến trình màu magenta.
 * **Ví dụ sử dụng:**
@@ -153,7 +162,7 @@ ar.merge(["part1.zip", "part2.zip"], "merged.zip", overwrite=True, verbose=True)
 
 ### 11. split
 Chia nhỏ một file ZIP lớn thành các phần nhỏ hơn có dung lượng nén giới hạn.
-* **Cú pháp:** `ar.split(source, size, output_dir=".", overwrite=False, verbose=True) -> list[str]`
+* **Cú pháp:** `ar.split(archive_path, size, output_dir=".", overwrite=False, verbose=True) -> list[str]`
 * **Tham số:**
   * `size`: Kích thước nén tối đa của mỗi phần (tính bằng MB, hỗ trợ cả số thực).
   * `output_dir`: Thư mục lưu các phần được tạo ra.

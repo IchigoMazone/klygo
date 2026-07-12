@@ -19,6 +19,23 @@ def _write_with_bar(
     desc: str,
     writer_func: Any,
 ) -> None:
+    """
+    Tác dụng:
+    - Thực hiện chức năng _write_with_bar
+
+    Đầu vào:
+    - path: Đường dẫn file
+    - data: Dữ liệu cần xử lý
+    - overwrite: Trạng thái cho phép ghi đè
+    - verbose: Trạng thái hiển thị tiến trình
+    - desc: Tham số desc của hàm
+    - writer_func: Tham số writer_func của hàm
+
+    Đầu ra:
+    - Không trả về dữ liệu
+
+    Nguồn: TrinhNhuNhat_12072026.
+    """
     bar = (
         tqdm(
             total=1,
@@ -46,35 +63,24 @@ def write_yaml(
     overwrite: bool = False,
     verbose: bool = True,
 ) -> None:
-    """Write data to a YAML file.
+    """
+    Tác dụng:
+    - Ghi dữ liệu vào file YAML
 
-    Parameters
-    ----------
-    path : str or Path
-        Destination path (must end in ``.yaml`` or ``.yml``).
-        Parent directories are created automatically.
-    data : Any
-        Data to serialise (usually a dict or list).
-    overwrite : bool, optional
-        If *True*, overwrite the file if it exists.
-        Default is *False*.
-    verbose : bool, optional
-        If *True* (default), display a progress bar.
+    Đầu vào:
+    - path: Đường dẫn file
+    - data: Dữ liệu cần xử lý
+    - overwrite: Trạng thái cho phép ghi đè
+    - verbose: Trạng thái hiển thị tiến trình
 
-    Returns
-    -------
-    None
+    Đầu ra:
+    - Không trả về dữ liệu
 
-    Raises
-    ------
-    ValueError
-        If ``path`` has an unsupported extension.
-    FileExistsError
-        If ``path`` exists and ``overwrite`` is *False*.
+    Ngoại lệ:
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Examples
-    --------
-    >>> write_yaml("out/config.yaml", {"lr": 0.001, "epochs": 10})
+    Nguồn: TrinhNhuNhat_12072026.
     """
     params = WriteFile(
         path=path,
@@ -85,6 +91,18 @@ def write_yaml(
     params.path.parent.mkdir(parents=True, exist_ok=True)
 
     def _write():
+        """
+        Tác dụng:
+        - Thực hiện chức năng _write
+
+        Đầu vào:
+        - Không có tham số đầu vào
+
+        Đầu ra:
+        - Kết quả xử lý của hàm
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         with open(params.path, "w", encoding="utf-8") as f:
             _yaml.dump(data, f)
 
@@ -104,35 +122,24 @@ def write_json(
     overwrite: bool = False,
     verbose: bool = True,
 ) -> None:
-    """Write data to a JSON file.
+    """
+    Tác dụng:
+    - Ghi dữ liệu vào file JSON
 
-    Parameters
-    ----------
-    path : str or Path
-        Destination path (must end in ``.json``).
-        Parent directories are created automatically.
-    data : Any
-        JSON-serialisable data.
-    overwrite : bool, optional
-        If *True*, overwrite the file if it exists.
-        Default is *False*.
-    verbose : bool, optional
-        If *True* (default), display a progress bar.
+    Đầu vào:
+    - path: Đường dẫn file
+    - data: Dữ liệu cần xử lý
+    - overwrite: Trạng thái cho phép ghi đè
+    - verbose: Trạng thái hiển thị tiến trình
 
-    Returns
-    -------
-    None
+    Đầu ra:
+    - Không trả về dữ liệu
 
-    Raises
-    ------
-    ValueError
-        If ``path`` has an unsupported extension.
-    FileExistsError
-        If ``path`` exists and ``overwrite`` is *False*.
+    Ngoại lệ:
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Examples
-    --------
-    >>> write_json("out/config.json", {"lr": 0.001})
+    Nguồn: TrinhNhuNhat_12072026.
     """
     params = WriteFile(
         path=path,
@@ -143,6 +150,18 @@ def write_json(
     params.path.parent.mkdir(parents=True, exist_ok=True)
 
     def _write():
+        """
+        Tác dụng:
+        - Thực hiện chức năng _write
+
+        Đầu vào:
+        - Không có tham số đầu vào
+
+        Đầu ra:
+        - Kết quả xử lý của hàm
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         with open(params.path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
 
@@ -162,35 +181,24 @@ def write_toml(
     overwrite: bool = False,
     verbose: bool = True,
 ) -> None:
-    """Write data to a TOML file.
+    """
+    Tác dụng:
+    - Ghi dữ liệu vào file TOML
 
-    Parameters
-    ----------
-    path : str or Path
-        Destination path (must end in ``.toml``).
-        Parent directories are created automatically.
-    data : Any
-        Dict-like data to serialise as TOML.
-    overwrite : bool, optional
-        If *True*, overwrite the file if it exists.
-        Default is *False*.
-    verbose : bool, optional
-        If *True* (default), display a progress bar.
+    Đầu vào:
+    - path: Đường dẫn file
+    - data: Dữ liệu cần xử lý
+    - overwrite: Trạng thái cho phép ghi đè
+    - verbose: Trạng thái hiển thị tiến trình
 
-    Returns
-    -------
-    None
+    Đầu ra:
+    - Không trả về dữ liệu
 
-    Raises
-    ------
-    ValueError
-        If ``path`` has an unsupported extension.
-    FileExistsError
-        If ``path`` exists and ``overwrite`` is *False*.
+    Ngoại lệ:
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Examples
-    --------
-    >>> write_toml("out/config.toml", {"lr": 0.001})
+    Nguồn: TrinhNhuNhat_12072026.
     """
     params = WriteFile(
         path=path,
@@ -201,6 +209,18 @@ def write_toml(
     params.path.parent.mkdir(parents=True, exist_ok=True)
 
     def _write():
+        """
+        Tác dụng:
+        - Thực hiện chức năng _write
+
+        Đầu vào:
+        - Không có tham số đầu vào
+
+        Đầu ra:
+        - Kết quả xử lý của hàm
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         with open(params.path, "w", encoding="utf-8") as f:
             tomlkit.dump(data, f)
 
@@ -220,38 +240,24 @@ def write_file(
     overwrite: bool = False,
     verbose: bool = True,
 ) -> None:
-    """Write data to any supported config file, auto-detecting the format.
+    """
+    Tác dụng:
+    - Ghi dữ liệu vào file cấu hình được hỗ trợ
 
-    Supported formats: ``.yaml``, ``.yml``, ``.json``, ``.toml``.
+    Đầu vào:
+    - path: Đường dẫn file
+    - data: Dữ liệu cần xử lý
+    - overwrite: Trạng thái cho phép ghi đè
+    - verbose: Trạng thái hiển thị tiến trình
 
-    Parameters
-    ----------
-    path : str or Path
-        Destination path. Format is inferred from the file extension.
-        Parent directories are created automatically.
-    data : Any
-        Data to write.
-    overwrite : bool, optional
-        If *True*, overwrite the file if it exists.
-        Default is *False*.
-    verbose : bool, optional
-        If *True* (default), display a progress bar.
+    Đầu ra:
+    - Không trả về dữ liệu
 
-    Returns
-    -------
-    None
+    Ngoại lệ:
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Raises
-    ------
-    ValueError
-        If ``path`` has an unsupported extension.
-    FileExistsError
-        If ``path`` exists and ``overwrite`` is *False*.
-
-    Examples
-    --------
-    >>> write_file("out/config.json", {"lr": 0.001})   # writes JSON
-    >>> write_file("out/params.toml", {"batch": 32})   # writes TOML
+    Nguồn: TrinhNhuNhat_12072026.
     """
     params = WriteFile(
         path=path,

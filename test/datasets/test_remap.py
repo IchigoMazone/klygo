@@ -43,7 +43,7 @@ def test_remap_success_list_format():
         # Renaming class "apple" to "fresh_apple", class ID remains 0 (continuous)
         remap_classes(
             source="test/data.zip",
-            output=temp_zip,
+            target=temp_zip,
             class_map={"apple": "fresh_apple"},
             overwrite=True,
             verbose=False
@@ -75,7 +75,7 @@ def test_remap_success_dict_format():
         # Changing ID from 0 to 1, rename "apple" to "red_apple" (sparse)
         remap_classes(
             source="test/data.zip",
-            output=temp_zip,
+            target=temp_zip,
             class_map={0: 1, "apple": "red_apple"},
             overwrite=True,
             verbose=False
@@ -101,7 +101,7 @@ def test_remap_validation_errors():
     try:
         remap_classes(
             source="test/data.zip",
-            output="dummy.zip",
+            target="dummy.zip",
             class_map={"non_existent_class": "orange"},
             overwrite=True
         )
@@ -113,7 +113,7 @@ def test_remap_validation_errors():
     try:
         remap_classes(
             source="test/data.zip",
-            output="dummy.zip",
+            target="dummy.zip",
             class_map={5: "orange"},
             overwrite=True
         )
@@ -125,7 +125,7 @@ def test_remap_validation_errors():
     try:
         remap_classes(
             source="test/data.zip",
-            output="dummy.zip",
+            target="dummy.zip",
             class_map={1.5: "orange"}, # float key
             overwrite=True
         )

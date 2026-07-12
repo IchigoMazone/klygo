@@ -4,67 +4,47 @@ from pathlib import Path
 from tqdm import tqdm
 
 from klygo.validators.archive import Merge, Split
-from klygo.archive._utils import _human_size
+from klygo.archive.human_size import human_size
 
 
 def merge(
-    sources: list,
-    output: str | Path,
+    archive_paths: list,
+    output_path: str | Path,
     overwrite: bool = False,
     verbose: bool = True,
 ) -> None:
-    """Combine two or more archives into a single new archive.
+    """
+    Tác dụng:
+    - Gộp nhiều nguồn dữ liệu thành một kết quả
 
-    All files from every source archive are written sequentially into
-    ``output``. Metadata (compression method, timestamps) from the
-    original members is preserved. If duplicate arcnames exist across
-    the input archives, both copies are included as-is.
+    Đầu vào:
+    - archive_paths: Danh sách đường dẫn file lưu trữ
+    - output_path: Đường dẫn file đầu ra
+    - overwrite: Trạng thái cho phép ghi đè
+    - verbose: Trạng thái hiển thị tiến trình
 
-    Parameters
-    ----------
-    sources : list of (str | Path)
-        Ordered list of at least 2 archive paths to merge.
-    output : str or Path
-        Destination path for the merged archive (must end in ``.zip``).
-    overwrite : bool, optional
-        If *True*, overwrite ``output`` when it already exists.
-        Default is *False*.
-    verbose : bool, optional
-        If *True* (default), display a coloured progress bar and print
-        the final merged archive size on completion.
+    Đầu ra:
+    - Không trả về dữ liệu
 
-    Returns
-    -------
-    None
+    Ngoại lệ:
+    - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Raises
-    ------
-    TypeError
-        If ``sources`` is not a list with at least 2 items, or any
-        argument has the wrong type.
-    FileNotFoundError
-        If any path in ``sources`` does not exist.
-    ValueError
-        If any source is not a supported format, or ``output`` does not
-        end with ``.zip``.
-    FileExistsError
-        If ``output`` already exists and ``overwrite`` is *False*.
-
-    Examples
-    --------
-    >>> merge(["part1.zip", "part2.zip"], "combined.zip")
-
-    Merge three archives, overwriting the output if it exists:
-
-    >>> merge(["a.zip", "b.zip", "c.zip"], "all.zip", overwrite=True)
+    Nguồn: TrinhNhuNhat_12072026.
     """
 
-    params = Merge(sources=sources, output=output, overwrite=overwrite)
+    params = Merge(
+        archive_paths=archive_paths,
+        output_path=output_path,
+        overwrite=overwrite,
+    )
 
     # Pre-collect members per source for accurate total count
     src_members: dict[Path, list] = {}
     total = 0
-    for src in params.sources:
+    for src in params.archive_paths:
         with ZipFile(src, mode="r") as zf:
             src_members[src] = zf.infolist()
             total += len(src_members[src])
@@ -81,8 +61,8 @@ def merge(
         else None
     )
 
-    with ZipFile(params.output, mode="w", compression=ZIP_DEFLATED) as out_zf:
-        for src in params.sources:
+    with ZipFile(params.output_path, mode="w", compression=ZIP_DEFLATED) as out_zf:
+        for src in params.archive_paths:
             with ZipFile(src, mode="r") as src_zf:
                 for item in src_members[src]:
                     out_zf.writestr(item, src_zf.read(item.filename))
@@ -95,77 +75,45 @@ def merge(
         bar.close()
 
     if verbose:
-        size = params.output.stat().st_size
+        size = params.output_path.stat().st_size
         print(
-            f"Done. Merged {len(params.sources)} archives -> "
-            f"{_human_size(size)}"
+            f"Done. Merged {len(params.archive_paths)} archives -> "
+            f"{human_size(size)}"
         )
 
 
 def split(
-    source: str | Path,
+    archive_path: str | Path,
     size: int | float,
     output_dir: str | Path = ".",
     overwrite: bool = False,
     verbose: bool = True,
 ) -> list[str]:
-    """Split a large archive into multiple smaller part files.
+    """
+    Tác dụng:
+    - Chia dữ liệu thành nhiều phần theo cấu hình
 
-    Files are distributed across parts greedily: a new part is started
-    whenever adding the next file would cause the current part's
-    *compressed* size to exceed ``size`` (specified in MB). Each individual
-    file always goes into exactly one part (files are never split across archives).
+    Đầu vào:
+    - archive_path: Đường dẫn file lưu trữ
+    - size: Tham số size của hàm
+    - output_dir: Đường dẫn thư mục đầu ra
+    - overwrite: Trạng thái cho phép ghi đè
+    - verbose: Trạng thái hiển thị tiến trình
 
-    Output files are named ``{stem}_part_NNN{suffix}`` where ``NNN``
-    is a zero-padded three-digit counter (e.g. ``data_part_001.zip``).
+    Đầu ra:
+    - Kết quả xử lý của hàm
 
-    Parameters
-    ----------
-    source : str or Path
-        Path to the archive file to split.
-    size : int or float
-        Maximum *compressed* size in MB for each output part.
-        Must be a positive number.
-    output_dir : str or Path, optional
-        Directory where the part files will be written.
-        Created automatically if it does not exist.
-        Defaults to the current working directory (``"."``).
-    overwrite : bool, optional
-        If *True*, overwrite existing part files.
-        Default is *False*.
-    verbose : bool, optional
-        If *True* (default), display a coloured progress bar and print
-        the total number of parts created on completion.
+    Ngoại lệ:
+    - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Returns
-    -------
-    list[str]
-        Ordered list of paths to the created part files
-        (e.g. ``["out/data_part_001.zip", "out/data_part_002.zip", …]``).
-
-    Raises
-    ------
-    TypeError
-        If any argument has the wrong type.
-    FileNotFoundError
-        If ``source`` does not exist.
-    ValueError
-        If ``source`` is not a supported archive format, or ``size`` is
-        not a positive number.
-    FileExistsError
-        If a part file already exists and ``overwrite`` is *False*.
-
-    Examples
-    --------
-    Split into 5 MB parts:
-
-    >>> parts = split("large_dataset.zip", size=5, output_dir="parts/")
-    >>> print(parts)
-    ['parts/large_dataset_part_001.zip', 'parts/large_dataset_part_002.zip']
+    Nguồn: TrinhNhuNhat_12072026.
     """
 
     params = Split(
-        source=source,
+        archive_path=archive_path,
         size=size,
         output_dir=output_dir,
         overwrite=overwrite,
@@ -173,12 +121,12 @@ def split(
 
     params.output_dir.mkdir(parents=True, exist_ok=True)
 
-    stem = params.source.stem
-    suffix = params.source.suffix
+    stem = params.archive_path.stem
+    suffix = params.archive_path.suffix
     parts: list[str] = []
     part_num = 1
 
-    with ZipFile(params.source, mode="r") as src_zf:
+    with ZipFile(params.archive_path, mode="r") as src_zf:
         members = src_zf.infolist()
 
         bar = (
@@ -197,6 +145,21 @@ def split(
         current_size = 0
 
         def _flush() -> None:
+            """
+            Tác dụng:
+            - Thực hiện chức năng _flush
+
+            Đầu vào:
+            - Không có tham số đầu vào
+
+            Đầu ra:
+            - Không trả về dữ liệu
+
+            Ngoại lệ:
+            - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+            Nguồn: TrinhNhuNhat_12072026.
+            """
             nonlocal part_num
             part_path = params.output_dir / f"{stem}_part_{part_num:03d}{suffix}"
             if part_path.exists() and not params.overwrite:

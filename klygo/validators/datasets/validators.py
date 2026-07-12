@@ -8,14 +8,37 @@ class Partition:
     def __init__(
         self,
         source: str | Path,
-        output: str | Path,
+        target: str | Path,
         ratios: tuple[float],
         overwrite: bool,
         verbose: bool,
     ) -> None:
-        
+
+        """
+        Tác dụng:
+        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
+
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - source: File hoặc thư mục đầu vào
+        - target: File hoặc thư mục đầu ra
+        - ratios: Tham số ratios của hàm
+        - overwrite: Trạng thái cho phép ghi đè
+        - verbose: Trạng thái hiển thị tiến trình
+
+        Đầu ra:
+        - Không trả về dữ liệu
+
+        Ngoại lệ:
+        - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+        - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+        - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         validate_type(source, (str, Path), "source")
-        validate_type(output, (str, Path), "output")
+        validate_type(target, (str, Path), "target")
         validate_type(ratios, tuple, "ratios")
         validate_type(overwrite, bool, "overwrite")
         validate_type(verbose, bool, "verbose")
@@ -26,12 +49,12 @@ class Partition:
             )
 
         source = Path(source)
-        output = Path(output) 
+        target = Path(target)
 
         if not source.exists():
             raise FileNotFoundError(f"source does not exist: {source}")
-        if output.exists() and not overwrite:
-            raise FileExistsError(f"output already exists: {output}")
+        if target.exists() and not overwrite:
+            raise FileExistsError(f"target already exists: {target}")
         if not (1 <= len(ratios) and len(ratios) <= 3):
             raise ValueError(f"ratios len must contain between 1 and 3 values: {len(ratios)}")
         if len(ratios) == 1:
@@ -53,8 +76,8 @@ class Partition:
                     "The sum of ratios must equal 1."
                 )
         self.source = source
-        self.output = output
-        self.ratios = ratios 
+        self.target = target
+        self.ratios = ratios
         self.overwrite = overwrite
         self.verbose = verbose
 
@@ -67,12 +90,34 @@ class Merge:
     def __init__(
         self,
         sources: list,
-        output: str | Path,
+        output_path: str | Path,
         overwrite: bool,
         verbose: bool,
     ) -> None:
+        """
+        Tác dụng:
+        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
+
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - sources: Danh sách file hoặc thư mục đầu vào
+        - output_path: Đường dẫn file đầu ra
+        - overwrite: Trạng thái cho phép ghi đè
+        - verbose: Trạng thái hiển thị tiến trình
+
+        Đầu ra:
+        - Không trả về dữ liệu
+
+        Ngoại lệ:
+        - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+        - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+        - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         validate_type(sources, list, "sources")
-        validate_type(output, (str, Path), "output")
+        validate_type(output_path, (str, Path), "output_path")
         validate_type(overwrite, bool, "overwrite")
         validate_type(verbose, bool, "verbose")
 
@@ -80,20 +125,20 @@ class Merge:
             raise TypeError("sources must be a list of strings or Path objects.")
 
         sources = [Path(s) for s in sources]
-        output = Path(output)
+        output_path = Path(output_path)
 
         for src in sources:
             if not src.exists():
                 raise FileNotFoundError(f"source does not exist: {src}")
 
-        if not str(output).lower().endswith(".zip"):
-            raise ValueError("output path must end with '.zip'")
+        if not str(output_path).lower().endswith(".zip"):
+            raise ValueError("output_path must end with '.zip'")
 
-        if output.exists() and not overwrite:
-            raise FileExistsError(f"output already exists: {output}")
+        if output_path.exists() and not overwrite:
+            raise FileExistsError(f"output_path already exists: {output_path}")
 
         self.sources = sources
-        self.output = output
+        self.output_path = output_path
         self.overwrite = overwrite
         self.verbose = verbose
 
@@ -109,6 +154,30 @@ class Split:
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
+        """
+        Tác dụng:
+        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
+
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - source: File hoặc thư mục đầu vào
+        - output_dir: Đường dẫn thư mục đầu ra
+        - by_class: Tham số by_class của hàm
+        - class_groups: Tham số class_groups của hàm
+        - ratios: Tham số ratios của hàm
+        - overwrite: Trạng thái cho phép ghi đè
+        - verbose: Trạng thái hiển thị tiến trình
+
+        Đầu ra:
+        - Không trả về dữ liệu
+
+        Ngoại lệ:
+        - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+        - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         validate_type(source, (str, Path), "source")
         validate_type(output_dir, (str, Path), "output_dir")
         validate_type(by_class, bool, "by_class")
@@ -142,6 +211,11 @@ class Split:
         if not self.source.exists():
             raise FileNotFoundError(f"source does not exist: {self.source}")
 
+        if self.output_dir.exists() and not self.output_dir.is_dir():
+            raise ValueError(
+                f"output_dir must be a directory, got file: {self.output_dir}"
+            )
+
         if not self.by_class and self.class_groups is None and self.ratios is None:
             raise ValueError("Must specify either by_class=True, class_groups, or ratios.")
 
@@ -150,19 +224,40 @@ class RemapClasses:
     def __init__(
         self,
         source: str | Path,
-        output: str | Path,
+        target: str | Path,
         class_map: dict,
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
+        """
+        Tác dụng:
+        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
+
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - source: File hoặc thư mục đầu vào
+        - target: File hoặc thư mục đầu ra
+        - class_map: Tham số class_map của hàm
+        - overwrite: Trạng thái cho phép ghi đè
+        - verbose: Trạng thái hiển thị tiến trình
+
+        Đầu ra:
+        - Không trả về dữ liệu
+
+        Ngoại lệ:
+        - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+        - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         validate_type(source, (str, Path), "source")
-        validate_type(output, (str, Path), "output")
+        validate_type(target, (str, Path), "target")
         validate_type(class_map, dict, "class_map")
         validate_type(overwrite, bool, "overwrite")
         validate_type(verbose, bool, "verbose")
 
         self.source = Path(source)
-        self.output = Path(output)
+        self.target = Path(target)
         self.class_map = class_map
         self.overwrite = overwrite
         self.verbose = verbose
@@ -170,8 +265,10 @@ class RemapClasses:
         if not self.source.exists():
             raise FileNotFoundError(f"source does not exist: {self.source}")
 
-        if self.output.exists() and not self.overwrite:
-            raise FileExistsError(f"output already exists: {self.output}")
+        if self.target.exists() and not self.overwrite:
+            raise FileExistsError(
+                f"target already exists: {self.target}"
+            )
 
 
 

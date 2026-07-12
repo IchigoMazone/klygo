@@ -6,103 +6,60 @@ from klygo.validators.archive import ListFiles, Search
 
 
 def list_files(
-    source: str | Path,
+    archive_path: str | Path,
 ) -> list[str]:
-    """Return a list of all file paths stored inside an archive.
+    """
+    Tác dụng:
+    - Lấy danh sách file bên trong file lưu trữ
 
-    The returned strings are the *arcnames* — the paths as they are
-    stored inside the ZIP (e.g. ``"images/frame_001.jpg"``). These
-    values can be passed directly to :func:`extract_file`, :func:`remove`,
-    and :func:`search`.
+    Đầu vào:
+    - archive_path: Đường dẫn file lưu trữ
 
-    Parameters
-    ----------
-    source : str or Path
-        Path to the archive file (e.g. ``"data.zip"``).
+    Đầu ra:
+    - Kết quả xử lý của hàm
 
-    Returns
-    -------
-    list[str]
-        Ordered list of file paths as stored inside the archive.
+    Ngoại lệ:
+    - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Raises
-    ------
-    TypeError
-        If ``source`` is not a ``str`` or ``Path``.
-    FileNotFoundError
-        If ``source`` does not exist.
-    ValueError
-        If ``source`` is not a supported archive format.
-
-    Examples
-    --------
-    >>> files = list_files("data.zip")
-    >>> print(files[:3])
-    ['images/frame_0.jpg', 'images/frame_1.jpg', 'data.yaml']
+    Nguồn: TrinhNhuNhat_12072026.
     """
 
-    params = ListFiles(source=source)
+    params = ListFiles(archive_path=archive_path)
 
-    with ZipFile(params.source, mode="r") as zf:
+    with ZipFile(params.archive_path, mode="r") as zf:
         names = zf.namelist()
 
     return names
 
 
 def search(
-    source: str | Path,
+    archive_path: str | Path,
     pattern: str,
 ) -> list[str]:
-    """Find files inside an archive whose paths match a glob pattern.
+    """
+    Tác dụng:
+    - Tìm các file khớp mẫu bên trong file lưu trữ
 
-    Matching is performed with :func:`fnmatch.fnmatch` against each
-    arcname stored in the archive. The search is case-sensitive on
-    case-sensitive filesystems.
+    Đầu vào:
+    - archive_path: Đường dẫn file lưu trữ
+    - pattern: Tham số pattern của hàm
 
-    Parameters
-    ----------
-    source : str or Path
-        Path to the archive file.
-    pattern : str
-        Glob pattern to match against file paths inside the archive.
-        Supports the standard wildcards:
+    Đầu ra:
+    - Kết quả xử lý của hàm
 
-        * ``*``  — matches any sequence of characters (not ``/``).
-        * ``?``  — matches any single character.
-        * ``[seq]`` — matches any character in *seq*.
+    Ngoại lệ:
+    - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-        Example: ``"images/*.jpg"`` matches all JPEG files under the
-        ``images/`` folder.
-
-    Returns
-    -------
-    list[str]
-        Arcnames of the files that matched ``pattern``, in the order
-        they appear inside the archive. Returns an empty list if
-        nothing matches.
-
-    Raises
-    ------
-    TypeError
-        If ``source`` or ``pattern`` has the wrong type.
-    FileNotFoundError
-        If ``source`` does not exist.
-    ValueError
-        If ``source`` is not a supported archive format.
-
-    Examples
-    --------
-    >>> results = search("data.zip", "images/frame_1*.jpg")
-    >>> print(len(results))
-    111
-
-    >>> search("data.zip", "*.yaml")
-    ['data.yaml']
+    Nguồn: TrinhNhuNhat_12072026.
     """
 
-    params = Search(source=source, pattern=pattern)
+    params = Search(archive_path=archive_path, pattern=pattern)
 
-    with ZipFile(params.source, mode="r") as zf:
+    with ZipFile(params.archive_path, mode="r") as zf:
         names = zf.namelist()
 
     return [name for name in names if fnmatch.fnmatch(name, params.pattern)]

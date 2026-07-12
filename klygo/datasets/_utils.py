@@ -5,6 +5,19 @@ from klygo.io import read_yaml
 
 
 def _safe_move(src: Path, dst: Path) -> None:
+    """
+    Tác dụng:
+    - Thực hiện chức năng _safe_move
+
+    Đầu vào:
+    - src: Tham số src của hàm
+    - dst: Tham số dst của hàm
+
+    Đầu ra:
+    - Không trả về dữ liệu
+
+    Nguồn: TrinhNhuNhat_12072026.
+    """
     if not src.exists():
         return
     if src.resolve() == dst.resolve():
@@ -27,6 +40,19 @@ def _safe_move(src: Path, dst: Path) -> None:
 
 
 def _safe_copy(src: Path, dst: Path) -> None:
+    """
+    Tác dụng:
+    - Thực hiện chức năng _safe_copy
+
+    Đầu vào:
+    - src: Tham số src của hàm
+    - dst: Tham số dst của hàm
+
+    Đầu ra:
+    - Không trả về dữ liệu
+
+    Nguồn: TrinhNhuNhat_12072026.
+    """
     if not src.exists():
         return
     if src.resolve() == dst.resolve():
@@ -42,16 +68,17 @@ def _safe_copy(src: Path, dst: Path) -> None:
 
 
 def _find_dataset_root(extracted_dir: Path) -> Path:
-    """Find the actual dataset root after ZIP extraction.
+    """
+    Tác dụng:
+    - Thực hiện chức năng _find_dataset_root
 
-    When a ZIP is created via ``compress("my_dataset/", ...)``, the archive
-    stores entries as ``my_dataset/data.yaml``, ``my_dataset/images/...``,
-    etc.  After extraction the dataset lives one level deeper than the
-    extraction directory.  This helper detects that situation and returns
-    the correct base path.
+    Đầu vào:
+    - extracted_dir: Tham số extracted_dir của hàm
 
-    Returns *extracted_dir* itself when ``data.yaml`` sits at the root,
-    or the single nested subdirectory that contains it.
+    Đầu ra:
+    - Kết quả xử lý của hàm
+
+    Nguồn: TrinhNhuNhat_12072026.
     """
     if (extracted_dir / "data.yaml").exists():
         return extracted_dir
@@ -70,6 +97,23 @@ def _read_class_names(
     temp_extract_dir: Path | None = None,
     extra_cleanups: list[Path] | None = None
 ) -> list[str]:
+    """
+    Tác dụng:
+    - Thực hiện chức năng _read_class_names
+
+    Đầu vào:
+    - src_base: Tham số src_base của hàm
+    - temp_extract_dir: Tham số temp_extract_dir của hàm
+    - extra_cleanups: Tham số extra_cleanups của hàm
+
+    Đầu ra:
+    - Kết quả xử lý của hàm
+
+    Ngoại lệ:
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+    Nguồn: TrinhNhuNhat_12072026.
+    """
     yaml_src = src_base / "data.yaml"
     if not yaml_src.exists():
         if temp_extract_dir and temp_extract_dir.exists():
@@ -99,6 +143,19 @@ def _read_class_names(
 
 
 def _scan_dataset_files(images_src: Path, labels_src: Path) -> list[tuple[Path, Path | None, Path, Path]]:
+    """
+    Tác dụng:
+    - Thực hiện chức năng _scan_dataset_files
+
+    Đầu vào:
+    - images_src: Tham số images_src của hàm
+    - labels_src: Tham số labels_src của hàm
+
+    Đầu ra:
+    - Kết quả xử lý của hàm
+
+    Nguồn: TrinhNhuNhat_12072026.
+    """
     image_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
     scan_dirs = [images_src]
     for split_sub in ["train", "val", "test"]:
@@ -111,7 +168,7 @@ def _scan_dataset_files(images_src: Path, labels_src: Path) -> list[tuple[Path, 
         for f in d.iterdir():
             if f.is_file() and f.suffix.lower() in image_extensions:
                 image_files.append(f)
-    
+
     image_files = sorted(list(set(image_files)))
 
     pairs = []
@@ -137,9 +194,23 @@ def _scan_dataset_files(images_src: Path, labels_src: Path) -> list[tuple[Path, 
 
 
 def _remap_label_file(src_lbl: Path, dest_lbl: Path, class_map: dict[int, int]) -> None:
+    """
+    Tác dụng:
+    - Thực hiện chức năng _remap_label_file
+
+    Đầu vào:
+    - src_lbl: Tham số src_lbl của hàm
+    - dest_lbl: Tham số dest_lbl của hàm
+    - class_map: Tham số class_map của hàm
+
+    Đầu ra:
+    - Không trả về dữ liệu
+
+    Nguồn: TrinhNhuNhat_12072026.
+    """
     with open(src_lbl, "r", encoding="utf-8", errors="ignore") as f_in:
         lines = f_in.readlines()
-    
+
     new_lines = []
     for line in lines:
         parts = line.strip().split()

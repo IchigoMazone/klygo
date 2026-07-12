@@ -7,57 +7,31 @@ from klygo.validators.archive import Add, Remove
 
 
 def add(
-    source: str | Path,
+    archive_path: str | Path,
     files: "str | Path | list",
     verbose: bool = True,
 ) -> None:
-    """Append one or more files or directories to an existing archive.
+    """
+    Tác dụng:
+    - Thêm file hoặc thư mục vào file lưu trữ
 
-    If a directory is passed, all files inside it are added recursively,
-    preserving the internal structure relative to the directory's parent.
-    If an added file's arcname already exists inside the archive, a
-    ``_dup`` suffix is appended to avoid silent overwrites.
+    Đầu vào:
+    - archive_path: Đường dẫn file lưu trữ
+    - files: Tham số files của hàm
+    - verbose: Trạng thái hiển thị tiến trình
 
-    Parameters
-    ----------
-    source : str or Path
-        Path to the existing archive file to append to.
-    files : str, Path, or list of (str | Path)
-        A single file/directory path or a list of paths to add.
-        Each path must exist on the filesystem.
-    verbose : bool, optional
-        If *True* (default), display a coloured progress bar and print
-        the count of added files on completion.
+    Đầu ra:
+    - Không trả về dữ liệu
 
-    Returns
-    -------
-    None
+    Ngoại lệ:
+    - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Raises
-    ------
-    TypeError
-        If ``source``, ``verbose``, or any item in ``files`` has the wrong type.
-    FileNotFoundError
-        If ``source`` or any file in ``files`` does not exist.
-    ValueError
-        If ``source`` is not a supported archive format.
-
-    Examples
-    --------
-    Add a single file:
-
-    >>> add("data.zip", "new_file.txt")
-
-    Add multiple files at once:
-
-    >>> add("data.zip", ["file_a.csv", "file_b.csv"])
-
-    Add an entire directory:
-
-    >>> add("data.zip", "extra_images/")
+    Nguồn: TrinhNhuNhat_12072026.
     """
 
-    params = Add(source=source, files=files, verbose=verbose)
+    params = Add(archive_path=archive_path, files=files, verbose=verbose)
 
     # Expand directories to individual files
     all_files: list[tuple[Path, str]] = []  # (absolute_path, arcname)
@@ -69,7 +43,7 @@ def add(
         else:
             all_files.append((fp, fp.name))
 
-    with ZipFile(params.source, mode="a", compression=ZIP_DEFLATED) as zf:
+    with ZipFile(params.archive_path, mode="a", compression=ZIP_DEFLATED) as zf:
         existing = set(zf.namelist())
         bar = (
             tqdm(
@@ -97,58 +71,37 @@ def add(
             bar.close()
 
     if verbose:
-        print(f"Done. Added {len(all_files)} file(s) to '{params.source}'")
+        print(f"Done. Added {len(all_files)} file(s) to '{params.archive_path}'")
 
 
 def remove(
-    source: str | Path,
+    archive_path: str | Path,
     files: "str | list[str]",
 ) -> None:
-    """Delete one or more files from an archive.
+    """
+    Tác dụng:
+    - Xóa các file được chỉ định khỏi file lưu trữ
 
-    Because the ZIP format does not support in-place deletion, the
-    archive is rewritten to a temporary sibling file and then atomically
-    replaces the original. The temporary file is always cleaned up,
-    even if an error occurs.
+    Đầu vào:
+    - archive_path: Đường dẫn file lưu trữ
+    - files: Tham số files của hàm
 
-    Parameters
-    ----------
-    source : str or Path
-        Path to the archive file to modify.
-    files : str or list of str
-        Arcname of the file to remove, or a list of arcnames, exactly
-        as returned by :func:`list_files`.
+    Đầu ra:
+    - Không trả về dữ liệu
 
-    Returns
-    -------
-    None
+    Ngoại lệ:
+    - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - KeyError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Raises
-    ------
-    TypeError
-        If ``source`` or any item in ``files`` has the wrong type.
-    FileNotFoundError
-        If ``source`` does not exist.
-    ValueError
-        If ``source`` is not a supported archive format.
-    KeyError
-        If one or more names in ``files`` are not found inside the archive.
-
-    Examples
-    --------
-    Remove a single file:
-
-    >>> remove("data.zip", "images/frame_001.jpg")
-
-    Remove multiple files:
-
-    >>> remove("data.zip", ["images/frame_001.jpg", "data.yaml"])
+    Nguồn: TrinhNhuNhat_12072026.
     """
 
-    params = Remove(source=source, files=files)
+    params = Remove(archive_path=archive_path, files=files)
     to_remove = set(params.files)
 
-    with ZipFile(params.source, mode="r") as zf:
+    with ZipFile(params.archive_path, mode="r") as zf:
         names = set(zf.namelist())
         missing = to_remove - names
         if missing:
@@ -157,10 +110,10 @@ def remove(
                 f"Use list_files() to see available files."
             )
 
-        tmp_path = params.source.with_suffix(".tmp.zip")
+        tmp_path = params.archive_path.with_suffix(".tmp.zip")
         with ZipFile(tmp_path, mode="w", compression=ZIP_DEFLATED) as tmp_zf:
             for item in zf.infolist():
                 if item.filename not in to_remove:
                     tmp_zf.writestr(item, zf.read(item.filename))
 
-    tmp_path.replace(params.source)
+    tmp_path.replace(params.archive_path)

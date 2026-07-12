@@ -16,7 +16,7 @@ def test_partition_and_repartition():
         # 1. Partition ZIP to folder
         partition(
             source="test/data.zip",
-            output=temp_out,
+            target=temp_out,
             ratios=(0.8, 0.1, 0.1),
             overwrite=True,
             verbose=False
@@ -36,7 +36,7 @@ def test_partition_and_repartition():
         # 2. Repartition folder in-place
         repartition(
             source=temp_out,
-            output=temp_out,
+            target=temp_out,
             ratios=(0.5, 0.5, 0.0), # 2 splits only
             overwrite=True,
             verbose=False
@@ -62,7 +62,7 @@ def test_partition_validation_errors():
     try:
         partition(
             source="test/data.zip",
-            output="dummy_out",
+            target="dummy_out",
             ratios=(0.5, 0.6), # sum = 1.1 > 1.0
             overwrite=True
         )
@@ -74,7 +74,7 @@ def test_partition_validation_errors():
     try:
         partition(
             source="non_existent_zip_or_folder.zip",
-            output="dummy_out",
+            target="dummy_out",
             ratios=(0.8,),
             overwrite=True
         )

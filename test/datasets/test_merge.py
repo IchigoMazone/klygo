@@ -43,7 +43,7 @@ def test_merge_success():
         # Merge them
         merge(
             sources=[temp_dir1, temp_dir2],
-            output=temp_out_zip,
+            output_path=temp_out_zip,
             overwrite=True,
             verbose=False
         )
@@ -85,7 +85,7 @@ def test_merge_validation_errors():
     try:
         merge(
             sources=["non_existent_source.zip", "test/data.zip"],
-            output="dummy.zip",
+            output_path="dummy.zip",
             overwrite=True
         )
         assert False, "Should raise FileNotFoundError for non-existent source"

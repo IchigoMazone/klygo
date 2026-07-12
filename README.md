@@ -21,7 +21,7 @@ klygo/
 ├── archive/        # Các tiện ích nén và giải nén
 ├── datasets/       # Công cụ quản lý và phân chia bộ dữ liệu YOLO
 ├── io/             # Bộ đọc/ghi cấu hình YAML, JSON, TOML
-├── models/         # Lớp nhận diện vật thể (Kernel)
+├── models/         # Lớp nhận diện vật thể (Model)
 ├── visualize/      # Trực quan hóa hình ảnh & crop bboxes
 └── validators/     # Bộ xác thực dữ liệu đầu vào
 ```
@@ -94,16 +94,16 @@ Xem tài liệu đầy đủ tại docs/io/README.md.
 
 ---
 
-### 4. Mô hình nhận diện (klygo.models.Kernel)
+### 4. Mô hình nhận diện (klygo.models.Model)
 
 ```python
-from klygo.models import Kernel
+from klygo.models import Model
 
 # Khởi tạo mô hình Grounding DINO
-kernel = Kernel()
+model = Model()
 
 # Chạy nhận diện trên video và xuất ra bộ dữ liệu YOLO
-kernel.detect(
+model.detect(
     input_path="input_video.mp4",
     prompt="car. traffic light.",
     save_yolo_dir="dataset/"
@@ -131,7 +131,7 @@ vis.crop_objects(
     image_path="dataset/images/frame_0.jpg",
     label_path="dataset/labels/frame_0.txt",
     classes=["car", "bus"],
-    output_zip="crops.zip",
+    output_path="crops.zip",
     overwrite=True
 )
 

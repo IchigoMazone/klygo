@@ -101,7 +101,7 @@ io.write_file("out/config.yaml", data, overwrite=True, verbose=True)
 
 ### 9. Config
 Lớp khởi tạo đối tượng cấu hình hỗ trợ tự động mở rộng đường dẫn tương đối và chuyển đổi định dạng.
-* **Khởi tạo:** `config = io.Config(src)` (với `src` là đường dẫn tệp cấu hình nguồn).
+* **Khởi tạo:** `config = io.Config(config_path)` (với `config_path` là đường dẫn tệp cấu hình).
 
 #### .read
 Đọc cấu hình nguồn, trả về đối tượng `Box` hỗ trợ truy cập bằng thuộc tính (dot-notation).

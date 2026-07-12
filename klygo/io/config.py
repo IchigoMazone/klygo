@@ -11,27 +11,90 @@ from klygo.io.write import write_file
 
 
 class Config:
-    def __init__(self, src: str | Path) -> None:
-        self._params = ConfigSource(src=src)
+    def __init__(self, config_path: str | Path) -> None:
+        """
+        Tác dụng:
+        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
+
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - config_path: Đường dẫn file cấu hình
+
+        Đầu ra:
+        - Không trả về dữ liệu
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
+        self._params = ConfigSource(config_path=config_path)
         self._keys: list = []
         self._cfg: dict = {}
 
     @property
-    def src(self) -> Path:
-        """Path to the source config file."""
-        return self._params.src
+    def config_path(self) -> Path:
+        """
+        Tác dụng:
+        - Thực hiện chức năng config_path
+
+        Đầu vào:
+        - self: Đối tượng hiện tại
+
+        Đầu ra:
+        - Kết quả xử lý của hàm
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
+        return self._params.config_path
 
     def _assign(self, keys: list, cfg: dict, value: Any | None = None) -> None:
-        """Set a nested dict value by key path."""
+        """
+        Tác dụng:
+        - Thực hiện chức năng _assign
+
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - keys: Tham số keys của hàm
+        - cfg: Tham số cfg của hàm
+        - value: Tham số value của hàm
+
+        Đầu ra:
+        - Không trả về dữ liệu
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         cur = reduce(getitem, keys[:-1], cfg)
         cur[keys[-1]] = value
 
     def _get_value(self, keys: list, cfg: dict) -> Any:
-        """Get a nested dict value by key path."""
+        """
+        Tác dụng:
+        - Thực hiện chức năng _get_value
+
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - keys: Tham số keys của hàm
+        - cfg: Tham số cfg của hàm
+
+        Đầu ra:
+        - Kết quả xử lý của hàm
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         return reduce(getitem, keys, cfg)
 
     def _traverse(self, tree: dict) -> None:
-        """Walk the config tree and expand relative paths under ``default.root``."""
+        """
+        Tác dụng:
+        - Thực hiện chức năng _traverse
+
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - tree: Tham số tree của hàm
+
+        Đầu ra:
+        - Không trả về dữ liệu
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         for key, value in tree.items():
             if key == "default":
                 continue
@@ -51,29 +114,20 @@ class Config:
             self._keys.pop()
 
     def read(self, verbose: bool = True) -> Box:
-        """Load the config file and return a dot-accessible :class:`Box`.
-
-        If the config contains a ``default.root`` key, any string value
-        starting with ``.`` is expanded to an absolute path by prepending
-        ``default.root``.
-
-        Parameters
-        ----------
-        verbose : bool, optional
-            If *True* (default), display a progress bar.
-
-        Returns
-        -------
-        Box
-            Config contents accessible by attribute or dict-key notation.
-
-        Examples
-        --------
-        >>> cfg = Config("config.yaml").read()
-        >>> print(cfg.model.lr)
-        0.001
         """
-        self._cfg = dict(read_file(self._params.src, verbose=verbose))
+        Tác dụng:
+        - Đọc và xử lý dữ liệu cấu hình
+
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - verbose: Trạng thái hiển thị tiến trình
+
+        Đầu ra:
+        - Kết quả xử lý của hàm
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
+        self._cfg = dict(read_file(self._params.config_path, verbose=verbose))
 
         if "default" in self._cfg and isinstance(self._cfg["default"], dict) and "root" in self._cfg["default"]:
             self._traverse(self._cfg)
@@ -81,7 +135,19 @@ class Config:
         return Box(self._cfg)
 
     def imread(self, verbose: bool = True) -> Box:
-        """Deprecated alias for Config.read(). Use Config.read() instead."""
+        """
+        Tác dụng:
+        - Đọc dữ liệu cấu hình bằng tên hàm tương thích cũ
+
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - verbose: Trạng thái hiển thị tiến trình
+
+        Đầu ra:
+        - Kết quả xử lý của hàm
+
+        Nguồn: TrinhNhuNhat_12072026.
+        """
         import warnings
         warnings.warn(
             "`imread` is deprecated and will be removed in a future version. "
@@ -92,27 +158,33 @@ class Config:
         return self.read(verbose=verbose)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert the parsed config into a standard Python dict.
+        """
+        Tác dụng:
+        - Chuyển dữ liệu cấu hình thành dictionary
 
-        Returns
-        -------
-        dict
-            Standard Python dictionary representing config contents.
+        Đầu vào:
+        - self: Đối tượng hiện tại
+
+        Đầu ra:
+        - Kết quả xử lý của hàm
+
+        Nguồn: TrinhNhuNhat_12072026.
         """
         return dict(self._cfg)
 
     def to_json(self, indent: int = 4) -> str:
-        """Convert the parsed config into a JSON string.
+        """
+        Tác dụng:
+        - Chuyển dữ liệu cấu hình thành chuỗi JSON
 
-        Parameters
-        ----------
-        indent : int, optional
-            Number of spaces for indentation. Default is 4.
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - indent: Tham số indent của hàm
 
-        Returns
-        -------
-        str
-            JSON string representing config contents.
+        Đầu ra:
+        - Kết quả xử lý của hàm
+
+        Nguồn: TrinhNhuNhat_12072026.
         """
         import json
         return json.dumps(self._cfg, ensure_ascii=False, indent=indent)
@@ -124,25 +196,20 @@ class Config:
         overwrite: bool = False,
         verbose: bool = True,
     ) -> "Config":
-        """Initialize a default template configuration file.
+        """
+        Tác dụng:
+        - Tạo file cấu hình mặc định
 
-        Parameters
-        ----------
-        path : str or Path
-            Path to the output configuration file.
-        default_data : dict, optional
-            Default config dictionary data to write. If not provided,
-            a standard default configuration template is written.
-        overwrite : bool, optional
-            If *True*, overwrite the config file if it already exists.
-            Default is *False*.
-        verbose : bool, optional
-            If *True* (default), display progress bar.
+        Đầu vào:
+        - path: Đường dẫn file
+        - default_data: Tham số default_data của hàm
+        - overwrite: Trạng thái cho phép ghi đè
+        - verbose: Trạng thái hiển thị tiến trình
 
-        Returns
-        -------
-        Config
-            Config instance configured with the created file.
+        Đầu ra:
+        - Kết quả xử lý của hàm
+
+        Nguồn: TrinhNhuNhat_12072026.
         """
         if default_data is None:
             default_data = {
@@ -168,38 +235,26 @@ class Config:
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
-        """Export the config to a different file format.
+        """
+        Tác dụng:
+        - Xuất cấu hình sang định dạng file khác
 
-        Parameters
-        ----------
-        name : str
-            Output filename without extension.
-        suffix : str
-            Target format extension (e.g. ``".json"``, ``"toml"``).
-            A leading dot is added automatically if omitted.
-        output_dir : str or Path, optional
-            Directory to write the output file into.
-            Defaults to ``default.root`` in the config (if present),
-            otherwise the current working directory.
-        overwrite : bool, optional
-            If *True*, overwrite the output file if it exists.
-            Default is *False*.
-        verbose : bool, optional
-            If *True* (default), display a progress bar.
+        Đầu vào:
+        - self: Đối tượng hiện tại
+        - name: Tham số name của hàm
+        - suffix: Tham số suffix của hàm
+        - output_dir: Đường dẫn thư mục đầu ra
+        - overwrite: Trạng thái cho phép ghi đè
+        - verbose: Trạng thái hiển thị tiến trình
 
-        Raises
-        ------
-        ValueError
-            If ``suffix`` is the same as the source file's extension,
-            or if ``suffix`` is not a supported format.
-        FileExistsError
-            If output file exists and ``overwrite`` is *False*.
+        Đầu ra:
+        - Không trả về dữ liệu
 
-        Examples
-        --------
-        >>> cfg = Config("config.yaml")
-        >>> cfg.read()
-        >>> cfg.export_file("config", ".json", output_dir="out/")
+        Ngoại lệ:
+        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+        - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+        Nguồn: TrinhNhuNhat_12072026.
         """
         params = ExportFile(
             name=name,
@@ -209,10 +264,10 @@ class Config:
             verbose=verbose,
         )
 
-        if params.suffix == self._params.src.suffix:
+        if params.suffix == self._params.config_path.suffix:
             raise ValueError(
                 f"Export suffix {params.suffix!r} must be different "
-                f"from source suffix {self._params.src.suffix!r}."
+                f"from source suffix {self._params.config_path.suffix!r}."
             )
 
         # Resolve output directory
@@ -224,7 +279,7 @@ class Config:
             out_dir = Path(".")
 
         file_path = out_dir / f"{params.name}{params.suffix}"
-        data = read_file(self._params.src, verbose=False)
+        data = read_file(self._params.config_path, verbose=False)
         write_file(
             file_path,
             data,

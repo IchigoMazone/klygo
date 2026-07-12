@@ -10,23 +10,41 @@ from ._utils import _safe_copy, _safe_move, _read_class_names, _remap_label_file
 
 def merge(
     sources: list[str | Path],
-    output: str | Path,
+    output_path: str | Path,
     overwrite: bool = False,
     verbose: bool = True,
 ) -> None:
-    
+
+    """
+    Tác dụng:
+    - Gộp nhiều nguồn dữ liệu thành một kết quả
+
+    Đầu vào:
+    - sources: Danh sách file hoặc thư mục đầu vào
+    - output_path: Đường dẫn file đầu ra
+    - overwrite: Trạng thái cho phép ghi đè
+    - verbose: Trạng thái hiển thị tiến trình
+
+    Đầu ra:
+    - Không trả về dữ liệu
+
+    Ngoại lệ:
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+    Nguồn: TrinhNhuNhat_12072026.
+    """
     params = DatasetMerge(
         sources=sources,
-        output=output,
+        output_path=output_path,
         overwrite=overwrite,
         verbose=verbose
     )
 
     # 1. Setup temporary workspace directory
-    merge_workspace = params.output.parent / f".temp_merge_workspace_{random.randint(1000, 9999)}"
+    merge_workspace = params.output_path.parent / f".temp_merge_workspace_{random.randint(1000, 9999)}"
     if merge_workspace.exists():
         shutil.rmtree(merge_workspace)
-    
+
     images_merge_dir = merge_workspace / "images"
     labels_merge_dir = merge_workspace / "labels"
     images_merge_dir.mkdir(parents=True, exist_ok=True)
@@ -42,12 +60,12 @@ def merge(
         temp_extract_dir = None
 
         if is_zip:
-            temp_extract_dir = params.output.parent / f".temp_merge_extract_{idx}_{random.randint(1000, 9999)}"
+            temp_extract_dir = params.output_path.parent / f".temp_merge_extract_{idx}_{random.randint(1000, 9999)}"
             if temp_extract_dir.exists():
                 shutil.rmtree(temp_extract_dir)
             extract(
-                source=src,
-                output=temp_extract_dir, 
+                archive_path=src,
+                output_dir=temp_extract_dir,
                 overwrite=True,
                 verbose=False
             )
@@ -82,7 +100,7 @@ def merge(
             mapping[local_id] = global_id
 
         class_maps.append(mapping)
-        
+
         needs_remap = any(local_id != global_id for local_id, global_id in mapping.items())
         needs_remapping.append(needs_remap)
 
@@ -114,7 +132,7 @@ def merge(
             flat_lbl_name = "_".join(rel_lbl.parts) if len(rel_lbl.parts) > 1 else rel_lbl.name
             img_dest = images_merge_dir / f"src{idx}_{flat_img_name}"
             lbl_dest = labels_merge_dir / f"src{idx}_{flat_lbl_name}"
-            
+
             # Copy/Move image
             if is_zip:
                 _safe_move(img_path, img_dest)
@@ -154,7 +172,7 @@ def merge(
 
     # 5. Compress to the output ZIP file manually to ensure no parent folder in ZIP
     from zipfile import ZipFile, ZIP_DEFLATED
-    with ZipFile(params.output, mode="w", compression=ZIP_DEFLATED) as zf:
+    with ZipFile(params.output_path, mode="w", compression=ZIP_DEFLATED) as zf:
         all_files = sorted(f for f in merge_workspace.rglob("*") if f.is_file())
         for file in all_files:
             arcname = file.relative_to(merge_workspace)

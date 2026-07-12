@@ -11,15 +11,36 @@ from ._utils import _safe_copy, _read_class_names, _scan_dataset_files, _remap_l
 
 def remap_classes(
     source: str | Path,
-    output: str | Path,
+    target: str | Path,
     class_map: dict[int | str, int | str],
     overwrite: bool = False,
     verbose: bool = True,
 ) -> None:
-    
+
+    """
+    Tác dụng:
+    - Ánh xạ lại class của dataset
+
+    Đầu vào:
+    - source: File hoặc thư mục đầu vào
+    - target: File hoặc thư mục đầu ra
+    - class_map: Tham số class_map của hàm
+    - overwrite: Trạng thái cho phép ghi đè
+    - verbose: Trạng thái hiển thị tiến trình
+
+    Đầu ra:
+    - Không trả về dữ liệu
+
+    Ngoại lệ:
+    - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+
+    Nguồn: TrinhNhuNhat_12072026.
+    """
     params = DatasetRemapClasses(
         source=source,
-        output=output,
+        target=target,
         class_map=class_map,
         overwrite=overwrite,
         verbose=verbose
@@ -30,12 +51,12 @@ def remap_classes(
 
     # 1. Source handling (extract if ZIP)
     if is_zip:
-        temp_extract_dir = params.output.parent / f".temp_remap_extract_{random.randint(1000, 9999)}"
+        temp_extract_dir = params.target.parent / f".temp_remap_extract_{random.randint(1000, 9999)}"
         if temp_extract_dir.exists():
             shutil.rmtree(temp_extract_dir)
         extract(
-            source=params.source,
-            output=temp_extract_dir,
+            archive_path=params.source,
+            output_dir=temp_extract_dir,
             overwrite=True,
             verbose=False
         )
@@ -89,8 +110,8 @@ def remap_classes(
     needs_remap = any(old_id != new_id for old_id, new_id in id_to_id.items())
 
     # 3. Setup temporary output folder
-    is_out_zip = str(params.output).lower().endswith(".zip")
-    temp_output_dir = params.output.parent / f".temp_remap_out_{random.randint(1000, 9999)}"
+    is_out_zip = str(params.target).lower().endswith(".zip")
+    temp_output_dir = params.target.parent / f".temp_remap_out_{random.randint(1000, 9999)}"
     if temp_output_dir.exists():
         shutil.rmtree(temp_output_dir)
     temp_output_dir.mkdir(parents=True, exist_ok=True)
@@ -122,8 +143,8 @@ def remap_classes(
     # 5. Write new data.yaml
     yaml_data = read_yaml(src_base / "data.yaml", verbose=False)
     new_yaml = dict(yaml_data)
-    new_yaml["path"] = str(params.output.resolve().as_posix()) if not is_out_zip else "/content/data"
-    
+    new_yaml["path"] = str(params.target.resolve().as_posix()) if not is_out_zip else "/content/data"
+
     if new_names and set(new_names.keys()) == set(range(len(new_names))):
         yaml_names = [new_names[i] for i in range(len(new_names))]
     else:
@@ -139,7 +160,7 @@ def remap_classes(
     # 6. Output handling
     if is_out_zip:
         from zipfile import ZipFile, ZIP_DEFLATED
-        with ZipFile(params.output, mode="w", compression=ZIP_DEFLATED) as zf:
+        with ZipFile(params.target, mode="w", compression=ZIP_DEFLATED) as zf:
             all_files = sorted(f for f in temp_output_dir.rglob("*") if f.is_file())
             for file in all_files:
                 arcname = file.relative_to(temp_output_dir)
@@ -147,27 +168,27 @@ def remap_classes(
         if temp_output_dir.exists():
             shutil.rmtree(temp_output_dir)
     else:
-        if params.output.exists():
+        if params.target.exists():
             for _ in range(10):
                 try:
-                    if params.output.is_dir():
-                        shutil.rmtree(params.output)
+                    if params.target.is_dir():
+                        shutil.rmtree(params.target)
                     else:
-                        params.output.unlink()
+                        params.target.unlink()
                     break
                 except PermissionError:
                     time.sleep(0.05)
             else:
-                if params.output.is_dir():
-                    shutil.rmtree(params.output)
+                if params.target.is_dir():
+                    shutil.rmtree(params.target)
                 else:
-                    params.output.unlink()
+                    params.target.unlink()
 
         for _ in range(10):
             try:
-                temp_output_dir.rename(params.output)
+                temp_output_dir.rename(params.target)
                 break
             except PermissionError:
                 time.sleep(0.05)
         else:
-            temp_output_dir.rename(params.output)
+            temp_output_dir.rename(params.target)
