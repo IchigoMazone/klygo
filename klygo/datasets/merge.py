@@ -5,7 +5,14 @@ from pathlib import Path
 from klygo.validators.datasets import Merge as DatasetMerge
 from klygo.archive import extract
 from klygo.io import write_yaml
-from ._utils import _safe_copy, _safe_move, _read_class_names, _remap_label_file, _scan_dataset_files, _find_dataset_root
+from klygo.utils.dataset import (
+    _find_dataset_root,
+    _read_class_names,
+    _remap_label_file,
+    _safe_copy,
+    _safe_move,
+    _scan_dataset_files,
+)
 
 
 def merge(

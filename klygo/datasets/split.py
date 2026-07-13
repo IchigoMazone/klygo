@@ -5,7 +5,12 @@ from pathlib import Path
 from klygo.validators.datasets import Split as DatasetSplit
 from klygo.archive import extract
 from klygo.io import write_yaml
-from ._utils import _safe_copy, _read_class_names, _scan_dataset_files, _find_dataset_root
+from klygo.utils.dataset import (
+    _find_dataset_root,
+    _read_class_names,
+    _safe_copy,
+    _scan_dataset_files,
+)
 
 
 def split(

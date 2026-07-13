@@ -1,8 +1,5 @@
-from .kernel import Model
-
-Kernel = Model
+from .model import Model
 
 __all__ = [
     "Model",
-    "Kernel",
 ]

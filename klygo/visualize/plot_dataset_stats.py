@@ -5,7 +5,7 @@ from typing import Tuple, Union
 
 from klygo.archive import extract
 from klygo.datasets import get_dataset_info
-from klygo.datasets._utils import _find_dataset_root, _scan_dataset_files
+from klygo.utils.dataset import _find_dataset_root, _scan_dataset_files
 
 
 def plot_dataset_stats(

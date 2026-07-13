@@ -3,7 +3,7 @@ import shutil
 import tempfile
 import yaml
 from pathlib import Path
-from klygo.datasets._utils import (
+from klygo.utils.dataset import (
     _safe_copy,
     _safe_move,
     _read_class_names,

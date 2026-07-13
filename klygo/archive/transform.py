@@ -82,7 +82,7 @@ def merge(
         )
 
 
-def split(
+def split_by_size(
     archive_path: str | Path,
     size: int | float,
     output_dir: str | Path = ".",
@@ -91,17 +91,17 @@ def split(
 ) -> list[str]:
     """
     Tác dụng:
-    - Chia dữ liệu thành nhiều phần theo cấu hình
+    - Chia file ZIP thành nhiều file ZIP theo dung lượng tối đa
 
     Đầu vào:
     - archive_path: Đường dẫn file lưu trữ
-    - size: Tham số size của hàm
+    - size: Dung lượng nén tối đa của mỗi file ZIP đầu ra, tính bằng MB
     - output_dir: Đường dẫn thư mục đầu ra
     - overwrite: Trạng thái cho phép ghi đè
     - verbose: Trạng thái hiển thị tiến trình
 
     Đầu ra:
-    - Kết quả xử lý của hàm
+    - Danh sách đường dẫn các file ZIP đã tạo
 
     Ngoại lệ:
     - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
@@ -109,7 +109,7 @@ def split(
     - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
     - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-    Nguồn: TrinhNhuNhat_12072026.
+    Nguồn: TrinhNhuNhat_13072026.
     """
 
     params = Split(

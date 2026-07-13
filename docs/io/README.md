@@ -1,144 +1,212 @@
 # klygo.io
 
-Module đọc/ghi các định dạng file cấu hình (YAML, JSON, TOML) và quản lý phân giải đường dẫn tự động.
+`klygo.io` đọc/ghi cấu hình YAML, JSON, TOML; đọc ảnh bằng PIL hoặc OpenCV; và cung cấp lớp `Config` để truy cập cấu hình dạng thuộc tính.
 
 ```python
 import klygo.io as io
 ```
 
----
+## 1. Đọc file cấu hình
 
-## Hướng dẫn chi tiết từng API
+### API theo định dạng
 
-### 1. read_yaml
-Đọc file YAML/YML và trả về dữ liệu Python.
-* **Cú pháp:** `io.read_yaml(path, verbose=True) -> Any`
-* **Ví dụ sử dụng:**
 ```python
-import klygo.io as io
-
-data = io.read_yaml("config.yaml", verbose=True)
-print(data)
+yaml_data = io.read_yaml("config.yaml", verbose=False)
+json_data = io.read_json("config.json", verbose=False)
+toml_data = io.read_toml("config.toml", verbose=False)
 ```
 
-### 2. read_json
-Đọc file JSON và trả về dữ liệu Python.
-* **Cú pháp:** `io.read_json(path, verbose=True) -> Any`
-* **Ví dụ sử dụng:**
-```python
-import klygo.io as io
+### Tự nhận định dạng
 
-data = io.read_json("config.json", verbose=False)
-print(data)
+`read_file` chọn parser dựa trên phần mở rộng `.yaml`, `.yml`, `.json` hoặc `.toml`:
+
+```python
+data = io.read_file("config.yaml", verbose=True)
 ```
 
-### 3. read_toml
-Đọc file TOML và trả về dữ liệu Python.
-* **Cú pháp:** `io.read_toml(path, verbose=True) -> Any`
-* **Ví dụ sử dụng:**
-```python
-import klygo.io as io
+Các hàm đọc phát sinh `FileNotFoundError` nếu file không tồn tại và `ValueError` nếu định dạng không được hỗ trợ.
 
-data = io.read_toml("config.toml", verbose=True)
-print(data)
+## 2. Ghi file cấu hình
+
+```python
+data = {
+    "model": "Grounding-Dino/232M",
+    "threshold": 0.25,
+}
+
+io.write_yaml("configs/model.yaml", data, overwrite=True)
+io.write_json("configs/model.json", data, overwrite=True)
+io.write_toml("configs/model.toml", data, overwrite=True)
 ```
 
-### 4. read_file
-Đọc file cấu hình và tự động nhận diện định dạng dựa vào phần mở rộng (`.yaml`, `.yml`, `.json`, `.toml`).
-* **Cú pháp:** `io.read_file(path, verbose=True) -> Any`
-* **Ví dụ sử dụng:**
-```python
-import klygo.io as io
+`write_file` tự chọn writer theo đuôi file:
 
-# Tự động đọc và parse file dựa vào phần mở rộng của file
-data = io.read_file("params.json", verbose=True)
+```python
+io.write_file(
+    path="configs/model.yaml",
+    data=data,
+    overwrite=True,
+    verbose=False,
+)
 ```
 
-### 5. write_yaml
-Ghi dữ liệu thành file YAML. Tự động tạo thư mục cha của tệp đích nếu chưa tồn tại.
-* **Cú pháp:** `io.write_yaml(path, data, overwrite=False, verbose=True)`
-* **Ví dụ sử dụng:**
-```python
-import klygo.io as io
+Thư mục cha được tạo tự động. Nếu file đã tồn tại và `overwrite=False`, hàm phát sinh `FileExistsError`.
 
-data = {"learning_rate": 0.001, "epochs": 100}
-io.write_yaml("out/config.yaml", data, overwrite=True, verbose=True)
+## 3. `read_images`
+
+```python
+io.read_images(
+    source,
+    recursive=False,
+    backend="pil",
+)
 ```
 
-### 6. write_json
-Ghi dữ liệu thành file JSON với định dạng thụt lề thụt dòng.
-* **Cú pháp:** `io.write_json(path, data, overwrite=False, verbose=True)`
-* **Ví dụ sử dụng:**
-```python
-import klygo.io as io
+`source` nhận một file ảnh hoặc thư mục ảnh. Các định dạng hỗ trợ: BMP, JPEG, PNG, TIFF và WebP.
 
-data = {"learning_rate": 0.001, "epochs": 100}
-io.write_json("out/config.json", data, overwrite=True, verbose=True)
+### Backend PIL mặc định
+
+```python
+images = io.read_images("dataset/images")
+
+print(type(images[0]))  # PIL.Image.Image
+print(images[0].mode)   # RGB
 ```
 
-### 7. write_toml
-Ghi dữ liệu thành file TOML.
-* **Cú pháp:** `io.write_toml(path, data, overwrite=False, verbose=True)`
-* **Ví dụ sử dụng:**
-```python
-import klygo.io as io
+Đây là backend phù hợp để truyền vào Model:
 
-data = {"learning_rate": 0.001, "epochs": 100}
-io.write_toml("out/config.toml", data, overwrite=True, verbose=True)
+```python
+from klygo.models import Model
+
+model = Model()
+images = io.read_images("dataset/images", backend="pil")
+predictions = model.predict(images, prompt="apple.")
 ```
 
-### 8. write_file
-Ghi dữ liệu vào file cấu hình, tự động nhận diện định dạng ghi dựa vào phần mở rộng của file.
-* **Cú pháp:** `io.write_file(path, data, overwrite=False, verbose=True)`
-* **Ví dụ sử dụng:**
-```python
-import klygo.io as io
+### Backend OpenCV
 
-data = {"learning_rate": 0.001, "epochs": 100}
-# Tự động ghi thành YAML
-io.write_file("out/config.yaml", data, overwrite=True, verbose=True)
+```python
+images = io.read_images(
+    source="dataset/images",
+    backend="opencv",
+)
+
+print(type(images[0]))   # numpy.ndarray
+print(images[0].shape)   # height, width, channels
 ```
 
-### 9. Config
-Lớp khởi tạo đối tượng cấu hình hỗ trợ tự động mở rộng đường dẫn tương đối và chuyển đổi định dạng.
-* **Khởi tạo:** `config = io.Config(config_path)` (với `config_path` là đường dẫn tệp cấu hình).
+Ảnh OpenCV có thứ tự màu BGR:
 
-#### .read
-Đọc cấu hình nguồn, trả về đối tượng `Box` hỗ trợ truy cập bằng thuộc tính (dot-notation).
-* **Cú pháp:** `config.read(verbose=True) -> Box`
-* **Ví dụ sử dụng:**
 ```python
-import klygo.io as io
+import cv2 as cv
 
+gray = cv.cvtColor(images[0], cv.COLOR_BGR2GRAY)
+```
+
+Model cũng nhận trực tiếp danh sách ảnh OpenCV và tự chuyển BGR sang RGB.
+
+### Đọc thư mục con
+
+```python
+images = io.read_images(
+    source="dataset/images",
+    recursive=True,
+    backend="pil",
+)
+```
+
+`recursive=False` chỉ đọc file ngay trong thư mục `source`; `True` đọc toàn bộ cây thư mục. File được sắp xếp theo tên trước khi đọc.
+
+### Đọc một file ảnh
+
+```python
+images = io.read_images("image.jpg")
+image = images[0]
+```
+
+Hàm luôn trả danh sách, kể cả khi source chỉ có một file.
+
+## 4. `Config`
+
+### Đọc và truy cập dạng thuộc tính
+
+```yaml
+# config.yaml
+default:
+  root: ./data
+dataset:
+  images: ./images
+model:
+  threshold: 0.25
+```
+
+```python
 config = io.Config("config.yaml")
-cfg = config.read(verbose=True)
-print(cfg.dataset.train_path)
+cfg = config.read(verbose=False)
+
+print(cfg.model.threshold)
+print(cfg.dataset.images)
 ```
 
-#### .imread (Deprecated)
-Đọc cấu hình nguồn (alias tương thích ngược của `.read()`). Ném cảnh báo `DeprecationWarning`.
+Khi cấu hình có `default.root`, chuỗi bắt đầu bằng `.` được mở rộng theo root đó.
 
-#### .to_dict
-Chuyển đổi dữ liệu cấu hình đã parse thành một `dict` Python tiêu chuẩn.
-* **Cú pháp:** `config.to_dict() -> dict`
+### Lấy đường dẫn file cấu hình
 
-#### .to_json
-Xuất cấu hình đã parse ra chuỗi định dạng JSON.
-* **Cú pháp:** `config.to_json(indent=4) -> str`
-
-#### .create_default (Static Method)
-Khởi tạo tự động một file cấu hình YAML mẫu (default template) và trả về đối tượng `Config` tương ứng.
-* **Cú pháp:** `Config.create_default(path, default_data=None, overwrite=False, verbose=True) -> Config`
-
-#### .export_file
-Xuất cấu hình hiện tại sang định dạng cấu hình khác.
-* **Cú pháp:** `config.export_file(name, suffix, output_dir=None, overwrite=False, verbose=True)`
-* **Ví dụ sử dụng:**
 ```python
-import klygo.io as io
+print(config.config_path)
+```
 
-config = io.Config("config.yaml")
+### Chuyển sang dictionary hoặc JSON string
+
+```python
+data = config.to_dict()
+json_text = config.to_json(indent=2)
+```
+
+Phải gọi `read()` trước khi chuyển đổi để dữ liệu nội bộ được nạp.
+
+### Tạo cấu hình mặc định
+
+```python
+config = io.Config.create_default(
+    path="configs/default.yaml",
+    overwrite=True,
+)
+
+cfg = config.read()
+```
+
+Có thể cung cấp template riêng:
+
+```python
+config = io.Config.create_default(
+    path="configs/app.json",
+    default_data={"app": {"debug": True}},
+    overwrite=True,
+)
+```
+
+### Xuất sang định dạng khác
+
+```python
 config.read()
-# Xuất sang file config.json trong thư mục 'out'
-config.export_file("config", ".json", output_dir="out/", overwrite=True)
+config.export_file(
+    name="model_config",
+    suffix=".toml",
+    output_dir="exports",
+    overwrite=True,
+)
 ```
+
+Các suffix hỗ trợ là `.yaml`, `.yml`, `.json` và `.toml`.
+
+## 5. Danh sách API public
+
+| API | Công dụng |
+|---|---|
+| `read_yaml`, `read_json`, `read_toml` | Đọc cấu hình theo định dạng cụ thể |
+| `read_file` | Tự chọn parser theo đuôi file |
+| `read_images` | Đọc file/thư mục ảnh bằng PIL hoặc OpenCV |
+| `write_yaml`, `write_json`, `write_toml` | Ghi cấu hình theo định dạng cụ thể |
+| `write_file` | Tự chọn writer theo đuôi file |
+| `Config` | Quản lý, chuyển đổi và xuất cấu hình |

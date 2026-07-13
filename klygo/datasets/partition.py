@@ -6,7 +6,12 @@ from pathlib import Path
 from klygo.validators.datasets import Partition, Repartition
 from klygo.archive import extract
 from klygo.io import read_yaml, write_yaml
-from ._utils import _safe_copy, _safe_move, _scan_dataset_files, _find_dataset_root
+from klygo.utils.dataset import (
+    _find_dataset_root,
+    _safe_copy,
+    _safe_move,
+    _scan_dataset_files,
+)
 
 
 def _execute_partition(params: Partition) -> None:

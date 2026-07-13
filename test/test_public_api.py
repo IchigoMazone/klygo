@@ -4,6 +4,7 @@ from types import MethodType, SimpleNamespace
 import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
+import pytest
 import torch
 from PIL import Image
 
@@ -18,12 +19,13 @@ from klygo.archive import (
     merge as merge_archives,
     remove,
     search,
-    split as split_archive,
+    split_by_size,
     test as test_archive,
 )
-from klygo.models import Kernel, Model
+from klygo.models import Model
 from klygo.io import (
     Config,
+    read_images,
     read_json,
     read_toml,
     read_yaml,
@@ -33,10 +35,11 @@ from klygo.io import (
 )
 from klygo.visualize import (
     crop_dataset,
-    crop_objects,
+    crop_image,
     draw_bboxes,
     plot_dataset_stats,
-    read_cropped_objects,
+    read_crops,
+    read_detections,
     show_image,
     visualize_dataset_image,
     visualize_prediction,
@@ -79,7 +82,7 @@ def test_all_archive_public_functions(tmp_path):
     merge_archives([first_zip, second_zip], merged_path, verbose=False)
     assert merged_path.exists()
 
-    parts = split_archive(
+    parts = split_by_size(
         merged_path,
         size=0.000001,
         output_dir=tmp_path / "parts",
@@ -120,10 +123,30 @@ def test_all_visualize_public_functions(tmp_path, monkeypatch):
     label_path.write_text("0 0.5 0.5 0.5 0.5\n", encoding="utf-8")
     visualize_dataset_image(image_path, label_path, labels)
 
+    crop_dir = tmp_path / "single_crops"
+    image_crops = crop_image(
+        image_path,
+        label_path,
+        labels,
+        target=crop_dir,
+        padding=2,
+    )
+    assert len(image_crops) == 1
+    assert isinstance(image_crops[0], Image.Image)
+    assert (crop_dir / "apple" / "image_crop_0.jpg").exists()
+
     crop_path = tmp_path / "crops.zip"
-    crop_objects(image_path, label_path, labels, crop_path)
-    crops = read_cropped_objects(crop_path)
+    compress(crop_dir, crop_path, verbose=False)
+    crops = read_crops(crop_path, grid=None)
     assert len(crops["apple"]) == 1
+    folder_crops = read_crops(crop_dir, grid=None)
+    assert len(folder_crops["apple"]) == 1
+    default_crop_grid = read_crops(crop_path)
+    assert isinstance(default_crop_grid, Image.Image)
+    crop_grid = read_crops(crop_dir, grid=(1,))
+    assert isinstance(crop_grid, Image.Image)
+    fixed_crop_grid = read_crops(crop_path, grid=(1, 1))
+    assert isinstance(fixed_crop_grid, Image.Image)
 
     dataset_dir = tmp_path / "dataset"
     (dataset_dir / "images").mkdir(parents=True)
@@ -181,15 +204,15 @@ class _Processor:
         }]
 
 
-def test_kernel_predict_without_downloading_model():
-    kernel = object.__new__(Kernel)
-    kernel.device = "cpu"
-    kernel.processor = _Processor()
-    kernel.model = lambda **kwargs: SimpleNamespace()
-    kernel.input_kwargs = {}
-    kernel.output_kwargs = {}
+def test_model_predict_without_downloading_model(tmp_path):
+    model = object.__new__(Model)
+    model.device = "cpu"
+    model.processor = _Processor()
+    model.model = lambda **kwargs: SimpleNamespace()
+    model.input_kwargs = {}
+    model.output_kwargs = {}
 
-    result = kernel.predict(
+    result = model.predict(
         Image.new("RGB", (100, 100)),
         box_threshold=0.2,
         max_area=0.2,
@@ -197,22 +220,30 @@ def test_kernel_predict_without_downloading_model():
     assert result["labels"] == ["small"]
     assert len(result["boxes"]) == len(result["scores"]) == 1
 
-
-def test_kernel_init_and_setters_without_downloading_model(monkeypatch):
-    monkeypatch.setattr(Kernel, "_model", lambda self, model: "model")
-    monkeypatch.setattr(Kernel, "_processor", lambda self, model: "processor")
-    kernel = Kernel()
-    assert kernel.model == "model"
-    assert kernel.processor == "processor"
-    kernel.set_input_kwargs(padding=True)
-    kernel.set_output_kwargs(top_k=5)
-    assert kernel.input_kwargs == {"padding": True}
-    assert kernel.output_kwargs == {"top_k": 5}
-    assert Kernel is Model
+    image_dir = tmp_path / "predict_images"
+    image_dir.mkdir()
+    Image.new("RGB", (100, 100), "white").save(image_dir / "image.jpg")
+    directory_result = model.predict(source=image_dir, max_area=0.2)[0]
+    assert directory_result["labels"] == ["small"]
+    opencv_images = read_images(image_dir, backend="opencv")
+    opencv_result = model.predict(source=opencv_images, max_area=0.2)[0]
+    assert opencv_result["labels"] == ["small"]
 
 
-def test_kernel_private_loaders_without_downloading_model(monkeypatch):
-    import klygo.models.kernel as kernel_module
+def test_model_init_and_setters_without_downloading_model(monkeypatch):
+    monkeypatch.setattr(Model, "_model", lambda self, model: "model")
+    monkeypatch.setattr(Model, "_processor", lambda self, model: "processor")
+    model = Model()
+    assert model.model == "model"
+    assert model.processor == "processor"
+    model.set_input_kwargs(padding=True)
+    model.set_output_kwargs(top_k=5)
+    assert model.input_kwargs == {"padding": True}
+    assert model.output_kwargs == {"top_k": 5}
+
+
+def test_model_private_loaders_without_downloading_model(monkeypatch):
+    import klygo.models.model as model_module
 
     class FakeLoadedModel:
         def to(self, device):
@@ -229,18 +260,18 @@ def test_kernel_private_loaders_without_downloading_model(monkeypatch):
         def from_pretrained(name):
             return FakeLoadedModel()
 
-    monkeypatch.setattr(kernel_module, "AutoProcessor", FakeProcessorFactory)
+    monkeypatch.setattr(model_module, "AutoProcessor", FakeProcessorFactory)
     monkeypatch.setattr(
-        kernel_module,
+        model_module,
         "AutoModelForZeroShotObjectDetection",
         FakeModelFactory,
     )
-    kernel = object.__new__(Kernel)
-    kernel.device = "cpu"
-    kernel.name_models = Kernel.NAME_MODELS
-    kernel.model_hugging_face = Kernel.MODEL_HUGGING_FACE
-    assert kernel._processor(Kernel.NAME_MODELS["GDN"])["processor"]
-    assert kernel._model(Kernel.NAME_MODELS["GDN"]).device == "cpu"
+    model = object.__new__(Model)
+    model.device = "cpu"
+    model.name_models = Model.NAME_MODELS
+    model.model_hugging_face = Model.MODEL_HUGGING_FACE
+    assert model._processor(Model.NAME_MODELS["GDN"])["processor"]
+    assert model._model(Model.NAME_MODELS["GDN"]).device == "cpu"
 
 
 def test_config_private_path_expansion(tmp_path):
@@ -271,8 +302,31 @@ def test_all_io_format_public_functions(tmp_path):
     assert config.config_path == yaml_path
 
 
-def test_kernel_detect_without_downloading_model(tmp_path, monkeypatch):
-    import klygo.models.kernel as kernel_module
+def test_read_images_with_pil_and_opencv_backends(tmp_path):
+    image_dir = tmp_path / "images"
+    nested_dir = image_dir / "nested"
+    nested_dir.mkdir(parents=True)
+    Image.new("RGB", (12, 8), (255, 0, 0)).save(image_dir / "red.jpg")
+    Image.new("RGB", (6, 4), (0, 255, 0)).save(nested_dir / "green.png")
+
+    pil_images = read_images(image_dir)
+    assert len(pil_images) == 1
+    assert isinstance(pil_images[0], Image.Image)
+    assert pil_images[0].mode == "RGB"
+
+    recursive_images = read_images(image_dir, recursive=True)
+    assert len(recursive_images) == 2
+
+    opencv_images = read_images(image_dir / "red.jpg", backend="opencv")
+    assert len(opencv_images) == 1
+    assert isinstance(opencv_images[0], np.ndarray)
+    assert opencv_images[0].shape == (8, 12, 3)
+    assert opencv_images[0][0, 0, 2] > opencv_images[0][0, 0, 0]
+
+
+def test_model_detect_without_downloading_model(tmp_path, monkeypatch):
+    import klygo.models.model as model_module
+    import klygo.utils.media as media_module
 
     frame = np.zeros((48, 64, 3), dtype=np.uint8)
 
@@ -299,23 +353,23 @@ def test_kernel_detect_without_downloading_model(tmp_path, monkeypatch):
         def release(self):
             return None
 
-    monkeypatch.setattr(kernel_module.cv, "VideoCapture", lambda path: FakeCapture())
-    monkeypatch.setattr(kernel_module, "tqdm", lambda iterable, **kwargs: iterable)
+    monkeypatch.setattr(media_module.cv, "VideoCapture", lambda path: FakeCapture())
+    monkeypatch.setattr(model_module, "tqdm", lambda iterable, **kwargs: iterable)
 
-    kernel = object.__new__(Kernel)
-    kernel.predict = MethodType(
+    model = object.__new__(Model)
+    model.predict = MethodType(
         lambda self, **kwargs: [{
             "boxes": torch.tensor([[5.0, 5.0, 20.0, 20.0]]),
             "scores": torch.tensor([0.9]),
             "labels": ["apple"],
         }],
-        kernel,
+        model,
     )
-    kernel._imwrite_txt = MethodType(Kernel._imwrite_txt, kernel)
+    model._imwrite_txt = MethodType(Model._imwrite_txt, model)
 
     video_path = tmp_path / "input.mp4"
     video_path.touch()
-    detected_images = kernel.detect(
+    detected_images = model.detect(
         str(video_path),
         annotated_dir=str(tmp_path / "annotated"),
         dataset_dir=str(tmp_path / "dataset"),
@@ -324,20 +378,94 @@ def test_kernel_detect_without_downloading_model(tmp_path, monkeypatch):
     assert (tmp_path / "dataset" / "images" / "frame_0.jpg").exists()
     assert (tmp_path / "dataset" / "labels" / "frame_0.txt").exists()
     assert (tmp_path / "dataset" / "data.yaml").exists()
+    dataset_yaml = read_yaml(
+        tmp_path / "dataset" / "data.yaml",
+        verbose=False,
+    )
+    assert dataset_yaml["train"] == "images"
+    assert "val" not in dataset_yaml
+    assert "test" not in dataset_yaml
     assert len(detected_images) == 1
     assert isinstance(detected_images[0], Image.Image)
+    assert (tmp_path / "annotated" / "metadata.json").exists()
+    saved_detections = read_detections(tmp_path / "annotated")
+    assert len(saved_detections) == 1
+    assert isinstance(saved_detections[0]["image"], Image.Image)
+    assert saved_detections[0]["boxes"] == [[5.0, 5.0, 20.0, 20.0]]
+    assert abs(saved_detections[0]["scores"][0] - 0.9) < 1e-6
+    assert saved_detections[0]["labels"] == ["apple"]
+    detection_zip = tmp_path / "detections.zip"
+    compress(tmp_path / "annotated", detection_zip, verbose=False)
+    zipped_detections = read_detections(detection_zip)
+    assert zipped_detections[0]["labels"] == ["apple"]
+    legacy_detections = tmp_path / "legacy_detections"
+    legacy_detections.mkdir()
+    Image.new("RGB", (16, 12), "white").save(
+        legacy_detections / "frame_0.jpg"
+    )
+    legacy_records = read_detections(legacy_detections)
+    assert len(legacy_records) == 1
+    assert legacy_records[0]["boxes"] == []
+    assert legacy_records[0]["scores"] == []
+    assert legacy_records[0]["labels"] == []
 
-    crop_images = kernel.crop(
-        input_path=str(video_path),
+    image_dir = tmp_path / "source_images"
+    image_dir.mkdir()
+    Image.new("RGB", (64, 48), "white").save(image_dir / "image.jpg")
+    source_images = read_images(image_dir)
+    image_detections = model.detect(
+        source_images,
+        annotated_dir=str(tmp_path / "image_annotated"),
+    )
+    assert len(image_detections) == 1
+    assert isinstance(image_detections[0], Image.Image)
+    direct_detections = model.detect(source_images, metadata=True)
+    assert len(direct_detections) == 1
+    assert isinstance(direct_detections[0]["image"], Image.Image)
+    assert direct_detections[0]["boxes"] == [[5.0, 5.0, 20.0, 20.0]]
+    assert direct_detections[0]["labels"] == ["apple"]
+    normalized_detections = read_detections(direct_detections)
+    assert normalized_detections[0]["labels"] == ["apple"]
+
+    crop_results = model.crop(
+        source=str(video_path),
         target=str(tmp_path / "crops"),
         padding=2,
     )
-    assert len(crop_images) == 1
-    assert isinstance(crop_images[0], Image.Image)
+    assert len(crop_results) == 1
+    assert isinstance(crop_results[0]["image"], Image.Image)
+    assert abs(crop_results[0]["score"] - 0.9) < 1e-6
+    assert crop_results[0]["label"] == "apple"
+    assert (tmp_path / "crops" / "metadata.json").exists()
+    saved_results = read_crops(tmp_path / "crops", metadata=True)
+    assert len(saved_results) == 1
+    assert isinstance(saved_results[0]["image"], Image.Image)
+    assert abs(saved_results[0]["score"] - 0.9) < 1e-6
+    assert saved_results[0]["label"] == "apple"
+    saved_zip = tmp_path / "model_crops.zip"
+    compress(tmp_path / "crops", saved_zip, verbose=False)
+    zipped_results = read_crops(saved_zip, metadata=True)
+    assert abs(zipped_results[0]["score"] - 0.9) < 1e-6
+    assert zipped_results[0]["label"] == "apple"
+    with pytest.raises(FileExistsError):
+        model.crop(source=str(video_path), target=str(tmp_path / "crops"))
+    overwritten_results = model.crop(
+        source=str(video_path),
+        target=str(tmp_path / "crops"),
+        overwrite=True,
+    )
+    assert len(overwritten_results) == 1
+    assert not (tmp_path / "crops" / ".metadata.json.tmp").exists()
+
+    directory_crops = model.crop(source=image_dir, padding=2)
+    assert len(directory_crops) == 1
+    assert isinstance(directory_crops[0]["image"], Image.Image)
     saved_crop = tmp_path / "crops" / "apple" / "frame_0_crop_0.jpg"
     assert saved_crop.exists()
 
-    crop_images = kernel.crop(input_path=str(video_path), padding=2)
-    assert len(crop_images) == 1
-    assert isinstance(crop_images[0], Image.Image)
-    assert crop_images[0].size == (19, 19)
+    crop_results = model.crop(source=str(video_path), padding=2)
+    assert len(crop_results) == 1
+    assert isinstance(crop_results[0]["image"], Image.Image)
+    assert crop_results[0]["image"].size == (19, 19)
+    assert abs(crop_results[0]["score"] - 0.9) < 1e-6
+    assert crop_results[0]["label"] == "apple"

@@ -3,7 +3,7 @@ from .extract import extract, extract_file
 from .list import list_files, search
 from .info import get_info, test
 from .modify import add, remove
-from .transform import merge, split
+from .transform import merge, split_by_size
 from .human_size import human_size
 
 __all__ = [
@@ -17,6 +17,6 @@ __all__ = [
     "add",
     "remove",
     "merge",
-    "split",
+    "split_by_size",
     "human_size",
 ]

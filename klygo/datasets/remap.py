@@ -6,7 +6,13 @@ from pathlib import Path
 from klygo.validators.datasets import RemapClasses as DatasetRemapClasses
 from klygo.archive import extract
 from klygo.io import read_yaml, write_yaml
-from ._utils import _safe_copy, _read_class_names, _scan_dataset_files, _remap_label_file, _find_dataset_root
+from klygo.utils.dataset import (
+    _find_dataset_root,
+    _read_class_names,
+    _remap_label_file,
+    _safe_copy,
+    _scan_dataset_files,
+)
 
 
 def remap_classes(

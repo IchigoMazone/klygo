@@ -4,7 +4,11 @@ from pathlib import Path
 from typing import Any
 
 from klygo.archive import extract
-from ._utils import _read_class_names, _scan_dataset_files, _find_dataset_root
+from klygo.utils.dataset import (
+    _find_dataset_root,
+    _read_class_names,
+    _scan_dataset_files,
+)
 
 
 def get_dataset_info(source: str | Path) -> dict[str, Any]:

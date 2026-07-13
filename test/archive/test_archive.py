@@ -49,7 +49,13 @@ if __name__ == "__main__":
     merge(["test_new.zip", "test_v.zip"], "test_merged.zip", overwrite=True, verbose=True)
 
     # 10. split
-    parts = split(src, size=5, output_dir="test_parts", overwrite=True, verbose=True)
+    parts = split_by_size(
+        src,
+        size=5,
+        output_dir="test_parts",
+        overwrite=True,
+        verbose=True,
+    )
     print(f"split: {len(parts)} parts -> {parts}")
 
     print("\nALL TESTS PASSED")

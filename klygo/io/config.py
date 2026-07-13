@@ -134,29 +134,6 @@ class Config:
 
         return Box(self._cfg)
 
-    def imread(self, verbose: bool = True) -> Box:
-        """
-        Tác dụng:
-        - Đọc dữ liệu cấu hình bằng tên hàm tương thích cũ
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - verbose: Trạng thái hiển thị tiến trình
-
-        Đầu ra:
-        - Kết quả xử lý của hàm
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
-        import warnings
-        warnings.warn(
-            "`imread` is deprecated and will be removed in a future version. "
-            "Use `read()` instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.read(verbose=verbose)
-
     def to_dict(self) -> dict[str, Any]:
         """
         Tác dụng:

@@ -6,11 +6,14 @@ from typing import List, Union
 from PIL import Image
 
 from klygo.archive import extract
-from klygo.datasets._utils import (
+from klygo.utils.dataset import (
     _find_dataset_root,
     _read_class_names,
     _scan_dataset_files,
 )
+from klygo.utils._crop_boxes import _crop_boxes
+from klygo.utils._read_yolo_boxes import _read_yolo_boxes
+from klygo.utils._save_crops import _save_crops
 
 
 def crop_dataset(
@@ -70,7 +73,6 @@ def crop_dataset(
             raise FileNotFoundError(f"images directory not found: {images_dir}")
 
         crops: List[Image.Image] = []
-        crop_counts = {}
         for image_path, label_path, relative_image, _ in _scan_dataset_files(
             images_dir,
             labels_dir,
@@ -78,45 +80,19 @@ def crop_dataset(
             if label_path is None:
                 continue
 
-            image = Image.open(image_path).convert("RGB")
-            width, height = image.size
-            with open(label_path, "r", encoding="utf-8") as file:
-                for line in file:
-                    parts = line.strip().split()
-                    if len(parts) < 5:
-                        continue
-
-                    class_id = int(parts[0])
-                    x_center = float(parts[1]) * width
-                    y_center = float(parts[2]) * height
-                    box_width = float(parts[3]) * width
-                    box_height = float(parts[4]) * height
-                    x1 = max(0, int(x_center - box_width / 2) - padding)
-                    y1 = max(0, int(y_center - box_height / 2) - padding)
-                    x2 = min(width, int(x_center + box_width / 2) + padding)
-                    y2 = min(height, int(y_center + box_height / 2) + padding)
-                    if x2 <= x1 or y2 <= y1:
-                        continue
-
-                    crop_image = image.crop((x1, y1, x2, y2))
-                    crops.append(crop_image)
-                    if target_dir is not None:
-                        label = (
-                            str(classes[class_id])
-                            if class_id < len(classes)
-                            else f"class_{class_id}"
-                        )
-                        label_dir = target_dir / label
-                        label_dir.mkdir(parents=True, exist_ok=True)
-                        key = (str(relative_image), class_id)
-                        crop_index = crop_counts.get(key, 0)
-                        crop_counts[key] = crop_index + 1
-                        image_name = "_".join(
-                            relative_image.with_suffix("").parts
-                        )
-                        crop_image.save(
-                            label_dir / f"{image_name}_crop_{crop_index}.jpg"
-                        )
+            with Image.open(image_path) as source_image:
+                image = source_image.convert("RGB")
+            boxes = _read_yolo_boxes(
+                label_path,
+                image.size,
+                classes,
+                padding,
+            )
+            image_crops = _crop_boxes(image, boxes)
+            crops.extend(crop for crop, _ in image_crops)
+            if target_dir is not None:
+                image_name = "_".join(relative_image.with_suffix("").parts)
+                _save_crops(image_crops, target_dir, image_name)
 
         return crops
     finally:

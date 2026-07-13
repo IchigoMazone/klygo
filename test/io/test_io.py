@@ -1,6 +1,5 @@
 import json
 import pathlib
-import warnings
 import klygo.io as io
 
 def test_io_operations():
@@ -35,20 +34,13 @@ def test_io_operations():
     assert cfg.to_dict() == data
     assert json.loads(cfg.to_json()) == data
 
-    # 7. Test Config imread() deprecated warning
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        cfg.imread()
-        assert len(w) >= 1
-        assert issubclass(w[-1].category, DeprecationWarning)
-
-    # 8. Test Config.create_default()
+    # 7. Test Config.create_default()
     cfg_def = io.Config.create_default("test_default_config.yaml", overwrite=True)
     box_def = cfg_def.read()
     assert box_def.model.name == "yolov8n"
     assert box_def.default.root == "./data"
 
-    # 9. Test Config export overwrite
+    # 8. Test Config export overwrite
     cfg_def.export_file("exported_config", ".toml", overwrite=True)
     try:
         cfg_def.export_file("exported_config", ".toml", overwrite=False)

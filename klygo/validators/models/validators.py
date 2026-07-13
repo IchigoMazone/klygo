@@ -8,7 +8,7 @@ _SUPPORTED_MODELS = {"Grounding-Dino/232M", "Locate-Anything/3B"}
 
 
 class InitModel:
-    """Validate Kernel initialization parameters."""
+    """Validate Model initialization parameters."""
 
     def __init__(self, model: str) -> None:
         """
@@ -118,7 +118,7 @@ class DetectModel:
 
     def __init__(
         self,
-        input_path: Union[str, Path],
+        source: Any,
         output_path: Union[str, Path, None],
         prompt: str,
         return_tensors: str,
@@ -140,7 +140,7 @@ class DetectModel:
 
         Đầu vào:
         - self: Đối tượng hiện tại
-        - input_path: Đường dẫn file đầu vào
+        - source: Ảnh, danh sách ảnh, file ảnh, thư mục ảnh hoặc file video
         - output_path: Đường dẫn file đầu ra
         - prompt: Tham số prompt của hàm
         - return_tensors: Tham số return_tensors của hàm
@@ -165,7 +165,6 @@ class DetectModel:
 
         Nguồn: TrinhNhuNhat_12072026.
         """
-        validate_type(input_path, (str, Path), "input_path")
         validate_type(prompt, str, "prompt")
         validate_type(return_tensors, str, "return_tensors")
         validate_type(box_threshold, float, "box_threshold")
@@ -200,11 +199,10 @@ class DetectModel:
         if font_scale <= 0:
             raise ValueError(f"font_scale must be greater than 0, got: {font_scale}")
 
-        input_path = Path(input_path)
-        if not input_path.exists():
-            raise FileNotFoundError(f"input_path does not exist: {input_path}")
-        if not input_path.is_file():
-            raise ValueError(f"input_path must be a file, got: {input_path}")
+        if isinstance(source, (str, Path)):
+            source_path = Path(source)
+            if not source_path.exists():
+                raise FileNotFoundError(f"source does not exist: {source_path}")
 
         if output_path is not None:
             validate_type(output_path, (str, Path), "output_path")
@@ -230,7 +228,7 @@ class DetectModel:
                     f"dataset_dir must be a directory, got file: {dataset_dir}"
                 )
 
-        self.input_path = input_path
+        self.source = source
         self.output_path = output_path
         self.prompt = prompt
         self.return_tensors = return_tensors
