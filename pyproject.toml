@@ -1,6 +1,10 @@
+[build-system]
+requires = ["setuptools>=68", "wheel", "pybind11>=3.0.4"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "klygo"
-version = "1.0.4"
+version = "2.0.2"
 description = "Python utilities for archive, config and zero-shot detection"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
@@ -16,6 +20,13 @@ dependencies = [
     "tomlkit>=0.13",
     "torch>=2.7,<3.0",
     "tqdm>=4.66",
-    "transformers>=4.50,<5.0",
+    "transformers>=4.50,<6.0",
     "matplotlib>=3.5",
+    "pybind11>=3.0.4",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["klygo*"]
+exclude = ["data*", "docs*", "test*"]
+namespaces = false

@@ -1,0 +1,3 @@
+recursive-include cpp *
+prune cpp/build
+recursive-include klygo *.pyd *.so *.dll

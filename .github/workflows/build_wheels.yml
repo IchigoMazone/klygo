@@ -1,0 +1,144 @@
+name: Build & Publish Wheels
+
+on:
+  push:
+    tags:
+      - "v*"          # Trigger khi push tag vd: v2.0.3
+  workflow_dispatch:  # Cho phep chay thu tay
+
+jobs:
+  build_wheels:
+    name: Build wheel on ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── Windows ──────────────────────────────────────────────
+          - os: windows-latest
+            python-version: "3.10"
+          - os: windows-latest
+            python-version: "3.11"
+          - os: windows-latest
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.13"
+
+          # ── Linux (manylinux via Docker) ──────────────────────────
+          - os: ubuntu-latest
+            python-version: "3.10"
+          - os: ubuntu-latest
+            python-version: "3.11"
+          - os: ubuntu-latest
+            python-version: "3.12"
+          - os: ubuntu-latest
+            python-version: "3.13"
+
+          # ── macOS (arm64 M-series) ────────────────────────────────
+          - os: macos-latest
+            python-version: "3.10"
+          - os: macos-latest
+            python-version: "3.11"
+          - os: macos-latest
+            python-version: "3.12"
+          - os: macos-latest
+            python-version: "3.13"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # ── Windows: cài MinGW/UCRT64 qua MSYS2 ─────────────────────
+      - name: Install MSYS2 + MinGW toolchain (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+
+      - name: Add MSYS2 UCRT64 to PATH (Windows)
+        if: runner.os == 'Windows'
+        run: echo "C:/msys64/ucrt64/bin" >> $env:GITHUB_PATH
+        shell: powershell
+
+      # ── Linux: cài build tools ───────────────────────────────────
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake ninja-build g++ libgomp1
+
+      # ── macOS: cài build tools ───────────────────────────────────
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake ninja
+          # libomp cho OpenMP tren Apple Clang
+          brew install libomp
+
+      - name: Install Python build deps
+        run: pip install build pybind11 wheel
+
+      - name: Build wheel
+        run: python -m build --wheel
+        shell: bash
+
+      # ── Linux: dung auditwheel de repair manylinux tag ───────────
+      - name: Repair wheel (Linux → manylinux)
+        if: runner.os == 'Linux'
+        run: |
+          pip install auditwheel patchelf
+          auditwheel repair dist/*.whl -w dist/repaired/
+          # Replace original with repaired
+          rm dist/*.whl
+          mv dist/repaired/*.whl dist/
+        shell: bash
+
+      # ── macOS: dung delocate de bundle dylib ─────────────────────
+      - name: Repair wheel (macOS → bundle dylibs)
+        if: runner.os == 'macOS'
+        run: |
+          pip install delocate
+          delocate-wheel -w dist/repaired/ dist/*.whl
+          rm dist/*.whl
+          mv dist/repaired/*.whl dist/
+        shell: bash
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: dist/*.whl
+
+  publish:
+    name: Publish to PyPI
+    needs: build_wheels
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write   # OIDC trusted publishing (khong can token)
+
+    steps:
+      - name: Download all wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          path: dist/
+          merge-multiple: true
+
+      - name: List dist/
+        run: ls -lh dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true   # Bo qua neu file da ton tai thay vi fail
