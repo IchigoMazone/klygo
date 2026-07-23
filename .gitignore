@@ -9,6 +9,17 @@ uv.lock
 .pypirc
 .agents
 .pytest_cache
+grounding-dino-base/
+.hf-http-test/
+
+# Build & Binary artifacts
+_cmake_build/
+*.pyd
+*.so
+*.dll
+*.exe
+*.rar
 
 # Virtual environments
 .venv
+
