@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "klygo"
-version = "2.0.5"
+version = "2.0.6"
 description = "Python utilities for archive, config and zero-shot detection"
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
