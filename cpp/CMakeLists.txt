@@ -4,12 +4,14 @@ project(klygo)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 if(MINGW)
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -static-libgcc -static-libstdc++ -Wl,-Bstatic -lgomp -lpthread -Wl,-Bdynamic")
 endif()
 
 # Library
-add_library(klygo_core
+add_library(klygo_core STATIC
     src/cpu_allocator.cpp
     src/storage.cpp
     src/tensor_impl.cpp

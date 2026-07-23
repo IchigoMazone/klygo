@@ -32,6 +32,8 @@ class CMakeBuild(build_ext):
             f"-DPython3_EXECUTABLE={python_exe}",
             f"-DPYTHON_EXECUTABLE={python_exe}",
         ]
+        if "CMAKE_ARGS" in os.environ:
+            cmake_args.extend(os.environ["CMAKE_ARGS"].split())
         subprocess.check_call(cmake_args)
         subprocess.check_call(["cmake", "--build", build_dir])
 
@@ -102,7 +104,7 @@ class BinaryDistribution(Distribution):
 
 setup(
     name="klygo",
-    version="2.0.4",
+    version="2.0.5",
     packages=find_packages(exclude=["cpp*", "test*", "build*", "_cmake_build*"]),
     distclass=BinaryDistribution,
     cmdclass={"build_ext": CMakeBuild},
