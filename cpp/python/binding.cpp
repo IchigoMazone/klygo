@@ -2,12 +2,14 @@
 #include <pybind11/stl.h>
 
 #include <cstdint>
+#include <sstream>
 
 #include "klygo/tensor.h"
 #include "klygo/tensor_impl.h"
 #include "klygo/dtype.h"
 #include "klygo/tensor_factory.h"
 #include "klygo/device.h"
+#include "klygo/tensor_printer.h"
 
 namespace py = pybind11;
 
@@ -469,6 +471,16 @@ PYBIND11_MODULE(klygo, m)
     // ======================
 
     py::class_<Tensor>(m, "Tensor")
+        .def("__repr__", [](const Tensor& self) {
+            std::ostringstream ss;
+            ss << self;
+            return ss.str();
+        })
+        .def("__str__", [](const Tensor& self) {
+            std::ostringstream ss;
+            ss << self;
+            return ss.str();
+        })
 
 
         .def(
