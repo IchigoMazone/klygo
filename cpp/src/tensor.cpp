@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <functional>
 #include "klygo/tensor.h"
 #include "klygo/device.h"
 #include "klygo/cuda_allocator.h"
@@ -275,7 +276,7 @@ void apply_binary_op(const Tensor& a, const Tensor& b, Tensor& res, Op op) {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-    for (std::size_t i = 0; i < n; ++i) {
+    for (int64_t i = 0; i < static_cast<int64_t>(n); ++i) {
         double val_a = get_value(a, i);
         double val_b = get_value(b, i);
         set_value(res, i, op(val_a, val_b));
@@ -309,7 +310,7 @@ void apply_scalar_op(const Tensor& a, double val_b, Tensor& res, Op op) {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-    for (std::size_t i = 0; i < n; ++i) {
+    for (int64_t i = 0; i < static_cast<int64_t>(n); ++i) {
         double val_a = get_value(a, i);
         set_value(res, i, op(val_a, val_b));
     }
@@ -408,7 +409,7 @@ Tensor Tensor::sum() const {
 #ifdef _OPENMP
 #pragma omp parallel for reduction(+:total)
 #endif
-    for (std::size_t i = 0; i < n; ++i) {
+    for (int64_t i = 0; i < static_cast<int64_t>(n); ++i) {
         total += get_value(self_c, i);
     }
     DType res_dtype = (dtype() == DType::Bool) ? DType::Int64 : dtype();
@@ -553,10 +554,10 @@ Tensor Tensor::matmul(const Tensor& other) const {
     };
     
 #ifdef _OPENMP
-#pragma omp parallel for collapse(2)
+#pragma omp parallel for
 #endif
-    for (std::size_t r = 0; r < M; ++r) {
-        for (std::size_t c = 0; c < N; ++c) {
+    for (int64_t r = 0; r < static_cast<int64_t>(M); ++r) {
+        for (int64_t c = 0; c < static_cast<int64_t>(N); ++c) {
             double sum_val = 0.0;
             for (std::size_t k = 0; k < K; ++k) {
                 sum_val += get_value(a_c, r, k) * get_value(b_c, k, c);
@@ -787,7 +788,7 @@ Tensor unary_op_dispatch(const Tensor& self, Op op) {
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-    for (std::size_t i = 0; i < n; ++i) {
+    for (int64_t i = 0; i < static_cast<int64_t>(n); ++i) {
         set_value(res, i, op(get_value(a_c, i)));
     }
     return res;

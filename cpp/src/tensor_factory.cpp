@@ -533,7 +533,7 @@ Tensor where(const Tensor& condition, const Tensor& input, const Tensor& other) 
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-    for (std::size_t i = 0; i < n; ++i) {
+    for (int64_t i = 0; i < static_cast<int64_t>(n); ++i) {
         if (get_cond(cond_c, i)) {
             set_val(res, i, get_val(in_c, i));
         } else {
