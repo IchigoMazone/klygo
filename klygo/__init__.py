@@ -19,6 +19,7 @@ except ImportError:
         pass
 
 from . import archive
+from . import cuda
 from . import datasets
 from . import io
 from . import models
@@ -26,5 +27,5 @@ from . import utils
 from . import validators
 from . import visualize
 
-__version__ = "2.0.9"
+__version__ = "2.0.10"
 __author__ = "IchigoMazone"

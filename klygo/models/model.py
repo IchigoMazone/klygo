@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
+import platform
 import shutil
+import sys
 from typing import Any, Union, List, Dict, Tuple
 
 import cv2 as cv
@@ -11,9 +13,12 @@ from tqdm import tqdm
 
 from klygo.validators.models import InitModel, PredictModel, DetectModel
 from klygo.io import write_yaml
+from klygo.utils import is_cuda_available
 from klygo.utils._crop_boxes import _crop_boxes
 from klygo.utils._save_crops import _save_crops
 from klygo.utils.media import _iter_media, _normalize_images
+
+_is_nvidia_cuda_available = is_cuda_available
 
 
 class Model:
@@ -32,14 +37,17 @@ class Model:
         "LAG": "",
     }
 
-    def __init__(self, model: str = "Grounding-Dino/232M") -> None:
+    def __init__(
+        self,
+        model: Union[str, Path] = "Grounding-Dino/232M",
+    ) -> None:
         """
         Tác dụng:
         - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
 
         Đầu vào:
         - self: Đối tượng hiện tại
-        - model: Tham số model của hàm
+        - model: Tên model hỗ trợ hoặc đường dẫn thư mục model local
 
         Đầu ra:
         - Không trả về dữ liệu
@@ -48,11 +56,11 @@ class Model:
         - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
         - NotImplementedError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-        Nguồn: TrinhNhuNhat_12072026.
+        Nguồn: TrinhNhuNhat_14072026.
         """
         params = InitModel(model=model)
 
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda" if _is_nvidia_cuda_available() else "cpu"
         self.name_models = self.NAME_MODELS
         self.model_hugging_face = self.MODEL_HUGGING_FACE
 
@@ -67,7 +75,7 @@ class Model:
         self.input_kwargs: Dict[str, Any] = {}
         self.output_kwargs: Dict[str, Any] = {}
 
-    def _processor(self, model: str) -> Any:
+    def _processor(self, model: Union[str, Path]) -> Any:
         """
         Tác dụng:
         - Thực hiện chức năng _processor
@@ -85,6 +93,11 @@ class Model:
 
         Nguồn: TrinhNhuNhat_12072026.
         """
+        if isinstance(model, Path):
+            return AutoProcessor.from_pretrained(
+                str(model),
+                local_files_only=True,
+            )
         if model == self.name_models.get("GDN"):
             return AutoProcessor.from_pretrained(
                 self.model_hugging_face.get("GDN")
@@ -96,7 +109,7 @@ class Model:
         else:
             raise ValueError(f"Unknown model name: {model}")
 
-    def _model(self, model: str) -> Any:
+    def _model(self, model: Union[str, Path]) -> Any:
         """
         Tác dụng:
         - Thực hiện chức năng _model
@@ -114,6 +127,11 @@ class Model:
 
         Nguồn: TrinhNhuNhat_12072026.
         """
+        if isinstance(model, Path):
+            return AutoModelForZeroShotObjectDetection.from_pretrained(
+                str(model),
+                local_files_only=True,
+            ).to(self.device)
         if model == self.name_models.get("GDN"):
             return AutoModelForZeroShotObjectDetection.from_pretrained(
                 self.model_hugging_face.get("GDN")
@@ -207,7 +225,7 @@ class Model:
         - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
         - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
 
-        Nguồn: TrinhNhuNhat_12072026.
+        Nguồn: TrinhNhuNhat_14072026.
         """
         images = _normalize_images(source)
         params = PredictModel(
@@ -236,14 +254,23 @@ class Model:
         with torch.no_grad():
             outputs = self.model(**inputs)
 
-        results = self.processor.post_process_grounded_object_detection(
-            outputs=outputs,
-            input_ids=inputs.input_ids,
-            target_sizes=target_size,
-            box_threshold=self.box_threshold,
-            text_threshold=self.text_threshold,
-            **self.output_kwargs,
+        post_process_kwargs = dict(self.output_kwargs)
+        post_process_kwargs.update(
+            {
+                "outputs": outputs,
+                "input_ids": inputs.input_ids,
+                "target_sizes": target_size,
+                "threshold": self.box_threshold,
+                "text_threshold": self.text_threshold,
+            }
         )
+        results = self.processor.post_process_grounded_object_detection(
+            **post_process_kwargs
+        )
+
+        for result in results:
+            if "text_labels" in result:
+                result["labels"] = list(result["text_labels"])
 
         if self.max_area is not None:
             for image, result in zip(params.images, results):
@@ -256,7 +283,7 @@ class Model:
                     boxes[:, 3] - boxes[:, 1]
                 ).clamp(min=0)
                 keep = box_areas <= self.max_area * image_area
-                for key in ("boxes", "scores", "labels"):
+                for key in ("boxes", "scores", "labels", "text_labels"):
                     if key in result:
                         values = result[key]
                         if torch.is_tensor(values):

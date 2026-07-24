@@ -7,8 +7,12 @@
 #include <cuda_runtime.h>
 #endif
 
+/**
+ * @brief Lớp cấp phát bộ nhớ VRAM trên GPU NVIDIA sử dụng CUDA API.
+ */
 class CUDAAllocator : public Allocator {
 public:
+    /// Cấp phát bộ nhớ VRAM bằng cudaMalloc
     void* allocate(std::size_t bytes) override {
 #ifdef KLYGO_USE_CUDA
         void* ptr = nullptr;
@@ -22,6 +26,7 @@ public:
 #endif
     }
 
+    /// Giải phóng bộ nhớ VRAM bằng cudaFree
     void deallocate(void* ptr) override {
 #ifdef KLYGO_USE_CUDA
         if (ptr) {

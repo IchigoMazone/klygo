@@ -15,12 +15,22 @@ add_library(klygo_core STATIC
     src/cpu_allocator.cpp
     src/storage.cpp
     src/tensor_impl.cpp
-    src/tensor.cpp
+    src/tensor/core.cpp
+    src/tensor/shape.cpp
+    src/tensor/ops_arithmetic.cpp
+    src/tensor/ops_math.cpp
+    src/tensor/ops_reduction.cpp
     src/tensor_factory.cpp
     src/tensor_printer.cpp
 )
 
 target_include_directories(klygo_core PUBLIC ${PROJECT_SOURCE_DIR}/include)
+
+if(MSVC)
+    target_compile_options(klygo_core PRIVATE /O2 /fp:fast)
+else()
+    target_compile_options(klygo_core PRIVATE -O3 -march=native -ffast-math -funroll-loops)
+endif()
 
 # OpenMP Configuration
 # macOS Apple Clang does not ship with OpenMP — find Homebrew libomp
@@ -66,9 +76,14 @@ endif()
 find_package(pybind11 REQUIRED)
 pybind11_add_module(klygo python/binding.cpp)
 target_link_libraries(klygo PRIVATE klygo_core)
+if(MSVC)
+    target_compile_options(klygo PRIVATE /O2 /fp:fast)
+else()
+    target_compile_options(klygo PRIVATE -O3 -march=native -ffast-math -funroll-loops)
+endif()
 
 # If CUDA is found, compile klygo module with CUDA flag as well
-if(CUDA_FOUND)
+if(CUDAToolkit_FOUND OR CUDA_FOUND)
     target_compile_definitions(klygo PRIVATE KLYGO_USE_CUDA)
 endif()
 

@@ -10,7 +10,7 @@ _SUPPORTED_MODELS = {"Grounding-Dino/232M", "Locate-Anything/3B"}
 class InitModel:
     """Validate Model initialization parameters."""
 
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: Union[str, Path]) -> None:
         """
         Tác dụng:
         - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
@@ -27,13 +27,23 @@ class InitModel:
 
         Nguồn: TrinhNhuNhat_12072026.
         """
-        validate_type(model, str, "model")
-        if model not in _SUPPORTED_MODELS:
+        validate_type(model, (str, Path), "model")
+        if isinstance(model, str) and model in _SUPPORTED_MODELS:
+            self.model = model
+            return
+
+        model_dir = Path(model).expanduser()
+        if not model_dir.exists():
             raise ValueError(
-                f"unsupported model: {model!r}, "
-                f"supported models: {sorted(_SUPPORTED_MODELS)}"
+                f"unsupported model or local model directory does not exist: "
+                f"{model!r}; supported models: {sorted(_SUPPORTED_MODELS)}"
             )
-        self.model = model
+        if not model_dir.is_dir():
+            raise ValueError(
+                f"local model must be a directory, got file: {model_dir}"
+            )
+
+        self.model = model_dir.resolve()
 
 
 class PredictModel:

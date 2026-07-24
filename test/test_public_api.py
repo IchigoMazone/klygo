@@ -3,8 +3,20 @@ from types import MethodType, SimpleNamespace
 
 import cv2 as cv
 import matplotlib.pyplot as plt
-import numpy as np
-import pytest
+try:
+    import pytest
+except ImportError:
+    class _PytestFallback:
+        def raises(self, expected_exception, match=None):
+            class _RaisesContext:
+                def __enter__(self): return self
+                def __exit__(self, exc_type, exc_val, exc_tb):
+                    if exc_type is None:
+                        raise AssertionError(f"Expected {expected_exception} but nothing was raised")
+                    return issubclass(exc_type, expected_exception)
+            return _RaisesContext()
+    pytest = _PytestFallback()
+
 import torch
 from PIL import Image
 
@@ -193,14 +205,26 @@ class _Inputs(dict):
 
 
 class _Processor:
+    def __init__(self):
+        self.threshold = None
+
     def __call__(self, **kwargs):
         return _Inputs()
 
-    def post_process_grounded_object_detection(self, **kwargs):
+    def post_process_grounded_object_detection(
+        self,
+        outputs,
+        input_ids,
+        threshold,
+        text_threshold,
+        target_sizes,
+    ):
+        self.threshold = threshold
         return [{
             "boxes": torch.tensor([[0.0, 0.0, 10.0, 10.0], [0.0, 0.0, 90.0, 90.0]]),
             "scores": torch.tensor([0.9, 0.8]),
-            "labels": ["small", "large"],
+            "labels": [0, 1],
+            "text_labels": ["small", "large"],
         }]
 
 
@@ -217,7 +241,9 @@ def test_model_predict_without_downloading_model(tmp_path):
         box_threshold=0.2,
         max_area=0.2,
     )[0]
+    assert model.processor.threshold == 0.2
     assert result["labels"] == ["small"]
+    assert result["text_labels"] == ["small"]
     assert len(result["boxes"]) == len(result["scores"]) == 1
 
     image_dir = tmp_path / "predict_images"
@@ -228,6 +254,40 @@ def test_model_predict_without_downloading_model(tmp_path):
     opencv_images = read_images(image_dir, backend="opencv")
     opencv_result = model.predict(source=opencv_images, max_area=0.2)[0]
     assert opencv_result["labels"] == ["small"]
+
+
+def test_is_nvidia_cuda_available(monkeypatch):
+    import sys
+    import torch
+    from klygo.models.model import _is_nvidia_cuda_available
+
+    # Scenario 1: macOS -> False
+    monkeypatch.setattr(sys, "platform", "darwin")
+    assert _is_nvidia_cuda_available() is False
+
+    # Reset platform to win32
+    monkeypatch.setattr(sys, "platform", "win32")
+
+    # Scenario 2: CUDA not available -> False
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    assert _is_nvidia_cuda_available() is False
+
+    # Scenario 3: AMD ROCm (torch.version.cuda is None, torch.version.hip exists) -> False
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.version, "cuda", None, raising=False)
+    monkeypatch.setattr(torch.version, "hip", "5.7.0", raising=False)
+    assert _is_nvidia_cuda_available() is False
+
+    # Scenario 4: Device name contains AMD/Radeon -> False
+    monkeypatch.setattr(torch.version, "cuda", "12.1", raising=False)
+    monkeypatch.setattr(torch.version, "hip", None, raising=False)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda idx: "AMD Radeon RX 7900 XTX")
+    assert _is_nvidia_cuda_available() is False
+
+    # Scenario 5: NVIDIA CUDA -> True
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda idx: "NVIDIA GeForce RTX 4090")
+    assert _is_nvidia_cuda_available() is True
 
 
 def test_model_init_and_setters_without_downloading_model(monkeypatch):
@@ -242,7 +302,7 @@ def test_model_init_and_setters_without_downloading_model(monkeypatch):
     assert model.output_kwargs == {"top_k": 5}
 
 
-def test_model_private_loaders_without_downloading_model(monkeypatch):
+def test_model_private_loaders_without_downloading_model(monkeypatch, tmp_path):
     import klygo.models.model as model_module
 
     class FakeLoadedModel:
@@ -252,13 +312,16 @@ def test_model_private_loaders_without_downloading_model(monkeypatch):
 
     class FakeProcessorFactory:
         @staticmethod
-        def from_pretrained(name):
-            return {"processor": name}
+        def from_pretrained(name, **kwargs):
+            return {"processor": name, "kwargs": kwargs}
 
     class FakeModelFactory:
         @staticmethod
-        def from_pretrained(name):
-            return FakeLoadedModel()
+        def from_pretrained(name, **kwargs):
+            loaded = FakeLoadedModel()
+            loaded.name = name
+            loaded.kwargs = kwargs
+            return loaded
 
     monkeypatch.setattr(model_module, "AutoProcessor", FakeProcessorFactory)
     monkeypatch.setattr(
@@ -272,6 +335,19 @@ def test_model_private_loaders_without_downloading_model(monkeypatch):
     model.model_hugging_face = Model.MODEL_HUGGING_FACE
     assert model._processor(Model.NAME_MODELS["GDN"])["processor"]
     assert model._model(Model.NAME_MODELS["GDN"]).device == "cpu"
+
+    local_dir = tmp_path / "local_model"
+    local_dir.mkdir()
+    local_model = Model(local_dir)
+    assert local_model.model.name == str(local_dir.resolve())
+    assert local_model.model.kwargs == {"local_files_only": True}
+    assert local_model.processor["processor"] == str(local_dir.resolve())
+    assert local_model.processor["kwargs"] == {"local_files_only": True}
+
+    local_file = tmp_path / "model.safetensors"
+    local_file.touch()
+    with pytest.raises(ValueError, match="must be a directory"):
+        Model(local_file)
 
 
 def test_config_private_path_expansion(tmp_path):
