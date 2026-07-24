@@ -21,6 +21,13 @@ class CMakeBuild(build_ext):
             shutil.rmtree(build_dir, ignore_errors=True)
         os.makedirs(build_dir, exist_ok=True)
 
+        pkg_dir = os.path.join(here, "klygo")
+        for old_ext in glob.glob(os.path.join(pkg_dir, "*.pyd")) + glob.glob(os.path.join(pkg_dir, "*.so")):
+            try:
+                os.remove(old_ext)
+            except OSError:
+                pass
+
         python_exe = sys.executable
         pybind11_cmake_dir = pybind11.get_cmake_dir()
 
@@ -105,7 +112,7 @@ class BinaryDistribution(Distribution):
 
 setup(
     name="klygo",
-    version="2.0.11",
+    version="2.0.12",
     packages=find_packages(exclude=["cpp*", "test*", "build*", "_cmake_build*"]),
     distclass=BinaryDistribution,
     cmdclass={"build_ext": CMakeBuild},

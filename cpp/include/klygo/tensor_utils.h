@@ -54,7 +54,7 @@ void copy_non_contiguous(const Tensor& src, T* dst_ptr) {
     T* src_data = static_cast<T*>(src.data());
 
 #ifdef _OPENMP
-#pragma omp parallel for simd schedule(static)
+#pragma omp parallel for schedule(static)
 #endif
     for (int64_t i = 0; i < static_cast<int64_t>(numel); ++i) {
         std::size_t idx = static_cast<std::size_t>(i);
@@ -105,7 +105,7 @@ inline DType promote_types(DType t1, DType t2) {
 template<typename T, typename Op>
 void apply_binary_op_typed(const T* a_ptr, const T* b_ptr, T* res_ptr, std::size_t n, Op op) {
 #ifdef _OPENMP
-#pragma omp parallel for simd schedule(static)
+#pragma omp parallel for schedule(static)
 #endif
     for (int64_t i = 0; i < static_cast<int64_t>(n); ++i) {
         res_ptr[i] = op(a_ptr[i], b_ptr[i]);
@@ -167,7 +167,7 @@ void apply_binary_op(const Tensor& a, const Tensor& b, Tensor& res, Op op) {
 template<typename T, typename Op>
 void apply_scalar_op_typed(const T* a_ptr, double val_b, T* res_ptr, std::size_t n, Op op) {
 #ifdef _OPENMP
-#pragma omp parallel for simd schedule(static)
+#pragma omp parallel for schedule(static)
 #endif
     for (int64_t i = 0; i < static_cast<int64_t>(n); ++i) {
         res_ptr[i] = static_cast<T>(op(static_cast<double>(a_ptr[i]), val_b));
@@ -195,7 +195,7 @@ void apply_scalar_op(const Tensor& a, double val_b, Tensor& res, Op op) {
 template<typename T, typename Op>
 void apply_unary_op_typed(const T* a_ptr, T* res_ptr, std::size_t n, Op op) {
 #ifdef _OPENMP
-#pragma omp parallel for simd schedule(static)
+#pragma omp parallel for schedule(static)
 #endif
     for (int64_t i = 0; i < static_cast<int64_t>(n); ++i) {
         res_ptr[i] = static_cast<T>(op(static_cast<double>(a_ptr[i])));
