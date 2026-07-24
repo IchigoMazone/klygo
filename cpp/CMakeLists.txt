@@ -29,7 +29,7 @@ target_include_directories(klygo_core PUBLIC ${PROJECT_SOURCE_DIR}/include)
 if(MSVC)
     target_compile_options(klygo_core PRIVATE /O2 /fp:fast)
 else()
-    target_compile_options(klygo_core PRIVATE -O3 -march=native -ffast-math -funroll-loops)
+    target_compile_options(klygo_core PRIVATE -O3 -ffast-math -funroll-loops)
 endif()
 
 # OpenMP Configuration
@@ -79,7 +79,7 @@ target_link_libraries(klygo PRIVATE klygo_core)
 if(MSVC)
     target_compile_options(klygo PRIVATE /O2 /fp:fast)
 else()
-    target_compile_options(klygo PRIVATE -O3 -march=native -ffast-math -funroll-loops)
+    target_compile_options(klygo PRIVATE -O3 -ffast-math -funroll-loops)
 endif()
 
 # If CUDA is found, compile klygo module with CUDA flag as well

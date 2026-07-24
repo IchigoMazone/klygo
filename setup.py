@@ -28,6 +28,7 @@ class CMakeBuild(build_ext):
             "cmake",
             "-B", build_dir,
             "-S", cpp_src_dir,
+            "-DCMAKE_BUILD_TYPE=Release",
             f"-Dpybind11_DIR={pybind11_cmake_dir}",
             f"-DPython3_EXECUTABLE={python_exe}",
             f"-DPYTHON_EXECUTABLE={python_exe}",
@@ -35,7 +36,7 @@ class CMakeBuild(build_ext):
         if "CMAKE_ARGS" in os.environ:
             cmake_args.extend(os.environ["CMAKE_ARGS"].split())
         subprocess.check_call(cmake_args)
-        subprocess.check_call(["cmake", "--build", build_dir])
+        subprocess.check_call(["cmake", "--build", build_dir, "--config", "Release"])
 
         # Find the built .pyd / .so (search recursively — MSVC puts it in Release/ subdir)
         pyd_found = None
@@ -104,7 +105,7 @@ class BinaryDistribution(Distribution):
 
 setup(
     name="klygo",
-    version="2.0.10",
+    version="2.0.11",
     packages=find_packages(exclude=["cpp*", "test*", "build*", "_cmake_build*"]),
     distclass=BinaryDistribution,
     cmdclass={"build_ext": CMakeBuild},
