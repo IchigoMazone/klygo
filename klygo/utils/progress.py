@@ -1,21 +1,20 @@
-import sys
 from typing import Optional, Any
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 
 class ProgressBar:
     """
     Tác dụng:
-    - Lớp quản lý Progress Bar dùng chung toàn bộ thư viện klygo với giao diện đồng nhất màu xanh da trời (Cyan), hiển thị tốc độ, ETA đếm ngược và đơn vị tự động.
+    - Lớp quản lý Progress Bar dùng chung toàn bộ thư viện klygo với giao diện đồng nhất chuẩn Hugging Face (xanh lá, liền mạch, tự động nhận diện Jupyter Notebook / Terminal).
 
     Đầu vào:
     - total [int]: Tổng số bước hoặc số lượng phần tử cần xử lý.
     - desc [str]: Mô tả hiển thị đầu thanh tiến trình (ví dụ: 'dataset.zip: compressing').
     - unit [str]: Đơn vị đếm ('file', 'byte', 'it', v.v.). Mặc định: 'file'.
     - verbose [bool]: Trạng thái bật/tắt hiển thị tiến trình. Mặc định: True.
-    - colour [str]: Màu sắc thanh tiến trình trong console. Mặc định: 'cyan'.
-    - unit_scale [bool]: Tự động quy đổi đơn vị (k, M, G). Mặc định: False.
-    - unit_divisor [int]: Cơ số chia quy đổi đơn vị (1024 cho byte, 1000 cho số lượng). Mặc định: 1024.
+    - colour [str]: Màu sắc thanh tiến trình trong console. Mặc định: 'green'.
+    - unit_scale [bool]: Tự động quy đổi đơn vị (k, M, G). Mặc định: True.
+    - unit_divisor [int]: Cơ số chia quy đổi đơn vị (1000 cho số lượng/file, 1024 cho byte). Mặc định: 1000.
 
     Đầu ra:
     - [ProgressBar] Đối tượng quản lý tiến trình.
@@ -29,9 +28,9 @@ class ProgressBar:
         desc: str,
         unit: str = "file",
         verbose: bool = True,
-        colour: str = "cyan",
-        unit_scale: bool = False,
-        unit_divisor: int = 1024,
+        colour: str = "green",
+        unit_scale: bool = True,
+        unit_divisor: int = 1000,
     ) -> None:
         self.verbose = verbose
         self.bar: Optional[tqdm] = None
@@ -44,10 +43,11 @@ class ProgressBar:
                 unit_scale=unit_scale,
                 unit_divisor=unit_divisor,
                 colour=colour,
-                bar_format="{l_bar}{bar:30}{r_bar}",
-                file=sys.stdout,
+                ascii=" █",
                 leave=True,
             )
+
+
 
     def update(self, n: int = 1) -> None:
         """Cập nhật tiến trình thêm n bước."""
