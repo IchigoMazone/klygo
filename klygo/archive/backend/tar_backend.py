@@ -262,6 +262,7 @@ class TarBackend(ArchiveBackend):
         if output_path.exists() and not overwrite:
             raise FileExistsError(f"output_path already exists: {output_path}")
 
+        written_names = set()
         mode_write = _get_tar_mode(self.format_name, write=True)
         with tarfile.open(output_path, mode=mode_write) as dst_tar:
             with ArchiveProgress(total=len(archive_paths), desc=f"{output_path.name}: merging", verbose=verbose) as pbar:
@@ -269,9 +270,13 @@ class TarBackend(ArchiveBackend):
                     mode_read = _get_tar_mode(src.suffix.lstrip("."), write=False)
                     with tarfile.open(src, mode=mode_read) as src_tar:
                         for member in src_tar.getmembers():
+                            if member.name in written_names:
+                                continue
+                            written_names.add(member.name)
                             fobj = src_tar.extractfile(member) if member.isfile() else None
                             dst_tar.addfile(member, fobj)
                     pbar.update(1)
+
 
     def split_by_size(
         self,

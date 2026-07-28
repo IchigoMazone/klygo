@@ -324,14 +324,20 @@ class ZipBackend(ArchiveBackend):
                 src_members[src] = zf.infolist()
                 total += len(src_members[src])
 
+        written_names = set()
         with ArchiveProgress(total=total, desc=f"{output_path.name}: merging", verbose=verbose) as pbar:
             with ZipFile(output_path, mode="w", compression=ZIP_DEFLATED) as out_zf:
                 for src in archive_paths:
                     with ZipFile(src, mode="r") as src_zf:
                         for item in src_members[src]:
+                            if item.filename in written_names:
+                                pbar.update(1)
+                                continue
+                            written_names.add(item.filename)
                             with src_zf.open(item) as src_file, out_zf.open(item, mode="w") as dst_file:
                                 shutil.copyfileobj(src_file, dst_file)
                             pbar.update(1)
+
 
     def split_by_size(
         self,

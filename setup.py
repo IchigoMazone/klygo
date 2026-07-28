@@ -112,7 +112,7 @@ class BinaryDistribution(Distribution):
 
 setup(
     name="klygo",
-    version="2.0.19",
+    version="2.0.20",
     packages=find_packages(exclude=["cpp*", "test*", "build*", "_cmake_build*"]),
     distclass=BinaryDistribution,
     cmdclass={"build_ext": CMakeBuild},
