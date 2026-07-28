@@ -19,8 +19,11 @@ def compress(
 ) -> None:
     """
     Tác dụng:
-    - Nén file hoặc thư mục thành file lưu trữ (ZIP, TAR, TAR.GZ, TAR.XZ, 7Z, GZ).
+    - Nén file hoặc thư mục thành file lưu trữ.
     - Tự động nhận diện định dạng từ đuôi file đầu ra.
+
+    Định dạng tương thích:
+    - Đầu ra hỗ trợ: ZIP, TAR, TAR.GZ, TAR.XZ, 7Z, GZ (GZ chỉ dùng cho 1 file đơn lẻ, RAR không hỗ trợ tạo/nén).
 
     Đầu vào:
     - source [str | Path]: Đường dẫn file hoặc thư mục nguồn cần nén.

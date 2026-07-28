@@ -9,6 +9,9 @@ class ArchiveFile:
     Tác dụng:
     - Đối tượng Wrapper hướng đối tượng (OOP) và Context Manager làm việc trực tiếp với file archive mà không phải mở/đóng lại file nhiều lần.
 
+    Định dạng tương thích:
+    - Hỗ trợ tất cả định dạng: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
+
     Nguồn: TrinhNhuNhat_28072026.
     """
 
@@ -90,6 +93,9 @@ def open_archive(archive_path: Union[str, Path]) -> ArchiveFile:
     """
     Tác dụng:
     - Mở một file archive và trả về đối tượng ArchiveFile (OOP Context Manager) để gọi liên tiếp các phương thức mà không cần reopen file nhiều lần.
+
+    Định dạng tương thích:
+    - Hỗ trợ tất cả định dạng: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
 
     Đầu vào:
     - archive_path [str | Path]: Đường dẫn file lưu trữ.

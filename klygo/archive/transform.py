@@ -19,6 +19,10 @@ def merge(
     - Gộp nhiều file archive nguồn thành một file archive kết quả.
     - Tự động hỗ trợ gộp khác định dạng (cross-format) bằng cơ chế extract → recompress.
 
+    Định dạng tương thích:
+    - Nguồn hỗ trợ: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
+    - Đích hỗ trợ: ZIP, TAR, TAR.GZ, TAR.XZ, 7Z.
+
     Đầu vào:
     - archive_paths [list[str | Path]]: Danh sách các file archive nguồn cần gộp (tối thiểu 2 file).
     - output_path [str | Path]: Đường dẫn file archive đầu ra sau khi gộp.
@@ -83,6 +87,9 @@ def split_by_size(
     Tác dụng:
     - Chia một file archive lớn thành nhiều file archive nhỏ hơn (part archive) theo dung lượng tối đa quy định (MB).
 
+    Định dạng tương thích:
+    - Hỗ trợ: ZIP, TAR, TAR.GZ, TAR.XZ, 7Z.
+
     Đầu vào:
     - archive_path [str | Path]: Đường dẫn file archive nguồn cần chia nhỏ.
     - size [int | float]: Dung lượng tối đa của mỗi file nén part đầu ra tính bằng Megabytes (MB).
@@ -125,6 +132,10 @@ def convert(
     """
     Tác dụng:
     - Chuyển đổi định dạng của file archive sang định dạng khác (ví dụ: chuyển từ .zip sang .tar.gz hoặc .7z).
+
+    Định dạng tương thích:
+    - Nguồn hỗ trợ: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
+    - Đích hỗ trợ: ZIP, TAR, TAR.GZ, TAR.XZ, 7Z.
 
     Đầu vào:
     - source_path [str | Path]: Đường dẫn file archive nguồn.
@@ -172,6 +183,9 @@ def recompress(
     Tác dụng:
     - Nén lại file archive với mức độ nén hoặc thuật toán nén khác để tối ưu dung lượng đĩa.
 
+    Định dạng tương thích:
+    - Hỗ trợ: ZIP, TAR, TAR.GZ, TAR.XZ, 7Z.
+
     Đầu vào:
     - source_path [str | Path]: Đường dẫn file archive nguồn.
     - target_path [str | Path]: Đường dẫn file archive đầu ra nén lại.
@@ -213,6 +227,9 @@ def copy(
     """
     Tác dụng:
     - Sao chép file archive sang đường dẫn đích mà không giải nén hay thay đổi nội dung.
+
+    Định dạng tương thích:
+    - Hỗ trợ tất cả mọi định dạng: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
 
     Đầu vào:
     - source_path [str | Path]: Đường dẫn file archive nguồn.

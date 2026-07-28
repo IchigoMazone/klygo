@@ -25,7 +25,13 @@ SUPPORTED_EXTENSIONS = {
 
 def detect_format(path: Union[str, Path]) -> str:
     """
-    Detect archive format from file magic bytes or extension.
+    Tác dụng:
+    - Nhận dạng tự động định dạng file lưu trữ dựa vào Magic Bytes đọc từ header file hoặc đuôi mở rộng.
+
+    Định dạng tương thích:
+    - Nhận dạng được: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
+
+    Nguồn: TrinhNhuNhat_28072026.
     """
     filepath = Path(path)
     filename = filepath.name.lower()
@@ -68,7 +74,13 @@ def detect_format(path: Union[str, Path]) -> str:
 
 def is_archive(path: Union[str, Path]) -> bool:
     """
-    Check if a file path points to a supported archive format.
+    Tác dụng:
+    - Kiểm tra một đường dẫn file có phải là file archive được hỗ trợ hợp lệ hay không.
+
+    Định dạng tương thích:
+    - Kiểm tra được: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
+
+    Nguồn: TrinhNhuNhat_28072026.
     """
     try:
         fmt = detect_format(path)

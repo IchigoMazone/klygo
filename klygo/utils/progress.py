@@ -28,7 +28,7 @@ class ProgressBar:
         desc: str,
         unit: str = "file",
         verbose: bool = True,
-        colour: str = "green",
+        colour: str = "cyan",
         unit_scale: bool = True,
         unit_divisor: int = 1000,
     ) -> None:

@@ -10,6 +10,9 @@ def list_files(archive_path: Union[str, Path]) -> List[str]:
     Tác dụng:
     - Lấy danh sách tất cả các đường dẫn file bên trong file lưu trữ.
 
+    Định dạng tương thích:
+    - Hỗ trợ tất cả định dạng: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
+
     Đầu vào:
     - archive_path [str | Path]: Đường dẫn file lưu trữ (ZIP, TAR, 7Z, v.v.).
 
@@ -44,6 +47,9 @@ def iter_files(archive_path: Union[str, Path]) -> Iterator[str]:
     Tác dụng:
     - Duyệt danh sách đường dẫn file dưới dạng Generator để tiết kiệm bộ nhớ RAM với các archive chứa hàng triệu file.
 
+    Định dạng tương thích:
+    - Hỗ trợ tất cả định dạng: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
+
     Đầu vào:
     - archive_path [str | Path]: Đường dẫn file lưu trữ.
 
@@ -76,6 +82,9 @@ def search(
     """
     Tác dụng:
     - Tìm kiếm các đường dẫn file phù hợp với mẫu wildcard hoặc biểu thức chính quy (Regex) trong file lưu trữ.
+
+    Định dạng tương thích:
+    - Hỗ trợ tất cả định dạng: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
 
     Đầu vào:
     - archive_path [str | Path]: Đường dẫn file lưu trữ.

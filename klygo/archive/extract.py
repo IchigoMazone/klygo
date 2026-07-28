@@ -21,6 +21,9 @@ def extract(
     - Giải nén toàn bộ hoặc các file chỉ định từ file lưu trữ vào thư mục đích.
     - Hỗ trợ chống lỗ hổng Zip-Slip (Path Traversal), giải nén mật khẩu và lọc theo wildcard.
 
+    Định dạng tương thích:
+    - Đầu vào hỗ trợ: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR (mở khóa bằng mật khẩu đối với ZIP/7Z/RAR).
+
     Đầu vào:
     - archive_path [str | Path]: Đường dẫn file lưu trữ cần giải nén.
     - output_dir [str | Path]: Thư mục đích nhận các file giải nén. Mặc định: ".".
@@ -86,6 +89,9 @@ def extract_file(
     Tác dụng:
     - Giải nén một file đơn lẻ từ file lưu trữ bằng cơ chế Streaming I/O tiết kiệm RAM.
 
+    Định dạng tương thích:
+    - Đầu vào hỗ trợ: ZIP, TAR, TAR.GZ, TAR.XZ, 7Z, RAR.
+
     Đầu vào:
     - archive_path [str | Path]: Đường dẫn file lưu trữ.
     - filename [str]: Tên đường dẫn file cụ thể bên trong archive (ví dụ: 'images/001.jpg').
@@ -134,6 +140,9 @@ def extract_matching(
     """
     Tác dụng:
     - Giải nén trực tiếp các file khớp mẫu pattern wildcard từ file lưu trữ.
+
+    Định dạng tương thích:
+    - Đầu vào hỗ trợ: ZIP, TAR, TAR.GZ, TAR.XZ, 7Z, RAR.
 
     Đầu vào:
     - archive_path [str | Path]: Đường dẫn file lưu trữ.

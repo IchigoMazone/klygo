@@ -15,6 +15,9 @@ def add(
     Tác dụng:
     - Thêm một hoặc nhiều file, thư mục mới vào file lưu trữ đã tồn tại.
 
+    Định dạng tương thích:
+    - Hỗ trợ: ZIP (thêm nhanh trực tiếp), TAR, TAR.GZ, TAR.XZ, 7Z (tự động nén rebuild archive). Không hỗ trợ: GZ file lẻ, RAR.
+
     Đầu vào:
     - archive_path [str | Path]: Đường dẫn file lưu trữ đích.
     - files [str | Path | list]: Một hoặc danh sách các đường dẫn file/thư mục cần thêm vào.
@@ -60,6 +63,9 @@ def remove(
     """
     Tác dụng:
     - Xóa một hoặc nhiều file được chỉ định khỏi file lưu trữ bằng Streaming I/O tiết kiệm RAM.
+
+    Định dạng tương thích:
+    - Hỗ trợ: ZIP, TAR, TAR.GZ, TAR.XZ, 7Z (sử dụng rebuild archive qua stream). Không hỗ trợ: GZ file lẻ, RAR.
 
     Đầu vào:
     - archive_path [str | Path]: Đường dẫn file lưu trữ.

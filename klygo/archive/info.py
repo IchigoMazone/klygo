@@ -10,6 +10,9 @@ def get_info(archive_path: Union[str, Path]) -> Dict[str, Any]:
     Tác dụng:
     - Lấy thông tin thống kê chi tiết và metadata của file lưu trữ (định dạng, thuật toán nén, mã hóa, số lượng file/thư mục, tỷ lệ nén, kích thước dễ đọc).
 
+    Định dạng tương thích:
+    - Hỗ trợ tất cả định dạng: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
+
     Đầu vào:
     - archive_path [str | Path]: Đường dẫn file lưu trữ.
 
@@ -55,6 +58,9 @@ def test(archive_path: Union[str, Path], raise_exception: bool = False) -> bool:
     Tác dụng:
     - Kiểm tra tính toàn vẹn dữ liệu và mã kiểm tra lỗi (CRC/Header) của file lưu trữ.
 
+    Định dạng tương thích:
+    - Hỗ trợ tất cả định dạng: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
+
     Đầu vào:
     - archive_path [str | Path]: Đường dẫn file lưu trữ.
     - raise_exception [bool]: Ném ra ngoại lệ ValueError khi phát hiện file hỏng thay vì trả về False. Mặc định: False.
@@ -89,6 +95,9 @@ def verify(archive_path: Union[str, Path]) -> Dict[str, Any]:
     """
     Tác dụng:
     - Kiểm tra và xác minh toàn diện trạng thái file lưu trữ (Header, CRC, Metadata, trạng thái mã hóa).
+
+    Định dạng tương thích:
+    - Hỗ trợ tất cả định dạng: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
 
     Đầu vào:
     - archive_path [str | Path]: Đường dẫn file lưu trữ.

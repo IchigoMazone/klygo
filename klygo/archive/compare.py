@@ -9,6 +9,9 @@ def compare(archive1: Union[str, Path], archive2: Union[str, Path]) -> Dict[str,
     Tác dụng:
     - So sánh nội dung danh sách các file bên trong 2 file lưu trữ khác nhau.
 
+    Định dạng tương thích:
+    - Hỗ trợ so sánh giữa tất cả định dạng: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
+
     Đầu vào:
     - archive1 [str | Path]: Đường dẫn file archive thứ nhất.
     - archive2 [str | Path]: Đường dẫn file archive thứ hai.
