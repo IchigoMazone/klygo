@@ -24,22 +24,30 @@ def read_images(
 ) -> List[Union[Image.Image, np.ndarray]]:
     """
     Tác dụng:
-    - Đọc một file ảnh hoặc toàn bộ ảnh trong thư mục
+    - Đọc một file ảnh đơn hoặc tất cả các file ảnh trong thư mục (hỗ trợ đọc đệ quy thư mục con).
+
+    Định dạng tương thích:
+    - Đầu vào hỗ trợ: .bmp, .jpeg, .jpg, .png, .tif, .tiff, .webp
+    - Backend hỗ trợ: 'pil' (PIL RGB) hoặc 'opencv' (NumPy BGR)
 
     Đầu vào:
-    - source: File ảnh hoặc thư mục chứa ảnh
-    - recursive: Trạng thái cho phép đọc ảnh trong các thư mục con
-    - backend: Kiểu ảnh đầu ra, gồm pil hoặc opencv
+    - source [str | Path]: File ảnh hoặc thư mục chứa ảnh.
+    - recursive [bool]: Đọc đệ quy thư mục con khi source là thư mục. Mặc định: False.
+    - backend [str]: Định dạng ảnh trả về ('pil' hoặc 'opencv'). Mặc định: 'pil'.
 
     Đầu ra:
-    - Danh sách ảnh PIL RGB hoặc mảng NumPy BGR theo backend
+    - [List[PIL.Image.Image | np.ndarray]] Danh sách các ảnh đã mở.
 
     Ngoại lệ:
-    - TypeError: Kiểu dữ liệu của tham số không hợp lệ
-    - ValueError: backend, định dạng ảnh hoặc nội dung source không hợp lệ
-    - FileNotFoundError: source không tồn tại
+    - TypeError: Kiểu dữ liệu tham số không hợp lệ.
+    - ValueError: Không tìm thấy ảnh hợp lệ hoặc backend không hỗ trợ.
+    - FileNotFoundError: source không tồn tại.
 
-    Nguồn: TrinhNhuNhat_13072026.
+    Ví dụ:
+    >>> import klygo.io as io
+    >>> imgs = io.read_images("dataset/images", recursive=True, backend="pil")
+
+    Nguồn: TrinhNhuNhat_28072026.
     """
     if not isinstance(source, (str, Path)):
         raise TypeError("source must be str or Path")

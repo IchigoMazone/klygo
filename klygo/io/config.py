@@ -11,23 +11,27 @@ from klygo.io.write import write_file
 
 
 class Config:
+    """
+    Tác dụng:
+    - Quản lý file cấu hình thông minh: hỗ trợ đọc/ghi file YAML, JSON, TOML với thuộc tính dot-notation (Box), kế thừa khối `default:`, và tự động xuất file.
+
+    Định dạng tương thích:
+    - Hỗ trợ: .yaml, .yml, .json, .jsonl, .toml
+
+    Ví dụ:
+    >>> from klygo.io import Config
+    >>> cfg = Config("config.yaml").read()
+    >>> print(cfg.model.name)
+    'Grounding-DINO-Base'
+
+    Nguồn: TrinhNhuNhat_28072026.
+    """
+
     def __init__(self, config_path: str | Path) -> None:
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - config_path: Đường dẫn file cấu hình
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
         self._params = ConfigSource(config_path=config_path)
         self._keys: list = []
         self._cfg: dict = {}
+
 
     @property
     def config_path(self) -> Path:

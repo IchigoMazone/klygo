@@ -3,7 +3,7 @@ from typing import Any
 
 from klygo.validators import validate_type
 
-_SUPPORTED = {".yaml", ".yml", ".json", ".toml"}
+_SUPPORTED = {".yaml", ".yml", ".json", ".jsonl", ".toml", ".csv", ".txt", ".log"}
 
 
 class ReadFile:
