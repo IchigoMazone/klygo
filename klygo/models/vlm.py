@@ -19,7 +19,7 @@ from klygo.utils._save_crops import _save_crops
 from klygo.utils.media import _iter_media, _normalize_images
 
 _is_nvidia_cuda_available = is_cuda_available
-_cfg = Config("klygo/config/registry.yaml").read()
+_cfg = Config(Path(__file__).parent.parent / "config" / "registry.yaml").read()
 
 
 
