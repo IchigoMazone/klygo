@@ -1,119 +1,93 @@
-from zipfile import ZipFile, ZIP_DEFLATED
 from pathlib import Path
+from typing import Union, List, Literal
 
-from tqdm import tqdm
-
+from klygo.archive.backend import get_backend
 from klygo.validators.archive import Add, Remove
 
 
 def add(
-    archive_path: str | Path,
-    files: "str | Path | list",
+    archive_path: Union[str, Path],
+    files: Union[str, Path, List[Union[str, Path]]],
     verbose: bool = True,
+    on_conflict: Literal["rename", "overwrite", "skip"] = "rename",
 ) -> None:
     """
     Tác dụng:
-    - Thêm file hoặc thư mục vào file lưu trữ
+    - Thêm một hoặc nhiều file, thư mục mới vào file lưu trữ đã tồn tại.
 
     Đầu vào:
-    - archive_path: Đường dẫn file lưu trữ
-    - files: Tham số files của hàm
-    - verbose: Trạng thái hiển thị tiến trình
+    - archive_path [str | Path]: Đường dẫn file lưu trữ đích.
+    - files [str | Path | list]: Một hoặc danh sách các đường dẫn file/thư mục cần thêm vào.
+    - verbose [bool]: Hiển thị thanh tiến trình Cyan trong console. Mặc định: True.
+    - on_conflict [str]: Chiến lược xử lý khi trùng tên file trong archive ('rename': đổi tên với hậu tố _dup, 'overwrite': ghi đè, 'skip': bỏ qua). Mặc định: 'rename'.
 
     Đầu ra:
-    - Không trả về dữ liệu
+    - [None] Không trả về dữ liệu.
 
-    Ngoại lệ:
-    - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    Ví dụ:
+    >>> import klygo.archive as ar
 
-    Nguồn: TrinhNhuNhat_12072026.
+    # Ví dụ 1: Thêm 1 file mới vào ZIP đã có
+    >>> ar.add("dataset.zip", "new_image.jpg", verbose=True)
+    # Kết quả hiển thị thanh tiến trình:
+    # dataset.zip: adding: 100%|##############################| 1/1 [00:00<00:00, 1200file/s]
+
+    # Ví dụ 2: Thêm nhiều file và thư mục với chiến lược bỏ qua file trùng tên (skip)
+    >>> ar.add("data.zip", ["extra1.png", "extra_dir/"], on_conflict="skip")
+
+    Nguồn: TrinhNhuNhat_28072026.
     """
+    path = Path(archive_path)
 
-    params = Add(archive_path=archive_path, files=files, verbose=verbose)
+    if isinstance(files, (str, Path)):
+        files_list = [Path(files)]
+    else:
+        files_list = [Path(f) for f in files]
 
-    # Expand directories to individual files
-    all_files: list[tuple[Path, str]] = []  # (absolute_path, arcname)
-    for fp in params.files:
-        if fp.is_dir():
-            for child in sorted(fp.rglob("*")):
-                if child.is_file():
-                    all_files.append((child, str(child.relative_to(fp.parent))))
-        else:
-            all_files.append((fp, fp.name))
-
-    with ZipFile(params.archive_path, mode="a", compression=ZIP_DEFLATED) as zf:
-        existing = set(zf.namelist())
-        bar = (
-            tqdm(
-                total=len(all_files) or 1,
-                desc="Adding",
-                unit="file",
-                colour="yellow",
-                bar_format="{l_bar}{bar:30}{r_bar}",
-            )
-            if verbose
-            else None
-        )
-        for abs_path, arcname in all_files:
-            # Avoid silently overwriting; suffix with _dup if name conflicts
-            if arcname in existing:
-                stem = Path(arcname).stem
-                suffix = Path(arcname).suffix
-                arcname = f"{stem}_dup{suffix}"
-            zf.write(abs_path, arcname=arcname)
-            if bar is not None:
-                bar.update(1)
-        if bar is not None:
-            if not all_files:
-                bar.update(1)
-            bar.close()
-
-    if verbose:
-        print(f"Done. Added {len(all_files)} file(s) to '{params.archive_path}'")
+    backend = get_backend(path)
+    backend.add(
+        archive_path=path,
+        files=files_list,
+        on_conflict=on_conflict,
+        verbose=verbose,
+    )
 
 
 def remove(
-    archive_path: str | Path,
-    files: "str | list[str]",
+    archive_path: Union[str, Path],
+    files: Union[str, List[str]],
 ) -> None:
     """
     Tác dụng:
-    - Xóa các file được chỉ định khỏi file lưu trữ
+    - Xóa một hoặc nhiều file được chỉ định khỏi file lưu trữ bằng Streaming I/O tiết kiệm RAM.
 
     Đầu vào:
-    - archive_path: Đường dẫn file lưu trữ
-    - files: Tham số files của hàm
+    - archive_path [str | Path]: Đường dẫn file lưu trữ.
+    - files [str | list[str]]: Tên file hoặc danh sách tên file bên trong archive cần xóa.
 
     Đầu ra:
-    - Không trả về dữ liệu
+    - [None] Không trả về dữ liệu.
 
     Ngoại lệ:
-    - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-    - KeyError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - KeyError: Phát sinh khi một hoặc nhiều file chỉ định xóa không tồn tại trong archive.
 
-    Nguồn: TrinhNhuNhat_12072026.
+    Ví dụ:
+    >>> import klygo.archive as ar
+
+    # Ví dụ 1: Xóa 1 file temp.log khỏi dataset.zip
+    >>> ar.remove("dataset.zip", "temp.log")
+
+    # Ví dụ 2: Xóa nhiều file rác khỏi file nén TAR.GZ
+    >>> ar.remove("data.tar.gz", ["old_label.txt", "debug/cache.tmp"])
+
+    Nguồn: TrinhNhuNhat_28072026.
     """
+    path = Path(archive_path)
 
-    params = Remove(archive_path=archive_path, files=files)
-    to_remove = set(params.files)
+    if isinstance(files, str):
+        files_list = [files]
+    else:
+        files_list = files
 
-    with ZipFile(params.archive_path, mode="r") as zf:
-        names = set(zf.namelist())
-        missing = to_remove - names
-        if missing:
-            raise KeyError(
-                f"Files not found in archive: {sorted(missing)}. "
-                f"Use list_files() to see available files."
-            )
-
-        tmp_path = params.archive_path.with_suffix(".tmp.zip")
-        with ZipFile(tmp_path, mode="w", compression=ZIP_DEFLATED) as tmp_zf:
-            for item in zf.infolist():
-                if item.filename not in to_remove:
-                    tmp_zf.writestr(item, zf.read(item.filename))
-
-    tmp_path.replace(params.archive_path)
+    backend = get_backend(path)
+    backend.remove(archive_path=path, files=files_list)

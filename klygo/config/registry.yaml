@@ -1,0 +1,85 @@
+  model:
+
+    names: 
+      - Grounding-DINO-Base
+      - Grounding-DINO-Tiny
+      - Locate-Anything-3B
+      - Qwen3-8B
+      - llama-name
+      - gemma-name
+      - yolo11m
+
+    vlm: 
+      grounding_dino: 
+        - Grounding-DINO-Base
+        - Grounding-DINO-Tiny
+
+      locate_anything: 
+        - Locate-Anything-3B
+
+    llm:
+      qwen:
+        - Qwen3-8B
+
+      gemma:
+        - name
+
+      llama: 
+        - name
+
+    vlms: 
+      - Grounding-DINO-Base
+      - Grounding-DINO-Tiny
+      - Locate-Anything-3B
+
+    llms:
+      - Qwen3-8B
+
+    Grounding-DINO-Base:
+      name: Grounding-DINO-Base
+      repo: IDEA-Research/grounding-dino-base
+      provider: IDEA-Research
+      params: 232M
+      task: vlm
+
+    Grounding-DINO-Tiny: 
+      name: Grounding-DINO-Tiny
+      repo: IDEA-Research/grounding-dino-tiny
+      provider: IDEA-Research
+      params: 91M
+      task: vlm
+
+    Locate-Anything-3B: 
+      name: Locate-Anything-3B
+      repo: nvidia/Locate-Anything-3B
+      provider: nvidia
+      params: 3B
+      task: vlm
+
+    Qwen3-8B: 
+      name: Qwen3-8B
+      repo: Qwen3/Qwen3-8B
+      provider: Alibaba-Cloud
+      params: 8B
+      task: llm
+
+    llama-name: 
+      name: llama-name
+      repo: llama-repo
+      provider: llama-provider
+      params: llama-params
+      task: llm
+
+    gemma-name: 
+      name: gemma-name
+      repo: gemma-repo
+      provider: gemma-provider
+      params: gemma-params
+      task: llm
+
+    yolo11m: 
+      name: yolo11m.pt 
+      repo: 11m-repo
+      provider: Ultralytics
+      params: 11m-params
+      task: detect

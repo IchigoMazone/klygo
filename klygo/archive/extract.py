@@ -1,137 +1,166 @@
-from zipfile import ZipFile
 from pathlib import Path
+from typing import Optional, Union, List
 
-from tqdm import tqdm
-
+from klygo.archive.backend import get_backend
 from klygo.validators.archive import Extract, ExtractFile
 
 
 def extract(
-    archive_path: str | Path,
-    output_dir: str | Path = ".",
+    archive_path: Union[str, Path],
+    output_dir: Union[str, Path] = ".",
     overwrite: bool = False,
     verbose: bool = True,
+    password: Optional[str] = None,
+    include: Optional[Union[str, List[str]]] = None,
+    exclude: Optional[Union[str, List[str]]] = None,
+    preserve_timestamp: bool = True,
+    preserve_permissions: bool = True,
 ) -> None:
     """
     Tác dụng:
-    - Giải nén toàn bộ file lưu trữ vào thư mục đích
+    - Giải nén toàn bộ hoặc các file chỉ định từ file lưu trữ vào thư mục đích.
+    - Hỗ trợ chống lỗ hổng Zip-Slip (Path Traversal), giải nén mật khẩu và lọc theo wildcard.
 
     Đầu vào:
-    - archive_path: Đường dẫn file lưu trữ
-    - output_dir: Đường dẫn thư mục đầu ra
-    - overwrite: Trạng thái cho phép ghi đè
-    - verbose: Trạng thái hiển thị tiến trình
+    - archive_path [str | Path]: Đường dẫn file lưu trữ cần giải nén.
+    - output_dir [str | Path]: Thư mục đích nhận các file giải nén. Mặc định: ".".
+    - overwrite [bool]: Trạng thái cho phép ghi đè nếu file trong output_dir đã tồn tại. Mặc định: False.
+    - verbose [bool]: Hiển thị thanh tiến trình Cyan trong console. Mặc định: True.
+    - password [str | None]: Mật khẩu giải nén đối với archive mã hóa. Mặc định: None.
+    - include [str | list[str] | None]: Mẫu wildcard chỉ định giải nén các file phù hợp (ví dụ: '*.png').
+    - exclude [str | list[str] | None]: Mẫu wildcard loại trừ các file không muốn giải nén.
+    - preserve_timestamp [bool]: Giữ nguyên thời gian lưu trữ gốc của file. Mặc định: True.
+    - preserve_permissions [bool]: Giữ nguyên quyền hạn POSIX của file. Mặc định: True.
 
     Đầu ra:
-    - Không trả về dữ liệu
+    - [None] Không trả về dữ liệu.
 
     Ngoại lệ:
-    - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-    - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - FileNotFoundError: Phát sinh khi archive_path không tồn tại.
+    - FileExistsError: Phát sinh khi các file đích đã tồn tại và overwrite=False.
+    - ValueError: Phát sinh khi phát hiện đường dẫn Zip-Slip độc hại.
 
-    Nguồn: TrinhNhuNhat_12072026.
+    Ví dụ:
+    >>> import klygo.archive as ar
+
+    # Ví dụ 1: Giải nén toàn bộ file ZIP vào thư mục ./extracted
+    >>> ar.extract("dataset.zip", output_dir="./extracted", overwrite=True)
+    # Kết quả hiển thị thanh tiến trình:
+    # dataset.zip: extracting: 100%|##############################| 120/120 [00:00<00:00, 520file/s]
+
+    # Ví dụ 2: Giải nén chỉ các file ảnh PNG với mật khẩu mở khóa
+    >>> ar.extract("data.tar.gz", output_dir="./imgs", include="*.png", password="secret_pass")
+    # Kết quả hiển thị thanh tiến trình:
+    # data.tar.gz: extracting: 100%|##############################| 45/45 [00:00<00:00, 310file/s]
+
+    # Ví dụ 3: Giải nén ngoại trừ các file tạm .log
+    >>> ar.extract("backup.zip", output_dir="./restore", exclude="*.log", overwrite=True)
+
+    Nguồn: TrinhNhuNhat_28072026.
     """
+    path = Path(archive_path)
+    out = Path(output_dir)
 
-    params = Extract(
-        archive_path=archive_path,
-        output_dir=output_dir,
+    backend = get_backend(path)
+    backend.extract(
+        archive_path=path,
+        output_dir=out,
+        password=password,
+        include=include,
+        exclude=exclude,
+        preserve_timestamp=preserve_timestamp,
+        preserve_permissions=preserve_permissions,
         overwrite=overwrite,
         verbose=verbose,
     )
 
-    source_path: Path = params.archive_path
-    output_path: Path = params.output_dir
-
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    with ZipFile(source_path, mode="r") as zf:
-        members = zf.infolist()
-
-        if not overwrite:
-            existing = [
-                m for m in members
-                if (output_path / m.filename).exists()
-            ]
-            if existing:
-                names = ", ".join(m.filename for m in existing[:5])
-                suffix = f"… (+{len(existing) - 5} more)" if len(existing) > 5 else ""
-                raise FileExistsError(
-                    f"Files already exist in output directory: {names}{suffix}. "
-                    "Use overwrite=True to replace them."
-                )
-
-        iterator = (
-            tqdm(
-                members,
-                desc="Extracting",
-                unit="file",
-                colour="cyan",
-                bar_format="{l_bar}{bar:30}{r_bar}",
-            )
-            if verbose
-            else iter(members)
-        )
-
-        for member in iterator:
-            zf.extract(member, path=output_path)
-
-    if verbose:
-        print(f"Done. Extracted {len(members)} file(s) to '{output_path}'")
-
 
 def extract_file(
-    archive_path: str | Path,
+    archive_path: Union[str, Path],
     filename: str,
-    output_dir: str | Path = ".",
+    output_dir: Union[str, Path] = ".",
     overwrite: bool = False,
+    password: Optional[str] = None,
 ) -> None:
     """
     Tác dụng:
-    - Giải nén một file cụ thể từ file lưu trữ
+    - Giải nén một file đơn lẻ từ file lưu trữ bằng cơ chế Streaming I/O tiết kiệm RAM.
 
     Đầu vào:
-    - archive_path: Đường dẫn file lưu trữ
-    - filename: Tham số filename của hàm
-    - output_dir: Đường dẫn thư mục đầu ra
-    - overwrite: Trạng thái cho phép ghi đè
+    - archive_path [str | Path]: Đường dẫn file lưu trữ.
+    - filename [str]: Tên đường dẫn file cụ thể bên trong archive (ví dụ: 'images/001.jpg').
+    - output_dir [str | Path]: Thư mục đích lưu trữ file giải nén. Mặc định: ".".
+    - overwrite [bool]: Cho phép ghi đè nếu file đã tồn tại tại đích. Mặc định: False.
+    - password [str | None]: Mật khẩu giải nén nếu file bị mã hóa.
 
     Đầu ra:
-    - Không trả về dữ liệu
+    - [None] Không trả về dữ liệu.
 
     Ngoại lệ:
-    - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-    - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-    - KeyError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    - KeyError: Phát sinh khi filename không tồn tại trong archive.
+    - FileExistsError: Phát sinh khi file đã tồn tại tại output_dir và overwrite=False.
 
-    Nguồn: TrinhNhuNhat_12072026.
+    Ví dụ:
+    >>> import klygo.archive as ar
+
+    # Ví dụ 1: Giải nén 1 file data.yaml từ dataset.zip ra thư mục hiện tại
+    >>> ar.extract_file("dataset.zip", "data.yaml", output_dir=".", overwrite=True)
+
+    # Ví dụ 2: Giải nén 1 file nhãn cụ thể ra thư mục ./labels
+    >>> ar.extract_file("data.zip", "labels/train.csv", output_dir="./labels", overwrite=True)
+
+    Nguồn: TrinhNhuNhat_28072026.
     """
+    path = Path(archive_path)
+    out = Path(output_dir)
 
-    params = ExtractFile(
-        archive_path=archive_path,
+    backend = get_backend(path)
+    backend.extract_file(
+        archive_path=path,
         filename=filename,
-        output_dir=output_dir,
+        output_dir=out,
+        password=password,
         overwrite=overwrite,
     )
 
-    output_path: Path = params.output_dir
-    output_path.mkdir(parents=True, exist_ok=True)
 
-    with ZipFile(params.archive_path, mode="r") as zf:
-        names = zf.namelist()
-        if params.filename not in names:
-            raise KeyError(
-                f"'{params.filename}' not found in archive. "
-                f"Use list_files() to see available files."
-            )
+def extract_matching(
+    archive_path: Union[str, Path],
+    pattern: str,
+    output_dir: Union[str, Path] = ".",
+    overwrite: bool = False,
+    password: Optional[str] = None,
+) -> None:
+    """
+    Tác dụng:
+    - Giải nén trực tiếp các file khớp mẫu pattern wildcard từ file lưu trữ.
 
-        target = output_path / Path(params.filename).name
-        if target.exists() and not params.overwrite:
-            raise FileExistsError(
-                f"file already exists: {target}. Use overwrite=True."
-            )
+    Đầu vào:
+    - archive_path [str | Path]: Đường dẫn file lưu trữ.
+    - pattern [str]: Mẫu wildcard cần khớp (ví dụ: '*.png', 'labels/*.txt').
+    - output_dir [str | Path]: Thư mục đích nhận file giải nén. Mặc định: ".".
+    - overwrite [bool]: Cho phép ghi đè file đã tồn tại. Mặc định: False.
+    - password [str | None]: Mật khẩu nếu archive được bảo vệ.
 
-        with open(target, "wb") as file:
-            file.write(zf.read(params.filename))
+    Đầu ra:
+    - [None] Không trả về dữ liệu.
+
+    Ví dụ:
+    >>> import klygo.archive as ar
+
+    # Ví dụ 1: Giải nén tất cả các file ảnh PNG ra thư mục ./images
+    >>> ar.extract_matching("dataset.zip", "*.png", output_dir="./images", overwrite=True)
+
+    # Ví dụ 2: Giải nén các file nhãn định dạng TXT
+    >>> ar.extract_matching("dataset.zip", "labels/*.txt", output_dir="./labels", overwrite=True)
+
+    Nguồn: TrinhNhuNhat_28072026.
+    """
+    extract(
+        archive_path=archive_path,
+        output_dir=output_dir,
+        include=pattern,
+        overwrite=overwrite,
+        password=password,
+        verbose=False,
+    )

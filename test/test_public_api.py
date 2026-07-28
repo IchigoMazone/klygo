@@ -259,7 +259,7 @@ def test_model_predict_without_downloading_model(tmp_path):
 def test_is_nvidia_cuda_available(monkeypatch):
     import sys
     import torch
-    from klygo.models.model import _is_nvidia_cuda_available
+    from klygo.models.vlm import _is_nvidia_cuda_available
 
     # Scenario 1: macOS -> False
     monkeypatch.setattr(sys, "platform", "darwin")
@@ -303,7 +303,7 @@ def test_model_init_and_setters_without_downloading_model(monkeypatch):
 
 
 def test_model_private_loaders_without_downloading_model(monkeypatch, tmp_path):
-    import klygo.models.model as model_module
+    import klygo.models.vlm as model_module
 
     class FakeLoadedModel:
         def to(self, device):
@@ -401,7 +401,7 @@ def test_read_images_with_pil_and_opencv_backends(tmp_path):
 
 
 def test_model_detect_without_downloading_model(tmp_path, monkeypatch):
-    import klygo.models.model as model_module
+    import klygo.models.vlm as model_module
     import klygo.utils.media as media_module
 
     frame = np.zeros((48, 64, 3), dtype=np.uint8)

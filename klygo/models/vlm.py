@@ -12,16 +12,18 @@ from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 from tqdm import tqdm
 
 from klygo.validators.models import InitModel, PredictModel, DetectModel
-from klygo.io import write_yaml
+from klygo.io import write_yaml, Config
 from klygo.utils import is_cuda_available
 from klygo.utils._crop_boxes import _crop_boxes
 from klygo.utils._save_crops import _save_crops
 from klygo.utils.media import _iter_media, _normalize_images
 
 _is_nvidia_cuda_available = is_cuda_available
+_cfg = Config("klygo/config/registry.yaml").read()
 
 
-class Model:
+
+class VisionLanguageModel:
     """A deep learning helper class for object detection and prediction.
 
     Supports zero-shot object detection with models like Grounding DINO. Can be
@@ -39,8 +41,9 @@ class Model:
 
     def __init__(
         self,
-        model: Union[str, Path] = "Grounding-Dino/232M",
+        model: Union[str, Path] = _cfg.model["Grounding-DINO-Base"].name,
     ) -> None:
+
         """
         Tác dụng:
         - Khởi tạo đối tượng và kiểm tra các tham số ban đầu

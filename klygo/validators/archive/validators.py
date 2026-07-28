@@ -1,25 +1,15 @@
 from pathlib import Path
 from klygo.validators import validate_type
 
-_SUPPORTED_FORMATS = {".zip"}
+_SUPPORTED_FORMATS = {
+    ".zip", ".tar", ".gz", ".tgz", ".txz", ".7z", ".rar",
+    ".tar.gz", ".tar.xz", ".tar.bz2", ".tbz2"
+}
 
 
-def _check_zip_path(archive_path: Path) -> None:
+def _check_archive_path(archive_path: Path) -> None:
     """
-    Tác dụng:
-    - Thực hiện chức năng _check_zip_path
-
-    Đầu vào:
-    - archive_path: Đường dẫn file lưu trữ
-
-    Đầu ra:
-    - Không trả về dữ liệu
-
-    Ngoại lệ:
-    - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-
-    Nguồn: TrinhNhuNhat_12072026.
+    Check if archive path exists, is a file, and has a supported extension.
     """
     if not archive_path.exists():
         raise FileNotFoundError(f"archive_path does not exist: {archive_path}")
@@ -27,17 +17,24 @@ def _check_zip_path(archive_path: Path) -> None:
         raise ValueError(
             f"archive_path must be a file, got directory: {archive_path}"
         )
-    if archive_path.suffix.lower() not in _SUPPORTED_FORMATS:
+    filename = archive_path.name.lower()
+    has_valid_ext = any(filename.endswith(ext) for ext in _SUPPORTED_FORMATS)
+    if not has_valid_ext:
         raise ValueError(
             f"unsupported archive format: {archive_path.suffix!r}, "
             f"supported: {sorted(_SUPPORTED_FORMATS)}"
         )
 
 
+# Alias for backward compatibility
+_check_zip_path = _check_archive_path
+
+
 class Compress:
 
-    COMPRESS_FORMATS = {"zip"}
-    SUPPORTED_FORMATS = {"zip": ".zip"}
+    COMPRESS_FORMATS = {
+        "zip", "tar", "tar.gz", "tgz", "tar.xz", "txz", "tar.bz2", "tbz2", "7z", "gz"
+    }
 
     def __init__(
         self,
@@ -47,28 +44,6 @@ class Compress:
         overwrite: bool,
         verbose: bool,
     ) -> None:
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - source: File hoặc thư mục đầu vào
-        - output_path: Đường dẫn file đầu ra
-        - format: Tham số format của hàm
-        - overwrite: Trạng thái cho phép ghi đè
-        - verbose: Trạng thái hiển thị tiến trình
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Ngoại lệ:
-        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-        - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-        - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
         validate_type(source, (str, Path), "source")
         validate_type(output_path, (str, Path), "output_path")
         validate_type(format, str, "format")
@@ -82,14 +57,6 @@ class Compress:
             raise FileNotFoundError(f"source does not exist: {source}")
         if output_path.exists() and not overwrite:
             raise FileExistsError(f"output_path already exists: {output_path}")
-        if format not in self.COMPRESS_FORMATS:
-            raise ValueError(
-                f"unsupported format: {format!r}, "
-                f"supported: {sorted(self.COMPRESS_FORMATS)}"
-            )
-        expected_suffix = self.SUPPORTED_FORMATS[format]
-        if not str(output_path).lower().endswith(expected_suffix):
-            raise ValueError(f"output suffix must be '{expected_suffix}'")
 
         self.source = source
         self.output_path = output_path
@@ -107,25 +74,6 @@ class Extract:
         overwrite: bool,
         verbose: bool,
     ) -> None:
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - archive_path: Đường dẫn file lưu trữ
-        - output_dir: Đường dẫn thư mục đầu ra
-        - overwrite: Trạng thái cho phép ghi đè
-        - verbose: Trạng thái hiển thị tiến trình
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Ngoại lệ:
-        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
         validate_type(archive_path, (str, Path), "archive_path")
         validate_type(output_dir, (str, Path), "output_dir")
         validate_type(overwrite, bool, "overwrite")
@@ -134,7 +82,7 @@ class Extract:
         archive_path = Path(archive_path)
         output_dir = Path(output_dir)
 
-        _check_zip_path(archive_path)
+        _check_archive_path(archive_path)
         if output_dir.exists() and not output_dir.is_dir():
             raise ValueError(f"output_dir must be a directory, got file: {output_dir}")
 
@@ -147,22 +95,9 @@ class Extract:
 class ListFiles:
 
     def __init__(self, archive_path: str | Path) -> None:
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - archive_path: Đường dẫn file lưu trữ
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
         validate_type(archive_path, (str, Path), "archive_path")
         archive_path = Path(archive_path)
-        _check_zip_path(archive_path)
+        _check_archive_path(archive_path)
         self.archive_path = archive_path
 
 
@@ -175,25 +110,6 @@ class ExtractFile:
         output_dir: str | Path,
         overwrite: bool,
     ) -> None:
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - archive_path: Đường dẫn file lưu trữ
-        - filename: Tham số filename của hàm
-        - output_dir: Đường dẫn thư mục đầu ra
-        - overwrite: Trạng thái cho phép ghi đè
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Ngoại lệ:
-        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
         validate_type(archive_path, (str, Path), "archive_path")
         validate_type(filename, str, "filename")
         validate_type(output_dir, (str, Path), "output_dir")
@@ -202,7 +118,7 @@ class ExtractFile:
         archive_path = Path(archive_path)
         output_dir = Path(output_dir)
 
-        _check_zip_path(archive_path)
+        _check_archive_path(archive_path)
         if output_dir.exists() and not output_dir.is_dir():
             raise ValueError(f"output_dir must be a directory, got file: {output_dir}")
 
@@ -215,44 +131,18 @@ class ExtractFile:
 class GetInfo:
 
     def __init__(self, archive_path: str | Path) -> None:
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - archive_path: Đường dẫn file lưu trữ
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
         validate_type(archive_path, (str, Path), "archive_path")
         archive_path = Path(archive_path)
-        _check_zip_path(archive_path)
+        _check_archive_path(archive_path)
         self.archive_path = archive_path
 
 
 class Test:
 
     def __init__(self, archive_path: str | Path) -> None:
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - archive_path: Đường dẫn file lưu trữ
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
         validate_type(archive_path, (str, Path), "archive_path")
         archive_path = Path(archive_path)
-        _check_zip_path(archive_path)
+        _check_archive_path(archive_path)
         self.archive_path = archive_path
 
 
@@ -264,30 +154,11 @@ class Add:
         files: "str | Path | list",
         verbose: bool,
     ) -> None:
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - archive_path: Đường dẫn file lưu trữ
-        - files: Tham số files của hàm
-        - verbose: Trạng thái hiển thị tiến trình
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Ngoại lệ:
-        - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-        - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
         validate_type(archive_path, (str, Path), "archive_path")
         validate_type(verbose, bool, "verbose")
 
         archive_path = Path(archive_path)
-        _check_zip_path(archive_path)
+        _check_archive_path(archive_path)
 
         if isinstance(files, (str, Path)):
             files = [files]
@@ -316,27 +187,10 @@ class Remove:
         archive_path: str | Path,
         files: "str | list[str]",
     ) -> None:
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - archive_path: Đường dẫn file lưu trữ
-        - files: Tham số files của hàm
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Ngoại lệ:
-        - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
         validate_type(archive_path, (str, Path), "archive_path")
 
         archive_path = Path(archive_path)
-        _check_zip_path(archive_path)
+        _check_archive_path(archive_path)
 
         if isinstance(files, str):
             files = [files]
@@ -359,26 +213,6 @@ class Merge:
         output_path: str | Path,
         overwrite: bool,
     ) -> None:
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - archive_paths: Danh sách đường dẫn file lưu trữ
-        - output_path: Đường dẫn file đầu ra
-        - overwrite: Trạng thái cho phép ghi đè
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Ngoại lệ:
-        - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-        - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
         validate_type(output_path, (str, Path), "output_path")
         validate_type(overwrite, bool, "overwrite")
 
@@ -387,8 +221,6 @@ class Merge:
 
         output_path = Path(output_path)
 
-        if not str(output_path).lower().endswith(".zip"):
-            raise ValueError("output_path suffix must be '.zip'")
         if output_path.exists() and not overwrite:
             raise FileExistsError(f"output_path already exists: {output_path}")
 
@@ -396,7 +228,7 @@ class Merge:
         for s in archive_paths:
             validate_type(s, (str, Path), "archive_paths item")
             sp = Path(s)
-            _check_zip_path(sp)
+            _check_archive_path(sp)
             normalized.append(sp)
 
         self.archive_paths = normalized
@@ -407,25 +239,11 @@ class Merge:
 class Search:
 
     def __init__(self, archive_path: str | Path, pattern: str) -> None:
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - archive_path: Đường dẫn file lưu trữ
-        - pattern: Tham số pattern của hàm
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
         validate_type(archive_path, (str, Path), "archive_path")
         validate_type(pattern, str, "pattern")
 
         archive_path = Path(archive_path)
-        _check_zip_path(archive_path)
+        _check_archive_path(archive_path)
 
         self.archive_path = archive_path
         self.pattern = pattern
@@ -440,25 +258,6 @@ class Split:
         output_dir: str | Path,
         overwrite: bool,
     ) -> None:
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - archive_path: Đường dẫn file lưu trữ
-        - size: Tham số size của hàm
-        - output_dir: Đường dẫn thư mục đầu ra
-        - overwrite: Trạng thái cho phép ghi đè
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Ngoại lệ:
-        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
         validate_type(archive_path, (str, Path), "archive_path")
         validate_type(size, (int, float), "size")
         validate_type(output_dir, (str, Path), "output_dir")
@@ -467,7 +266,7 @@ class Split:
         archive_path = Path(archive_path)
         output_dir = Path(output_dir)
 
-        _check_zip_path(archive_path)
+        _check_archive_path(archive_path)
 
         if output_dir.exists() and not output_dir.is_dir():
             raise ValueError(f"output_dir must be a directory, got file: {output_dir}")
@@ -476,6 +275,6 @@ class Split:
             raise ValueError(f"size must be a positive number, got {size}")
 
         self.archive_path = archive_path
-        self.size = int(size * 1024 * 1024)
+        self.size = float(size)
         self.output_dir = output_dir
         self.overwrite = overwrite

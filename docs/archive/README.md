@@ -167,3 +167,11 @@ print(ar.human_size(1048576))  # 1.00 MB
 compress, extract, extract_file, list_files, search,
 get_info, test, add, remove, merge, split_by_size, human_size
 ```
+
+---
+
+## 14. Kế hoạch & Đề xuất tối ưu hóa
+
+Xem tài liệu tổng hợp đánh giá hiện trạng và đề xuất cải tiến tại:
+- [OPTIMIZATION_PLAN.md](file:///c:/Users/Mine/Downloads/klygo/docs/archive/OPTIMIZATION_PLAN.md)
+
