@@ -3,7 +3,7 @@ from klygo.archive.extract import extract, extract_file, extract_matching
 from klygo.archive.list import list_files, iter_files, search
 from klygo.archive.info import get_info, test, verify
 from klygo.archive.modify import add, remove
-from klygo.archive.transform import merge, split_by_size, convert, recompress
+from klygo.archive.transform import merge, split_by_size, convert, recompress, copy
 from klygo.archive.compare import compare
 from klygo.archive.context import open_archive as open, ArchiveFile
 from klygo.archive.backend import detect_format, is_archive
@@ -26,6 +26,7 @@ __all__ = [
     "split_by_size",
     "convert",
     "recompress",
+    "copy",
     "compare",
     "open",
     "ArchiveFile",

@@ -244,21 +244,51 @@ class ZipBackend(ArchiveBackend):
             else:
                 all_files.append((fp, fp.name))
 
-        with ZipFile(archive_path, mode="a", compression=ZIP_DEFLATED) as zf:
+        # Build final list of (abs_path, arcname) resolving conflicts
+        with ZipFile(archive_path, mode="r") as zf:
             existing = set(zf.namelist())
-            with ArchiveProgress(total=len(all_files), desc=f"{archive_path.name}: adding", verbose=verbose) as pbar:
-                for abs_path, arcname in all_files:
-                    if arcname in existing:
-                        if on_conflict == "skip":
-                            pbar.update(1)
-                            continue
-                        elif on_conflict == "rename":
-                            stem = Path(arcname).stem
-                            suffix = Path(arcname).suffix
-                            arcname = f"{stem}_dup{suffix}"
 
-                    zf.write(abs_path, arcname=arcname)
-                    pbar.update(1)
+        resolved: List[tuple[Path, str]] = []
+        to_overwrite: set[str] = set()
+        for abs_path, arcname in all_files:
+            if arcname in existing:
+                if on_conflict == "skip":
+                    continue
+                elif on_conflict == "rename":
+                    stem = Path(arcname).stem
+                    suffix = Path(arcname).suffix
+                    arcname = f"{stem}_dup{suffix}"
+                elif on_conflict == "overwrite":
+                    to_overwrite.add(arcname)
+            resolved.append((abs_path, arcname))
+
+        if not resolved:
+            return
+
+        # If overwriting entries, must rebuild archive
+        if to_overwrite:
+            tmp_path = archive_path.with_suffix(".tmp.zip")
+            with ZipFile(archive_path, mode="r") as src_zf, \
+                 ZipFile(tmp_path, mode="w", compression=ZIP_DEFLATED) as dst_zf:
+                # Copy existing entries not being overwritten
+                for item in src_zf.infolist():
+                    if item.filename not in to_overwrite:
+                        with src_zf.open(item) as src, dst_zf.open(item, mode="w") as dst:
+                            shutil.copyfileobj(src, dst)
+                # Write new/overwritten entries
+                with ArchiveProgress(total=len(resolved), desc=f"{archive_path.name}: adding", verbose=verbose) as pbar:
+                    for abs_path, arcname in resolved:
+                        dst_zf.write(abs_path, arcname=arcname)
+                        pbar.update(1)
+            tmp_path.replace(archive_path)
+        else:
+            # Simple append — no overwrite needed
+            with ZipFile(archive_path, mode="a", compression=ZIP_DEFLATED) as zf:
+                with ArchiveProgress(total=len(resolved), desc=f"{archive_path.name}: adding", verbose=verbose) as pbar:
+                    for abs_path, arcname in resolved:
+                        zf.write(abs_path, arcname=arcname)
+                        pbar.update(1)
+
 
     def remove(self, archive_path: Path, files: List[str]) -> None:
         to_remove = set(files)

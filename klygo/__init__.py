@@ -27,5 +27,5 @@ from . import utils
 from . import validators
 from . import visualize
 
-__version__ = "2.0.15"
+__version__ = "2.0.16"
 __author__ = "IchigoMazone"

@@ -16,7 +16,8 @@ def merge(
 ) -> None:
     """
     Tác dụng:
-    - Gộp nhiều file archive nguồn thành một file archive kết quả bằng Streaming I/O tiết kiệm RAM.
+    - Gộp nhiều file archive nguồn thành một file archive kết quả.
+    - Tự động hỗ trợ gộp khác định dạng (cross-format) bằng cơ chế extract → recompress.
 
     Đầu vào:
     - archive_paths [list[str | Path]]: Danh sách các file archive nguồn cần gộp (tối thiểu 2 file).
@@ -32,21 +33,43 @@ def merge(
 
     # Ví dụ 1: Gộp 2 file ZIP thành merged.zip
     >>> ar.merge(["part1.zip", "part2.zip"], "merged.zip", overwrite=True)
-    # Kết quả hiển thị thanh tiến trình:
     # merged.zip: merging: 100%|##############################| 78/78 [00:00<00:00, 2100file/s]
+
+    # Ví dụ 2: Gộp khác định dạng — zip + tar.gz → merged.zip
+    >>> ar.merge(["data.zip", "extra.tar.gz"], "merged.zip", overwrite=True)
 
     Nguồn: TrinhNhuNhat_28072026.
     """
+    from klygo.archive.backend import detect_format
+
     out_path = Path(output_path)
     sources = [Path(p) for p in archive_paths]
 
-    backend = get_backend(out_path)
-    backend.merge(
-        archive_paths=sources,
-        output_path=out_path,
-        overwrite=overwrite,
-        verbose=verbose,
-    )
+    out_fmt = detect_format(out_path)
+    src_fmts = [detect_format(p) for p in sources]
+    all_same_format = all(f == out_fmt for f in src_fmts)
+
+    if all_same_format:
+        # Fast path — same format, merge directly
+        backend = get_backend(out_path)
+        backend.merge(
+            archive_paths=sources,
+            output_path=out_path,
+            overwrite=overwrite,
+            verbose=verbose,
+        )
+    else:
+        # Cross-format path — extract all to temp dir, then compress
+        if out_path.exists() and not overwrite:
+            raise FileExistsError(f"output_path already exists: {out_path}. Use overwrite=True.")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            for src in sources:
+                src_backend = get_backend(src)
+                src_backend.extract(src, tmp_path, verbose=verbose)
+            dst_backend = get_backend(out_path)
+            dst_backend.compress(tmp_path, out_path, overwrite=overwrite, verbose=verbose)
+
 
 
 def split_by_size(
@@ -180,3 +203,47 @@ def recompress(
         tmp_path = Path(tmpdir)
         src_backend.extract(src, tmp_path, verbose=verbose)
         dst_backend.compress(tmp_path, dst, compresslevel=compresslevel, overwrite=overwrite, verbose=verbose)
+
+
+def copy(
+    source_path: Union[str, Path],
+    target_path: Union[str, Path],
+    overwrite: bool = False,
+) -> None:
+    """
+    Tác dụng:
+    - Sao chép file archive sang đường dẫn đích mà không giải nén hay thay đổi nội dung.
+
+    Đầu vào:
+    - source_path [str | Path]: Đường dẫn file archive nguồn.
+    - target_path [str | Path]: Đường dẫn file archive đích.
+    - overwrite [bool]: Cho phép ghi đè nếu target_path đã tồn tại. Mặc định: False.
+
+    Đầu ra:
+    - [None] Không trả về dữ liệu.
+
+    Ngoại lệ:
+    - FileNotFoundError: Phát sinh khi source_path không tồn tại.
+    - FileExistsError: Phát sinh khi target_path đã tồn tại và overwrite=False.
+
+    Ví dụ:
+    >>> import klygo.archive as ar
+
+    # Ví dụ 1: Sao chép file ZIP sang thư mục backup
+    >>> ar.copy("dataset.zip", "backup/dataset.zip", overwrite=True)
+
+    # Ví dụ 2: Tạo bản sao với tên khác
+    >>> ar.copy("folder.tar.gz", "folder_backup.tar.gz")
+
+    Nguồn: TrinhNhuNhat_28072026.
+    """
+    src = Path(source_path)
+    dst = Path(target_path)
+
+    if not src.exists():
+        raise FileNotFoundError(f"source_path does not exist: {src}")
+    if dst.exists() and not overwrite:
+        raise FileExistsError(f"target_path already exists: {dst}. Use overwrite=True.")
+
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dst)
