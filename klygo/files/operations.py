@@ -400,71 +400,105 @@ def convert(
 
 
 def download(
-    url: str,
+    source: Union[str, Path],
     output_path: Optional[Union[str, Path]] = None,
     overwrite: bool = False,
     verbose: bool = True,
 ) -> Path:
     """
     Tác dụng:
-    - Tải tập tin từ đường dẫn URL trên Internet về máy cục bộ hoặc Google Colab.
-    - Tự động hiển thị thanh tiến trình ProgressBar theo dung lượng bytes khi tải.
+    - Tải tập tin từ URL Internet về Colab/Server HOẶC tải tập tin từ Colab/Server về máy tính cá nhân (PC).
+    - Hỗ trợ tải tập tin cục bộ sang vị trí cục bộ mới.
+    - Chỉ hỗ trợ tải tập tin (file), không hỗ trợ thư mục (không nén).
 
     Đầu vào:
-    - url [str]: Đường dẫn URL tập tin cần tải.
-    - output_path [str | Path | None]: Đường dẫn file lưu cục bộ. Nếu None, tự động lấy tên file từ URL.
-    - overwrite [bool]: Cho phép ghi đè nếu file cục bộ đã tồn tại. Mặc định: False.
+    - source [str | Path]: Đường dẫn URL tập tin hoặc đường dẫn file cục bộ trên Colab/Server.
+    - output_path [str | Path | None]: Đường dẫn file đầu ra. Nếu None, tự động lấy tên file từ source.
+    - overwrite [bool]: Cho phép ghi đè nếu file đầu ra đã tồn tại. Mặc định: False.
     - verbose [bool]: Hiển thị thanh tiến trình ProgressBar trong console. Mặc định: True.
 
     Đầu ra:
     - [Path]: Đường dẫn Path đến tập tin đã tải về.
 
     Ngoại lệ:
+    - FileNotFoundError: Phát sinh khi file nguồn cục bộ không tồn tại.
+    - ValueError: Phát sinh khi nguồn là thư mục thay vì tập tin hoặc URL không hợp lệ.
     - FileExistsError: Phát sinh khi output_path đã tồn tại và overwrite=False.
-    - ValueError: Phát sinh khi URL không hợp lệ.
 
     Ví dụ:
     >>> import klygo.files as files
-    >>> files.download("https://raw.githubusercontent.com/.../config.yaml", "config.yaml", overwrite=True)
+
+    # Ví dụ 1: Tải file từ URL Internet về Colab/Server
+    >>> files.download("https://example.com/model.pt", "model.pt", overwrite=True)
+
+    # Ví dụ 2: Tải file từ Google Colab về trực tiếp máy tính cá nhân (PC)
+    >>> files.download("results.json")
     """
-    validate_type(url, str, "url")
+    validate_type(source, (str, Path), "source")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
 
-    if not url.startswith(("http://", "https://", "ftp://")):
-        raise ValueError(f"Invalid URL schema: {url!r}")
+    src_str = str(source)
 
+    # TH1: Tải từ URL Internet (http, https, ftp)
+    if src_str.startswith(("http://", "https://", "ftp://")):
+        if output_path is None:
+            parsed = urlparse(src_str)
+            filename = os.path.basename(parsed.path) or "downloaded_file"
+            dst_p = Path(filename)
+        else:
+            dst_p = Path(output_path)
+
+        if dst_p.exists() and not overwrite:
+            raise FileExistsError(f"File already exists: {dst_p}. Use overwrite=True to replace it.")
+
+        dst_p.parent.mkdir(parents=True, exist_ok=True)
+
+        req = urllib.request.Request(src_str, headers={"User-Agent": "klygo/2.0"})
+        with urllib.request.urlopen(req) as response:
+            total_size = int(response.headers.get("content-length", 0))
+            block_size = 8192
+
+            with open(dst_p, "wb") as f, ProgressBar(
+                total=total_size if total_size > 0 else None,
+                desc=f"Downloading {dst_p.name}",
+                unit="B",
+                unit_scale=True,
+                verbose=verbose,
+                colour="cyan",
+            ) as pbar:
+                while True:
+                    buffer = response.read(block_size)
+                    if not buffer:
+                        break
+                    f.write(buffer)
+                    pbar.update(len(buffer))
+
+        return dst_p
+
+    # TH2: Tải từ file cục bộ (Colab / Server / Local)
+    src_p = Path(source)
+    if not src_p.exists():
+        raise FileNotFoundError(f"Source file does not exist: {src_p}")
+
+    if src_p.is_dir():
+        raise ValueError(f"download() only supports single files, not directories: {src_p}")
+
+    # Nếu đang chạy trong Google Colab và không truyền output_path -> Kích hoạt tải về máy tính PC
+    try:
+        from google.colab import files as colab_files
+        colab_files.download(str(src_p))
+        return src_p
+    except ImportError:
+        pass
+
+    # Nếu không ở Colab hoặc có chỉ định output_path -> Copy file cục bộ sang output_path
     if output_path is None:
-        parsed = urlparse(url)
-        filename = os.path.basename(parsed.path) or "downloaded_file"
-        dst_p = Path(filename)
+        dst_p = src_p
     else:
         dst_p = Path(output_path)
-
-    if dst_p.exists() and not overwrite:
-        raise FileExistsError(f"File already exists: {dst_p}. Use overwrite=True to replace it.")
-
-    dst_p.parent.mkdir(parents=True, exist_ok=True)
-
-    req = urllib.request.Request(url, headers={"User-Agent": "klygo/2.0"})
-    with urllib.request.urlopen(req) as response:
-        total_size = int(response.headers.get("content-length", 0))
-        block_size = 8192
-
-        with open(dst_p, "wb") as f, ProgressBar(
-            total=total_size if total_size > 0 else None,
-            desc=f"Downloading {dst_p.name}",
-            unit="B",
-            unit_scale=True,
-            verbose=verbose,
-            colour="cyan",
-        ) as pbar:
-            while True:
-                buffer = response.read(block_size)
-                if not buffer:
-                    break
-                f.write(buffer)
-                pbar.update(len(buffer))
+        if dst_p.resolve() != src_p.resolve():
+            copy(src_p, dst_p, overwrite=overwrite)
 
     return dst_p
 
