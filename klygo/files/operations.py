@@ -59,35 +59,38 @@ def load(
     verbose: bool = True,
 ) -> Any:
     """
-    Tự động đọc dữ liệu từ file dựa trên phần mở rộng đuôi file mở rộng.
+    Tác dụng:
+    - Tự động đọc dữ liệu từ file dựa theo phần mở rộng đuôi file mở rộng.
+    - Hỗ trợ giải mã cấu trúc dữ liệu thô (dict, list, str) của 14 định dạng file phổ biến.
 
-    Hỗ trợ 14 loại file dữ liệu & cấu hình:
-        - YAML (.yaml, .yml)
-        - JSON (.json), JSON Lines (.jsonl)
-        - TOML (.toml)
-        - CSV (.csv)
-        - Text (.txt), Log (.log)
-        - INI (.ini), Config (.cfg), Properties (.properties)
-        - Environment (.env)
-        - XML (.xml)
-        - Pickle (.pkl, .pickle)
+    Định dạng tương thích:
+    - Hỗ trợ: YAML (.yaml, .yml), JSON (.json), JSON Lines (.jsonl), TOML (.toml), CSV (.csv),
+      Text (.txt), Log (.log), INI (.ini), Config (.cfg), Properties (.properties),
+      Environment (.env), XML (.xml), Pickle (.pkl, .pickle).
 
-    Args:
-        path (str | Path): Đường dẫn tới file cần đọc.
-        as_lines (bool, optional): Nếu là file .txt/.log, chọn True để đọc thành danh sách các dòng. Mặc định là False.
-        verbose (bool, optional): Hiển thị thanh tiến trình ProgressBar trong quá trình đọc. Mặc định là True.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn file nguồn cần đọc.
+    - as_lines [bool]: Chọn True nếu muốn đọc file .txt/.log thành danh sách các dòng (list[str]). Mặc định: False.
+    - verbose [bool]: Hiển thị thanh tiến trình ProgressBar màu Cyan trong console. Mặc định: True.
 
-    Returns:
-        Any: Dữ liệu đã đọc (dict, list, str, v.v.).
+    Đầu ra:
+    - [Any]: Trả về đối tượng dữ liệu đã đọc (dict, list, str hoặc object đã unpickle).
 
-    Raises:
-        FileNotFoundError: Nếu tập tin không tồn tại.
-        ValueError: Nếu đường dẫn là thư mục hoặc định dạng file không được hỗ trợ.
+    Ngoại lệ:
+    - FileNotFoundError: Phát sinh khi file path không tồn tại trên hệ thống.
+    - ValueError: Phát sinh khi path là thư mục hoặc định dạng file không được hỗ trợ.
 
-    Examples:
-        >>> from klygo import files
-        >>> config = files.load("config.yaml")
-        >>> users = files.load("data.json")
+    Ví dụ:
+    >>> import klygo.files as files
+
+    # Ví dụ 1: Đọc file YAML cấu hình
+    >>> config = files.load("config.yaml")
+
+    # Ví dụ 2: Đọc file JSON danh sách người dùng
+    >>> users = files.load("data.json")
+
+    # Ví dụ 3: Đọc file log thành danh sách các dòng mà không hiển thị thanh tiến trình
+    >>> lines = files.load("app.log", as_lines=True, verbose=False)
     """
     validate_type(path, (str, Path), "path")
     p = Path(path)
@@ -213,23 +216,36 @@ def save(
     fieldnames: Optional[List[str]] = None,
 ) -> None:
     """
-    Tự động ghi dữ liệu ra file dựa theo phần mở rộng đuôi file.
+    Tác dụng:
+    - Tự động ghi và mã hóa dữ liệu ra file dựa theo phần mở rộng đuôi file mở rộng.
+    - Tự động tạo thư mục cha nếu chưa tồn tại.
 
-    Args:
-        path (str | Path): Đường dẫn file lưu đầu ra.
-        data (Any): Dữ liệu cần ghi ra file (dict, list, str, v.v.).
-        overwrite (bool, optional): Cho phép ghi đè nếu file đã tồn tại. Mặc định là False.
-        verbose (bool, optional): Hiển thị thanh tiến trình ProgressBar trong quá trình ghi. Mặc định là True.
-        indent (int, optional): Thụt lề khi ghi file JSON. Mặc định là 4.
-        fieldnames (List[str], optional): Danh sách tên cột khi ghi file CSV. Mặc định là None.
+    Định dạng tương thích:
+    - Đầu ra hỗ trợ: YAML, JSON, JSONL, TOML, CSV, TXT, LOG, INI, CFG, PROPERTIES, ENV, XML, PKL, PICKLE.
 
-    Raises:
-        FileExistsError: Nếu file đã tồn tại và overwrite=False.
-        ValueError: Nếu định dạng file không được hỗ trợ.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn file đầu ra cần lưu.
+    - data [Any]: Dữ liệu cần ghi ra file (dict, list, str...).
+    - overwrite [bool]: Cho phép ghi đè nếu file đầu ra đã tồn tại. Mặc định: False.
+    - verbose [bool]: Hiển thị thanh tiến trình ProgressBar trong console. Mặc định: True.
+    - indent [int]: Số khoảng trắng thụt lề khi xuất định dạng JSON. Mặc định: 4.
+    - fieldnames [list[str] | None]: Danh sách tên cột tương ứng khi xuất file CSV. Mặc định: None.
 
-    Examples:
-        >>> from klygo import files
-        >>> files.save("data.json", {"a": 1}, overwrite=True)
+    Đầu ra:
+    - [None] Không trả về dữ liệu.
+
+    Ngoại lệ:
+    - FileExistsError: Phát sinh khi path đã tồn tại và overwrite=False.
+    - ValueError: Phát sinh khi định dạng đuôi file không được hỗ trợ.
+
+    Ví dụ:
+    >>> import klygo.files as files
+
+    # Ví dụ 1: Ghi dictionary ra file YAML
+    >>> files.save("config.yaml", {"model": "yolov8", "batch": 16}, overwrite=True)
+
+    # Ví dụ 2: Ghi file biến môi trường .env
+    >>> files.save(".env", {"PORT": "8080", "HOST": "localhost"}, overwrite=True)
     """
     validate_type(path, (str, Path), "path")
     validate_type(overwrite, bool, "overwrite")
@@ -356,20 +372,25 @@ def convert(
     verbose: bool = True,
 ) -> Path:
     """
-    Chuyển đổi dữ liệu từ file nguồn sang định dạng file đích.
+    Tác dụng:
+    - Chuyển đổi dữ liệu từ file nguồn sang định dạng file đích.
+    - Tự động xác định kiểu đọc/ghi theo đuôi mở rộng của hai file.
 
-    Args:
-        source (str | Path): Đường dẫn tới file nguồn.
-        target (str | Path): Đường dẫn tới file đích.
-        overwrite (bool, optional): Cho phép ghi đè nếu file đích đã tồn tại. Mặc định là False.
-        verbose (bool, optional): Hiển thị thanh tiến trình ProgressBar trong quá trình chuyển đổi. Mặc định là True.
+    Định dạng tương thích:
+    - Chuyển đổi qua lại giữa: YAML, JSON, JSONL, TOML, CSV, TXT, LOG, INI, CFG, PROPERTIES, ENV, XML, PKL, PICKLE.
 
-    Returns:
-        Path: Đường dẫn file đích đã chuyển đổi.
+    Đầu vào:
+    - source [str | Path]: Đường dẫn file nguồn.
+    - target [str | Path]: Đường dẫn file đích.
+    - overwrite [bool]: Cho phép ghi đè nếu file đích đã tồn tại. Mặc định: False.
+    - verbose [bool]: Hiển thị thanh tiến trình ProgressBar. Mặc định: True.
 
-    Examples:
-        >>> from klygo import files
-        >>> files.convert("config.yaml", "config.json")
+    Đầu ra:
+    - [Path]: Đường dẫn Path đến file đích đã chuyển đổi.
+
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.convert("config.yaml", "config.json", overwrite=True)
     """
     data = load(source, verbose=verbose)
     save(target, data, overwrite=overwrite, verbose=verbose)
@@ -382,54 +403,57 @@ def convert(
 
 def exists(path: Union[str, Path]) -> bool:
     """
-    Kiểm tra xem file hoặc thư mục tại đường dẫn chỉ định có tồn tại hay không.
+    Tác dụng:
+    - Kiểm tra xem file hoặc thư mục tại đường dẫn chỉ định có tồn tại hay không.
 
-    Args:
-        path (str | Path): Đường dẫn cần kiểm tra.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn cần kiểm tra.
 
-    Returns:
-        bool: True nếu tồn tại, ngược lại False.
+    Đầu ra:
+    - [bool]: True nếu tồn tại, ngược lại False.
 
-    Examples:
-        >>> from klygo import files
-        >>> files.exists("config.yaml")
-        True
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.exists("config.yaml")
+    True
     """
     return Path(path).exists()
 
 
 def is_file(path: Union[str, Path]) -> bool:
     """
-    Kiểm tra xem đường dẫn có phải là một file hợp lệ hay không.
+    Tác dụng:
+    - Kiểm tra xem đường dẫn có phải là một tập tin (file) hợp lệ hay không.
 
-    Args:
-        path (str | Path): Đường dẫn cần kiểm tra.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn cần kiểm tra.
 
-    Returns:
-        bool: True nếu là file, ngược lại False.
+    Đầu ra:
+    - [bool]: True nếu là file, ngược lại False.
 
-    Examples:
-        >>> from klygo import files
-        >>> files.is_file("config.yaml")
-        True
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.is_file("config.yaml")
+    True
     """
     return Path(path).is_file()
 
 
 def is_dir(path: Union[str, Path]) -> bool:
     """
-    Kiểm tra xem đường dẫn có phải là một thư mục hay không.
+    Tác dụng:
+    - Kiểm tra xem đường dẫn có phải là một thư mục (directory) hay không.
 
-    Args:
-        path (str | Path): Đường dẫn cần kiểm tra.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn cần kiểm tra.
 
-    Returns:
-        bool: True nếu là thư mục, ngược lại False.
+    Đầu ra:
+    - [bool]: True nếu là thư mục, ngược lại False.
 
-    Examples:
-        >>> from klygo import files
-        >>> files.is_dir("dataset")
-        True
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.is_dir("dataset/")
+    True
     """
     return Path(path).is_dir()
 
@@ -444,23 +468,24 @@ def list(
     recursive: bool = False,
 ) -> List[Path]:
     """
-    Liệt kê danh sách các tập tin và thư mục con bên trong đường dẫn chỉ định.
+    Tác dụng:
+    - Liệt kê danh sách các tập tin và thư mục con bên trong đường dẫn chỉ định.
 
-    Args:
-        path (str | Path, optional): Đường dẫn thư mục cần xem. Mặc định là '.'.
-        pattern (str, optional): Mẫu khớp file (wildcard). Mặc định là '*'.
-        recursive (bool, optional): Duyệt sâu vào các thư mục con. Mặc định là False.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn thư mục cần duyệt. Mặc định: '.'.
+    - pattern [str]: Mẫu lọc tên file khớp wildcard. Mặc định: '*'.
+    - recursive [bool]: Duyệt đệ quy sâu vào tất cả các thư mục con. Mặc định: False.
 
-    Returns:
-        List[Path]: Danh sách tập tin và thư mục dưới dạng Path.
+    Đầu ra:
+    - [List[Path]]: Danh sách các đường dẫn Path sắp xếp theo thứ tự bảng chữ cái.
 
-    Raises:
-        FileNotFoundError: Nếu thư mục không tồn tại.
-        ValueError: Nếu đường dẫn không phải thư mục.
+    Ngoại lệ:
+    - FileNotFoundError: Phát sinh khi path không tồn tại.
+    - ValueError: Phát sinh khi path không phải thư mục.
 
-    Examples:
-        >>> from klygo import files
-        >>> files.list("dataset", pattern="*.json")
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.list("dataset/", pattern="*.json")
     """
     p = Path(path)
     if not p.exists():
@@ -478,19 +503,20 @@ def find(
     recursive: bool = True,
 ) -> List[Path]:
     """
-    Tìm kiếm tất cả các file khớp với mẫu wildcard bên trong thư mục.
+    Tác dụng:
+    - Tìm kiếm tất cả các file khớp với mẫu wildcard chỉ định bên trong thư mục.
 
-    Args:
-        path (str | Path, optional): Thư mục bắt đầu tìm kiếm. Mặc định là '.'.
-        pattern (str, optional): Mẫu wildcard tìm kiếm. Mặc định là '*'.
-        recursive (bool, optional): Tìm kiếm sâu trong các thư mục con. Mặc định là True.
+    Đầu vào:
+    - path [str | Path]: Thư mục gốc bắt đầu tìm kiếm. Mặc định: '.'.
+    - pattern [str]: Mẫu wildcard tìm kiếm (ví dụ: '*.jpg', '*.json'). Mặc định: '*'.
+    - recursive [bool]: Tìm kiếm sâu trong các thư mục con. Mặc định: True.
 
-    Returns:
-        List[Path]: Danh sách các tập tin tìm thấy dưới dạng Path.
+    Đầu ra:
+    - [List[Path]]: Danh sách các file tìm thấy dưới dạng Path.
 
-    Examples:
-        >>> from klygo import files
-        >>> files.find("dataset", pattern="*.jpg")
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.find("dataset/", pattern="*.jpg")
     """
     p = Path(path)
     if not p.exists():
@@ -504,18 +530,19 @@ def walk(
     path: Union[str, Path] = ".",
 ) -> Generator[Tuple[str, List[str], List[str]], None, None]:
     """
-    Duyệt cây thư mục theo cơ chế generator (tương tự os.walk).
+    Tác dụng:
+    - Duyệt cây thư mục theo cơ chế generator tiết kiệm bộ nhớ (tương tự os.walk).
 
-    Args:
-        path (str | Path, optional): Thư mục gốc bắt đầu duyệt. Mặc định là '.'.
+    Đầu vào:
+    - path [str | Path]: Thư mục gốc bắt đầu duyệt. Mặc định: '.'.
 
-    Returns:
-        Generator[Tuple[str, List[str], List[str]], None, None]: Tuple chứa (root, dirs, files).
+    Đầu ra:
+    - [Generator]: Trả về tuple (root_dir, dir_names, file_names) cho từng thư mục.
 
-    Examples:
-        >>> from klygo import files
-        >>> for root, dirs, filenames in files.walk("dataset"):
-        ...     print(root, filenames)
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> for root, dirs, filenames in files.walk("dataset/"):
+    ...     print(root, filenames)
     """
     return os.walk(str(path))
 
@@ -526,19 +553,20 @@ def mkdir(
     exist_ok: bool = True,
 ) -> Path:
     """
-    Tạo thư mục mới trên đĩa.
+    Tác dụng:
+    - Tạo thư mục mới trên ổ đĩa hệ thống.
 
-    Args:
-        path (str | Path): Đường dẫn thư mục cần tạo.
-        parents (bool, optional): Tự động tạo các thư mục cha nếu chưa tồn tại. Mặc định là True.
-        exist_ok (bool, optional): Bỏ qua lỗi nếu thư mục đã tồn tại từ trước. Mặc định là True.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn thư mục cần tạo.
+    - parents [bool]: Tự động tạo các thư mục cha nếu chưa tồn tại. Mặc định: True.
+    - exist_ok [bool]: Bỏ qua thông báo lỗi nếu thư mục đã tồn tại từ trước. Mặc định: True.
 
-    Returns:
-        Path: Đường dẫn thư mục đã tạo.
+    Đầu ra:
+    - [Path]: Đường dẫn thư mục Path đã tạo.
 
-    Examples:
-        >>> from klygo import files
-        >>> files.mkdir("output/reports/2026")
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.mkdir("output/reports/2026", parents=True, exist_ok=True)
     """
     p = Path(path)
     p.mkdir(parents=parents, exist_ok=exist_ok)
@@ -555,23 +583,24 @@ def copy(
     overwrite: bool = True,
 ) -> Path:
     """
-    Sao chép tập tin hoặc toàn bộ thư mục từ vị trí nguồn sang đích.
+    Tác dụng:
+    - Sao chép tập tin hoặc toàn bộ thư mục từ vị trí nguồn sang vị trí đích.
 
-    Args:
-        source (str | Path): Đường dẫn nguồn.
-        target (str | Path): Đường dẫn đích.
-        overwrite (bool, optional): Cho phép ghi đè nếu đích đã tồn tại. Mặc định là True.
+    Đầu vào:
+    - source [str | Path]: Đường dẫn nguồn.
+    - target [str | Path]: Đường dẫn đích.
+    - overwrite [bool]: Cho phép ghi đè/thay thế nếu đích đã tồn tại. Mặc định: True.
 
-    Returns:
-        Path: Đường dẫn đích đã sao chép.
+    Đầu ra:
+    - [Path]: Đường dẫn Path đến đối tượng đã sao chép.
 
-    Raises:
-        FileNotFoundError: Nếu nguồn không tồn tại.
-        FileExistsError: Nếu đích đã tồn tại và overwrite=False.
+    Ngoại lệ:
+    - FileNotFoundError: Phát sinh khi source không tồn tại.
+    - FileExistsError: Phát sinh khi target đã tồn tại và overwrite=False.
 
-    Examples:
-        >>> from klygo import files
-        >>> files.copy("config.yaml", "backup/config.yaml")
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.copy("config.yaml", "backup/config.yaml", overwrite=True)
     """
     src_p = Path(source)
     dst_p = Path(target)
@@ -599,19 +628,24 @@ def move(
     overwrite: bool = True,
 ) -> Path:
     """
-    Di chuyển tập tin hoặc thư mục sang vị trí mới.
+    Tác dụng:
+    - Di chuyển tập tin hoặc thư mục sang vị trí đích mới.
 
-    Args:
-        source (str | Path): Đường dẫn nguồn.
-        target (str | Path): Đường dẫn đích.
-        overwrite (bool, optional): Cho phép ghi đè nếu đích đã tồn tại. Mặc định là True.
+    Đầu vào:
+    - source [str | Path]: Đường dẫn nguồn.
+    - target [str | Path]: Đường dẫn đích.
+    - overwrite [bool]: Cho phép ghi đè nếu đích đã tồn tại. Mặc định: True.
 
-    Returns:
-        Path: Đường dẫn mới của tập tin/thư mục.
+    Đầu ra:
+    - [Path]: Đường dẫn Path mới sau khi di chuyển.
 
-    Examples:
-        >>> from klygo import files
-        >>> files.move("old_dir/data.json", "new_dir/data.json")
+    Ngoại lệ:
+    - FileNotFoundError: Phát sinh khi source không tồn tại.
+    - FileExistsError: Phát sinh khi target đã tồn tại và overwrite=False.
+
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.move("old_dir/data.json", "new_dir/data.json", overwrite=True)
     """
     src_p = Path(source)
     dst_p = Path(target)
@@ -638,19 +672,24 @@ def rename(
     overwrite: bool = False,
 ) -> Path:
     """
-    Đổi tên tập tin/thư mục hoặc chuyển sang tên mới.
+    Tác dụng:
+    - Đổi tên tập tin/thư mục hoặc chuyển sang tên mới.
 
-    Args:
-        path (str | Path): Đường dẫn hiện tại.
-        new_name_or_path (str | Path): Tên mới hoặc đường dẫn mới.
-        overwrite (bool, optional): Cho phép ghi đè nếu tên mới đã tồn tại. Mặc định là False.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn tập tin/thư mục hiện tại.
+    - new_name_or_path [str | Path]: Tên mới hoặc đường dẫn mới.
+    - overwrite [bool]: Cho phép ghi đè nếu tên mới đã tồn tại. Mặc định: False.
 
-    Returns:
-        Path: Đường dẫn sau khi đổi tên.
+    Đầu ra:
+    - [Path]: Đường dẫn Path mới sau khi đổi tên.
 
-    Examples:
-        >>> from klygo import files
-        >>> files.rename("draft.txt", "final.txt")
+    Ngoại lệ:
+    - FileNotFoundError: Phát sinh khi path không tồn tại.
+    - FileExistsError: Phát sinh khi tên mới đã tồn tại và overwrite=False.
+
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.rename("draft.txt", "final.txt", overwrite=True)
     """
     src_p = Path(path)
     if not src_p.exists():
@@ -681,16 +720,20 @@ def remove(
     missing_ok: bool = True,
 ) -> None:
     """
-    Xóa tập tin hoặc toàn bộ thư mục khỏi ổ đĩa.
+    Tác dụng:
+    - Xóa tập tin hoặc toàn bộ thư mục khỏi ổ đĩa hệ thống.
 
-    Args:
-        path (str | Path): Đường dẫn cần xóa.
-        recursive (bool, optional): Xóa đệ quy nếu đường dẫn là thư mục. Mặc định là True.
-        missing_ok (bool, optional): Bỏ qua lỗi nếu đường dẫn không tồn tại. Mặc định là True.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn tập tin hoặc thư mục cần xóa.
+    - recursive [bool]: Xóa đệ quy nếu đường dẫn là thư mục. Mặc định: True.
+    - missing_ok [bool]: Bỏ qua thông báo lỗi nếu đường dẫn không tồn tại. Mặc định: True.
 
-    Examples:
-        >>> from klygo import files
-        >>> files.remove("temp.txt")
+    Đầu ra:
+    - [None] Không trả về dữ liệu.
+
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.remove("temp.txt", missing_ok=True)
     """
     p = Path(path)
     if not p.exists():
@@ -713,19 +756,20 @@ def remove(
 
 def size(path: Union[str, Path], human: bool = False) -> Union[int, str]:
     """
-    Tính tổng dung lượng của tập tin hoặc thư mục.
+    Tác dụng:
+    - Tính tổng dung lượng của tập tin hoặc toàn bộ thư mục.
 
-    Args:
-        path (str | Path): Đường dẫn tập tin hoặc thư mục.
-        human (bool, optional): Nếu True, trả về chuỗi đọc được (vd: '1.5 MB'). Nếu False, trả về số byte. Mặc định là False.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn tập tin hoặc thư mục.
+    - human [bool]: Nếu True, trả về chuỗi đọc được (ví dụ: '1.5 MB'). Nếu False, trả về số byte. Mặc định: False.
 
-    Returns:
-        int | str: Dung lượng dạng số byte hoặc dạng chuỗi đọc được.
+    Đầu ra:
+    - [int | str]: Dung lượng dưới dạng số byte (int) hoặc chuỗi thân thiện (str).
 
-    Examples:
-        >>> from klygo import files
-        >>> files.size("config.yaml", human=True)
-        '1.20 KB'
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.size("config.yaml", human=True)
+    '1.20 KB'
     """
     p = Path(path)
     if not p.exists():
@@ -743,19 +787,24 @@ def size(path: Union[str, Path], human: bool = False) -> Union[int, str]:
 
 def hash(path: Union[str, Path], algorithm: str = "md5") -> str:
     """
-    Tính mã checksum hash của tập tin.
+    Tác dụng:
+    - Tính mã checksum hash của một tập tin.
 
-    Args:
-        path (str | Path): Đường dẫn tập tin cần tính hash.
-        algorithm (str, optional): Thuật toán hash ('md5', 'sha256', 'sha1'). Mặc định là 'md5'.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn tập tin cần tính hash.
+    - algorithm [str]: Thuật toán hash ('md5', 'sha256', 'sha1'). Mặc định: 'md5'.
 
-    Returns:
-        str: Chuỗi mã hash Hex.
+    Đầu ra:
+    - [str]: Chuỗi mã checksum Hex.
 
-    Examples:
-        >>> from klygo import files
-        >>> files.hash("data.json", algorithm="md5")
-        'd41d8cd98f00b204e9800998ecf8427e'
+    Ngoại lệ:
+    - FileNotFoundError: Phát sinh khi path không tồn tại.
+    - ValueError: Phát sinh khi path không phải là file.
+
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.hash("data.json", algorithm="md5")
+    'd41d8cd98f00b204e9800998ecf8427e'
     """
     p = Path(path)
     if not p.exists():
@@ -772,17 +821,19 @@ def hash(path: Union[str, Path], algorithm: str = "md5") -> str:
 
 def info(path: Union[str, Path]) -> Dict[str, Any]:
     """
-    Lấy thông tin metadata chi tiết của tập tin hoặc thư mục.
+    Tác dụng:
+    - Lấy thông tin metadata chi tiết của tập tin hoặc thư mục.
 
-    Args:
-        path (str | Path): Đường dẫn tập tin hoặc thư mục.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn tập tin hoặc thư mục.
 
-    Returns:
-        Dict[str, Any]: Dictionary chứa các thuộc tính metadata (name, stem, extension, size, human_size, created, modified, hash...).
+    Đầu ra:
+    - [Dict[str, Any]]: Dictionary chứa các thuộc tính metadata (name, stem, extension, size, human_size, is_file, is_dir, created, modified, hash...).
 
-    Examples:
-        >>> from klygo import files
-        >>> files.info("config.yaml")
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> info_dict = files.info("config.yaml")
+    >>> print(info_dict["size"])
     """
     p = Path(path)
     if not p.exists():
@@ -811,20 +862,21 @@ def compare(
     by: str = "hash",
 ) -> bool:
     """
-    So sánh 2 tập tin xem có cùng nội dung hay không.
+    Tác dụng:
+    - So sánh nội dung giữa 2 tập tin xem có giống nhau hay không.
 
-    Args:
-        path1 (str | Path): Đường dẫn tập tin thứ nhất.
-        path2 (str | Path): Đường dẫn tập tin thứ hai.
-        by (str, optional): Phương thức so sánh: 'hash' (MD5) hoặc 'content' (byte-by-byte). Mặc định là 'hash'.
+    Đầu vào:
+    - path1 [str | Path]: Đường dẫn tập tin thứ nhất.
+    - path2 [str | Path]: Đường dẫn tập tin thứ hai.
+    - by [str]: Phương thức so sánh: 'hash' (so sánh mã MD5) hoặc 'content' (so sánh byte-by-byte). Mặc định: 'hash'.
 
-    Returns:
-        bool: True nếu 2 file giống nhau, ngược lại False.
+    Đầu ra:
+    - [bool]: True nếu 2 file có nội dung hoàn toàn giống nhau, ngược lại False.
 
-    Examples:
-        >>> from klygo import files
-        >>> files.compare("file1.txt", "file2.txt")
-        True
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.compare("file1.txt", "file2.txt", by="hash")
+    True
     """
     p1 = Path(path1)
     p2 = Path(path2)
@@ -855,71 +907,75 @@ def compare(
 
 def name(path: Union[str, Path]) -> str:
     """
-    Trích xuất tên file/thư mục kèm phần mở rộng từ đường dẫn.
+    Tác dụng:
+    - Trích xuất tên tập tin/thư mục kèm phần mở rộng từ đường dẫn.
 
-    Args:
-        path (str | Path): Đường dẫn.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn cần xử lý.
 
-    Returns:
-        str: Tên file/thư mục (vd: 'sample.jpg').
+    Đầu ra:
+    - [str]: Tên tập tin/thư mục (ví dụ: 'sample.jpg').
 
-    Examples:
-        >>> from klygo import files
-        >>> files.name("dataset/images/sample.jpg")
-        'sample.jpg'
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.name("dataset/images/sample.jpg")
+    'sample.jpg'
     """
     return Path(path).name
 
 
 def stem(path: Union[str, Path]) -> str:
     """
-    Trích xuất tên file không bao gồm phần mở rộng (đuôi file).
+    Tác dụng:
+    - Trích xuất tên tập tin không bao gồm phần mở rộng (đuôi file).
 
-    Args:
-        path (str | Path): Đường dẫn.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn cần xử lý.
 
-    Returns:
-        str: Tên file không đuôi (vd: 'sample').
+    Đầu ra:
+    - [str]: Tên tập tin không có đuôi (ví dụ: 'sample').
 
-    Examples:
-        >>> from klygo import files
-        >>> files.stem("dataset/images/sample.jpg")
-        'sample'
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.stem("dataset/images/sample.jpg")
+    'sample'
     """
     return Path(path).stem
 
 
 def extension(path: Union[str, Path]) -> str:
     """
-    Trích xuất phần mở rộng đuôi file (suffix) từ đường dẫn.
+    Tác dụng:
+    - Trích xuất phần mở rộng đuôi file (suffix) từ đường dẫn.
 
-    Args:
-        path (str | Path): Đường dẫn.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn cần xử lý.
 
-    Returns:
-        str: Đuôi file (vd: '.jpg').
+    Đầu ra:
+    - [str]: Đuôi phần mở rộng (ví dụ: '.jpg').
 
-    Examples:
-        >>> from klygo import files
-        >>> files.extension("dataset/images/sample.jpg")
-        '.jpg'
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.extension("dataset/images/sample.jpg")
+    '.jpg'
     """
     return Path(path).suffix
 
 
 def parent(path: Union[str, Path]) -> Path:
     """
-    Lấy đường dẫn thư mục cha chứa tập tin hoặc thư mục hiện tại.
+    Tác dụng:
+    - Lấy đường dẫn thư mục cha chứa tập tin hoặc thư mục hiện tại.
 
-    Args:
-        path (str | Path): Đường dẫn.
+    Đầu vào:
+    - path [str | Path]: Đường dẫn cần xử lý.
 
-    Returns:
-        Path: Đường dẫn thư mục cha.
+    Đầu ra:
+    - [Path]: Đường dẫn Path đến thư mục cha.
 
-    Examples:
-        >>> from klygo import files
-        >>> files.parent("dataset/images/sample.jpg")
-        WindowsPath('dataset/images')
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.parent("dataset/images/sample.jpg")
+    WindowsPath('dataset/images')
     """
     return Path(path).parent
