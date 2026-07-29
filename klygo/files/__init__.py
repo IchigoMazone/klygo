@@ -9,35 +9,37 @@ https://colab.research.google.com/drive/1-Oo8ERqSuxns1OfZAdHY5jVMTrLVpJG-?usp=sh
   - CSV (.csv), TXT (.txt), LOG (.log), INI (.ini), CFG (.cfg), PROPERTIES (.properties)
   - ENV (.env), XML (.xml), Pickle (.pkl, .pickle)
 
-Danh sách 22 APIs:
+Danh sách 23 APIs:
   1.  load(path, ...) - Đọc file dữ liệu tự động theo phần mở rộng đuôi file
   2.  save(path, data, ...) - Ghi dữ liệu ra file dựa theo đuôi mở rộng
   3.  convert(source, target, ...) - Chuyển đổi định dạng file dữ liệu
-  4.  exists(path) - Kiểm tra sự tồn tại của file hoặc thư mục
-  5.  is_file(path) - Kiểm tra đường dẫn có phải là file không
-  6.  is_dir(path) - Kiểm tra đường dẫn có phải là thư mục không
-  7.  list(path, ...) - Liệt kê các tập tin/thư mục con
-  8.  find(path, ...) - Tìm kiếm file theo mẫu wildcard
-  9.  walk(path) - Duyệt cây thư mục dạng generator
-  10. mkdir(path, ...) - Tạo thư mục mới trên ổ đĩa
-  11. copy(source, target, ...) - Sao chép file hoặc thư mục
-  12. move(source, target, ...) - Di chuyển file hoặc thư mục
-  13. rename(path, new_name, ...) - Đổi tên file hoặc thư mục
-  14. remove(path, ...) - Xóa file hoặc thư mục
-  15. info(path) - Chi tiết thông tin metadata (dung lượng, hash, time...)
-  16. size(path, ...) - Dung lượng file hoặc thư mục (bytes/human)
-  17. hash(path, ...) - Tính mã checksum hash MD5/SHA256
-  18. compare(path1, path2, ...) - So sánh nội dung 2 file
-  19. name(path) - Tên file/thư mục kèm phần mở rộng
-  20. stem(path) - Tên file không kèm phần mở rộng
-  21. extension(path) - Phần mở rộng đuôi file
-  22. parent(path) - Thư mục cha chứa file/thư mục
+  4.  download(url, output_path, ...) - Tải tập tin từ URL về máy/Colab có ProgressBar
+  5.  exists(path) - Kiểm tra sự tồn tại của file hoặc thư mục
+  6.  is_file(path) - Kiểm tra đường dẫn có phải là file không
+  7.  is_dir(path) - Kiểm tra đường dẫn có phải là thư mục không
+  8.  list(path, ...) - Liệt kê các tập tin/thư mục con
+  9.  find(path, ...) - Tìm kiếm file theo mẫu wildcard
+  10. walk(path) - Duyệt cây thư mục dạng generator
+  11. mkdir(path, ...) - Tạo thư mục mới trên ổ đĩa
+  12. copy(source, target, ...) - Sao chép file hoặc thư mục
+  13. move(source, target, ...) - Di chuyển file hoặc thư mục
+  14. rename(path, new_name, ...) - Đổi tên file hoặc thư mục
+  15. remove(path, ...) - Xóa file hoặc thư mục
+  16. info(path) - Chi tiết thông tin metadata (dung lượng, hash, time...)
+  17. size(path, ...) - Dung lượng file hoặc thư mục (bytes/human)
+  18. hash(path, ...) - Tính mã checksum hash MD5/SHA256
+  19. compare(path1, path2, ...) - So sánh nội dung 2 file
+  20. name(path) - Tên file/thư mục kèm phần mở rộng
+  21. stem(path) - Tên file không kèm phần mở rộng
+  22. extension(path) - Phần mở rộng đuôi file
+  23. parent(path) - Thư mục cha chứa file/thư mục
 """
 
 from .operations import (
     load,
     save,
     convert,
+    download,
     exists,
     is_file,
     is_dir,
@@ -63,6 +65,7 @@ __all__ = [
     "load",
     "save",
     "convert",
+    "download",
     "exists",
     "is_file",
     "is_dir",

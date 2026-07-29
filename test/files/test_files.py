@@ -173,6 +173,14 @@ def test_files_info_size_hash_compare(tmp_path):
     assert files.compare(f1, f2, by="content")
 
 
+def test_files_download(tmp_path):
+    out_file = tmp_path / "python_logo.png"
+    # Download a small public file to test download
+    downloaded = files.download("https://www.python.org/static/img/python-logo.png", out_file, overwrite=True)
+    assert files.exists(downloaded)
+    assert files.size(downloaded) > 0
+
+
 def test_config_module(tmp_path):
     cfg_path = tmp_path / "config.yaml"
     cfg = Config.create_default(cfg_path, overwrite=True)
@@ -196,5 +204,10 @@ if __name__ == "__main__":
         test_media_image_loading(tmp_p)
         test_files_filesystem_operations(tmp_p)
         test_files_info_size_hash_compare(tmp_p)
+        try:
+            test_files_download(tmp_p)
+        except Exception as e:
+            print(f"Skipping network download test: {e}")
         test_config_module(tmp_p)
         print("ALL KLYGO.FILES AND KLYGO.CONFIG TESTS PASSED SUCCESSFULLY!")
+

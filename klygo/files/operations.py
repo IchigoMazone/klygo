@@ -7,6 +7,8 @@ import os
 import pickle
 import shutil
 import xml.etree.ElementTree as ET
+import urllib.request
+from urllib.parse import urlparse
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Generator, Tuple, Union
@@ -395,6 +397,76 @@ def convert(
     data = load(source, verbose=verbose)
     save(target, data, overwrite=overwrite, verbose=verbose)
     return Path(target)
+
+
+def download(
+    url: str,
+    output_path: Optional[Union[str, Path]] = None,
+    overwrite: bool = False,
+    verbose: bool = True,
+) -> Path:
+    """
+    Tác dụng:
+    - Tải tập tin từ đường dẫn URL trên Internet về máy cục bộ hoặc Google Colab.
+    - Tự động hiển thị thanh tiến trình ProgressBar theo dung lượng bytes khi tải.
+
+    Đầu vào:
+    - url [str]: Đường dẫn URL tập tin cần tải.
+    - output_path [str | Path | None]: Đường dẫn file lưu cục bộ. Nếu None, tự động lấy tên file từ URL.
+    - overwrite [bool]: Cho phép ghi đè nếu file cục bộ đã tồn tại. Mặc định: False.
+    - verbose [bool]: Hiển thị thanh tiến trình ProgressBar trong console. Mặc định: True.
+
+    Đầu ra:
+    - [Path]: Đường dẫn Path đến tập tin đã tải về.
+
+    Ngoại lệ:
+    - FileExistsError: Phát sinh khi output_path đã tồn tại và overwrite=False.
+    - ValueError: Phát sinh khi URL không hợp lệ.
+
+    Ví dụ:
+    >>> import klygo.files as files
+    >>> files.download("https://raw.githubusercontent.com/.../config.yaml", "config.yaml", overwrite=True)
+    """
+    validate_type(url, str, "url")
+    validate_type(overwrite, bool, "overwrite")
+    validate_type(verbose, bool, "verbose")
+
+    if not url.startswith(("http://", "https://", "ftp://")):
+        raise ValueError(f"Invalid URL schema: {url!r}")
+
+    if output_path is None:
+        parsed = urlparse(url)
+        filename = os.path.basename(parsed.path) or "downloaded_file"
+        dst_p = Path(filename)
+    else:
+        dst_p = Path(output_path)
+
+    if dst_p.exists() and not overwrite:
+        raise FileExistsError(f"File already exists: {dst_p}. Use overwrite=True to replace it.")
+
+    dst_p.parent.mkdir(parents=True, exist_ok=True)
+
+    req = urllib.request.Request(url, headers={"User-Agent": "klygo/2.0"})
+    with urllib.request.urlopen(req) as response:
+        total_size = int(response.headers.get("content-length", 0))
+        block_size = 8192
+
+        with open(dst_p, "wb") as f, ProgressBar(
+            total=total_size if total_size > 0 else None,
+            desc=f"Downloading {dst_p.name}",
+            unit="B",
+            unit_scale=True,
+            verbose=verbose,
+            colour="cyan",
+        ) as pbar:
+            while True:
+                buffer = response.read(block_size)
+                if not buffer:
+                    break
+                f.write(buffer)
+                pbar.update(len(buffer))
+
+    return dst_p
 
 
 # =========================================================================
