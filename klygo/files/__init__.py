@@ -4,16 +4,20 @@ Bộ công cụ Quản lý File System & I/O Dữ liệu đa định dạng (`kl
 Hướng dẫn sử dụng (Google Colab):
 https://colab.research.google.com/drive/1-Oo8ERqSuxns1OfZAdHY5jVMTrLVpJG-?usp=sharing
 
-Định dạng hỗ trợ (14 loại):
+Định dạng I/O giải mã dữ liệu hỗ trợ (14 loại):
   - YAML (.yaml, .yml), JSON (.json), JSON Lines (.jsonl), TOML (.toml)
   - CSV (.csv), TXT (.txt), LOG (.log), INI (.ini), CFG (.cfg), PROPERTIES (.properties)
   - ENV (.env), XML (.xml), Pickle (.pkl, .pickle)
+
+Định dạng Tải xuống (`files.download`):
+  - Hỗ trợ TẤT CẢ các định dạng tập tin nhị phân (AI Models: .pt, .onnx, .safetensors;
+    File nén: .zip, .tar.gz, .7z; Media: .mp4, .png, .jpg; Data: .parquet, .db, .whl, v.v.)
 
 Danh sách 23 APIs:
   1.  load(path, ...) - Đọc file dữ liệu tự động theo phần mở rộng đuôi file
   2.  save(path, data, ...) - Ghi dữ liệu ra file dựa theo đuôi mở rộng
   3.  convert(source, target, ...) - Chuyển đổi định dạng file dữ liệu
-  4.  download(url, output_path, ...) - Tải tập tin từ URL về máy/Colab có ProgressBar
+  4.  download(source, output_dir, ...) - Tải tập tin bất kỳ từ URL/Colab về máy/thư mục có ProgressBar (giữ nguyên tên gốc)
   5.  exists(path) - Kiểm tra sự tồn tại của file hoặc thư mục
   6.  is_file(path) - Kiểm tra đường dẫn có phải là file không
   7.  is_dir(path) - Kiểm tra đường dẫn có phải là thư mục không
