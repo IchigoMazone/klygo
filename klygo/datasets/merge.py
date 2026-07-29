@@ -4,7 +4,7 @@ from pathlib import Path
 
 from klygo.validators.datasets import Merge as DatasetMerge
 from klygo.archive import extract
-from klygo.io import write_yaml
+from klygo.files import save
 from klygo.utils.dataset import (
     _find_dataset_root,
     _read_class_names,
@@ -175,7 +175,7 @@ def merge(
         "nc": len(global_names),
         "names": global_names
     }
-    write_yaml(merge_workspace / "data.yaml", yaml_data, overwrite=True, verbose=verbose)
+    save(merge_workspace / "data.yaml", yaml_data, overwrite=True, verbose=verbose)
 
     # 5. Compress to the output ZIP file manually to ensure no parent folder in ZIP
     from zipfile import ZipFile, ZIP_DEFLATED

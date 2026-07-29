@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from pathlib import Path
 from types import MethodType, SimpleNamespace
 
@@ -35,16 +39,8 @@ from klygo.archive import (
     test as test_archive,
 )
 from klygo.models import Model
-from klygo.io import (
-    Config,
-    read_images,
-    read_json,
-    read_toml,
-    read_yaml,
-    write_json,
-    write_toml,
-    write_yaml,
-)
+from klygo.config import Config
+from klygo.files import load, save
 from klygo.visualize import (
     crop_dataset,
     crop_image,
@@ -251,7 +247,7 @@ def test_model_predict_without_downloading_model(tmp_path):
     Image.new("RGB", (100, 100), "white").save(image_dir / "image.jpg")
     directory_result = model.predict(source=image_dir, max_area=0.2)[0]
     assert directory_result["labels"] == ["small"]
-    opencv_images = read_images(image_dir, backend="opencv")
+    opencv_images = load(image_dir, backend="opencv")
     opencv_result = model.predict(source=opencv_images, max_area=0.2)[0]
     assert opencv_result["labels"] == ["small"]
 
@@ -367,12 +363,12 @@ def test_all_io_format_public_functions(tmp_path):
     json_path = tmp_path / "data.json"
     toml_path = tmp_path / "data.toml"
 
-    write_yaml(yaml_path, data, overwrite=True, verbose=False)
-    write_json(json_path, data, overwrite=True, verbose=False)
-    write_toml(toml_path, data, overwrite=True, verbose=False)
-    assert dict(read_yaml(yaml_path, verbose=False)) == data
-    assert read_json(json_path, verbose=False) == data
-    assert read_toml(toml_path, verbose=False) == data
+    save(yaml_path, data, overwrite=True, verbose=False)
+    save(json_path, data, overwrite=True, verbose=False)
+    save(toml_path, data, overwrite=True, verbose=False)
+    assert dict(load(yaml_path, verbose=False)) == data
+    assert load(json_path, verbose=False) == data
+    assert load(toml_path, verbose=False) == data
 
     config = Config(yaml_path)
     assert config.config_path == yaml_path
@@ -385,15 +381,15 @@ def test_read_images_with_pil_and_opencv_backends(tmp_path):
     Image.new("RGB", (12, 8), (255, 0, 0)).save(image_dir / "red.jpg")
     Image.new("RGB", (6, 4), (0, 255, 0)).save(nested_dir / "green.png")
 
-    pil_images = read_images(image_dir)
+    pil_images = load(image_dir)
     assert len(pil_images) == 1
     assert isinstance(pil_images[0], Image.Image)
     assert pil_images[0].mode == "RGB"
 
-    recursive_images = read_images(image_dir, recursive=True)
+    recursive_images = load(image_dir, recursive=True)
     assert len(recursive_images) == 2
 
-    opencv_images = read_images(image_dir / "red.jpg", backend="opencv")
+    opencv_images = load(image_dir / "red.jpg", backend="opencv")
     assert len(opencv_images) == 1
     assert isinstance(opencv_images[0], np.ndarray)
     assert opencv_images[0].shape == (8, 12, 3)
@@ -454,7 +450,7 @@ def test_model_detect_without_downloading_model(tmp_path, monkeypatch):
     assert (tmp_path / "dataset" / "images" / "frame_0.jpg").exists()
     assert (tmp_path / "dataset" / "labels" / "frame_0.txt").exists()
     assert (tmp_path / "dataset" / "data.yaml").exists()
-    dataset_yaml = read_yaml(
+    dataset_yaml = load(
         tmp_path / "dataset" / "data.yaml",
         verbose=False,
     )
@@ -488,7 +484,7 @@ def test_model_detect_without_downloading_model(tmp_path, monkeypatch):
     image_dir = tmp_path / "source_images"
     image_dir.mkdir()
     Image.new("RGB", (64, 48), "white").save(image_dir / "image.jpg")
-    source_images = read_images(image_dir)
+    source_images = load(image_dir)
     image_detections = model.detect(
         source_images,
         annotated_dir=str(tmp_path / "image_annotated"),

@@ -46,7 +46,8 @@ from klygo.archive.transform import merge, split_by_size, convert, recompress, c
 from klygo.archive.compare import compare
 from klygo.archive.context import open_archive as open, ArchiveFile
 from klygo.archive.backend import detect_format, is_archive
-from klygo.archive.human_size import human_size
+info = get_info
+list = list_files
 
 __all__ = [
     "compress",
@@ -54,9 +55,11 @@ __all__ = [
     "extract_file",
     "extract_matching",
     "list_files",
+    "list",
     "iter_files",
     "search",
     "get_info",
+    "info",
     "test",
     "verify",
     "add",

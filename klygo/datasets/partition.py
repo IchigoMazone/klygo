@@ -5,7 +5,7 @@ from pathlib import Path
 
 from klygo.validators.datasets import Partition, Repartition
 from klygo.archive import extract
-from klygo.io import read_yaml, write_yaml
+from klygo.files import load, save
 from klygo.utils.dataset import (
     _find_dataset_root,
     _safe_copy,
@@ -122,7 +122,7 @@ def _execute_partition(params: Partition) -> None:
     # 7. Handle data.yaml
     yaml_src = src_base / "data.yaml"
     if yaml_src.exists():
-        yaml_data = read_yaml(yaml_src, verbose=False)
+        yaml_data = load(yaml_src, verbose=False)
         yaml_data["path"] = str(params.target.resolve().as_posix())
         yaml_data["train"] = "images/train"
         yaml_data["val"] = "images/val"
@@ -132,7 +132,7 @@ def _execute_partition(params: Partition) -> None:
             del yaml_data["test"]
 
         yaml_dest = temp_output_dir / "data.yaml"
-        write_yaml(yaml_dest, yaml_data, overwrite=True, verbose=params.verbose)
+        save(yaml_dest, yaml_data, overwrite=True, verbose=params.verbose)
 
     # 8. Clear extraction temp dir if ZIP
     if temp_extract_dir and temp_extract_dir.exists():
@@ -303,7 +303,7 @@ def unpartition(
     yaml_src = src_base / "data.yaml"
     names = []
     if yaml_src.exists():
-        yaml_data = read_yaml(yaml_src, verbose=False)
+        yaml_data = load(yaml_src, verbose=False)
         names = yaml_data.get("names", [])
 
     # Write new data.yaml
@@ -315,7 +315,7 @@ def unpartition(
         "nc": len(names),
         "names": names
     }
-    write_yaml(temp_out / "data.yaml", new_yaml, overwrite=True, verbose=False)
+    save(temp_out / "data.yaml", new_yaml, overwrite=True, verbose=False)
 
     # Clean up temp extract
     if temp_extract_dir and temp_extract_dir.exists():

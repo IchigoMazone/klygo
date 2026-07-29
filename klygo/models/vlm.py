@@ -12,7 +12,7 @@ from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 from tqdm import tqdm
 
 from klygo.validators.models import InitModel, PredictModel, DetectModel
-from klygo.io import write_yaml
+from klygo.files import save
 from klygo.utils import is_cuda_available
 from klygo.utils._crop_boxes import _crop_boxes
 from klygo.utils._save_crops import _save_crops
@@ -706,7 +706,7 @@ class VisionLanguageModel:
             }
 
             # Reuse klygo.io write_yaml helper for seamless integration
-            write_yaml(path, yaml_content, overwrite=True, verbose=False)
+            save(path, yaml_content, overwrite=True, verbose=False)
 
         if params.annotated_dir:
             metadata_path = params.annotated_dir / "metadata.json"

@@ -5,7 +5,7 @@ import cv2 as cv
 import numpy as np
 from PIL import Image
 
-from klygo.io.read_images import read_images
+from klygo.media import load
 
 
 VIDEO_SUFFIXES = {".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm"}
@@ -41,7 +41,7 @@ def _normalize_images(source: Any) -> List[Image.Image]:
             raise ValueError("Video source is not supported by predict")
         return [
             _to_pil_image(image)
-            for image in read_images(source, backend="pil")
+            for image in load(source, backend="pil")
         ]
 
     values = list(source) if isinstance(source, (list, tuple)) else [source]

@@ -13,8 +13,10 @@ uv sync
 ## Các package
 
 - `klygo.archive`: nén, giải nén, tìm kiếm, kiểm tra, chỉnh sửa, gộp và chia ZIP.
+- `klygo.config`: quản lý 16 APIs cấu hình thông minh.
 - `klygo.datasets`: partition, repartition, unpartition, merge, split và remap dataset YOLO.
-- `klygo.io`: đọc/ghi YAML, JSON, TOML; đọc ảnh bằng PIL hoặc OpenCV.
+- `klygo.files`: bộ công cụ 22 hàm thao tác file/thư mục, hỗ trợ 14 định dạng dữ liệu (YAML, JSON, TOML, CSV, INI, ENV, XML, Pickle...).
+- `klygo.media`: xử lý và tải/lưu tập tin hình ảnh và truyền thông.
 - `klygo.models`: nhận diện zero-shot trên ảnh, thư mục ảnh và video.
 - `klygo.visualize`: hiển thị, vẽ bbox, crop, đọc crop và thống kê dataset.
 
@@ -46,14 +48,18 @@ info = ds.get_dataset_info("dataset")
 print(info)
 ```
 
-### Đọc cấu hình và ảnh
+### File, Cấu hình & Truyền thông
 
 ```python
-import klygo.io as io
+import klygo.files as files
+import klygo.media as media
+import klygo.config as config
+from klygo.config import Config
 
-config = io.Config("config.yaml").read()
-pil_images = io.read_images("dataset/images", backend="pil")
-opencv_images = io.read_images("dataset/images", backend="opencv")
+cfg = config.load("config.yaml")
+data = files.load("data.json")
+files.save("output.env", {"PORT": "8080"}, overwrite=True)
+pil_images = media.load("dataset/images", backend="pil")
 ```
 
 ### Model

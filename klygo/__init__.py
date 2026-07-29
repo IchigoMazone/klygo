@@ -19,9 +19,11 @@ except ImportError:
         pass
 
 from . import archive
+from . import config
 from . import cuda
 from . import datasets
-from . import io
+from . import files
+from . import media
 from . import models
 from . import utils
 from . import validators

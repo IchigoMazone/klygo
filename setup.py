@@ -12,6 +12,11 @@ from setuptools.dist import Distribution
 
 class CMakeBuild(build_ext):
     def run(self):
+        if os.environ.get("BUILD_CPP", "0") != "1":
+            print("[klygo] C++ extension build is frozen/disabled (Pure Python mode).")
+            self.extensions = []
+            return
+
         # Source tree (works both in-tree and from sdist temp dir)
         here = os.path.dirname(os.path.abspath(__file__))
         cpp_src_dir = os.path.join(here, "cpp")
@@ -107,7 +112,7 @@ class CMakeBuild(build_ext):
 
 class BinaryDistribution(Distribution):
     def has_ext_modules(self):
-        return True
+        return os.environ.get("BUILD_CPP", "0") == "1"
 
 
 setup(

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from klygo.validators.datasets import Split as DatasetSplit
 from klygo.archive import extract
-from klygo.io import write_yaml
+from klygo.files import save
 from klygo.utils.dataset import (
     _find_dataset_root,
     _read_class_names,
@@ -158,7 +158,7 @@ def split(
                     "nc": len(group),
                     "names": group
                 }
-                write_yaml(workspace / "data.yaml", yaml_data, overwrite=True, verbose=False)
+                save(workspace / "data.yaml", yaml_data, overwrite=True, verbose=False)
 
                 from zipfile import ZipFile, ZIP_DEFLATED
                 with ZipFile(zip_dest, mode="w", compression=ZIP_DEFLATED) as zf:
@@ -222,7 +222,7 @@ def split(
                 "nc": len(source_names),
                 "names": source_names
             }
-            write_yaml(workspace / "data.yaml", yaml_data, overwrite=True, verbose=False)
+            save(workspace / "data.yaml", yaml_data, overwrite=True, verbose=False)
 
             from zipfile import ZipFile, ZIP_DEFLATED
             with ZipFile(zip_dest, mode="w", compression=ZIP_DEFLATED) as zf:
