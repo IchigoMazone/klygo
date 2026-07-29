@@ -75,24 +75,27 @@ class Config:
     def export_file(
         self,
         name: str,
-        suffix: str,
+        suffix: Optional[str] = None,
         output_dir: Optional[Union[str, Path]] = None,
         overwrite: bool = False,
         verbose: bool = True,
-    ) -> None:
+        ext: Optional[str] = None,
+    ) -> Path:
+        actual_suffix = ext or suffix or ".json"
+        if not actual_suffix.startswith("."):
+            actual_suffix = f".{actual_suffix}"
+
+        clean_name = name
+        if clean_name.lower().endswith(actual_suffix.lower()):
+            clean_name = clean_name[:-len(actual_suffix)]
+
         params = ExportFile(
-            name=name,
-            suffix=suffix,
+            name=clean_name,
+            suffix=actual_suffix,
             output_dir=output_dir if output_dir is not None else ".",
             overwrite=overwrite,
             verbose=verbose,
         )
-
-        if params.suffix == self._params.config_path.suffix:
-            raise ValueError(
-                f"Export suffix {params.suffix!r} must be different "
-                f"from source suffix {self._params.config_path.suffix!r}."
-            )
 
         if output_dir is not None:
             out_dir = Path(output_dir)
@@ -102,4 +105,5 @@ class Config:
             out_dir = Path(".")
 
         file_path = out_dir / f"{params.name}{params.suffix}"
-        operations.export(self._params.config_path, file_path, overwrite=params.overwrite, verbose=params.verbose)
+        data = self._cfg if self._cfg else operations.load(self._params.config_path, verbose=False)
+        return operations.export(data, file_path, overwrite=params.overwrite, verbose=params.verbose)
