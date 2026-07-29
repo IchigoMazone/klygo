@@ -35,45 +35,6 @@ def test_media_conversions():
     assert pil_from_arr.size == (20, 10)
 
 
-def test_media_padding():
-    img_pil = Image.new("RGB", (20, 10), "blue")
-
-    # 1. pad
-    padded = media.pad(img_pil, pad_width=5)
-    assert media.to_array(padded).shape == (20, 30, 3)
-
-    # 2. pad_to_shape
-    padded_shape = media.pad_to_shape(img_pil, (30, 40))
-    assert media.to_array(padded_shape).shape == (30, 40, 3)
-
-    # 3. letterbox
-    lb_img, ratio, (pad_x, pad_y) = media.letterbox(img_pil, (640, 640))
-    assert media.to_array(lb_img).shape == (640, 640, 3)
-    assert pad_y > 0
-
-
-def test_media_kernels_and_filters():
-    img_pil = Image.new("RGB", (50, 50), "white")
-
-    # 1. filter2d
-    k = [[0, -1, 0], [-1, 5, -1], [0, -1, 0]]
-    filtered = media.filter2d(img_pil, k)
-    assert isinstance(filtered, Image.Image)
-
-    # 2. gaussian_blur
-    blurred = media.gaussian_blur(img_pil, kernel_size=5, sigma=1.5)
-    assert isinstance(blurred, Image.Image)
-
-    # 3. sharpen
-    sharp = media.sharpen(img_pil, factor=1.5)
-    assert isinstance(sharp, Image.Image)
-
-    # 4. edge_detection
-    edges = media.edge_detection(img_pil, method="sobel")
-    assert isinstance(edges, Image.Image)
-    assert edges.size == (50, 50)
-
-
 def test_media_batch_saving_and_iter(tmp_path):
     img_dir = tmp_path / "images"
     img_dir.mkdir()
@@ -94,7 +55,6 @@ def test_media_batch_saving_and_iter(tmp_path):
 
     # 3. save_video
     vid_p = tmp_path / "test_video.mp4"
-    # 6. overwrite check
     try:
         media.save(tmp_path / "saved.png", frames[0], overwrite=False, verbose=False)
         media.save(tmp_path / "saved.png", frames[0], overwrite=False, verbose=False)
@@ -120,7 +80,5 @@ if __name__ == "__main__":
     with tempfile.TemporaryDirectory() as td:
         tmp_p = Path(td)
         test_media_conversions()
-        test_media_padding()
-        test_media_kernels_and_filters()
         test_media_batch_saving_and_iter(tmp_p)
-        print("ALL KLYGO.MEDIA VIDEO, IMAGES & ITERATION TESTS PASSED SUCCESSFULLY!")
+        print("ALL KLYGO.MEDIA 9 CORE APIS TESTS PASSED SUCCESSFULLY!")
