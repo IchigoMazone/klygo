@@ -21,28 +21,28 @@ assert callable(Config)
 
 # Test 3: Explicit imports from klygo.files
 from klygo.files import (
-    load, save, convert, exists, is_file, is_dir,
+    load, save, convert, download, exists, is_file, is_dir,
     list, find, walk, mkdir, copy, move, rename,
     remove, info, size, hash, compare, name, stem,
     extension, parent
 )
 assert callable(load)
-assert callable(save)
+assert callable(download)
 
 # Test 4: Explicit imports from klygo.config
 from klygo.config import (
     load as cfg_load, save as cfg_save, convert as cfg_convert,
     create, defaults, merge, update, get, set, has, delete,
-    keys, values, items, validate, export
+    keys, values, items, validate, export, diff, flatten, unflatten, from_env
 )
 assert callable(cfg_load)
-assert callable(create)
+assert callable(diff)
 
 # Test 5: Verify __all__ in files and config
 import klygo.files
 import klygo.config
 
-assert len(klygo.files.__all__) == 22
-assert len(klygo.config.__all__) == 17
+assert len(klygo.files.__all__) == 23
+assert len(klygo.config.__all__) == 21
 
 print("ALL PUBLIC IMPORT PATTERNS AND MODULE EXPORTS PASSED SUCCESSFULLY!")

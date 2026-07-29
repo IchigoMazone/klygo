@@ -116,6 +116,28 @@ def test_config_class_wrapper(tmp_path):
     assert (tmp_path / "exported_class.toml").exists()
 
 
+def test_config_diff_flatten_env():
+    # 1. flatten & unflatten
+    nested = {"model": {"arch": {"name": "yolo"}, "batch": 16}}
+    flat = config.flatten(nested)
+    assert flat == {"model.arch.name": "yolo", "model.batch": 16}
+
+    unflat = config.unflatten(flat)
+    assert unflat == nested
+
+    # 2. diff
+    c1 = {"model": {"batch": 16}}
+    c2 = {"model": {"batch": 32, "lr": 0.001}}
+    d = config.diff(c1, c2)
+    assert d["added"] == {"model.lr": 0.001}
+    assert d["modified"] == {"model.batch": {"from": 16, "to": 32}}
+
+    # 3. from_env
+    os.environ["KLYGO_TEST_BATCH"] = "64"
+    env_cfg = config.from_env(prefix="KLYGO_TEST_")
+    assert env_cfg["batch"] == "64"
+
+
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory() as td:
         tmp_p = Path(td)
@@ -126,4 +148,6 @@ if __name__ == "__main__":
         test_config_keys_values_items()
         test_config_validate_export(tmp_p)
         test_config_class_wrapper(tmp_p)
-        print("ALL KLYGO.CONFIG 16 APIS AND CONFIG CLASS TESTS PASSED SUCCESSFULLY!")
+        test_config_diff_flatten_env()
+        print("ALL KLYGO.CONFIG 20 APIS AND CONFIG CLASS TESTS PASSED SUCCESSFULLY!")
+

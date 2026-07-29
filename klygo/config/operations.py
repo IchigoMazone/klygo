@@ -1,5 +1,6 @@
 import builtins
 import copy
+import os
 from functools import reduce
 from operator import getitem
 from pathlib import Path
@@ -301,3 +302,146 @@ def export(
         return save(target, data, overwrite=overwrite, verbose=verbose)
     else:
         raise TypeError("source must be a file path (str | Path) or dict | Box")
+
+
+# =========================================================================
+# 7. Config Comparison, Environment & Flattening Helpers
+# =========================================================================
+
+def diff(
+    config1: Union[Dict[str, Any], Any, str, Path],
+    config2: Union[Dict[str, Any], Any, str, Path],
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Tác dụng:
+    - So sánh sự khác biệt chi tiết giữa 2 đối tượng hoặc 2 file cấu hình.
+
+    Đầu vào:
+    - config1 [dict | Box | str | Path]: File hoặc đối tượng cấu hình thứ nhất.
+    - config2 [dict | Box | str | Path]: File hoặc đối tượng cấu hình thứ hai.
+
+    Đầu ra:
+    - [Dict[str, Dict[str, Any]]]: Dictionary gồm 3 danh mục: 'added' (mới thêm), 'removed' (bị xóa), 'modified' (thay đổi giá trị).
+
+    Ví dụ:
+    >>> import klygo.config as config
+    >>> cfg1 = {"model": {"batch": 16}}
+    >>> cfg2 = {"model": {"batch": 32, "lr": 0.001}}
+    >>> config.diff(cfg1, cfg2)
+    {'added': {'model.lr': 0.001}, 'removed': {}, 'modified': {'model.batch': {'from': 16, 'to': 32}}}
+    """
+    c1 = load(config1, verbose=False) if isinstance(config1, (str, Path)) else config1
+    c2 = load(config2, verbose=False) if isinstance(config2, (str, Path)) else config2
+
+    f1 = dict(_flatten(c1.to_dict() if isinstance(c1, Box) else dict(c1))) if isinstance(c1, (dict, Box)) else {}
+    f2 = dict(_flatten(c2.to_dict() if isinstance(c2, Box) else dict(c2))) if isinstance(c2, (dict, Box)) else {}
+
+    added = {k: v for k, v in f2.items() if k not in f1}
+    removed = {k: v for k, v in f1.items() if k not in f2}
+    modified = {k: {"from": f1[k], "to": f2[k]} for k in f1 if k in f2 and f1[k] != f2[k]}
+
+    return {
+        "added": added,
+        "removed": removed,
+        "modified": modified,
+    }
+
+
+def flatten(
+    config_data: Union[Dict[str, Any], Any],
+    sep: str = ".",
+) -> Dict[str, Any]:
+    """
+    Tác dụng:
+    - Chuyển đổi cấu trúc dictionary cấu hình lồng nhau thành dictionary dạng phẳng với key theo dạng dot-notation.
+
+    Đầu vào:
+    - config_data [dict | Box]: Dữ liệu cấu hình lồng nhau.
+    - sep [str]: Ký tự phân cách các cấp key. Mặc định: '.'.
+
+    Đầu ra:
+    - [Dict[str, Any]]: Dictionary cấu hình dạng phẳng.
+
+    Ví dụ:
+    >>> import klygo.config as config
+    >>> cfg = {"model": {"batch": 16}}
+    >>> config.flatten(cfg)
+    {'model.batch': 16}
+    """
+    d = config_data.to_dict() if isinstance(config_data, Box) else dict(config_data)
+    flat_tuples = _flatten(d)
+    if sep == ".":
+        return dict(flat_tuples)
+    return {k.replace(".", sep): v for k, v in flat_tuples}
+
+
+def unflatten(
+    flat_dict: Dict[str, Any],
+    sep: str = ".",
+) -> Dict[str, Any]:
+    """
+    Tác dụng:
+    - Khôi phục dictionary dạng phẳng (dot-notation) trở lại cấu trúc dictionary lồng nhau ban đầu.
+
+    Đầu vào:
+    - flat_dict [dict]: Dictionary dạng phẳng (ví dụ: {'model.batch': 16}).
+    - sep [str]: Ký tự phân cách các cấp key. Mặc định: '.'.
+
+    Đầu ra:
+    - [Dict[str, Any]]: Dictionary cấu hình lồng nhau.
+
+    Ví dụ:
+    >>> import klygo.config as config
+    >>> flat = {'model.batch': 16}
+    >>> config.unflatten(flat)
+    {'model': {'batch': 16}}
+    """
+    result: Dict[str, Any] = {}
+    for key, value in flat_dict.items():
+        parts = key.split(sep)
+        curr = result
+        for part in parts[:-1]:
+            if part not in curr or not isinstance(curr[part], dict):
+                curr[part] = {}
+            curr = curr[part]
+        curr[parts[-1]] = value
+    return result
+
+
+def from_env(
+    config_data: Optional[Union[Dict[str, Any], Any]] = None,
+    prefix: str = "KLYGO_",
+    sep: str = "_",
+) -> Dict[str, Any]:
+    """
+    Tác dụng:
+    - Đọc các biến môi trường hệ thống OS (bắt đầu bằng prefix) và ghi đè/cập nhật vào cấu hình.
+
+    Đầu vào:
+    - config_data [dict | Box | None]: Cấu hình gốc cần cập nhật (nếu None sẽ tạo mới).
+    - prefix [str]: Tiền tố tên biến môi trường cần đọc. Mặc định: 'KLYGO_'.
+    - sep [str]: Ký tự phân cách các cấp key trong tên biến môi trường. Mặc định: '_'.
+
+    Đầu ra:
+    - [Dict[str, Any]]: Dictionary cấu hình đã được ghi đè bởi biến môi trường OS.
+
+    Ví dụ:
+    >>> import os, klygo.config as config
+    >>> os.environ["KLYGO_MODEL_BATCH"] = "64"
+    >>> config.from_env(prefix="KLYGO_")
+    {'model': {'batch': '64'}}
+    """
+    base_dict = (config_data.to_dict() if isinstance(config_data, Box) else dict(config_data)) if config_data else {}
+    env_updates = {}
+    for env_key, env_val in os.environ.items():
+        if env_key.startswith(prefix):
+            raw_key = env_key[len(prefix):].lower()
+            key_path = raw_key.replace(sep, ".")
+            env_updates[key_path] = env_val
+
+    if env_updates:
+        nested_updates = unflatten(env_updates, sep=".")
+        base_dict = update(base_dict, nested_updates, deep=True)
+
+    return base_dict
+
