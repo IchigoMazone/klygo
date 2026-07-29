@@ -28,6 +28,21 @@ from . import models
 from . import utils
 from . import validators
 from . import visualize
+from .config import Config
 
 __version__ = "2.0.20"
 __author__ = "IchigoMazone"
+
+__all__ = [
+    "archive",
+    "config",
+    "cuda",
+    "datasets",
+    "files",
+    "media",
+    "models",
+    "utils",
+    "validators",
+    "visualize",
+    "Config",
+]
