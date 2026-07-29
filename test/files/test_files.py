@@ -174,10 +174,10 @@ def test_files_info_size_hash_compare(tmp_path):
 
 
 def test_files_download(tmp_path):
-    out_file = tmp_path / "python_logo.png"
-    # Download a small public file to test download
-    downloaded = files.download("https://www.python.org/static/img/python-logo.png", out_file, overwrite=True)
+    # Download a small public file to test download preserving original filename
+    downloaded = files.download("https://www.python.org/static/img/python-logo.png", output_dir=tmp_path, overwrite=True)
     assert files.exists(downloaded)
+    assert downloaded.name == "python-logo.png"
     assert files.size(downloaded) > 0
 
 

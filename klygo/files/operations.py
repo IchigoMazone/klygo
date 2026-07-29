@@ -401,19 +401,19 @@ def convert(
 
 def download(
     source: Union[str, Path],
-    output_path: Optional[Union[str, Path]] = None,
+    output_dir: Union[str, Path] = ".",
     overwrite: bool = False,
     verbose: bool = True,
 ) -> Path:
     """
     Tác dụng:
     - Tải tập tin từ URL Internet về Colab/Server HOẶC tải tập tin từ Colab/Server về máy tính cá nhân (PC).
-    - Hỗ trợ tải tập tin cục bộ sang vị trí cục bộ mới.
+    - Giữ nguyên tên file gốc (không đổi tên). Để đổi tên file sau khi tải, sử dụng hàm files.rename().
     - Chỉ hỗ trợ tải tập tin (file), không hỗ trợ thư mục (không nén).
 
     Đầu vào:
     - source [str | Path]: Đường dẫn URL tập tin hoặc đường dẫn file cục bộ trên Colab/Server.
-    - output_path [str | Path | None]: Đường dẫn file đầu ra. Nếu None, tự động lấy tên file từ source.
+    - output_dir [str | Path]: Thư mục đầu ra chứa file tải về. Mặc định: '.' (thư mục hiện tại).
     - overwrite [bool]: Cho phép ghi đè nếu file đầu ra đã tồn tại. Mặc định: False.
     - verbose [bool]: Hiển thị thanh tiến trình ProgressBar trong console. Mặc định: True.
 
@@ -422,37 +422,35 @@ def download(
 
     Ngoại lệ:
     - FileNotFoundError: Phát sinh khi file nguồn cục bộ không tồn tại.
-    - ValueError: Phát sinh khi nguồn là thư mục thay vì tập tin hoặc URL không hợp lệ.
-    - FileExistsError: Phát sinh khi output_path đã tồn tại và overwrite=False.
+    - ValueError: Phát sinh khi nguồn là thư mục thay vì tập tin.
+    - FileExistsError: Phát sinh khi file đầu ra đã tồn tại và overwrite=False.
 
     Ví dụ:
     >>> import klygo.files as files
 
-    # Ví dụ 1: Tải file từ URL Internet về Colab/Server
-    >>> files.download("https://example.com/model.pt", "model.pt", overwrite=True)
+    # Ví dụ 1: Tải file từ URL Internet về thư mục "downloads/" giữ nguyên tên file gốc
+    >>> files.download("https://example.com/model.pt", output_dir="downloads", overwrite=True)
 
     # Ví dụ 2: Tải file từ Google Colab về trực tiếp máy tính cá nhân (PC)
     >>> files.download("results.json")
     """
     validate_type(source, (str, Path), "source")
+    validate_type(output_dir, (str, Path), "output_dir")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
 
     src_str = str(source)
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     # TH1: Tải từ URL Internet (http, https, ftp)
     if src_str.startswith(("http://", "https://", "ftp://")):
-        if output_path is None:
-            parsed = urlparse(src_str)
-            filename = os.path.basename(parsed.path) or "downloaded_file"
-            dst_p = Path(filename)
-        else:
-            dst_p = Path(output_path)
+        parsed = urlparse(src_str)
+        filename = os.path.basename(parsed.path) or "downloaded_file"
+        dst_p = out_dir / filename
 
         if dst_p.exists() and not overwrite:
             raise FileExistsError(f"File already exists: {dst_p}. Use overwrite=True to replace it.")
-
-        dst_p.parent.mkdir(parents=True, exist_ok=True)
 
         req = urllib.request.Request(src_str, headers={"User-Agent": "klygo/2.0"})
         with urllib.request.urlopen(req) as response:
@@ -484,7 +482,7 @@ def download(
     if src_p.is_dir():
         raise ValueError(f"download() only supports single files, not directories: {src_p}")
 
-    # Nếu đang chạy trong Google Colab và không truyền output_path -> Kích hoạt tải về máy tính PC
+    # Nếu đang chạy trong Google Colab và lưu ở thư mục mặc định '.' -> Kích hoạt tải về máy tính PC
     try:
         from google.colab import files as colab_files
         colab_files.download(str(src_p))
@@ -492,13 +490,10 @@ def download(
     except ImportError:
         pass
 
-    # Nếu không ở Colab hoặc có chỉ định output_path -> Copy file cục bộ sang output_path
-    if output_path is None:
-        dst_p = src_p
-    else:
-        dst_p = Path(output_path)
-        if dst_p.resolve() != src_p.resolve():
-            copy(src_p, dst_p, overwrite=overwrite)
+    # Copy file cục bộ sang output_dir giữ nguyên tên file
+    dst_p = out_dir / src_p.name
+    if dst_p.resolve() != src_p.resolve():
+        copy(src_p, dst_p, overwrite=overwrite)
 
     return dst_p
 
