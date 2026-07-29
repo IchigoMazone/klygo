@@ -38,11 +38,21 @@ from klygo.config import (
 assert callable(cfg_load)
 assert callable(diff)
 
-# Test 5: Verify __all__ in files and config
+# Test 5: Explicit imports from klygo.media
+from klygo.media import (
+    load as med_load, save as med_save, convert as med_convert, copy as med_copy,
+    save_video, save_images, iter_frames, info as med_info, to_array, to_tensor, to_pil
+)
+assert callable(med_load)
+assert callable(med_convert)
+
+# Test 6: Verify __all__ in files, config, and media
 import klygo.files
 import klygo.config
+import klygo.media
 
 assert len(klygo.files.__all__) == 23
 assert len(klygo.config.__all__) == 21
+assert len(klygo.media.__all__) == 11
 
 print("ALL PUBLIC IMPORT PATTERNS AND MODULE EXPORTS PASSED SUCCESSFULLY!")

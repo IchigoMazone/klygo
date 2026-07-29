@@ -75,10 +75,21 @@ def test_media_batch_saving_and_iter(tmp_path):
     v_frames = list(media.iter_frames(vid_p, sample_rate=1))
     assert len(v_frames) == 3
 
+    # 6. media.convert
+    png_p = tmp_path / "saved.png"
+    jpg_p = tmp_path / "converted.jpg"
+    conv_res = media.convert(png_p, jpg_p, overwrite=True, verbose=False)
+    assert conv_res.exists()
+
+    # 7. media.copy
+    copied_p = tmp_path / "copied.png"
+    cp_res = media.copy(png_p, copied_p, overwrite=True)
+    assert cp_res.exists()
+
 
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory() as td:
         tmp_p = Path(td)
         test_media_conversions()
         test_media_batch_saving_and_iter(tmp_p)
-        print("ALL KLYGO.MEDIA 9 CORE APIS TESTS PASSED SUCCESSFULLY!")
+        print("ALL KLYGO.MEDIA 11 APIS TESTS PASSED SUCCESSFULLY!")
