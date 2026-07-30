@@ -4,6 +4,7 @@ from .base import BaseAdapter
 from ..registry import registry
 from klygo import media
 from klygo import files
+from klygo.utils.progress import ProgressBar
 
 class ClassificationResult:
     def __init__(self, label: str, score: float, topk: List[Dict[str, Any]]):
@@ -106,8 +107,12 @@ class ClassifyAdapter(BaseAdapter):
             
         predict_kwargs = {k: v for k, v in kwargs.items() if k != "source"}
         images = media.load(source)
-        for idx, img in enumerate(images):
-            res = self.predict(img, **predict_kwargs)
-            class_dir = os.path.join(output_path, res.label)
-            files.mkdir(class_dir)
-            media.save(os.path.join(class_dir, f"classified_{idx}.jpg"), img)
+        verbose = kwargs.get("verbose", True)
+        
+        with ProgressBar(total=len(images), desc="Exporting Classification Dataset", verbose=verbose) as pbar:
+            for idx, img in enumerate(images):
+                res = self.predict(img, **predict_kwargs)
+                class_dir = os.path.join(output_path, res.label)
+                files.mkdir(class_dir)
+                media.save(os.path.join(class_dir, f"classified_{idx}.jpg"), img)
+                pbar.update(1)

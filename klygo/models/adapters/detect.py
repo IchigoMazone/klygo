@@ -4,6 +4,7 @@ from .base import BaseAdapter
 from ..registry import registry
 from klygo import media
 from klygo import files
+from klygo.utils.progress import ProgressBar
 
 class BoundingBox:
     def __init__(self, xmin: float, ymin: float, xmax: float, ymax: float, label: str, score: float):
@@ -123,16 +124,20 @@ class DetectAdapter(BaseAdapter):
 
         predict_kwargs = {k: v for k, v in kwargs.items() if k != "source"}
 
+        verbose = kwargs.get("verbose", True)
+
         # 2. Classification output folder format
         if format == "classification":
-            for img_idx, img in enumerate(images):
-                results = self.predict(img, **predict_kwargs)
-                for obj_idx, obj in enumerate(results.objects):
-                    if obj.label in label_to_id:
-                        cropped = img.crop((obj.xmin, obj.ymin, obj.xmax, obj.ymax))
-                        class_dir = os.path.join(output_path, obj.label)
-                        files.mkdir(class_dir)
-                        media.save(os.path.join(class_dir, f"crop_{img_idx}_{obj_idx}.jpg"), cropped)
+            with ProgressBar(total=len(images), desc="Exporting Classification Dataset", verbose=verbose) as pbar:
+                for img_idx, img in enumerate(images):
+                    results = self.predict(img, **predict_kwargs)
+                    for obj_idx, obj in enumerate(results.objects):
+                        if obj.label in label_to_id:
+                            cropped = img.crop((obj.xmin, obj.ymin, obj.xmax, obj.ymax))
+                            class_dir = os.path.join(output_path, obj.label)
+                            files.mkdir(class_dir)
+                            media.save(os.path.join(class_dir, f"crop_{img_idx}_{obj_idx}.jpg"), cropped)
+                    pbar.update(1)
                         
         # 3. YOLO detection output folder format
         elif format == "yolo":
@@ -146,20 +151,22 @@ class DetectAdapter(BaseAdapter):
             files.mkdir(img_dir)
             files.mkdir(lbl_dir)
 
-            for img_idx, img in enumerate(images):
-                results = self.predict(img, **predict_kwargs)
-                media.save(os.path.join(img_dir, f"img_{img_idx}.jpg"), img)
-                
-                lbl_content = ""
-                w_img, h_img = img.size
-                for obj in results.objects:
-                    class_id = label_to_id.get(obj.label)
-                    if class_id is None:
-                        continue
-                    x_center = ((obj.xmin + obj.xmax) / 2) / w_img
-                    y_center = ((obj.ymin + obj.ymax) / 2) / h_img
-                    w_box = (obj.xmax - obj.xmin) / w_img
-                    h_box = (obj.ymax - obj.ymin) / h_img
-                    lbl_content += f"{class_id} {x_center:.6f} {y_center:.6f} {w_box:.6f} {h_box:.6f}\n"
-                
-                files.save(os.path.join(lbl_dir, f"img_{img_idx}.txt"), lbl_content, overwrite=True)
+            with ProgressBar(total=len(images), desc="Exporting YOLO Dataset", verbose=verbose) as pbar:
+                for img_idx, img in enumerate(images):
+                    results = self.predict(img, **predict_kwargs)
+                    media.save(os.path.join(img_dir, f"img_{img_idx}.jpg"), img)
+                    
+                    lbl_content = ""
+                    w_img, h_img = img.size
+                    for obj in results.objects:
+                        class_id = label_to_id.get(obj.label)
+                        if class_id is None:
+                            continue
+                        x_center = ((obj.xmin + obj.xmax) / 2) / w_img
+                        y_center = ((obj.ymin + obj.ymax) / 2) / h_img
+                        w_box = (obj.xmax - obj.xmin) / w_img
+                        h_box = (obj.ymax - obj.ymin) / h_img
+                        lbl_content += f"{class_id} {x_center:.6f} {y_center:.6f} {w_box:.6f} {h_box:.6f}\n"
+                    
+                    files.save(os.path.join(lbl_dir, f"img_{img_idx}.txt"), lbl_content, overwrite=True)
+                    pbar.update(1)
