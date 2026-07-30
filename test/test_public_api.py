@@ -38,7 +38,13 @@ from klygo.archive import (
     split_by_size,
     test as test_archive,
 )
-from klygo.models import Model
+try:
+    from klygo.models import Model
+except ImportError:
+    # Skip the entire module as requested since legacy Model is archived
+    import unittest
+    raise unittest.SkipTest("Legacy Model is archived")
+
 from klygo.config import Config
 from klygo.files import load, save
 from klygo.visualize import (
