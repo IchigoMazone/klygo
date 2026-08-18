@@ -8,12 +8,22 @@ MODEL_METADATA = {
     "yolov8n-detect": {
         "model_path": "yolov8n.pt",
         "backend": "ultralytics",
-        "task": "detect"
+        "task": "detect",
+        "predict_params": {
+            "conf": {"type": "float", "default": 0.25, "description": "Object confidence threshold for detection"},
+            "iou": {"type": "float", "default": 0.7, "description": "Intersection over Union (IoU) threshold for NMS"},
+            "verbose": {"type": "bool", "default": False, "description": "Whether to print inference details"}
+        }
     },
     "grounding-dino-tiny": {
         "model_path": "IDEA-Research/grounding-dino-tiny",
         "backend": "huggingface",
-        "task": "detect"
+        "task": "detect",
+        "predict_params": {
+            "text_prompt": {"type": "str", "required": True, "description": "Classes to search for separated by dots (e.g., 'cat . dog')"},
+            "box_threshold": {"type": "float", "default": 0.3, "description": "Bounding box threshold"},
+            "text_threshold": {"type": "float", "default": 0.25, "description": "Text similarity threshold"}
+        }
     }
 }
 

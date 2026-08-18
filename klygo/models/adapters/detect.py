@@ -35,34 +35,68 @@ class DetectAdapter(BaseAdapter):
         # Capture parameters in history
         self._history["operations"]["predict"].update(kwargs)
         
-        is_batch = isinstance(source, list) or (isinstance(source, str) and os.path.isdir(source))
+        from PIL import Image
+        import numpy as np
         
-        images = media.load(source)
+        # Enforce single image input (Image object, numpy array, or path to single image file)
+        if isinstance(source, (Image.Image, np.ndarray)):
+            images = [source]
+        elif isinstance(source, str) and not os.path.isdir(source) and not source.lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
+            images = media.load(source)
+        else:
+            raise TypeError(
+                "source must be a single PIL Image, numpy array, or a filepath to a single image file. "
+                "Folders and videos must be processed frame-by-frame using media.load()."
+            )
+            
         raw_outputs = self.backend.predict(images, **run_params)
         results = self._post_process(raw_outputs, images)
-        return results if is_batch else results[0]
+        return results[0]
 
     def crop(self, source: Any, **kwargs) -> List[Any]:
         """Runs object detection and crops each detected object into a separate PIL Image."""
-        images = media.load(source)
-        results = self.predict(images, **kwargs)
+        from PIL import Image
+        import numpy as np
         
-        if not isinstance(results, list):
-            results = [results]
+        # Enforce single image input
+        if isinstance(source, (Image.Image, np.ndarray)):
+            img = source
+        elif isinstance(source, str) and not os.path.isdir(source) and not source.lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
+            img = media.load(source)[0]
+        else:
+            raise TypeError(
+                "source must be a single PIL Image, numpy array, or a filepath to a single image file. "
+                "Folders and videos must be processed frame-by-frame using media.load()."
+            )
             
+        results = self.predict(img, **kwargs)
+        
         cropped_results = []
-        for img, res in zip(images, results):
-            for obj in res.objects:
-                # Clip box coordinates to image size boundaries
-                xmin = max(0, int(obj.xmin))
-                ymin = max(0, int(obj.ymin))
-                xmax = min(img.width, int(obj.xmax))
-                ymax = min(img.height, int(obj.ymax))
-                
-                cropped_img = img.crop((xmin, ymin, xmax, ymax))
-                cropped_results.append(cropped_img)
-                
+        for obj in results.objects:
+            # Clip box coordinates to image size boundaries
+            xmin = max(0, int(obj.xmin))
+            ymin = max(0, int(obj.ymin))
+            xmax = min(img.width, int(obj.xmax))
+            ymax = min(img.height, int(obj.ymax))
+            
+            cropped_img = img.crop((xmin, ymin, xmax, ymax))
+            cropped_results.append(cropped_img)
+            
         return cropped_results
+
+    def export_dataset(self, output_path: str, format: str, **kwargs) -> Any:
+        """Generates YOLO or cropped Classification dataset folder structure from predictions."""
+        from klygo.datasets import detect
+        source = kwargs.get("source")
+        classes = kwargs.get("classes")
+        return detect.export(
+            model=self,
+            output_path=output_path,
+            format=format,
+            source=source,
+            classes=classes,
+            **kwargs
+        )
 
     def _post_process(self, raw_outputs: Any, images: list) -> List[DetectionResult]:
         if raw_outputs is None:
@@ -104,69 +138,41 @@ class DetectAdapter(BaseAdapter):
 
         return batch_results
 
-    def _export_dataset(self, output_path: str, format: str, classes: list = None, **kwargs):
-        """Generates YOLO or cropped Classification dataset folder structure from predictions."""
-        source = kwargs.get("source")
-        if not source:
-            raise ValueError("Parameter 'source' containing input images folder is required.")
-            
-        images = media.load(source)
+    def update_crop_params(self, **updated_schema):
+        """Updates crop parameter definitions and saves them to the individual JSON configuration file."""
+        if "crop_params" not in self.config:
+            self.config["crop_params"] = {}
+        self.config["crop_params"].update(updated_schema)
         
-        # 1. Resolve classes mapping
-        if classes is None:
-            if hasattr(self.backend, "native") and hasattr(self.backend.native, "names"):
-                native_names = self.backend.native.names
-                classes = [native_names[i] for i in sorted(native_names.keys())]
-            else:
-                raise ValueError("Class list mapping 'classes' must be provided.")
-                
-        label_to_id = {label: idx for idx, label in enumerate(classes)}
+        # Save config file using standard BaseModel logic
+        import os
+        import json
+        registry_dir = os.path.expanduser("~/.klygo/registry")
+        filepath = os.path.join(registry_dir, f"{self.config.get('model_key')}.json")
+        try:
+            # Clean export keys
+            export_data = {
+                "model_key": self.config.get("model_key"),
+                "model_path": self.config.get("model_path"),
+                "backend": self.config.get("backend"),
+                "task": self.config.get("task"),
+                "loader": self.config.get("loader"),
+                "template": self.config.get("template"),
+                "predict_params": self.config.get("predict_params", {}),
+                "crop_params": self.config.get("crop_params", {}),
+                "train_params": self.config.get("train_params", {}),
+                "guide": self.config.get("guide"),
+                "links": self.config.get("links", {})
+            }
+            export_data = {k: v for k, v in export_data.items() if v is not None}
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(export_data, f, indent=4, ensure_ascii=False)
+            print(f"Crop parameters successfully updated and saved to: {filepath}")
+        except Exception as e:
+            print(f"Warning: Failed to save updated configuration file to disk: {e}")
+            
+        # Re-generate type stubs dynamically!
+        from klygo.models.base import generate_type_stubs
+        generate_type_stubs(self.config)
 
-        predict_kwargs = {k: v for k, v in kwargs.items() if k != "source"}
 
-        verbose = kwargs.get("verbose", True)
-
-        # 2. Classification output folder format
-        if format == "classification":
-            with ProgressBar(total=len(images), desc="Exporting Classification Dataset", verbose=verbose) as pbar:
-                for img_idx, img in enumerate(images):
-                    results = self.predict(img, **predict_kwargs)
-                    for obj_idx, obj in enumerate(results.objects):
-                        if obj.label in label_to_id:
-                            cropped = img.crop((obj.xmin, obj.ymin, obj.xmax, obj.ymax))
-                            class_dir = os.path.join(output_path, obj.label)
-                            files.mkdir(class_dir)
-                            media.save(os.path.join(class_dir, f"crop_{img_idx}_{obj_idx}.jpg"), cropped)
-                    pbar.update(1)
-                        
-        # 3. YOLO detection output folder format
-        elif format == "yolo":
-            yaml_content = f"path: {os.path.abspath(output_path)}\ntrain: images\nval: images\n\nnames:\n"
-            for idx, label in enumerate(classes):
-                yaml_content += f"  {idx}: {label}\n"
-            files.save(os.path.join(output_path, "dataset.yaml"), yaml_content, overwrite=True)
-
-            img_dir = os.path.join(output_path, "images")
-            lbl_dir = os.path.join(output_path, "labels")
-            files.mkdir(img_dir)
-            files.mkdir(lbl_dir)
-
-            with ProgressBar(total=len(images), desc="Exporting YOLO Dataset", verbose=verbose) as pbar:
-                for img_idx, img in enumerate(images):
-                    results = self.predict(img, **predict_kwargs)
-                    media.save(os.path.join(img_dir, f"img_{img_idx}.jpg"), img)
-                    
-                    lbl_content = ""
-                    w_img, h_img = img.size
-                    for obj in results.objects:
-                        class_id = label_to_id.get(obj.label)
-                        if class_id is None:
-                            continue
-                        x_center = ((obj.xmin + obj.xmax) / 2) / w_img
-                        y_center = ((obj.ymin + obj.ymax) / 2) / h_img
-                        w_box = (obj.xmax - obj.xmin) / w_img
-                        h_box = (obj.ymax - obj.ymin) / h_img
-                        lbl_content += f"{class_id} {x_center:.6f} {y_center:.6f} {w_box:.6f} {h_box:.6f}\n"
-                    
-                    files.save(os.path.join(lbl_dir, f"img_{img_idx}.txt"), lbl_content, overwrite=True)
-                    pbar.update(1)

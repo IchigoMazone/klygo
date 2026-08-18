@@ -1,4 +1,3 @@
-import torch
 from typing import Any
 from ..registry import registry
 from ..exceptions import ModelLoadError, BackendExecutionError
@@ -6,6 +5,7 @@ from ..exceptions import ModelLoadError, BackendExecutionError
 @registry.register_backend("huggingface")
 class HuggingFaceBackend:
     def __init__(self, model, processor=None, tokenizer=None, device: str = "cpu", **kwargs):
+        import torch
         self.model = model
         self.processor = processor
         self.tokenizer = tokenizer
@@ -25,7 +25,9 @@ class HuggingFaceBackend:
             local_files_only = kwargs.get("local_files_only", is_local)
             
             hf_kwargs = {"local_files_only": local_files_only}
-            if "trust_remote_code" in kwargs:
+            if "locateanything" in model_path.lower():
+                hf_kwargs["trust_remote_code"] = kwargs.get("trust_remote_code", True)
+            elif "trust_remote_code" in kwargs:
                 hf_kwargs["trust_remote_code"] = kwargs["trust_remote_code"]
                 
             processor = None
@@ -68,6 +70,7 @@ class HuggingFaceBackend:
 
     def predict(self, images: list, **kwargs) -> list:
         """Executes forward pass for vision tasks."""
+        import torch
         # 1. OCR (TrOCR)
         if "trocr" in self.model.__class__.__name__.lower():
             all_results = []
@@ -108,7 +111,72 @@ class HuggingFaceBackend:
                 })
             return all_results
 
-        # 3. Image Classification
+        # 3. NVIDIA LocateAnything-3B Zero-Shot Grounding
+        elif "locateanything" in self.model.__class__.__name__.lower() or (hasattr(self.model, "config") and "locateanything" in getattr(self.model.config, "_name_or_path", "").lower()):
+            text_prompt = kwargs.get("text_prompt", "")
+            all_results = []
+            
+            for img in images:
+                messages = [
+                    {"role": "user", "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": text_prompt}
+                    ]}
+                ]
+                if hasattr(self.processor, "apply_chat_template"):
+                    prompt = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+                else:
+                    prompt = f"<|im_start|>user\n<image>\n{text_prompt}<|im_end|>\n<|im_start|>assistant\n"
+                    
+                inputs = self.processor(text=prompt, images=img, return_tensors="pt").to(self.device)
+                
+                # Check parameter dtype to handle half-precision model weight conversion
+                first_param = next(self.model.parameters(), None)
+                if first_param is not None and first_param.dtype in [torch.float16, torch.bfloat16]:
+                    if "pixel_values" in inputs:
+                        inputs["pixel_values"] = inputs["pixel_values"].to(first_param.dtype)
+                
+                with torch.no_grad():
+                    output_ids = self.model.generate(**inputs, max_new_tokens=1024)
+                    
+                if "input_ids" in inputs:
+                    prompt_len = inputs["input_ids"].shape[1]
+                    generated_ids = output_ids[:, prompt_len:]
+                else:
+                    generated_ids = output_ids
+                    
+                response = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+                
+                import re
+                # Match <ref>label</ref><box><x1><y1><x2><y2></box> format
+                pattern = re.compile(r'<ref>([^<]+)</ref>\s*<box><(\d+)><(\d+)><(\d+)><(\d+)></box>')
+                matches = pattern.findall(response)
+                
+                width, height = img.size
+                boxes = []
+                scores = []
+                labels = []
+                
+                for label, x1_str, y1_str, x2_str, y2_str in matches:
+                    x1_norm, y1_norm, x2_norm, y2_norm = map(int, [x1_str, y1_str, x2_str, y2_str])
+                    
+                    x1 = (x1_norm / 1000.0) * width
+                    y1 = (y1_norm / 1000.0) * height
+                    x2 = (x2_norm / 1000.0) * width
+                    y2 = (y2_norm / 1000.0) * height
+                    
+                    boxes.append([x1, y1, x2, y2])
+                    scores.append(1.0)
+                    labels.append(label)
+                    
+                all_results.append({
+                    "boxes": torch.tensor(boxes) if boxes else torch.zeros((0, 4)),
+                    "scores": torch.tensor(scores) if scores else torch.zeros((0,)),
+                    "labels": labels
+                })
+            return all_results
+
+        # 4. Image Classification
         else:
             from transformers import pipeline
             pipe = pipeline("image-classification", model=self.model, image_processor=self.processor, device=self.device)

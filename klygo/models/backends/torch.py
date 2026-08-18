@@ -1,11 +1,11 @@
 from typing import Any
-import torch
 from ..registry import registry
 from ..exceptions import ModelLoadError, BackendExecutionError
 
 @registry.register_backend("torch")
 class TorchBackend:
-    def __init__(self, raw_model: torch.nn.Module, device: str = "cpu", **kwargs):
+    def __init__(self, raw_model: Any, device: str = "cpu", **kwargs):
+        import torch
         self.model = raw_model
         self.device = torch.device("cuda" if torch.cuda.is_available() and device == "cuda" else "cpu")
         self.model.to(self.device)
@@ -13,19 +13,20 @@ class TorchBackend:
 
     @classmethod
     def load(cls, model_path: str, device: str = "cpu", **kwargs):
-        """Loads raw PyTorch model weights from a .pth/.pt file. Supports state dicts and full serialized models."""
+        """Loads PyTorch model. If model_class is provided, loads state dict; otherwise, loads as serialized TorchScript model."""
+        import torch
         try:
-            loaded = torch.load(model_path, map_location="cpu")
             model_class = kwargs.get("model_class")
             
-            if isinstance(loaded, dict):
+            if model_class is not None:
+                # Load state dict
+                loaded = torch.load(model_path, map_location="cpu")
                 state_dict = loaded.get("state_dict", loaded)
-                if model_class is None:
-                    raise ValueError("model_class must be provided to load a state dict file.")
                 raw_model = model_class()
                 raw_model.load_state_dict(state_dict)
             else:
-                raw_model = loaded
+                # Default: load as serialized TorchScript model (does not require python code class definitions)
+                raw_model = torch.jit.load(model_path, map_location="cpu")
                 
             return cls(raw_model, device=device, **kwargs)
         except Exception as e:
@@ -37,6 +38,7 @@ class TorchBackend:
 
     def predict(self, images: Any, **kwargs) -> Any:
         """Executes forward pass. Expects raw tensors or PIL Images converted to tensors."""
+        import torch
         self.model.eval()
         
         # If input is already a PyTorch Tensor, directly run inference
@@ -64,6 +66,7 @@ class TorchBackend:
 
     def train(self, train_loader, optimizer, loss_fn, epochs=10, **kwargs) -> Any:
         """Runs a standard PyTorch training loop on the wrapped module in-place."""
+        import torch
         self.model.to(self.device)
         self.model.train()
         
