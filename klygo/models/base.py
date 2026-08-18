@@ -274,6 +274,7 @@ class BaseModel(ABC):
                 "loader": self.config.get("loader"),
                 "template": self.config.get("template"),
                 "predict_params": self.config.get("predict_params", {}),
+                "crop_params": self.config.get("crop_params", {}),
                 "train_params": self.config.get("train_params", {}),
                 "guide": self.config.get("guide"),
                 "links": self.config.get("links", {})
@@ -331,6 +332,18 @@ class BaseModel(ABC):
                 print(f"  * {name} ({info.get('type', 'Any')}){req}{default}")
                 print(f"    Description: {info.get('description', 'No description.')}")
                 
+        crop_params = self.get_crop_params()
+        if crop_params or self.config.get("task") == "detect":
+            print("\n[Crop Parameters (crop())]:")
+            if not crop_params:
+                print("  No parameters registered.")
+            else:
+                for name, info in crop_params.items():
+                    req = " (Required)" if info.get("required") else ""
+                    default = f", Default: {info.get('default')}" if "default" in info else ""
+                    print(f"  * {name} ({info.get('type', 'Any')}){req}{default}")
+                    print(f"    Description: {info.get('description', 'No description.')}")
+
         train_params = self.get_train_params()
         print("\n[Train Parameters (train())]:")
         if not train_params:
@@ -341,6 +354,11 @@ class BaseModel(ABC):
                 default = f", Default: {info.get('default')}" if "default" in info else ""
                 print(f"  * {name} ({info.get('type', 'Any')}){req}{default}")
                 print(f"    Description: {info.get('description', 'No description.')}")
+
+    def get_crop_params(self) -> dict:
+        """Returns the registered standard crop parameters schema for this model."""
+        return self.config.get("crop_params", {})
+
     def update_predict_params(self, **updated_schema):
         """Updates model parameter definitions and saves them to the individual JSON configuration file."""
         import os
@@ -366,6 +384,7 @@ class BaseModel(ABC):
                 "loader": self.config.get("loader"),
                 "template": self.config.get("template"),
                 "predict_params": self.config.get("predict_params", {}),
+                "crop_params": self.config.get("crop_params", {}),
                 "train_params": self.config.get("train_params", {}),
                 "guide": self.config.get("guide"),
                 "links": self.config.get("links", {})
