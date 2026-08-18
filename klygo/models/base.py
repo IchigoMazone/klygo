@@ -262,7 +262,7 @@ class BaseModel(ABC):
             print(f"Warning: Warmup failed: {e}")
 
     # --- API 1: Export Configuration ---
-    def export(self, output_path: str):
+    def export_config(self, output_path: str):
         """Exports the model configuration/metadata to a JSON file for community sharing."""
         import json
         try:
