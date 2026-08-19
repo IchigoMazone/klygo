@@ -73,6 +73,12 @@ class GroundingDinoDetect(DetectorModel):
             self.model = AutoModelForZeroShotObjectDetection.from_pretrained(load_path)
             if half:
                 self.model = self.model.half()
+            elif self._device == "cpu":
+                try:
+                    if next(self.model.parameters()).dtype == torch.float16:
+                        self.model = self.model.float()
+                except Exception:
+                    pass
             self.model.to(self._device)
 
         self.model.eval()
@@ -99,6 +105,11 @@ class GroundingDinoDetect(DetectorModel):
         try:
             self.model.to(device_name)
             self._device = device_name
+            # Nếu chuyển về CPU mà mô hình đang là float16, tự động chuyển về float32 để CPU tính toán được
+            if device_name == "cpu" and next(self.model.parameters()).dtype == torch.float16:
+                self.model = self.model.float()
+            elif "cuda" in device_name and self.half:
+                self.model = self.model.half()
         except ValueError:
             self._device = str(self.model.device)
         return self
@@ -129,12 +140,30 @@ class GroundingDinoDetect(DetectorModel):
             raise TypeError("text_prompt phải là danh sách chuỗi ký tự (list[str]).")
 
         text_labels = [text_prompt]
-        inputs = self.processor(images=image, text=text_labels, return_tensors="pt").to(
-            self.model.device
-        )
+        inputs = self.processor(images=image, text=text_labels, return_tensors="pt")
+
+        # Xác định thiết bị tính toán
+        model_device = getattr(self.model, "device", self._device)
+        is_cuda = "cuda" in str(model_device)
+
+        # Trên CPU: PyTorch MSDeformAttn grid_sample không hỗ trợ float16, tự động chuyển model sang float32
+        if not is_cuda and next(self.model.parameters()).dtype == torch.float16:
+            self.model = self.model.float()
+
+        model_dtype = next(self.model.parameters()).dtype
+        for k, v in inputs.items():
+            if isinstance(v, torch.Tensor):
+                if torch.is_floating_point(v):
+                    inputs[k] = v.to(device=model_device, dtype=model_dtype)
+                else:
+                    inputs[k] = v.to(device=model_device)
 
         with torch.no_grad():
-            outputs = self.model(**inputs)
+            if is_cuda and self.half:
+                with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
+                    outputs = self.model(**inputs)
+            else:
+                outputs = self.model(**inputs)
 
         target_sizes = [image.size[::-1]]
         post_kwargs = {
