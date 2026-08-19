@@ -121,7 +121,7 @@ setup(
     packages=find_packages(exclude=["cpp*", "test*", "build*", "_cmake_build*"]),
     distclass=BinaryDistribution,
     cmdclass={"build_ext": CMakeBuild},
-    package_data={"klygo": ["*.pyd", "*.so", "*.dll"]},
+    package_data={"klygo": ["*.pyd", "*.so", "*.dll", "**/*.json"]},
     include_package_data=True,
     zip_safe=False,
 )
