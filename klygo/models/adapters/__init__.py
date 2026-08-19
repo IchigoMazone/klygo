@@ -1,1 +1,0 @@
-# Task adapters package initialization
