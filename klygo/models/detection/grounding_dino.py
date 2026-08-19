@@ -288,6 +288,8 @@ class GroundingDinoDetect(DetectorModel):
         text_prompt: List[str],
         batch_size: int = 16,
         threshold: float = 0.4,
+        verbose: bool = True,
+        **kwargs,
     ) -> None:
         """
         Tác dụng:
@@ -300,6 +302,7 @@ class GroundingDinoDetect(DetectorModel):
         - text_prompt [List[str]]: Danh sách các lớp nhãn đối tượng cần trích xuất.
         - batch_size [int]: Kích thước xử lý theo lô. Mặc định: 16.
         - threshold [float]: Ngưỡng độ tin cậy nhận diện. Mặc định: 0.4.
+        - verbose [bool]: Hiển thị thanh tiến trình. Mặc định: True.
         """
         from klygo.datasets import detect
 
@@ -311,6 +314,8 @@ class GroundingDinoDetect(DetectorModel):
             text_prompt=text_prompt,
             batch_size=batch_size,
             threshold=threshold,
+            verbose=verbose,
+            **kwargs,
         )
 
     def warmup(self) -> None:

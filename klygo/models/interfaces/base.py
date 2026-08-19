@@ -99,6 +99,8 @@ class DetectorModel(ABC):
         text_prompt: List[str],
         batch_size: int = 16,
         threshold: float = 0.4,
+        verbose: bool = True,
+        **kwargs,
     ) -> None:
         """
         Tác dụng:
@@ -111,6 +113,7 @@ class DetectorModel(ABC):
         - text_prompt [List[str]]: Danh sách các lớp nhãn đối tượng cần trích xuất.
         - batch_size [int]: Kích thước xử lý theo lô. Mặc định: 16.
         - threshold [float]: Ngưỡng độ tin cậy nhận diện. Mặc định: 0.4.
+        - verbose [bool]: Hiển thị thanh tiến trình ProgressBar. Mặc định: True.
         """
         raise NotImplementedError
 
