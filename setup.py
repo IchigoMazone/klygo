@@ -115,10 +115,31 @@ class BinaryDistribution(Distribution):
         return os.environ.get("BUILD_CPP", "0") == "1"
 
 
+INSTALL_REQUIRES = [
+    "numpy",
+    "opencv-python",
+    "pillow",
+    "pydantic",
+    "python-box",
+    "pyyaml",
+    "ruamel-yaml",
+    "tomlkit",
+    "torch",
+    "tqdm",
+    "transformers",
+    "matplotlib",
+    "pybind11",
+    "optimum",
+    "onnx",
+    "onnxruntime",
+    "openvino",
+]
+
 setup(
     name="klygo",
     version="2.0.20",
     packages=find_packages(exclude=["cpp*", "test*", "build*", "_cmake_build*"]),
+    install_requires=INSTALL_REQUIRES,
     distclass=BinaryDistribution,
     cmdclass={"build_ext": CMakeBuild},
     package_data={"klygo": ["*.pyd", "*.so", "*.dll", "**/*.json"]},
