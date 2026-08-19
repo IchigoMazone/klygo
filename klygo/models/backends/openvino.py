@@ -26,10 +26,19 @@ def export_openvino(model_id: str, processor: Any, output_path: str, half: bool 
             export=True,
             compile=False,
         )
+        if half:
+            try:
+                ov_model.half()
+            except Exception:
+                pass
         ov_model.save_pretrained(output_path)
         if processor:
             processor.save_pretrained(output_path)
-    except Exception:
-        pass
+            if hasattr(processor, "image_processor"):
+                processor.image_processor.save_pretrained(output_path)
+    except ImportError:
+        raise ImportError(
+            "Để xuất định dạng OpenVINO, vui lòng cài đặt: pip install optimum[openvino] openvino"
+        )
 
     return output_path

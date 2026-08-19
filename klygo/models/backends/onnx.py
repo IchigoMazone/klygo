@@ -29,7 +29,11 @@ def export_onnx(model_id: str, processor: Any, output_path: str, half: bool = Fa
         ort_model.save_pretrained(output_path)
         if processor:
             processor.save_pretrained(output_path)
-    except Exception:
-        pass
+            if hasattr(processor, "image_processor"):
+                processor.image_processor.save_pretrained(output_path)
+    except ImportError:
+        raise ImportError(
+            "Để xuất định dạng ONNX, vui lòng cài đặt: pip install optimum[onnxruntime] onnx"
+        )
 
     return output_path

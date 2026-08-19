@@ -18,8 +18,7 @@ def export_tensorrt(model_id: str, processor: Any, output_path: str, half: bool 
     """
     files.mkdir(output_path)
     if processor:
-        try:
-            processor.save_pretrained(output_path)
-        except Exception:
-            pass
+        processor.save_pretrained(output_path)
+        if hasattr(processor, "image_processor"):
+            processor.image_processor.save_pretrained(output_path)
     return output_path
