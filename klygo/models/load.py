@@ -68,12 +68,15 @@ def load(model: str) -> DetectorModel:
     # 1. Nạp từ thư mục Grounding DINO offline hoặc thư mục export
     if files.is_dir(model):
         abs_model_path = os.path.abspath(model)
+        klygo_path = os.path.join(abs_model_path, "klygo.json")
         config_path = os.path.join(abs_model_path, "config.json")
 
-        if files.exists(config_path):
+        if files.exists(klygo_path):
+            entry = files.load(klygo_path, verbose=False)
+        elif files.exists(config_path):
             cfg = files.load(config_path, verbose=False)
             if isinstance(cfg, dict):
-                # Thư mục xuất từ Klygo
+                # Thư mục xuất từ Klygo (legacy)
                 if "class" in cfg:
                     entry = cfg
                 # Thư mục mô hình Grounding DINO tải về từ Hugging Face
@@ -88,7 +91,7 @@ def load(model: str) -> DetectorModel:
                         "model_id": abs_model_path,
                     }
 
-    # 2. Nạp từ file config.json trực tiếp
+    # 2. Nạp từ file config/klygo .json trực tiếp
     elif files.is_file(model) and model.endswith(".json"):
         entry = files.load(model, verbose=False)
 

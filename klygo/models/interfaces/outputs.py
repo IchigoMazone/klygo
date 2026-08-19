@@ -152,9 +152,15 @@ class DetectionResult:
         annotated = self.plot(outline_color=outline_color, width=width)
         media.save(output_path, annotated, overwrite=True, verbose=False)
 
-    def show(self, outline_color: str = "red", width: int = 3) -> None:
-        """Vẽ và mở ngay cửa sổ xem ảnh trên màn hình."""
-        self.plot(outline_color=outline_color, width=width).show()
+    def show(self, outline_color: str = "red", width: int = 3) -> "PIL.Image.Image":
+        """Vẽ và hiển thị ảnh nhận diện (tương thích Desktop, Colab và Jupyter Notebook)."""
+        annotated = self.plot(outline_color=outline_color, width=width)
+        try:
+            from IPython.display import display
+            display(annotated)
+        except ImportError:
+            annotated.show()
+        return annotated
 
     def __len__(self) -> int:
         return len(self.objects)

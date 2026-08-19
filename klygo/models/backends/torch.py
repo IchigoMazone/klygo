@@ -17,15 +17,12 @@ def export_torch(model_id: str, processor: Any, output_path: str, half: bool = F
     - [str]: Đường dẫn thư mục đầu ra.
     """
     files.mkdir(output_path)
-    try:
-        from transformers import AutoModelForZeroShotObjectDetection
+    from transformers import AutoModelForZeroShotObjectDetection
 
-        model = AutoModelForZeroShotObjectDetection.from_pretrained(model_id)
-        if half:
-            model = model.half()
-        model.save_pretrained(output_path)
-        if processor:
-            processor.save_pretrained(output_path)
-    except Exception:
-        pass
+    model = AutoModelForZeroShotObjectDetection.from_pretrained(model_id)
+    if half:
+        model = model.half()
+    model.save_pretrained(output_path)
+    if processor:
+        processor.save_pretrained(output_path)
     return output_path

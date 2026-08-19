@@ -246,8 +246,8 @@ class GroundingDinoDetect(DetectorModel):
             "source_model_id": self.model_id,
             "half": half,
         }
-        config_file = os.path.join(output_path, "config.json")
-        files.save(config_file, config_data, overwrite=True, verbose=False)
+        klygo_file = os.path.join(output_path, "klygo.json")
+        files.save(klygo_file, config_data, overwrite=True, verbose=False)
 
         return output_path
 
