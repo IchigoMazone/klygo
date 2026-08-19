@@ -25,4 +25,6 @@ def export_torch(model_id: str, processor: Any, output_path: str, half: bool = F
     model.save_pretrained(output_path)
     if processor:
         processor.save_pretrained(output_path)
+        if hasattr(processor, "image_processor"):
+            processor.image_processor.save_pretrained(output_path)
     return output_path
