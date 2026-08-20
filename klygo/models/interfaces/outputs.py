@@ -1,7 +1,43 @@
 import os
+from typing import List, Dict, Any, Optional, Union
 import PIL.Image
-from typing import List, Dict, Any, Optional
+import PIL.ImageDraw
+import PIL.ImageFont
+
 from klygo import files, media
+
+# Bảng 20 mã màu Hex chuẩn của Ultralytics YOLOv8 / YOLOv11
+ULTRALYTICS_HEX = (
+    "042aff", "0bdfdf", "ff9700", "ff4477", "b644ff", "074799",
+    "00a36c", "9e0059", "ff0054", "ff5400", "ffbd00", "2b9348",
+    "0077b6", "5a189a", "e0aaff", "7b2cbf", "9d0208", "dc2f02",
+    "e85d04", "f48c06"
+)
+ULTRALYTICS_PALETTE = [
+    tuple(int(h[i:i+2], 16) for i in (0, 2, 4)) for h in ULTRALYTICS_HEX
+]
+
+
+def _get_palette_color(idx: int) -> tuple:
+    """Lấy màu phân biệt cố định theo index của class từ bảng màu YOLO."""
+    return ULTRALYTICS_PALETTE[idx % len(ULTRALYTICS_PALETTE)]
+
+
+def _is_notebook() -> bool:
+    """Kiểm tra chính xác runtime có thực sự là Jupyter Notebook / Google Colab / Kaggle hay không."""
+    try:
+        from IPython import get_ipython
+        ip = get_ipython()
+        if ip is None:
+            return False
+        shell_name = ip.__class__.__name__
+        if shell_name in ("ZMQInteractiveShell", "Shell"):
+            return True
+        if "google.colab" in str(type(ip)):
+            return True
+        return False
+    except Exception:
+        return False
 
 
 class DetectedObject:
@@ -123,43 +159,156 @@ class DetectionResult:
             "speed": self.speed,
         }
 
-    def plot(self, outline_color: str = "red", width: int = 3) -> PIL.Image.Image:
+    def plot(
+        self,
+        line_width: Optional[int] = None,
+        font_size: Optional[int] = None,
+        labels: bool = True,
+        conf: bool = True,
+        boxes: bool = True,
+        outline_color: Optional[str] = None,
+        width: Optional[int] = None,
+    ) -> PIL.Image.Image:
         """
         Tác dụng:
-        - Vẽ bounding box và tên nhãn trực tiếp lên ảnh gốc và trả về đối tượng ảnh PIL.Image.
+        - Vẽ bounding box và nhãn tên theo chuẩn đồ họa nguyên bản của Ultralytics YOLO.
 
         Đầu vào:
-        - outline_color [str]: Màu viền khung chữ nhật (Mặc định: 'red').
-        - width [int]: Độ dày đường viền (Mặc định: 3).
+        - line_width [int]: Độ dày viền khung (Mặc định: tự động tính theo tỉ lệ kích thước ảnh).
+        - font_size [int]: Cỡ chữ của nhãn (Mặc định: tự động tính theo tỉ lệ kích thước ảnh).
+        - labels [bool]: Hiển thị tên nhãn lớp. Mặc định: True.
+        - conf [bool]: Hiển thị điểm số tin cậy (Confidence score). Mặc định: True.
+        - boxes [bool]: Vẽ khung chữ nhật BBox. Mặc định: True.
+        - outline_color [str]: Màu viền tùy chỉnh đơn lẻ (nếu không truyền sẽ dùng bảng 20 màu YOLO phân biệt theo Class).
+        - width [int]: Tham số tương thích ngược (alias của line_width).
 
         Đầu ra:
-        - [PIL.Image.Image]: Bức ảnh mới đã được vẽ đóng khung nhãn.
+        - [PIL.Image.Image]: Bức ảnh mới đã được vẽ đóng khung và gắn tag nhãn.
         """
-        from PIL import ImageDraw
+        annotated = self.source_image.copy()
+        draw = PIL.ImageDraw.Draw(annotated)
+        w_img, h_img = self.source_image.size
 
-        annotated_image = self.source_image.copy()
-        draw = ImageDraw.Draw(annotated_image)
+        # 1. Tính toán độ dày viền & cỡ chữ tự động theo tỉ lệ kích thước ảnh (chuẩn YOLO)
+        actual_lw = line_width or width or max(round(sum(self.source_image.size) / 2 * 0.003), 2)
+        actual_fs = font_size or max(round(sum(self.source_image.size) / 2 * 0.025), 12)
 
+        # 2. Nạp Font chữ hệ thống hỗ trợ UTF-8
+        font = None
+        for font_name in ["arial.ttf", "DejaVuSans.ttf", "calibri.ttf", "SegoeUI.ttf"]:
+            try:
+                font = PIL.ImageFont.truetype(font_name, actual_fs)
+                break
+            except Exception:
+                continue
+        if font is None:
+            font = PIL.ImageFont.load_default()
+
+        # 3. Tạo ánh xạ nhãn -> màu cố định
+        unique_labels = list(dict.fromkeys(self.labels))
+        label_to_color = {
+            l: (_get_palette_color(i) if outline_color is None else outline_color)
+            for i, l in enumerate(unique_labels)
+        }
+
+        # 4. Vẽ từng đối tượng theo logic của Ultralytics YOLO Annotator
         for obj in self.objects:
-            draw.rectangle(obj.box, outline=outline_color, width=width)
-            text = f"{obj.label} ({obj.score:.2f})"
-            draw.text((obj.xmin + 5, obj.ymin + 5), text, fill=outline_color)
+            color = label_to_color.get(obj.label, (255, 56, 56))
+            xmin, ymin, xmax, ymax = obj.box
 
-        return annotated_image
+            # 4a. Vẽ khung chữ nhật BBox
+            if boxes:
+                draw.rectangle([xmin, ymin, xmax, ymax], outline=color, width=actual_lw)
 
-    def save(self, output_path: str, outline_color: str = "red", width: int = 3) -> None:
+            # 4b. Xây dựng nội dung nhãn (Label + Confidence)
+            text_parts = []
+            if labels:
+                text_parts.append(str(obj.label))
+            if conf and obj.score is not None:
+                text_parts.append(f"{obj.score:.2f}")
+            caption = " ".join(text_parts)
+
+            if caption:
+                # Đo kích thước khối chữ
+                tb = draw.textbbox((0, 0), caption, font=font)
+                tw = tb[2] - tb[0]
+                th = tb[3] - tb[1]
+
+                # Kiểm tra vị trí đặt nhãn (outside - phía trên bên ngoài, hoặc lật vào trong nếu chạm mép trên)
+                outside = (ymin - th - 4) >= 0
+                if outside:
+                    b_ymin = ymin - th - 4
+                    b_ymax = ymin
+                else:
+                    b_ymin = ymin
+                    b_ymax = ymin + th + 4
+                b_xmax = min(w_img, xmin + tw + 6)
+
+                # Vẽ hộp nền Badge cùng màu viền BBox
+                draw.rectangle([xmin, b_ymin, b_xmax, b_ymax], fill=color)
+
+                # Vẽ chữ màu trắng sắc nét
+                text_y = b_ymin + 1 if outside else b_ymin + 2
+                draw.text((xmin + 3, text_y), caption, fill=(255, 255, 255), font=font)
+
+        return annotated
+
+    def save(
+        self,
+        output_path: str,
+        line_width: Optional[int] = None,
+        font_size: Optional[int] = None,
+        labels: bool = True,
+        conf: bool = True,
+        boxes: bool = True,
+        outline_color: Optional[str] = None,
+        width: Optional[int] = None,
+    ) -> None:
         """Vẽ và lưu trực tiếp ảnh nhận diện ra đường dẫn đĩa bằng klygo.media.save."""
-        annotated = self.plot(outline_color=outline_color, width=width)
+        annotated = self.plot(
+            line_width=line_width,
+            font_size=font_size,
+            labels=labels,
+            conf=conf,
+            boxes=boxes,
+            outline_color=outline_color,
+            width=width,
+        )
         media.save(output_path, annotated, overwrite=True, verbose=False)
 
-    def show(self, outline_color: str = "red", width: int = 3) -> "PIL.Image.Image":
-        """Vẽ và hiển thị ảnh nhận diện (tương thích Desktop, Colab và Jupyter Notebook)."""
-        annotated = self.plot(outline_color=outline_color, width=width)
-        try:
-            from IPython.display import display
-            display(annotated)
-        except ImportError:
+    def show(
+        self,
+        line_width: Optional[int] = None,
+        font_size: Optional[int] = None,
+        labels: bool = True,
+        conf: bool = True,
+        boxes: bool = True,
+        outline_color: Optional[str] = None,
+        width: Optional[int] = None,
+    ) -> PIL.Image.Image:
+        """
+        Vẽ và hiển thị ảnh nhận diện:
+        - Trên Google Colab / Jupyter Notebook: Tự động hiển thị inline ngay dưới cell output.
+        - Trên Desktop IDE (VSCode, PyCharm, Terminal): Tự động mở cửa sổ xem ảnh của hệ điều hành.
+        """
+        annotated = self.plot(
+            line_width=line_width,
+            font_size=font_size,
+            labels=labels,
+            conf=conf,
+            boxes=boxes,
+            outline_color=outline_color,
+            width=width,
+        )
+        if _is_notebook():
+            try:
+                from IPython.display import display
+                display(annotated)
+            except Exception:
+                annotated.show()
+        else:
             annotated.show()
+
         return annotated
 
     def __len__(self) -> int:
@@ -200,9 +349,17 @@ class CroppedObject:
         self.box = box  # [xmin, ymin, xmax, ymax]
         self.box_normalized = box_normalized or []
 
-    def show(self) -> None:
-        """Mở xem ảnh con ngay trên màn hình."""
-        self.image.show()
+    def show(self) -> PIL.Image.Image:
+        """Mở xem ảnh con (tương thích cả Notebook lẫn Desktop)."""
+        if _is_notebook():
+            try:
+                from IPython.display import display
+                display(self.image)
+            except Exception:
+                self.image.show()
+        else:
+            self.image.show()
+        return self.image
 
     def save(self, output_path: str) -> None:
         """Lưu ảnh con ra đường dẫn file bằng klygo.media.save."""
@@ -251,6 +408,11 @@ class CropResult:
         """Trả về danh sách tọa độ gốc của các ảnh con."""
         return [crop.box for crop in self.crops]
 
+    def show(self) -> None:
+        """Mở xem tất cả các ảnh con."""
+        for crop in self.crops:
+            crop.show()
+
     def save(self, output_dir: str, prefix: str = "crop") -> List[str]:
         """
         Tác dụng:
@@ -272,12 +434,9 @@ class CropResult:
             saved_paths.append(file_path)
         return saved_paths
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Xuất danh sách siêu dữ liệu của tất cả các ảnh con ra dạng Dictionary."""
-        return {
-            "crops": [crop.to_dict() for crop in self.crops],
-            "total": len(self.crops),
-        }
+    def to_dict(self) -> List[Dict[str, Any]]:
+        """Chuyển đổi danh sách ảnh con sang list of dicts."""
+        return [crop.to_dict() for crop in self.crops]
 
     def __len__(self) -> int:
         return len(self.crops)
@@ -291,7 +450,7 @@ class CropResult:
     def __repr__(self) -> str:
         summary = f"CropResult: {len(self.crops)} cropped objects"
         if len(self.crops) > 0:
-            details = ", ".join([f"{c.label} ({c.image.size[0]}x{c.image.size[1]})" for c in self.crops[:5]])
+            details = ", ".join([f"{crop.label} ({crop.score:.2f})" for crop in self.crops[:5]])
             if len(self.crops) > 5:
                 details += ", ..."
             summary += f" [{details}]"
