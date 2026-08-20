@@ -12,15 +12,68 @@ def _parse_data_yaml(data_path: Any) -> tuple:
 
     import os
     import yaml
+    from klygo import files
 
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Không tìm thấy file cấu hình data.yaml tại: {data_path}")
 
-    with open(data_path, "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f) or {}
+    try:
+        config = files.load(data_path, verbose=False)
+    except Exception:
+        config = None
+
+    if isinstance(config, str):
+        try:
+            config = yaml.safe_load(config)
+        except Exception:
+            pass
+
+    if not isinstance(config, dict) or not config:
+        try:
+            with open(data_path, "r", encoding="utf-8") as f:
+                content = f.read().strip().strip("'\"")
+            config = yaml.safe_load(content)
+        except Exception:
+            config = None
+
+    if not isinstance(config, dict) or not config:
+        import re
+        config = {}
+        names_dict = {}
+        in_names = False
+        with open(data_path, "r", encoding="utf-8") as f:
+            raw_lines = f.read().replace("\\n", "\n").splitlines()
+        for line in raw_lines:
+            line_str = line.strip().strip("'\"")
+            if not line_str or line_str.startswith("#"):
+                continue
+            if line_str.startswith("path:"):
+                config["path"] = line_str.split("path:", 1)[1].strip().strip("'\"")
+            elif line_str.startswith("val:"):
+                config["val"] = line_str.split("val:", 1)[1].strip().strip("'\"")
+            elif line_str.startswith("train:"):
+                config["train"] = line_str.split("train:", 1)[1].strip().strip("'\"")
+            elif line_str.startswith("names:"):
+                in_names = True
+                val_part = line_str.split("names:", 1)[1].strip()
+                if val_part.startswith("[") and val_part.endswith("]"):
+                    config["names"] = [x.strip().strip("'\"") for x in val_part[1:-1].split(",") if x.strip()]
+                    in_names = False
+            elif in_names:
+                m = re.match(r"^(\d+)\s*:\s*(.+)$", line_str)
+                if m:
+                    names_dict[int(m.group(1))] = m.group(2).strip().strip("'\"")
+                elif line_str.startswith("- "):
+                    if "names" not in config:
+                        config["names"] = []
+                    config["names"].append(line_str[2:].strip().strip("'\""))
+                elif ":" in line_str:
+                    in_names = False
+        if names_dict:
+            config["names"] = [names_dict[k] for k in sorted(names_dict.keys())]
 
     # 1. Trích xuất danh sách names:
-    names_raw = config.get("names", [])
+    names_raw = config.get("names", []) if isinstance(config, dict) else []
     names = []
     if isinstance(names_raw, dict):
         for k in sorted(names_raw.keys()):
@@ -29,18 +82,18 @@ def _parse_data_yaml(data_path: Any) -> tuple:
         names = [str(n) for n in names_raw]
 
     # 2. Trích xuất đường dẫn ảnh (ưu tiên val -> train -> images):
-    dataset_root = config.get("path", "")
+    dataset_root = config.get("path", "") if isinstance(config, dict) else ""
     yaml_dir = os.path.dirname(os.path.abspath(data_path))
     if not dataset_root:
         dataset_root = yaml_dir
-    elif not os.path.isabs(dataset_root):
-        dataset_root = os.path.normpath(os.path.join(yaml_dir, dataset_root))
+    elif not os.path.isabs(str(dataset_root)):
+        dataset_root = os.path.normpath(os.path.join(yaml_dir, str(dataset_root)))
 
-    img_sub = config.get("val") or config.get("train") or config.get("test") or "images"
+    img_sub = (config.get("val") or config.get("train") or config.get("test") or "images") if isinstance(config, dict) else "images"
     if os.path.isabs(str(img_sub)):
         img_dir = str(img_sub)
     else:
-        img_dir = os.path.normpath(os.path.join(dataset_root, str(img_sub)))
+        img_dir = os.path.normpath(os.path.join(str(dataset_root), str(img_sub)))
 
     return img_dir, names
 
