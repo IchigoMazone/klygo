@@ -372,7 +372,15 @@ class GroundingDinoDetect(DetectorModel):
                 calibration_prompts=calibration_prompts,
             )
         elif format in ["torchscript", "pt", "safetensors", "torch", "fp16"]:
-            backends.export_torch(self.model_id, self.processor, output_path, half=half)
+            backends.export_torch(
+                self.model_id,
+                self.processor,
+                output_path,
+                half=half,
+                int8=int8,
+                calibration_source=calibration_source,
+                calibration_prompts=calibration_prompts,
+            )
 
         config_data = {
             "class": "GroundingDinoDetect",
