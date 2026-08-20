@@ -1,8 +1,28 @@
 import os
+import logging
+import warnings
 import inspect
 import torch
 import PIL.Image
 from typing import Any, List, Optional, Dict, Union
+
+# Tắt các cảnh báo không cần thiết từ Hugging Face Hub và Transformers
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+warnings.filterwarnings("ignore", message=".*unauthenticated requests.*")
+warnings.filterwarnings("ignore", message=".*HF_TOKEN.*")
+
+try:
+    import huggingface_hub.utils.logging as hf_logging
+    hf_logging.set_verbosity_error()
+except Exception:
+    pass
+
+for _logger_name in ["huggingface_hub", "huggingface_hub.utils._http", "transformers"]:
+    try:
+        logging.getLogger(_logger_name).setLevel(logging.ERROR)
+    except Exception:
+        pass
+
 from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
 from klygo import files, media
@@ -62,24 +82,26 @@ class GroundingDinoDetect(DetectorModel):
             ) and not files.exists(os.path.join(model_id, "pytorch_model.bin")):
                 load_path = source_model_id
 
-        self.processor = AutoProcessor.from_pretrained(load_path)
-        if device_map:
-            self.model = AutoModelForZeroShotObjectDetection.from_pretrained(
-                load_path, device_map=device_map
-            )
-            self._device = str(self.model.device)
-        else:
-            self._device = "cpu"
-            self.model = AutoModelForZeroShotObjectDetection.from_pretrained(load_path)
-            if half:
-                self.model = self.model.half()
-            elif self._device == "cpu":
-                try:
-                    if next(self.model.parameters()).dtype == torch.float16:
-                        self.model = self.model.float()
-                except Exception:
-                    pass
-            self.model.to(self._device)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            self.processor = AutoProcessor.from_pretrained(load_path)
+            if device_map:
+                self.model = AutoModelForZeroShotObjectDetection.from_pretrained(
+                    load_path, device_map=device_map
+                )
+                self._device = str(self.model.device)
+            else:
+                self._device = "cpu"
+                self.model = AutoModelForZeroShotObjectDetection.from_pretrained(load_path)
+                if half:
+                    self.model = self.model.half()
+                elif self._device == "cpu":
+                    try:
+                        if next(self.model.parameters()).dtype == torch.float16:
+                            self.model = self.model.float()
+                    except Exception:
+                        pass
+                self.model.to(self._device)
 
         self.model.eval()
 
