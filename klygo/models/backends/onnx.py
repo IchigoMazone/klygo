@@ -30,6 +30,8 @@ def export_onnx(
     files.mkdir(output_path)
 
     try:
+        import os
+        import glob
         from optimum.onnxruntime import ORTModelForZeroShotObjectDetection
 
         ort_model = ORTModelForZeroShotObjectDetection.from_pretrained(
@@ -38,6 +40,19 @@ def export_onnx(
             use_io_binding=True,
         )
         ort_model.save_pretrained(output_path)
+
+        if int8:
+            try:
+                from onnxruntime.quantization import quantize_dynamic, QuantType
+                onnx_files = glob.glob(os.path.join(output_path, "*.onnx"))
+                for model_file in onnx_files:
+                    if not model_file.endswith("_int8.onnx"):
+                        quantized_file = model_file.replace(".onnx", "_int8.onnx")
+                        quantize_dynamic(model_file, quantized_file, weight_type=QuantType.QInt8)
+                        os.replace(quantized_file, model_file)
+            except Exception:
+                pass
+
         if processor:
             processor.save_pretrained(output_path)
             if hasattr(processor, "image_processor"):

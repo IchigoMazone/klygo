@@ -357,6 +357,9 @@ class GroundingDinoDetect(DetectorModel):
                 self.processor,
                 output_path,
                 half=half,
+                int8=int8,
+                calibration_source=calibration_source,
+                calibration_prompts=calibration_prompts,
             )
         elif format in ["openvino", "xml", "ov"]:
             backends.export_openvino(
