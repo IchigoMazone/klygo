@@ -366,16 +366,38 @@ class CroppedObject:
         self.box = box  # [xmin, ymin, xmax, ymax]
         self.box_normalized = box_normalized or []
 
-    def show(self) -> None:
-        """Mở xem ảnh con (tương thích cả Notebook lẫn Desktop)."""
+    def __array__(self, dtype=None):
+        """Hỗ trợ tự động chuyển đổi sang NumPy Array và tương thích trực tiếp với matplotlib.pyplot.imshow(crop)."""
+        import numpy as np
+        arr = np.asarray(self.image)
+        if dtype is not None:
+            arr = arr.astype(dtype)
+        return arr
+
+    def __getattr__(self, name: str) -> Any:
+        """Chuyển tiếp các thuộc tính/hàm của PIL Image (như .size, .resize, .convert) sang self.image."""
+        return getattr(self.image, name)
+
+    def show(self, width: Optional[int] = None) -> None:
+        """
+        Mở xem ảnh con (tương thích cả Notebook lẫn Desktop).
+
+        Đầu vào:
+        - width [int]: Chiều rộng hiển thị (tùy chọn phóng to/thu nhỏ khi xem trên Colab/Jupyter).
+        """
+        img_to_show = self.image
+        if width is not None and width > 0 and self.image.width > 0:
+            new_h = max(1, int(self.image.height * width / self.image.width))
+            img_to_show = self.image.resize((width, new_h), PIL.Image.Resampling.BILINEAR)
+
         if _is_notebook():
             try:
                 from IPython.display import display
-                display(self.image)
+                display(img_to_show)
             except Exception:
-                self.image.show()
+                img_to_show.show()
         else:
-            self.image.show()
+            img_to_show.show()
 
     def save(self, output_path: str) -> None:
         """Lưu ảnh con ra đường dẫn file bằng klygo.media.save."""
@@ -424,10 +446,24 @@ class CropResult:
         """Trả về danh sách tọa độ gốc của các ảnh con."""
         return [crop.box for crop in self.crops]
 
-    def show(self) -> None:
-        """Mở xem tất cả các ảnh con."""
+    def __len__(self) -> int:
+        return len(self.crops)
+
+    def __iter__(self):
+        return iter(self.crops)
+
+    def __getitem__(self, index):
+        return self.crops[index]
+
+    def show(self, width: Optional[int] = None) -> None:
+        """
+        Mở xem tất cả các ảnh con.
+
+        Đầu vào:
+        - width [int]: Chiều rộng hiển thị (tùy chọn).
+        """
         for crop in self.crops:
-            crop.show()
+            crop.show(width=width)
 
     def save(self, output_dir: str, prefix: str = "crop") -> List[str]:
         """
