@@ -76,6 +76,8 @@ class GroundingDinoDetect(DetectorModel):
         device_map: Optional[str] = None,
         source_model_id: Optional[str] = None,
         half: bool = False,
+        int8: bool = False,
+        **kwargs,
     ) -> None:
         self.task = task
         self.backend = backend
@@ -83,6 +85,7 @@ class GroundingDinoDetect(DetectorModel):
         self.model_id = model_id
         self.source_model_id = source_model_id
         self.half = half
+        self.int8 = int8
 
         load_path = model_id
         # Hỗ trợ nạp Offline khi model_id là thư mục cục bộ
@@ -144,7 +147,7 @@ class GroundingDinoDetect(DetectorModel):
                 self.model = self.model.half()
         except ValueError:
             self._device = str(self.model.device)
-        # return self
+        return self
 
     def predict(
         self,

@@ -112,4 +112,11 @@ def load(model: str) -> DetectorModel:
         )
 
     cls = CLASS_MAPPING[class_name]
-    return cls(**entry_copy)
+    import inspect
+    sig = inspect.signature(cls.__init__)
+    valid_params = sig.parameters
+    if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in valid_params.values()):
+        filtered_kwargs = entry_copy
+    else:
+        filtered_kwargs = {k: v for k, v in entry_copy.items() if k in valid_params}
+    return cls(**filtered_kwargs)
