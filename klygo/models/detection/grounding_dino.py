@@ -199,15 +199,19 @@ class GroundingDinoDetect(DetectorModel):
             if self._has_text_threshold:
                 post_kwargs["text_threshold"] = text_threshold
 
-        results = self.processor.post_process_grounded_object_detection(**post_kwargs)
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=FutureWarning)
+            results = self.processor.post_process_grounded_object_detection(**post_kwargs)
 
         result = results[0]
         detected_objects = []
-        for box, score, label in zip(result["boxes"], result["scores"], result["labels"]):
+        labels_list = result.get("text_labels", result.get("labels", []))
+        for box, score, label in zip(result["boxes"], result["scores"], labels_list):
             coords = box.tolist()
             detected_objects.append(
                 DetectedObject(
-                    label=label,
+                    label=str(label),
                     score=round(score.item(), 3),
                     box=[round(x, 2) for x in coords],
                     img_size=(image.width, image.height),

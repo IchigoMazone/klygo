@@ -302,11 +302,11 @@ class DetectionResult:
         width: Optional[int] = None,
         conf: Optional[bool] = None,
         score: Optional[bool] = None,
-    ) -> PIL.Image.Image:
+    ) -> None:
         """
-        Vẽ và hiển thị ảnh nhận diện:
-        - Trên Google Colab / Jupyter Notebook: Tự động hiển thị inline ngay dưới cell output.
-        - Trên Desktop IDE (VSCode, PyCharm, Terminal): Tự động mở cửa sổ xem ảnh của hệ điều hành.
+        Vẽ và hiển thị ảnh nhận diện (tương thích cả Notebook lẫn Desktop):
+        - Trên Google Colab / Jupyter Notebook: Hiển thị 1 ảnh inline duy nhất dưới cell output.
+        - Trên Desktop IDE (VSCode, PyCharm, Terminal): Mở cửa sổ xem ảnh hệ điều hành.
         """
         annotated = self.plot(
             line_width=line_width,
@@ -327,8 +327,6 @@ class DetectionResult:
                 annotated.show()
         else:
             annotated.show()
-
-        return annotated
 
     def __len__(self) -> int:
         return len(self.objects)
@@ -368,7 +366,7 @@ class CroppedObject:
         self.box = box  # [xmin, ymin, xmax, ymax]
         self.box_normalized = box_normalized or []
 
-    def show(self) -> PIL.Image.Image:
+    def show(self) -> None:
         """Mở xem ảnh con (tương thích cả Notebook lẫn Desktop)."""
         if _is_notebook():
             try:
@@ -378,7 +376,6 @@ class CroppedObject:
                 self.image.show()
         else:
             self.image.show()
-        return self.image
 
     def save(self, output_path: str) -> None:
         """Lưu ảnh con ra đường dẫn file bằng klygo.media.save."""
