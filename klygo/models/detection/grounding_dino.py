@@ -2,7 +2,7 @@ import os
 import inspect
 import torch
 import PIL.Image
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict, Union
 from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
 from klygo import files, media
@@ -117,9 +117,10 @@ class GroundingDinoDetect(DetectorModel):
     def predict(
         self,
         source: Any,
-        text_prompt: List[str],
+        text_prompt: Optional[List[str]] = None,
         threshold: float = 0.4,
         text_threshold: float = 0.3,
+        data: Optional[str] = None,
     ) -> DetectionResult:
         """
         Tác dụng:
@@ -127,17 +128,26 @@ class GroundingDinoDetect(DetectorModel):
 
         Đầu vào:
         - source [Any]: 1 bức ảnh (Đường dẫn file, PIL.Image, NumPy array hoặc PyTorch Tensor).
-        - text_prompt [List[str]]: Danh sách các tên nhãn từ khóa cần tìm kiếm.
+        - text_prompt [List[str]]: Danh sách các tên nhãn từ khóa cần tìm kiếm (hoặc nạp từ data='data.yaml').
         - threshold [float]: Ngưỡng lọc khung giới hạn (Confidence Threshold). Mặc định: 0.4.
         - text_threshold [float]: Ngưỡng tương đồng văn bản. Mặc định: 0.3.
+        - data [str]: Đường dẫn file data.yaml (tự động lấy danh sách nhãn lớp giống YOLO).
 
         Đầu ra:
-        - [DetectionResult]: Đối tượng kết quả chứa danh sách tọa độ, nhãn và độ tin cậy của ảnh.
+        - [DetectionResult]: Đối tượng kết quả chứa danh sách tọa độ, nhãn, độ tin cậy và tốc độ suy luận.
         """
-        image = _load_source_image(source)
+        import time
+        from ..interfaces.base import _parse_data_yaml
 
-        if not isinstance(text_prompt, list):
-            raise TypeError("text_prompt phải là danh sách chuỗi ký tự (list[str]).")
+        if data:
+            _, yaml_names = _parse_data_yaml(data)
+            text_prompt = text_prompt or yaml_names
+
+        if not text_prompt or not isinstance(text_prompt, list):
+            raise TypeError("text_prompt phải là danh sách chuỗi ký tự (list[str]) hoặc nạp qua data='data.yaml'.")
+
+        t0 = time.perf_counter()
+        image = _load_source_image(source)
 
         text_labels = [text_prompt]
         inputs = self.processor(images=image, text=text_labels, return_tensors="pt")
@@ -158,12 +168,19 @@ class GroundingDinoDetect(DetectorModel):
                 else:
                     inputs[k] = v.to(device=model_device)
 
+        t1 = time.perf_counter()
+
         with torch.no_grad():
             if is_cuda and self.half:
                 with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
                     outputs = self.model(**inputs)
             else:
                 outputs = self.model(**inputs)
+
+        if is_cuda and torch.cuda.is_available():
+            torch.cuda.synchronize()
+
+        t2 = time.perf_counter()
 
         target_sizes = [image.size[::-1]]
         post_kwargs = {
@@ -197,14 +214,24 @@ class GroundingDinoDetect(DetectorModel):
                 )
             )
 
-        return DetectionResult(source_image=image, objects=detected_objects)
+        t3 = time.perf_counter()
+
+        speed = {
+            "preprocess": round((t1 - t0) * 1000, 2),
+            "inference": round((t2 - t1) * 1000, 2),
+            "postprocess": round((t3 - t2) * 1000, 2),
+            "total": round((t3 - t0) * 1000, 2),
+        }
+
+        return DetectionResult(source_image=image, objects=detected_objects, speed=speed)
 
     def crop(
         self,
         source: Any,
-        text_prompt: List[str],
+        text_prompt: Optional[List[str]] = None,
         threshold: float = 0.4,
         text_threshold: float = 0.3,
+        data: Optional[str] = None,
     ) -> CropResult:
         """
         Tác dụng:
@@ -215,6 +242,7 @@ class GroundingDinoDetect(DetectorModel):
         - text_prompt [List[str]]: Danh sách các tên nhãn từ khóa cần cắt.
         - threshold [float]: Ngưỡng lọc khung giới hạn. Mặc định: 0.4.
         - text_threshold [float]: Ngưỡng tương đồng văn bản. Mặc định: 0.3.
+        - data [str]: Đường dẫn file data.yaml (tự động lấy danh sách nhãn lớp giống YOLO).
 
         Đầu ra:
         - [CropResult]: Đối tượng tập hợp chứa các ảnh con và siêu dữ liệu tọa độ gốc.
@@ -225,6 +253,7 @@ class GroundingDinoDetect(DetectorModel):
             text_prompt=text_prompt,
             threshold=threshold,
             text_threshold=text_threshold,
+            data=data,
         )
 
         cropped_objects = []
@@ -248,21 +277,58 @@ class GroundingDinoDetect(DetectorModel):
 
         return CropResult(source_image=image, crops=cropped_objects)
 
-    def export(self, output_path: str, format: str = "onnx", half: bool = False) -> str:
+    def export(
+        self,
+        output_path: str,
+        format: str = "onnx",
+        half: bool = False,
+        int8: bool = False,
+        data: Optional[str] = None,
+        calibration_source: Optional[Union[str, List[Any]]] = None,
+        calibration_prompts: Optional[List[str]] = None,
+    ) -> str:
         """
         Tác dụng:
-        - Xuất mô hình sang các kiến trúc tối ưu (ONNX, TensorRT, OpenVINO, FP16) kèm config.json.
+        - Xuất mô hình sang các kiến trúc tối ưu (ONNX, TensorRT, OpenVINO, FP16, INT8) kèm config.json.
         """
+        from ..interfaces.base import _parse_data_yaml
+
+        if data:
+            d_source, d_names = _parse_data_yaml(data)
+            calibration_source = calibration_source or d_source
+            calibration_prompts = calibration_prompts or d_names
+
         output_path = os.path.abspath(output_path)
         files.mkdir(output_path)
         format = format.lower().lstrip(".")
 
         if format == "onnx":
-            backends.export_onnx(self.model_id, self.processor, output_path, half=half)
+            backends.export_onnx(
+                self.model_id,
+                self.processor,
+                output_path,
+                half=half,
+                int8=int8,
+                calibration_source=calibration_source,
+                calibration_prompts=calibration_prompts,
+            )
         elif format in ["engine", "tensorrt", "trt"]:
-            backends.export_tensorrt(self.model_id, self.processor, output_path, half=half)
+            backends.export_tensorrt(
+                self.model_id,
+                self.processor,
+                output_path,
+                half=half,
+            )
         elif format in ["openvino", "xml", "ov"]:
-            backends.export_openvino(self.model_id, self.processor, output_path, half=half)
+            backends.export_openvino(
+                self.model_id,
+                self.processor,
+                output_path,
+                half=half,
+                int8=int8,
+                calibration_source=calibration_source,
+                calibration_prompts=calibration_prompts,
+            )
         elif format in ["torchscript", "pt", "safetensors", "torch", "fp16"]:
             backends.export_torch(self.model_id, self.processor, output_path, half=half)
 
@@ -274,6 +340,7 @@ class GroundingDinoDetect(DetectorModel):
             "model_id": output_path,
             "source_model_id": self.model_id,
             "half": half,
+            "int8": int8,
         }
         klygo_file = os.path.join(output_path, "klygo.json")
         files.save(klygo_file, config_data, overwrite=True, verbose=False)
@@ -284,8 +351,9 @@ class GroundingDinoDetect(DetectorModel):
         self,
         output_path: str,
         format: str,
-        source: Any,
-        text_prompt: List[str],
+        source: Optional[Union[str, List[Any]]] = None,
+        text_prompt: Optional[List[str]] = None,
+        data: Optional[str] = None,
         batch_size: int = 16,
         threshold: float = 0.4,
         verbose: bool = True,
@@ -293,18 +361,25 @@ class GroundingDinoDetect(DetectorModel):
     ) -> None:
         """
         Tác dụng:
-        - Tự động tạo bộ dữ liệu huấn luyện định dạng YOLO hoặc Classification từ nguồn ảnh/video.
+        - Tự động tạo bộ dữ liệu huấn luyện định dạng Detection hoặc Classification từ nguồn ảnh/video.
 
         Đầu vào:
         - output_path [str]: Thư mục lưu trữ bộ dữ liệu đầu ra.
-        - format [str]: Định dạng xuất ('yolo' hoặc 'classification').
+        - format [str]: Định dạng xuất ('detection' hoặc 'classification').
         - source [str | List]: Đường dẫn thư mục ảnh, file video, hoặc danh sách ảnh đã đọc sẵn từ media.load.
         - text_prompt [List[str]]: Danh sách các lớp nhãn đối tượng cần trích xuất.
+        - data [str]: File cấu hình data.yaml để nạp tự động ảnh và nhãn.
         - batch_size [int]: Kích thước xử lý theo lô. Mặc định: 16.
         - threshold [float]: Ngưỡng độ tin cậy nhận diện. Mặc định: 0.4.
         - verbose [bool]: Hiển thị thanh tiến trình. Mặc định: True.
         """
+        from ..interfaces.base import _parse_data_yaml
         from klygo.datasets import detect
+
+        if data:
+            d_source, d_names = _parse_data_yaml(data)
+            source = source or d_source
+            text_prompt = text_prompt or d_names
 
         detect.export(
             model=self,
@@ -317,6 +392,97 @@ class GroundingDinoDetect(DetectorModel):
             verbose=verbose,
             **kwargs,
         )
+
+    def benchmark(
+        self,
+        source: Optional[Any] = None,
+        text_prompt: Optional[List[str]] = None,
+        data: Optional[str] = None,
+        iterations: int = 20,
+        warmup: int = 5,
+        threshold: float = 0.4,
+        verbose: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Tác dụng:
+        - Đo đạc và chấm điểm đánh giá tốc độ suy luận (Độ trễ Latency ms / Tốc độ FPS) của mô hình.
+
+        Đầu vào:
+        - data [str]: Đường dẫn file data.yaml (Tự động nạp danh sách ảnh và nhãn giống YOLO).
+        - source [Any]: Ảnh thử nghiệm (mặc định tạo ảnh chuẩn 640x640 nếu là None).
+        - text_prompt [List[str]]: Danh sách nhãn từ khóa cần đo (Mặc định: ['object']).
+        - iterations [int]: Số lần lặp đo đạc. Mặc định: 20.
+        - warmup [int]: Số lần chạy khởi động trước khi bấm giờ. Mặc định: 5.
+        - threshold [float]: Ngưỡng độ tin cậy nhận diện. Mặc định: 0.4.
+        - verbose [bool]: In bảng báo cáo chi tiết ra màn hình console. Mặc định: True.
+
+        Đầu ra:
+        - [dict]: Kết quả đo đạc gồm latency_avg_ms, latency_min_ms, latency_max_ms, fps, device, backend...
+        """
+        import time
+        from ..interfaces.base import _parse_data_yaml
+
+        if data:
+            d_source, d_names = _parse_data_yaml(data)
+            source = source or d_source
+            text_prompt = text_prompt or d_names
+
+        img = source if source is not None else PIL.Image.new("RGB", (640, 640), color=(100, 100, 100))
+        prompts = text_prompt or ["object"]
+
+        # 1. Warmup
+        for _ in range(warmup):
+            self.predict(img, text_prompt=prompts, threshold=threshold)
+
+        # 2. Benchmark
+        latencies = []
+        is_cuda = "cuda" in str(getattr(self.model, "device", self._device))
+
+        for _ in range(iterations):
+            t_start = time.perf_counter()
+            self.predict(img, text_prompt=prompts, threshold=threshold)
+            if is_cuda and torch.cuda.is_available():
+                torch.cuda.synchronize()
+            t_end = time.perf_counter()
+            latencies.append(t_end - t_start)
+
+        avg_latency = sum(latencies) / len(latencies)
+        min_latency = min(latencies)
+        max_latency = max(latencies)
+        fps = 1.0 / avg_latency if avg_latency > 0 else 0.0
+
+        w_dim, h_dim = (img.width, img.height) if isinstance(img, PIL.Image.Image) else (640, 640)
+
+        report = {
+            "model_id": self.model_id,
+            "backend": self.backend,
+            "device": self.device,
+            "image_size": f"{w_dim}x{h_dim}",
+            "iterations": iterations,
+            "warmup": warmup,
+            "latency_avg_ms": round(avg_latency * 1000, 2),
+            "latency_min_ms": round(min_latency * 1000, 2),
+            "latency_max_ms": round(max_latency * 1000, 2),
+            "fps": round(fps, 1),
+        }
+
+        if verbose:
+            print("=" * 60)
+            print("         BAO CAO DANH GIA HIEU NANG & TOC DO MO HINH")
+            print("=" * 60)
+            print(f" * Mo hinh      : {report['model_id']}")
+            print(f" * Backend      : {report['backend']}")
+            print(f" * Thiet bi     : {report['device']}")
+            print(f" * Kich thuoc   : {report['image_size']}")
+            print(f" * So vong lap  : {report['iterations']} (Warmup: {report['warmup']})")
+            print("-" * 60)
+            print(f" * Do tre TB    : {report['latency_avg_ms']} ms / anh")
+            print(f" * Nhanh nhat   : {report['latency_min_ms']} ms")
+            print(f" * Cham nhat    : {report['latency_max_ms']} ms")
+            print(f" * Toc do (FPS) : {report['fps']} FPS (frames / sec)")
+            print("=" * 60)
+
+        return report
 
     def warmup(self) -> None:
         """Khởi động mô hình với dữ liệu giả lập."""
@@ -341,7 +507,9 @@ class GroundingDinoDetect(DetectorModel):
         print("2. crop(source, text_prompt, threshold=0.4, text_threshold=0.3)")
         print("   Cat doi tuong thanh danh sach anh con PIL Images.")
         print("3. dataset(output_path, format, source, text_prompt, batch_size=16, threshold=0.4)")
-        print("   Tao dataset YOLO hoac Classification tu thu muc anh, video, hoac List[PIL.Image].")
-        print("4. export(output_path, format='onnx', half=False)")
-        print("   Xuat mo hinh sang ONNX, TensorRT, OpenVINO, hoac FP16.")
+        print("   Tao dataset 'detection' hoac 'classification' tu thu muc anh, video, hoac List[PIL.Image].")
+        print("4. export(output_path, format='safetensors', half=False)")
+        print("   Xuat mo hinh sang SafeTensors FP16, ONNX, TensorRT, OpenVINO.")
+        print("5. benchmark(source=None, iterations=20, warmup=5)")
+        print("   Cham diem danh gia toc do suy luan (Do tre Latency ms / Toc do FPS).")
 

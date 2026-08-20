@@ -58,14 +58,14 @@ def export(
         return output_path
 
     label_to_id = {label: idx for idx, label in enumerate(target_prompt)}
-    format_type = format.lower()
+    format_type = format.lower().strip()
     total_images = len(images)
     files.mkdir(output_path)
 
     # =====================================================================
-    # 1. Định dạng CLASSIFICATION: Dùng model.crop() cho từng ảnh
+    # 1. Định dạng CLASSIFICATION (hoặc 'classify'): Dùng model.crop()
     # =====================================================================
-    if format_type == "classification":
+    if format_type in ("classification", "classify", "cls"):
         with ProgressBar(
             total=total_images,
             desc="Exporting Classification Dataset",
@@ -88,9 +88,9 @@ def export(
                 pbar.update(1)
 
     # =====================================================================
-    # 2. Định dạng YOLO: Dùng model.predict() cho từng ảnh
+    # 2. Định dạng DETECTION (hoặc 'detect' / 'yolo'): Dùng model.predict()
     # =====================================================================
-    elif format_type == "yolo":
+    elif format_type in ("detection", "detect", "det", "yolo"):
         yaml_content = f"path: {os.path.abspath(output_path)}\ntrain: images\nval: images\n\nnc: {len(target_prompt)}\nnames:\n"
         for idx, label in enumerate(target_prompt):
             yaml_content += f"  {idx}: {label}\n"
@@ -108,7 +108,7 @@ def export(
 
         with ProgressBar(
             total=total_images,
-            desc="Exporting YOLO Dataset",
+            desc="Exporting Detection Dataset",
             unit="img",
             verbose=verbose,
         ) as pbar:
@@ -145,7 +145,7 @@ def export(
                 pbar.update(1)
     else:
         raise ValueError(
-            f"Định dạng '{format}' không được hỗ trợ. Vui lòng chọn 'yolo' hoặc 'classification'."
+            f"Định dạng dataset '{format}' không hợp lệ. Vui lòng chọn 'detection' (hoặc 'detect') hoặc 'classification' (hoặc 'classify')."
         )
 
     return output_path

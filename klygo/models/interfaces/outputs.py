@@ -164,10 +164,12 @@ class DetectionResult:
         line_width: Optional[int] = None,
         font_size: Optional[int] = None,
         labels: bool = True,
-        conf: bool = True,
+        scores: bool = True,
         boxes: bool = True,
         outline_color: Optional[str] = None,
         width: Optional[int] = None,
+        conf: Optional[bool] = None,
+        score: Optional[bool] = None,
     ) -> PIL.Image.Image:
         """
         Tác dụng:
@@ -177,14 +179,23 @@ class DetectionResult:
         - line_width [int]: Độ dày viền khung (Mặc định: tự động tính theo tỉ lệ kích thước ảnh).
         - font_size [int]: Cỡ chữ của nhãn (Mặc định: tự động tính theo tỉ lệ kích thước ảnh).
         - labels [bool]: Hiển thị tên nhãn lớp. Mặc định: True.
-        - conf [bool]: Hiển thị điểm số tin cậy (Confidence score). Mặc định: True.
+        - scores [bool]: Hiển thị điểm số tin cậy (Confidence / Score). Mặc định: True.
         - boxes [bool]: Vẽ khung chữ nhật BBox. Mặc định: True.
         - outline_color [str]: Màu viền tùy chỉnh đơn lẻ (nếu không truyền sẽ dùng bảng 20 màu YOLO phân biệt theo Class).
         - width [int]: Tham số tương thích ngược (alias của line_width).
+        - conf [bool]: Tham số tương thích ngược (alias của scores).
+        - score [bool]: Tham số tương thích ngược (alias của scores).
 
         Đầu ra:
         - [PIL.Image.Image]: Bức ảnh mới đã được vẽ đóng khung và gắn tag nhãn.
         """
+        # Hỗ trợ linh hoạt cả scores, score và conf
+        show_scores = scores
+        if score is not None:
+            show_scores = score
+        elif conf is not None:
+            show_scores = conf
+
         annotated = self.source_image.copy()
         draw = PIL.ImageDraw.Draw(annotated)
         w_img, h_img = self.source_image.size
@@ -220,11 +231,11 @@ class DetectionResult:
             if boxes:
                 draw.rectangle([xmin, ymin, xmax, ymax], outline=color, width=actual_lw)
 
-            # 4b. Xây dựng nội dung nhãn (Label + Confidence)
+            # 4b. Xây dựng nội dung nhãn (Label + Scores)
             text_parts = []
             if labels:
                 text_parts.append(str(obj.label))
-            if conf and obj.score is not None:
+            if show_scores and obj.score is not None:
                 text_parts.append(f"{obj.score:.2f}")
             caption = " ".join(text_parts)
 
@@ -259,20 +270,24 @@ class DetectionResult:
         line_width: Optional[int] = None,
         font_size: Optional[int] = None,
         labels: bool = True,
-        conf: bool = True,
+        scores: bool = True,
         boxes: bool = True,
         outline_color: Optional[str] = None,
         width: Optional[int] = None,
+        conf: Optional[bool] = None,
+        score: Optional[bool] = None,
     ) -> None:
         """Vẽ và lưu trực tiếp ảnh nhận diện ra đường dẫn đĩa bằng klygo.media.save."""
         annotated = self.plot(
             line_width=line_width,
             font_size=font_size,
             labels=labels,
-            conf=conf,
+            scores=scores,
             boxes=boxes,
             outline_color=outline_color,
             width=width,
+            conf=conf,
+            score=score,
         )
         media.save(output_path, annotated, overwrite=True, verbose=False)
 
@@ -281,10 +296,12 @@ class DetectionResult:
         line_width: Optional[int] = None,
         font_size: Optional[int] = None,
         labels: bool = True,
-        conf: bool = True,
+        scores: bool = True,
         boxes: bool = True,
         outline_color: Optional[str] = None,
         width: Optional[int] = None,
+        conf: Optional[bool] = None,
+        score: Optional[bool] = None,
     ) -> PIL.Image.Image:
         """
         Vẽ và hiển thị ảnh nhận diện:
@@ -295,10 +312,12 @@ class DetectionResult:
             line_width=line_width,
             font_size=font_size,
             labels=labels,
-            conf=conf,
+            scores=scores,
             boxes=boxes,
             outline_color=outline_color,
             width=width,
+            conf=conf,
+            score=score,
         )
         if _is_notebook():
             try:
