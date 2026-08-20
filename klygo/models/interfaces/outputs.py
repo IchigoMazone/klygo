@@ -222,16 +222,19 @@ class DetectionResult:
             for i, l in enumerate(unique_labels)
         }
 
-        # 4. Vẽ từng đối tượng theo logic của Ultralytics YOLO Annotator
+        # 4. PASS 1: Vẽ toàn bộ tất cả khung chữ nhật BBox trước
+        if boxes:
+            for obj in self.objects:
+                color = label_to_color.get(obj.label, (255, 56, 56))
+                xmin, ymin, xmax, ymax = obj.box
+                draw.rectangle([xmin, ymin, xmax, ymax], outline=color, width=actual_lw)
+
+        # 5. PASS 2: Vẽ toàn bộ Badge nhãn chữ lên trên cùng (100% không bao giờ bị viền khung cắt đè)
+        occupied_badges = []
         for obj in self.objects:
             color = label_to_color.get(obj.label, (255, 56, 56))
             xmin, ymin, xmax, ymax = obj.box
 
-            # 4a. Vẽ khung chữ nhật BBox
-            if boxes:
-                draw.rectangle([xmin, ymin, xmax, ymax], outline=color, width=actual_lw)
-
-            # 4b. Xây dựng nội dung nhãn (Label + Scores)
             text_parts = []
             if labels:
                 text_parts.append(str(obj.label))
@@ -240,27 +243,36 @@ class DetectionResult:
             caption = " ".join(text_parts)
 
             if caption:
-                # Đo kích thước khối chữ
                 tb = draw.textbbox((0, 0), caption, font=font)
                 tw = tb[2] - tb[0]
                 th = tb[3] - tb[1]
 
-                # Kiểm tra vị trí đặt nhãn (outside - phía trên bên ngoài, hoặc lật vào trong nếu chạm mép trên)
+                # Ưu tiên đặt badge ở phía trên ngoài box (outside)
                 outside = (ymin - th - 4) >= 0
-                if outside:
-                    b_ymin = ymin - th - 4
-                    b_ymax = ymin
-                else:
+                b_ymin = (ymin - th - 4) if outside else ymin
+                b_ymax = ymin if outside else (ymin + th + 4)
+                b_xmin = max(0, xmin)
+                b_xmax = min(w_img, b_xmin + tw + 6)
+                current_badge = [b_xmin, b_ymin, b_xmax, b_ymax]
+
+                # Tránh va chạm/đè nhãn: Nếu góc ngoài đã bị nhãn khác chiếm, tự động chuyển vào trong (inside)
+                def _overlaps(b1, b2):
+                    return not (b1[2] < b2[0] or b1[0] > b2[2] or b1[3] < b2[1] or b1[1] > b2[3])
+
+                if any(_overlaps(current_badge, occ) for occ in occupied_badges) and outside:
+                    # Lật nhãn vào trong box để không bị chồng lên nhãn của quả cam bên cạnh
                     b_ymin = ymin
                     b_ymax = ymin + th + 4
-                b_xmax = min(w_img, xmin + tw + 6)
+                    current_badge = [b_xmin, b_ymin, b_xmax, b_ymax]
 
-                # Vẽ hộp nền Badge cùng màu viền BBox
-                draw.rectangle([xmin, b_ymin, b_xmax, b_ymax], fill=color)
+                occupied_badges.append(current_badge)
+
+                # Vẽ nền Badge cùng màu viền BBox
+                draw.rectangle(current_badge, fill=color)
 
                 # Vẽ chữ màu trắng sắc nét
-                text_y = b_ymin + 1 if outside else b_ymin + 2
-                draw.text((xmin + 3, text_y), caption, fill=(255, 255, 255), font=font)
+                text_y = b_ymin + 1 if outside and b_ymin == (ymin - th - 4) else b_ymin + 2
+                draw.text((b_xmin + 3, text_y), caption, fill=(255, 255, 255), font=font)
 
         return annotated
 
