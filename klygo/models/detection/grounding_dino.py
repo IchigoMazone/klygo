@@ -8,12 +8,22 @@ from typing import Any, List, Optional, Dict, Union
 
 # Tắt các cảnh báo không cần thiết từ Hugging Face Hub và Transformers
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning, module="transformers.*")
+warnings.filterwarnings("ignore", message=".*The key `labels` is will return integer ids.*")
+warnings.filterwarnings("ignore", message=".*text_labels.*")
 warnings.filterwarnings("ignore", message=".*unauthenticated requests.*")
 warnings.filterwarnings("ignore", message=".*HF_TOKEN.*")
 
 try:
     import huggingface_hub.utils.logging as hf_logging
     hf_logging.set_verbosity_error()
+except Exception:
+    pass
+
+try:
+    import transformers.utils.logging as tf_logging
+    tf_logging.set_verbosity_error()
 except Exception:
     pass
 
@@ -134,7 +144,7 @@ class GroundingDinoDetect(DetectorModel):
                 self.model = self.model.half()
         except ValueError:
             self._device = str(self.model.device)
-        return self
+        # return self
 
     def predict(
         self,
