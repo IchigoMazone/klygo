@@ -91,9 +91,9 @@ def export(
     # 2. Định dạng DETECTION (hoặc 'detect' / 'yolo'): Dùng model.predict()
     # =====================================================================
     elif format_type in ("detection", "detect", "det", "yolo"):
-        yaml_content = f"path: {os.path.abspath(output_path)}\ntrain: images\nval: images\n\nnc: {len(target_prompt)}\nnames:\n"
-        for idx, label in enumerate(target_prompt):
-            yaml_content += f"  {idx}: {label}\n"
+        clean_root = os.path.abspath(output_path).replace("\\", "/")
+        names_block = "\n".join([f"  {idx}: {label}" for idx, label in enumerate(target_prompt)])
+        yaml_content = f"path: {clean_root}\ntrain: images\nval: images\n\nnc: {len(target_prompt)}\nnames:\n{names_block}\n"
         files.save(
             os.path.join(output_path, "data.yaml"),
             yaml_content,

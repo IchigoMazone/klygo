@@ -269,27 +269,39 @@ def save(
     if suffix in (".yaml", ".yml"):
         def _write_yaml():
             with open(p, "w", encoding="utf-8") as f:
-                _yaml.dump(data, f)
+                if isinstance(data, str):
+                    f.write(data)
+                else:
+                    _yaml.dump(data, f)
         _write_with_bar(p, data, overwrite, verbose, "Writing YAML", _write_yaml)
 
     elif suffix == ".json":
         def _write_json():
             with open(p, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=indent)
+                if isinstance(data, str):
+                    f.write(data)
+                else:
+                    json.dump(data, f, ensure_ascii=False, indent=indent)
         _write_with_bar(p, data, overwrite, verbose, "Writing JSON", _write_json)
 
     elif suffix == ".jsonl":
         def _write_jsonl():
             with open(p, "w", encoding="utf-8") as f:
-                for item in data:
-                    f.write(json.dumps(item, ensure_ascii=False) + "\n")
+                if isinstance(data, str):
+                    f.write(data)
+                else:
+                    for item in data:
+                        f.write(json.dumps(item, ensure_ascii=False) + "\n")
         _write_with_bar(p, data, overwrite, verbose, "Writing JSONL", _write_jsonl)
 
     elif suffix == ".toml":
         import tomlkit
         def _write_toml():
             with open(p, "w", encoding="utf-8") as f:
-                tomlkit.dump(data, f)
+                if isinstance(data, str):
+                    f.write(data)
+                else:
+                    tomlkit.dump(data, f)
         _write_with_bar(p, data, overwrite, verbose, "Writing TOML", _write_toml)
 
     elif suffix == ".csv":
