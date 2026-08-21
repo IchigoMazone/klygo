@@ -519,3 +519,86 @@ class CropResult:
                 details += ", ..."
             summary += f" [{details}]"
         return summary
+
+
+class PreviewResult:
+    """
+    Tập hợp kết quả xem trước trực quan hóa (Preview) từ thư mục ảnh, file video hoặc danh sách ảnh media.load.
+    """
+
+    def __init__(
+        self,
+        results: List[DetectionResult],
+        source_type: str = "image",  # "image", "video", "directory", "list"
+        output_path: Optional[str] = None,
+        annotated_frames: Optional[List[PIL.Image.Image]] = None,
+        fps: float = 30.0,
+    ) -> None:
+        self.results = results
+        self.source_type = source_type
+        self.output_path = output_path
+        self.annotated_frames = annotated_frames or []
+        self.fps = fps
+
+    def __len__(self) -> int:
+        return len(self.results)
+
+    def __iter__(self):
+        return iter(self.results)
+
+    def __getitem__(self, index: int) -> DetectionResult:
+        return self.results[index]
+
+    @property
+    def images(self) -> List[PIL.Image.Image]:
+        """Danh sách các ảnh / khung hình đã được vẽ bounding box."""
+        if not self.annotated_frames and self.results:
+            self.annotated_frames = [r.plot() for r in self.results]
+        return self.annotated_frames
+
+    def show(self, width: Optional[int] = None, limit: Optional[int] = None) -> None:
+        """
+        Hiển thị trực quan hóa kết quả nhận diện.
+        - Trên Google Colab / Jupyter: Render ảnh inline trong cell.
+        - Trên Desktop: Mở ảnh / video.
+        """
+        display_items = self.results if limit is None else self.results[:limit]
+        for res in display_items:
+            res.show(width=width)
+
+    def save(self, output_path: str, fps: Optional[float] = None) -> str:
+        """
+        Lưu toàn bộ kết quả trực quan hóa theo đúng định dạng đích (folder ảnh hoặc file video .mp4).
+        """
+        target_fps = fps if fps is not None else self.fps
+        p_str = str(output_path).lower()
+        is_video_target = p_str.endswith((".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"))
+
+        if self.source_type == "video" or is_video_target:
+            # Lưu video
+            if not is_video_target:
+                files.mkdir(output_path)
+                final_path = os.path.join(output_path, "preview_video.mp4")
+            else:
+                parent_dir = os.path.dirname(os.path.abspath(output_path))
+                if parent_dir:
+                    files.mkdir(parent_dir)
+                final_path = output_path
+            frames = self.images
+            media.save_video(final_path, frames, fps=target_fps, overwrite=True, verbose=False)
+            self.output_path = final_path
+            return final_path
+        else:
+            # Lưu folder ảnh
+            files.mkdir(output_path)
+            for idx, res in enumerate(self.results, 1):
+                annotated = res.plot()
+                img_path = os.path.join(output_path, f"annotated_{idx:05d}.jpg")
+                media.save(img_path, annotated, overwrite=True, verbose=False)
+            self.output_path = output_path
+            return output_path
+
+    def __repr__(self) -> str:
+        out_info = f", output='{self.output_path}'" if self.output_path else ""
+        return f"<PreviewResult count={len(self.results)}, source_type='{self.source_type}'{out_info}>"
+

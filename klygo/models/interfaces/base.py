@@ -201,6 +201,45 @@ class DetectorModel(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def preview(
+        self,
+        source: Optional[Union[str, List[Any]]] = None,
+        text_prompt: Optional[Union[str, List[str]]] = None,
+        output_path: Optional[str] = None,
+        show: bool = True,
+        threshold: float = 0.4,
+        text_threshold: float = 0.3,
+        data: Optional[str] = None,
+        fps: Optional[float] = None,
+        limit: Optional[int] = None,
+        width: Optional[int] = None,
+        verbose: bool = True,
+        **kwargs,
+    ) -> Any:
+        """
+        Tác dụng:
+        - Chạy nhận diện trực quan hóa hàng loạt (Preview) trên thư mục ảnh, video hoặc danh sách ảnh từ media.load.
+        - Tự động xuất ra thư mục ảnh hoặc file video theo đúng định dạng đầu vào.
+
+        Đầu vào:
+        - source [str | List[Any] | None]: Thư mục ảnh, file video (.mp4, .avi...), file ảnh hoặc danh sách ảnh từ media.load.
+        - text_prompt [str | List[str] | None]: Danh sách từ khóa cần tìm kiếm (hoặc nạp qua data='data.yaml').
+        - output_path [str | None]: Đường dẫn file video hoặc thư mục ảnh đầu ra cần lưu.
+        - show [bool]: Hiển thị trực tiếp kết quả xem trước trên Notebook / Desktop. Mặc định: True.
+        - threshold [float]: Ngưỡng lọc độ tin cậy. Mặc định: 0.4.
+        - text_threshold [float]: Ngưỡng tương đồng văn bản. Mặc định: 0.3.
+        - data [str | None]: Đường dẫn file data.yaml chuẩn YOLO (tự động bóc tách ảnh và nhãn).
+        - fps [float | None]: Tốc độ khung hình (Frames Per Second) khi lưu video đầu ra.
+        - limit [int | None]: Giới hạn số lượng ảnh / khung hình xử lý tối đa (tùy chọn).
+        - width [int | None]: Chiều rộng hiển thị ảnh/video trên giao diện Colab/Jupyter.
+        - verbose [bool]: Hiển thị thanh tiến trình xử lý ProgressBar. Mặc định: True.
+
+        Đầu ra:
+        - [PreviewResult]: Đối tượng tập hợp kết quả trực quan hóa, hỗ trợ .show(), .save().
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def dataset(
         self,
         output_path: str,

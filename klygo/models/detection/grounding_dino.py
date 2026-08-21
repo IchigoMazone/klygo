@@ -33,6 +33,7 @@ for _logger_name in ["huggingface_hub", "huggingface_hub.utils._http", "transfor
     except Exception:
         pass
 
+from pathlib import Path
 from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
 from klygo import files, media
@@ -42,6 +43,7 @@ from ..interfaces import (
     DetectionResult,
     CroppedObject,
     CropResult,
+    PreviewResult,
 )
 from .. import backends
 
@@ -548,6 +550,215 @@ class GroundingDinoDetect(DetectorModel):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+    def preview(
+        self,
+        source: Optional[Union[str, List[Any]]] = None,
+        text_prompt: Optional[Union[str, List[str]]] = None,
+        output_path: Optional[str] = None,
+        show: bool = True,
+        threshold: float = 0.4,
+        text_threshold: float = 0.3,
+        data: Optional[str] = None,
+        fps: Optional[float] = None,
+        limit: Optional[int] = None,
+        width: Optional[int] = None,
+        verbose: bool = True,
+        **kwargs,
+    ) -> PreviewResult:
+        """
+        Tác dụng:
+        - Chạy nhận diện trực quan hóa hàng loạt (Preview) trên thư mục ảnh, video hoặc danh sách ảnh từ media.load.
+        - Tự động xuất ra thư mục ảnh hoặc file video theo đúng định dạng đầu vào.
+
+        Đầu vào:
+        - source [str | List[Any] | None]: Thư mục ảnh, file video (.mp4, .avi...), file ảnh hoặc danh sách ảnh từ media.load.
+        - text_prompt [str | List[str] | None]: Danh sách từ khóa cần tìm kiếm (hoặc nạp qua data='data.yaml').
+        - output_path [str | None]: Đường dẫn file video hoặc thư mục ảnh đầu ra cần lưu.
+        - show [bool]: Hiển thị trực tiếp kết quả xem trước trên Notebook / Desktop. Mặc định: True.
+        - threshold [float]: Ngưỡng lọc độ tin cậy. Mặc định: 0.4.
+        - text_threshold [float]: Ngưỡng tương đồng văn bản. Mặc định: 0.3.
+        - data [str | None]: Đường dẫn file data.yaml chuẩn YOLO (tự động bóc tách ảnh và nhãn).
+        - fps [float | None]: Tốc độ khung hình (Frames Per Second) khi lưu video đầu ra.
+        - limit [int | None]: Giới hạn số lượng ảnh / khung hình xử lý tối đa (tùy chọn).
+        - width [int | None]: Chiều rộng hiển thị ảnh/video trên giao diện Colab/Jupyter.
+        - verbose [bool]: Hiển thị thanh tiến trình xử lý ProgressBar. Mặc định: True.
+
+        Đầu ra:
+        - [PreviewResult]: Đối tượng tập hợp kết quả trực quan hóa, hỗ trợ .show(), .save().
+        """
+        import cv2 as cv
+        from ..interfaces.base import _parse_data_yaml
+        from ..interfaces.outputs import _is_notebook
+        from klygo.utils.progress import ProgressBar
+
+        # 1. Bóc tách data.yaml nếu có
+        if data:
+            d_source, d_names = _parse_data_yaml(data)
+            source = source or d_source
+            if text_prompt is None and d_names:
+                text_prompt = d_names
+
+        if isinstance(text_prompt, str):
+            target_prompt = [text_prompt]
+        elif isinstance(text_prompt, (list, tuple)):
+            target_prompt = list(text_prompt)
+        else:
+            target_prompt = None
+
+        if source is None:
+            raise ValueError(
+                "Vui lòng cung cấp nguồn dữ liệu 'source' (thư mục ảnh, file video, danh sách ảnh) hoặc file 'data'."
+            )
+
+        video_extensions = (".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v", ".flv", ".wmv")
+        is_video_source = isinstance(source, (str, Path)) and str(source).lower().endswith(video_extensions)
+
+        results = []
+        annotated_frames = []
+        source_type = "video" if is_video_source else "image"
+        target_fps = fps or 30.0
+
+        # =====================================================================
+        # TRƯỜNG HỢP 1: NGUỒN ĐẦU VÀO LÀ VIDEO
+        # =====================================================================
+        if is_video_source:
+            cap = cv.VideoCapture(str(source))
+            if not cap.isOpened():
+                raise FileNotFoundError(f"Không thể mở file video: {source}")
+
+            orig_fps = cap.get(cv.CAP_PROP_FPS)
+            if orig_fps and orig_fps > 0:
+                target_fps = fps if fps is not None else float(orig_fps)
+
+            total_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
+            max_process = (
+                min(total_frames, limit)
+                if limit is not None and total_frames > 0
+                else (limit or total_frames)
+            )
+
+            try:
+                with ProgressBar(
+                    total=max_process if max_process > 0 else None,
+                    desc="Processing Video Preview",
+                    unit="frame",
+                    verbose=verbose,
+                    colour="cyan",
+                ) as pbar:
+                    frame_idx = 0
+                    while True:
+                        if limit is not None and frame_idx >= limit:
+                            break
+                        ret, frame = cap.read()
+                        if not ret:
+                            break
+
+                        pil_frame = PIL.Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
+                        res = self.predict(
+                            pil_frame,
+                            text_prompt=target_prompt,
+                            threshold=threshold,
+                            text_threshold=text_threshold,
+                        )
+                        ann_frame = res.plot()
+
+                        results.append(res)
+                        annotated_frames.append(ann_frame)
+                        frame_idx += 1
+                        pbar.update(1)
+            finally:
+                cap.release()
+
+            # Xuất video theo đúng định dạng đầu vào nếu có output_path
+            final_output = None
+            if output_path:
+                p_str = str(output_path).lower()
+                if not p_str.endswith(video_extensions):
+                    files.mkdir(output_path)
+                    final_output = os.path.join(output_path, f"preview_{Path(source).stem}.mp4")
+                else:
+                    parent_dir = os.path.dirname(os.path.abspath(output_path))
+                    if parent_dir:
+                        files.mkdir(parent_dir)
+                    final_output = output_path
+
+                media.save_video(final_output, annotated_frames, fps=target_fps, verbose=verbose)
+
+            # Hiển thị Preview
+            if show:
+                if _is_notebook():
+                    sample_count = min(3, len(results))
+                    for i in range(sample_count):
+                        results[i].show(width=width)
+                elif results:
+                    results[0].show()
+
+            return PreviewResult(
+                results=results,
+                source_type="video",
+                output_path=final_output,
+                annotated_frames=annotated_frames,
+                fps=target_fps,
+            )
+
+        # =====================================================================
+        # TRƯỜNG HỢP 2: NGUỒN ĐẦU VÀO LÀ THƯ MỤC ẢNH / DANH SÁCH ẢNH (MEDIA.LOAD)
+        # =====================================================================
+        else:
+            from klygo.datasets.detect import _resolve_source
+
+            images = _resolve_source(source)
+            if limit is not None:
+                images = images[:limit]
+
+            if not images:
+                raise ValueError(f"Không tìm thấy ảnh hợp lệ nào từ nguồn: {source}")
+
+            if isinstance(source, (str, Path)) and os.path.isdir(str(source)):
+                source_type = "directory"
+            else:
+                source_type = "list"
+
+            final_output = None
+            if output_path:
+                files.mkdir(output_path)
+                final_output = output_path
+
+            with ProgressBar(
+                total=len(images),
+                desc="Processing Images Preview",
+                unit="img",
+                verbose=verbose,
+                colour="cyan",
+            ) as pbar:
+                for idx, img in enumerate(images, 1):
+                    res = self.predict(
+                        img,
+                        text_prompt=target_prompt,
+                        threshold=threshold,
+                        text_threshold=text_threshold,
+                    )
+                    ann_img = res.plot()
+                    results.append(res)
+                    annotated_frames.append(ann_img)
+
+                    if output_path:
+                        out_img_file = os.path.join(output_path, f"annotated_{idx:05d}.jpg")
+                        media.save(out_img_file, ann_img, overwrite=True, verbose=False)
+
+                    if show:
+                        res.show(width=width)
+
+                    pbar.update(1)
+
+            return PreviewResult(
+                results=results,
+                source_type=source_type,
+                output_path=final_output,
+                annotated_frames=annotated_frames,
+                fps=target_fps,
+            )
+
     def help(self) -> None:
         """In ra thông tin mô hình và danh sách các hàm nghiệp vụ."""
         print(f"MODEL: {self.model_id} ({self.backend}/{self.task})")
@@ -556,10 +767,13 @@ class GroundingDinoDetect(DetectorModel):
         print("   Nhan dien doi tuong tren 1 anh (Path, PIL, NumPy, Tensor).")
         print("2. crop(source, text_prompt, threshold=0.4, text_threshold=0.3)")
         print("   Cat doi tuong thanh danh sach anh con PIL Images.")
-        print("3. dataset(output_path, format, source, text_prompt, batch_size=16, threshold=0.4)")
+        print("3. preview(source, text_prompt, output_path=None, show=True, limit=None)")
+        print("   Xem truoc truc quan hoa video, folder anh hoac media.load va xuat file theo dinh dang dau vao.")
+        print("4. dataset(output_path, format, source, text_prompt, batch_size=16, threshold=0.4)")
         print("   Tao dataset 'detection' hoac 'classification' tu thu muc anh, video, hoac List[PIL.Image].")
-        print("4. export(output_path, format='safetensors', half=False)")
+        print("5. export(output_path, format='safetensors', half=False)")
         print("   Xuat mo hinh sang SafeTensors FP16, ONNX, TensorRT, OpenVINO.")
-        print("5. benchmark(source=None, iterations=20, warmup=5)")
+        print("6. benchmark(source=None, iterations=20, warmup=5)")
         print("   Cham diem danh gia toc do suy luan (Do tre Latency ms / Toc do FPS).")
+
 

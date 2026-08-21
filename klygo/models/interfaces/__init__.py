@@ -3,7 +3,7 @@ Giao diện chung & Lớp kết quả đầu ra chuẩn hóa (`klygo.models.inte
 """
 
 from .base import DetectorModel
-from .outputs import DetectedObject, DetectionResult, CroppedObject, CropResult
+from .outputs import DetectedObject, DetectionResult, CroppedObject, CropResult, PreviewResult
 
 __all__ = [
     "DetectorModel",
@@ -11,4 +11,5 @@ __all__ = [
     "DetectionResult",
     "CroppedObject",
     "CropResult",
+    "PreviewResult",
 ]
