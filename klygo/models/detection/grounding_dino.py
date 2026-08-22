@@ -7,14 +7,10 @@ import torch
 import PIL.Image
 from typing import Any, List, Optional, Dict, Union
 
-# Tắt các cảnh báo không cần thiết từ Hugging Face Hub và Transformers
+# Tắt toàn bộ các cảnh báo không cần thiết từ Hugging Face Hub, Transformers và PyTorch
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-warnings.filterwarnings("ignore", category=FutureWarning)
-warnings.filterwarnings("ignore", category=UserWarning, module="transformers.*")
-warnings.filterwarnings("ignore", message=".*The key `labels` is will return integer ids.*")
-warnings.filterwarnings("ignore", message=".*text_labels.*")
-warnings.filterwarnings("ignore", message=".*unauthenticated requests.*")
-warnings.filterwarnings("ignore", message=".*HF_TOKEN.*")
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+warnings.filterwarnings("ignore")
 
 try:
     import huggingface_hub.utils.logging as hf_logging
@@ -187,59 +183,58 @@ class GroundingDinoDetect(DetectorModel):
         t0 = time.perf_counter()
         pil_image = _load_source_image(image)
 
-        text_labels = [target_prompt]
-        inputs = self.processor(images=pil_image, text=text_labels, return_tensors="pt")
-
-        # Xác định thiết bị tính toán
-        model_device = getattr(self.model, "device", self._device)
-        is_cuda = "cuda" in str(model_device)
-
-        # Trên CPU: PyTorch MSDeformAttn grid_sample không hỗ trợ float16, tự động chuyển model sang float32
-        if not is_cuda and next(self.model.parameters()).dtype == torch.float16:
-            self.model = self.model.float()
-
-        model_dtype = next(self.model.parameters()).dtype
-        for k, v in inputs.items():
-            if isinstance(v, torch.Tensor):
-                if torch.is_floating_point(v):
-                    inputs[k] = v.to(device=model_device, dtype=model_dtype)
-                else:
-                    inputs[k] = v.to(device=model_device)
-
-        t1 = time.perf_counter()
-
-        with torch.no_grad():
-            if is_cuda and self.half:
-                with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
-                    outputs = self.model(**inputs)
-            else:
-                outputs = self.model(**inputs)
-
-        if is_cuda and torch.cuda.is_available():
-            torch.cuda.synchronize()
-
-        t2 = time.perf_counter()
-
-        target_sizes = [pil_image.size[::-1]]
-        post_kwargs = {
-            "outputs": outputs,
-            "target_sizes": target_sizes,
-        }
-
-        if self._has_input_ids:
-            post_kwargs["input_ids"] = inputs.input_ids
-
-        if self._has_threshold:
-            post_kwargs["threshold"] = threshold
-        else:
-            if self._has_box_threshold:
-                post_kwargs["box_threshold"] = threshold
-            if self._has_text_threshold:
-                post_kwargs["text_threshold"] = text_threshold
-
-        import warnings
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=FutureWarning)
+            warnings.simplefilter("ignore")
+            text_labels = [target_prompt]
+            inputs = self.processor(images=pil_image, text=text_labels, return_tensors="pt")
+
+            # Xác định thiết bị tính toán
+            model_device = getattr(self.model, "device", self._device)
+            is_cuda = "cuda" in str(model_device)
+
+            # Trên CPU: PyTorch MSDeformAttn grid_sample không hỗ trợ float16, tự động chuyển model sang float32
+            if not is_cuda and next(self.model.parameters()).dtype == torch.float16:
+                self.model = self.model.float()
+
+            model_dtype = next(self.model.parameters()).dtype
+            for k, v in inputs.items():
+                if isinstance(v, torch.Tensor):
+                    if torch.is_floating_point(v):
+                        inputs[k] = v.to(device=model_device, dtype=model_dtype)
+                    else:
+                        inputs[k] = v.to(device=model_device)
+
+            t1 = time.perf_counter()
+
+            with torch.no_grad():
+                if is_cuda and self.half:
+                    with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
+                        outputs = self.model(**inputs)
+                else:
+                    outputs = self.model(**inputs)
+
+            if is_cuda and torch.cuda.is_available():
+                torch.cuda.synchronize()
+
+            t2 = time.perf_counter()
+
+            target_sizes = [pil_image.size[::-1]]
+            post_kwargs = {
+                "outputs": outputs,
+                "target_sizes": target_sizes,
+            }
+
+            if self._has_input_ids:
+                post_kwargs["input_ids"] = inputs.input_ids
+
+            if self._has_threshold:
+                post_kwargs["threshold"] = threshold
+            else:
+                if self._has_box_threshold:
+                    post_kwargs["box_threshold"] = threshold
+                if self._has_text_threshold:
+                    post_kwargs["text_threshold"] = text_threshold
+
             results = self.processor.post_process_grounded_object_detection(**post_kwargs)
 
         result = results[0]
