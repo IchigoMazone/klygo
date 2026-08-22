@@ -180,6 +180,8 @@ class DetectorModel(ABC):
         text_prompt: Union[str, List[str]],
         threshold: float = 0.4,
         text_threshold: float = 0.3,
+        batch_size: int = 1,
+        verbose: bool = True,
     ) -> DetectionResults:
         """
         Tác dụng:
@@ -190,6 +192,8 @@ class DetectorModel(ABC):
         - text_prompt [str | List[str]]: Danh sách tên nhãn từ khóa cần tìm kiếm.
         - threshold [float]: Ngưỡng lọc khung giới hạn (Confidence Threshold). Mặc định: 0.4.
         - text_threshold [float]: Ngưỡng tương đồng văn bản (Text Similarity Threshold). Mặc định: 0.3.
+        - batch_size [int]: Số lượng ảnh xử lý đồng thời trong một batch (mặc định: 1).
+        - verbose [bool]: Hiển thị thanh tiến trình ProgressBar khi suy luận (mặc định: True).
 
         Đầu ra:
         - [DetectionResults]: Tập hợp kết quả nhận diện của toàn bộ video / folder.

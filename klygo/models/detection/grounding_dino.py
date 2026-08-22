@@ -1,4 +1,5 @@
 import os
+import time
 import logging
 import warnings
 import inspect
@@ -467,6 +468,7 @@ class GroundingDinoDetect(DetectorModel):
         text_prompt: Union[str, List[str]],
         threshold: float = 0.4,
         text_threshold: float = 0.3,
+        batch_size: int = 1,
         verbose: bool = True,
     ) -> DetectionResults:
         """
@@ -478,6 +480,7 @@ class GroundingDinoDetect(DetectorModel):
         - text_prompt: Danh sách tên nhãn từ khóa cần tìm kiếm.
         - threshold: Ngưỡng lọc khung giới hạn (Confidence Threshold). Mặc định: 0.4.
         - text_threshold: Ngưỡng tương đồng văn bản (Text Similarity Threshold). Mặc định: 0.3.
+        - batch_size: Số lượng ảnh xử lý đồng thời trong một batch (mặc định: 1).
         - verbose: Hiển thị thanh tiến trình ProgressBar khi suy luận. Mặc định: True.
 
         Đầu ra:
@@ -518,6 +521,21 @@ class GroundingDinoDetect(DetectorModel):
                     f"Phần tử trong images có kiểu {type(img)} không phải ảnh từ media.load."
                 )
 
+        batch_size = max(1, int(batch_size))
+
+        if isinstance(text_prompt, str):
+            target_prompt = [text_prompt]
+        elif isinstance(text_prompt, (list, tuple)):
+            target_prompt = list(text_prompt)
+        else:
+            raise TypeError("text_prompt phải là chuỗi ký tự (str) hoặc danh sách chuỗi ký tự (list[str]).")
+
+        model_device = getattr(self.model, "device", self._device)
+        is_cuda = "cuda" in str(model_device)
+        if not is_cuda and next(self.model.parameters()).dtype == torch.float16:
+            self.model = self.model.float()
+        model_dtype = next(self.model.parameters()).dtype
+
         from klygo.utils.progress import ProgressBar
         frame_results = []
         with ProgressBar(
@@ -527,16 +545,98 @@ class GroundingDinoDetect(DetectorModel):
             verbose=verbose,
             colour="cyan",
         ) as pbar:
-            for idx, img in enumerate(cleaned_images):
-                res = self.predict(
-                    image=img,
-                    text_prompt=text_prompt,
-                    threshold=threshold,
-                    text_threshold=text_threshold,
-                )
-                res.image_frame_index = idx
-                frame_results.append(res)
-                pbar.update(1)
+            for b_idx in range(0, len(cleaned_images), batch_size):
+                batch_imgs = cleaned_images[b_idx:b_idx + batch_size]
+                global_indices = list(range(b_idx, b_idx + len(batch_imgs)))
+
+                if len(batch_imgs) == 1:
+                    res = self.predict(
+                        image=batch_imgs[0],
+                        text_prompt=text_prompt,
+                        threshold=threshold,
+                        text_threshold=text_threshold,
+                    )
+                    res.image_frame_index = global_indices[0]
+                    frame_results.append(res)
+                    pbar.update(1)
+                    continue
+
+                t0 = time.perf_counter()
+                text_labels = [target_prompt] * len(batch_imgs)
+                inputs = self.processor(images=batch_imgs, text=text_labels, return_tensors="pt")
+
+                for k, v in inputs.items():
+                    if isinstance(v, torch.Tensor):
+                        if torch.is_floating_point(v):
+                            inputs[k] = v.to(device=model_device, dtype=model_dtype)
+                        else:
+                            inputs[k] = v.to(device=model_device)
+
+                t1 = time.perf_counter()
+                with torch.no_grad():
+                    if is_cuda and self.half:
+                        with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
+                            outputs = self.model(**inputs)
+                    else:
+                        outputs = self.model(**inputs)
+
+                if is_cuda and torch.cuda.is_available():
+                    torch.cuda.synchronize()
+                t2 = time.perf_counter()
+
+                target_sizes = [img.size[::-1] for img in batch_imgs]
+                post_kwargs = {
+                    "outputs": outputs,
+                    "target_sizes": target_sizes,
+                }
+                if self._has_input_ids:
+                    post_kwargs["input_ids"] = inputs.input_ids
+                if self._has_threshold:
+                    post_kwargs["threshold"] = threshold
+                else:
+                    if self._has_box_threshold:
+                        post_kwargs["box_threshold"] = threshold
+                    if self._has_text_threshold:
+                        post_kwargs["text_threshold"] = text_threshold
+
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=FutureWarning)
+                    batch_outputs = self.processor.post_process_grounded_object_detection(**post_kwargs)
+
+                t3 = time.perf_counter()
+                batch_speed = {
+                    "preprocess": round(((t1 - t0) * 1000) / len(batch_imgs), 2),
+                    "inference": round(((t2 - t1) * 1000) / len(batch_imgs), 2),
+                    "postprocess": round(((t3 - t2) * 1000) / len(batch_imgs), 2),
+                    "total": round(((t3 - t0) * 1000) / len(batch_imgs), 2),
+                }
+
+                for out_res, pil_img, g_idx in zip(batch_outputs, batch_imgs, global_indices):
+                    detected_objects = []
+                    labels_list = out_res.get("text_labels", out_res.get("labels", []))
+                    for idx, (box, score, label) in enumerate(zip(out_res["boxes"], out_res["scores"], labels_list)):
+                        coords = box.tolist()
+                        detected_objects.append(
+                            CropResult(
+                                id=idx,
+                                label=str(label),
+                                score=round(score.item(), 3),
+                                box=[round(x, 2) for x in coords],
+                                parent_image=pil_img,
+                            )
+                        )
+                    frame_res = DetectionResult(
+                        source_image=pil_img,
+                        objects=detected_objects,
+                        speed=batch_speed,
+                        image_frame_index=g_idx,
+                        text_prompt=text_prompt,
+                        threshold=threshold,
+                        text_threshold=text_threshold,
+                    )
+                    frame_results.append(frame_res)
+
+                pbar.update(len(batch_imgs))
 
         source_type = "video" if len(cleaned_images) > 1 else "image"
         return DetectionResults(frames=frame_results, source_type=source_type, fps=30.0)
@@ -547,8 +647,8 @@ class GroundingDinoDetect(DetectorModel):
         print("=" * 52)
         print("1. predict(image, text_prompt, threshold=0.4, text_threshold=0.3)")
         print("   Nhan dien doi tuong tren 1 anh tu media.load (PIL.Image).")
-        print("2. inference(images, text_prompt, threshold=0.4, text_threshold=0.3)")
-        print("   Suy luan tren toan bo Video hoac Folder anh tu media.load.")
+        print("2. inference(images, text_prompt, threshold=0.4, text_threshold=0.3, batch_size=1)")
+        print("   Suy luan tren toan bo Video hoac Folder anh tu media.load (ho tro batch_size).")
         print("3. export(output_path, format='safetensors', half=False, int8=False, data=None)")
         print("   Xuat mo hinh sang SafeTensors, ONNX, TensorRT, OpenVINO (FP16, INT8).")
         print("4. benchmark(data='data.yaml', iterations=20, warmup=5)")
