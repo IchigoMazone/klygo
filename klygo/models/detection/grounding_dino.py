@@ -39,28 +39,31 @@ from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 from klygo import files, media
 from ..interfaces import (
     DetectorModel,
-    DetectedObject,
-    DetectionResult,
-    CroppedObject,
     CropResult,
+    CropResults,
+    DetectionResult,
+    DetectionResults,
+    DetectedObject,
+    CroppedObject,
     PreviewResult,
 )
 from .. import backends
 
 
-def _load_source_image(source: Any) -> PIL.Image.Image:
+def _load_source_image(image: Any) -> PIL.Image.Image:
     """
-    Đọc và chuẩn hóa duy nhất 1 ảnh đầu vào thông qua klygo.media.load.
+    Chỉ chấp nhận duy nhất ảnh được nạp từ klygo.media.load (PIL.Image hoặc List[PIL.Image]).
     """
-    if isinstance(source, PIL.Image.Image):
-        return source.convert("RGB")
-    elif isinstance(source, str):
-        loaded = media.load(source, verbose=False)
-        if not loaded:
-            raise ValueError(f"Không thể đọc ảnh từ nguồn: {source}")
-        return loaded[0].convert("RGB")
+    if isinstance(image, PIL.Image.Image):
+        return image.convert("RGB")
+    elif isinstance(image, (list, tuple)) and len(image) > 0 and isinstance(image[0], PIL.Image.Image):
+        return image[0].convert("RGB")
     else:
-        return media.to_pil(source).convert("RGB")
+        raise TypeError(
+            f"Đầu vào 'image' không hợp lệ ({type(image).__name__}). "
+            "model.predict() chỉ nhận duy nhất ảnh từ klygo.media.load() (PIL.Image hoặc List[PIL.Image]). "
+            "Ví dụ: img = media.load('image.jpg'); model.predict(img, text_prompt=['cat'])"
+        )
 
 
 class GroundingDinoDetect(DetectorModel):
@@ -153,41 +156,38 @@ class GroundingDinoDetect(DetectorModel):
 
     def predict(
         self,
-        source: Any,
-        text_prompt: Optional[List[str]] = None,
+        image: Any,
+        text_prompt: Union[str, List[str]],
         threshold: float = 0.4,
         text_threshold: float = 0.3,
-        data: Optional[str] = None,
     ) -> DetectionResult:
         """
         Tác dụng:
-        - Nhận diện đối tượng trên 1 bức ảnh duy nhất thông qua media.load.
+        - Nhận diện đối tượng trên 1 bức ảnh duy nhất (PIL.Image hoặc kết quả media.load).
 
         Đầu vào:
-        - source [Any]: 1 bức ảnh (Đường dẫn file, PIL.Image, NumPy array hoặc PyTorch Tensor).
-        - text_prompt [List[str]]: Danh sách các tên nhãn từ khóa cần tìm kiếm (hoặc nạp từ data='data.yaml').
+        - image [Any]: 1 bức ảnh đầu vào (kết quả từ media.load hoặc PIL.Image).
+        - text_prompt [str | List[str]]: Danh sách các tên nhãn từ khóa cần tìm kiếm.
         - threshold [float]: Ngưỡng lọc khung giới hạn (Confidence Threshold). Mặc định: 0.4.
-        - text_threshold [float]: Ngưỡng tương đồng văn bản. Mặc định: 0.3.
-        - data [str]: Đường dẫn file data.yaml (tự động lấy danh sách nhãn lớp giống YOLO).
+        - text_threshold [float]: Ngưỡng tương đồng văn bản (Text Similarity Threshold). Mặc định: 0.3.
 
         Đầu ra:
         - [DetectionResult]: Đối tượng kết quả chứa danh sách tọa độ, nhãn, độ tin cậy và tốc độ suy luận.
         """
         import time
-        from ..interfaces.base import _parse_data_yaml
 
-        if data:
-            _, yaml_names = _parse_data_yaml(data)
-            text_prompt = text_prompt or yaml_names
-
-        if not text_prompt or not isinstance(text_prompt, list):
-            raise TypeError("text_prompt phải là danh sách chuỗi ký tự (list[str]) hoặc nạp qua data='data.yaml'.")
+        if isinstance(text_prompt, str):
+            target_prompt = [text_prompt]
+        elif isinstance(text_prompt, (list, tuple)):
+            target_prompt = list(text_prompt)
+        else:
+            raise TypeError("text_prompt phải là chuỗi ký tự (str) hoặc danh sách chuỗi ký tự (list[str]).")
 
         t0 = time.perf_counter()
-        image = _load_source_image(source)
+        pil_image = _load_source_image(image)
 
-        text_labels = [text_prompt]
-        inputs = self.processor(images=image, text=text_labels, return_tensors="pt")
+        text_labels = [target_prompt]
+        inputs = self.processor(images=pil_image, text=text_labels, return_tensors="pt")
 
         # Xác định thiết bị tính toán
         model_device = getattr(self.model, "device", self._device)
@@ -219,7 +219,7 @@ class GroundingDinoDetect(DetectorModel):
 
         t2 = time.perf_counter()
 
-        target_sizes = [image.size[::-1]]
+        target_sizes = [pil_image.size[::-1]]
         post_kwargs = {
             "outputs": outputs,
             "target_sizes": target_sizes,
@@ -244,14 +244,15 @@ class GroundingDinoDetect(DetectorModel):
         result = results[0]
         detected_objects = []
         labels_list = result.get("text_labels", result.get("labels", []))
-        for box, score, label in zip(result["boxes"], result["scores"], labels_list):
+        for idx, (box, score, label) in enumerate(zip(result["boxes"], result["scores"], labels_list)):
             coords = box.tolist()
             detected_objects.append(
-                DetectedObject(
+                CropResult(
+                    id=idx,
                     label=str(label),
                     score=round(score.item(), 3),
                     box=[round(x, 2) for x in coords],
-                    img_size=(image.width, image.height),
+                    parent_image=pil_image,
                 )
             )
 
@@ -264,7 +265,15 @@ class GroundingDinoDetect(DetectorModel):
             "total": round((t3 - t0) * 1000, 2),
         }
 
-        return DetectionResult(source_image=image, objects=detected_objects, speed=speed)
+        return DetectionResult(
+            source_image=pil_image,
+            objects=detected_objects,
+            speed=speed,
+            image_frame_index=0,
+            text_prompt=text_prompt,
+            threshold=threshold,
+            text_threshold=text_threshold,
+        )
 
     def export(
         self,
@@ -442,7 +451,7 @@ class GroundingDinoDetect(DetectorModel):
         """Khởi động mô hình với dữ liệu giả lập."""
         dummy_img = PIL.Image.new("RGB", (1, 1), color="black")
         try:
-            self.predict(source=dummy_img, text_prompt=["dummy"], threshold=0.9, text_threshold=0.9)
+            self.predict(image=dummy_img, text_prompt=["dummy"], threshold=0.9, text_threshold=0.9)
         except Exception:
             pass
 
@@ -452,226 +461,95 @@ class GroundingDinoDetect(DetectorModel):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    def preview(
+    def inference(
         self,
-        source: Optional[Union[str, List[Any]]] = None,
-        text_prompt: Optional[Union[str, List[str]]] = None,
-        output_path: Optional[str] = None,
-        show: bool = True,
+        images: Any,
+        text_prompt: Union[str, List[str]],
         threshold: float = 0.4,
         text_threshold: float = 0.3,
-        data: Optional[str] = None,
-        fps: Optional[float] = None,
-        limit: Optional[int] = None,
-        width: Optional[int] = None,
         verbose: bool = True,
-        **kwargs,
-    ) -> PreviewResult:
+    ) -> DetectionResults:
         """
         Tác dụng:
-        - Chạy nhận diện trực quan hóa hàng loạt (Preview) trên thư mục ảnh, video hoặc danh sách ảnh từ media.load.
-        - Tự động xuất ra thư mục ảnh hoặc file video theo đúng định dạng đầu vào.
+        - Thực thi suy luận trên toàn bộ Video hoặc Thư mục ảnh nạp từ klygo.media.load.
 
         Đầu vào:
-        - source [str | List[Any] | None]: Thư mục ảnh, file video (.mp4, .avi...), file ảnh hoặc danh sách ảnh từ media.load.
-        - text_prompt [str | List[str] | None]: Danh sách từ khóa cần tìm kiếm (hoặc nạp qua data='data.yaml').
-        - output_path [str | None]: Đường dẫn file video hoặc thư mục ảnh đầu ra cần lưu.
-        - show [bool]: Hiển thị trực tiếp kết quả xem trước trên Notebook / Desktop. Mặc định: True.
-        - threshold [float]: Ngưỡng lọc độ tin cậy. Mặc định: 0.4.
-        - text_threshold [float]: Ngưỡng tương đồng văn bản. Mặc định: 0.3.
-        - data [str | None]: Đường dẫn file data.yaml chuẩn YOLO (tự động bóc tách ảnh và nhãn).
-        - fps [float | None]: Tốc độ khung hình (Frames Per Second) khi lưu video đầu ra.
-        - limit [int | None]: Giới hạn số lượng ảnh / khung hình xử lý tối đa (tùy chọn).
-        - width [int | None]: Chiều rộng hiển thị ảnh/video trên giao diện Colab/Jupyter.
-        - verbose [bool]: Hiển thị thanh tiến trình xử lý ProgressBar. Mặc định: True.
+        - images: Dữ liệu video / folder nạp từ klygo.media.load (chỉ nhận List[PIL.Image] hoặc Generator).
+        - text_prompt: Danh sách tên nhãn từ khóa cần tìm kiếm.
+        - threshold: Ngưỡng lọc khung giới hạn (Confidence Threshold). Mặc định: 0.4.
+        - text_threshold: Ngưỡng tương đồng văn bản (Text Similarity Threshold). Mặc định: 0.3.
+        - verbose: Hiển thị thanh tiến trình ProgressBar khi suy luận. Mặc định: True.
 
         Đầu ra:
-        - [PreviewResult]: Đối tượng tập hợp kết quả trực quan hóa, hỗ trợ .show(), .save().
+        - [DetectionResults]: Tập hợp kết quả nhận diện của toàn bộ video / folder.
         """
-        import cv2 as cv
-        from ..interfaces.base import _parse_data_yaml
-        from ..interfaces.outputs import _is_notebook
-        from klygo.utils.progress import ProgressBar
+        if isinstance(images, (str, Path)):
+            raise TypeError(
+                "model.inference() chỉ nhận dữ liệu đã nạp từ klygo.media.load "
+                "(ví dụ: images = media.load('video.mp4') hoặc images = media.load('folder_anh/')). "
+                "Vui lòng sử dụng images = media.load(...) trước khi truyền vào."
+            )
 
-        # 1. Bóc tách data.yaml nếu có
-        if data:
-            d_source, d_names = _parse_data_yaml(data)
-            source = source or d_source
-            if text_prompt is None and d_names:
-                text_prompt = d_names
-
-        if isinstance(text_prompt, str):
-            target_prompt = [text_prompt]
-        elif isinstance(text_prompt, (list, tuple)):
-            target_prompt = list(text_prompt)
+        # Chuyển đổi sang list ảnh
+        if isinstance(images, PIL.Image.Image):
+            image_list = [images]
+        elif isinstance(images, (list, tuple)):
+            image_list = list(images)
+        elif hasattr(images, "__iter__"):
+            image_list = list(images)
         else:
-            target_prompt = None
-
-        if source is None:
-            raise ValueError(
-                "Vui lòng cung cấp nguồn dữ liệu 'source' (thư mục ảnh, file video, danh sách ảnh) hoặc file 'data'."
+            raise TypeError(
+                f"Định dạng đầu vào {type(images)} không hợp lệ. "
+                "model.inference() chỉ nhận dữ liệu từ klygo.media.load (List[PIL.Image.Image] hoặc Generator)."
             )
 
-        video_extensions = (".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v", ".flv", ".wmv")
-        is_video_source = isinstance(source, (str, Path)) and str(source).lower().endswith(video_extensions)
+        if not image_list:
+            return DetectionResults(frames=[], source_type="list", fps=30.0)
 
-        results = []
-        annotated_frames = []
-        source_type = "video" if is_video_source else "image"
-        target_fps = fps or 30.0
-
-        # =====================================================================
-        # TRƯỜNG HỢP 1: NGUỒN ĐẦU VÀO LÀ VIDEO
-        # =====================================================================
-        if is_video_source:
-            cap = cv.VideoCapture(str(source))
-            if not cap.isOpened():
-                raise FileNotFoundError(f"Không thể mở file video: {source}")
-
-            orig_fps = cap.get(cv.CAP_PROP_FPS)
-            if orig_fps and orig_fps > 0:
-                target_fps = fps if fps is not None else float(orig_fps)
-
-            total_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
-            max_process = (
-                min(total_frames, limit)
-                if limit is not None and total_frames > 0
-                else (limit or total_frames)
-            )
-
-            try:
-                with ProgressBar(
-                    total=max_process if max_process > 0 else None,
-                    desc="Processing Video Preview",
-                    unit="frame",
-                    verbose=verbose,
-                    colour="cyan",
-                ) as pbar:
-                    frame_idx = 0
-                    while True:
-                        if limit is not None and frame_idx >= limit:
-                            break
-                        ret, frame = cap.read()
-                        if not ret:
-                            break
-
-                        pil_frame = PIL.Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
-                        res = self.predict(
-                            pil_frame,
-                            text_prompt=target_prompt,
-                            threshold=threshold,
-                            text_threshold=text_threshold,
-                        )
-                        ann_frame = res.plot()
-
-                        results.append(res)
-                        annotated_frames.append(ann_frame)
-                        frame_idx += 1
-                        pbar.update(1)
-            finally:
-                cap.release()
-
-            # Xuất video theo đúng định dạng đầu vào nếu có output_path
-            final_output = None
-            if output_path:
-                p_str = str(output_path).lower()
-                if not p_str.endswith(video_extensions):
-                    files.mkdir(output_path)
-                    final_output = os.path.join(output_path, f"preview_{Path(source).stem}.mp4")
-                else:
-                    parent_dir = os.path.dirname(os.path.abspath(output_path))
-                    if parent_dir:
-                        files.mkdir(parent_dir)
-                    final_output = output_path
-
-                media.save_video(final_output, annotated_frames, fps=target_fps, verbose=verbose)
-
-            # Hiển thị Preview
-            if show:
-                if _is_notebook():
-                    sample_count = min(3, len(results))
-                    for i in range(sample_count):
-                        results[i].show(width=width)
-                elif results:
-                    results[0].show()
-
-            return PreviewResult(
-                results=results,
-                source_type="video",
-                output_path=final_output,
-                annotated_frames=annotated_frames,
-                fps=target_fps,
-            )
-
-        # =====================================================================
-        # TRƯỜNG HỢP 2: NGUỒN ĐẦU VÀO LÀ THƯ MỤC ẢNH / DANH SÁCH ẢNH (MEDIA.LOAD)
-        # =====================================================================
-        else:
-            from klygo.datasets.detect import _resolve_source
-
-            images = _resolve_source(source)
-            if limit is not None:
-                images = images[:limit]
-
-            if not images:
-                raise ValueError(f"Không tìm thấy ảnh hợp lệ nào từ nguồn: {source}")
-
-            if isinstance(source, (str, Path)) and os.path.isdir(str(source)):
-                source_type = "directory"
+        # Chuyển đổi np.ndarray sang PIL.Image nếu cần
+        cleaned_images = []
+        for img in image_list:
+            if isinstance(img, PIL.Image.Image):
+                cleaned_images.append(img)
+            elif hasattr(img, "shape"):
+                cleaned_images.append(PIL.Image.fromarray(img))
             else:
-                source_type = "list"
+                raise TypeError(
+                    f"Phần tử trong images có kiểu {type(img)} không phải ảnh từ media.load."
+                )
 
-            final_output = None
-            if output_path:
-                files.mkdir(output_path)
-                final_output = output_path
+        from klygo.utils.progress import ProgressBar
+        frame_results = []
+        with ProgressBar(
+            total=len(cleaned_images),
+            desc="Inference",
+            unit="frame",
+            verbose=verbose,
+            colour="cyan",
+        ) as pbar:
+            for idx, img in enumerate(cleaned_images):
+                res = self.predict(
+                    image=img,
+                    text_prompt=text_prompt,
+                    threshold=threshold,
+                    text_threshold=text_threshold,
+                )
+                res.image_frame_index = idx
+                frame_results.append(res)
+                pbar.update(1)
 
-            with ProgressBar(
-                total=len(images),
-                desc="Processing Images Preview",
-                unit="img",
-                verbose=verbose,
-                colour="cyan",
-            ) as pbar:
-                for idx, img in enumerate(images, 1):
-                    res = self.predict(
-                        img,
-                        text_prompt=target_prompt,
-                        threshold=threshold,
-                        text_threshold=text_threshold,
-                    )
-                    ann_img = res.plot()
-                    results.append(res)
-                    annotated_frames.append(ann_img)
-
-                    if output_path:
-                        out_img_file = os.path.join(output_path, f"annotated_{idx:05d}.jpg")
-                        media.save(out_img_file, ann_img, overwrite=True, verbose=False)
-
-                    if show:
-                        res.show(width=width)
-
-                    pbar.update(1)
-
-            return PreviewResult(
-                results=results,
-                source_type=source_type,
-                output_path=final_output,
-                annotated_frames=annotated_frames,
-                fps=target_fps,
-            )
+        source_type = "video" if len(cleaned_images) > 1 else "image"
+        return DetectionResults(frames=frame_results, source_type=source_type, fps=30.0)
 
     def help(self) -> None:
         """In ra thông tin mô hình và danh sách các hàm nghiệp vụ."""
         print(f"MODEL: {self.model_id} ({self.backend}/{self.task})")
         print("=" * 52)
-        print("1. predict(source, text_prompt=None, threshold=0.4, text_threshold=0.3, data=None)")
-        print("   Nhan dien doi tuong tren 1 anh (Path, PIL, NumPy, Tensor) hoac qua file data.yaml.")
-        print("2. preview(source=None, text_prompt=None, output_path=None, show=True, data=None)")
-        print("   Xem truoc truc quan hoa video, folder anh hoac media.load va xuat file theo dinh dang dau vao.")
+        print("1. predict(image, text_prompt, threshold=0.4, text_threshold=0.3)")
+        print("   Nhan dien doi tuong tren 1 anh tu media.load (PIL.Image).")
+        print("2. inference(images, text_prompt, threshold=0.4, text_threshold=0.3)")
+        print("   Suy luan tren toan bo Video hoac Folder anh tu media.load.")
         print("3. export(output_path, format='safetensors', half=False, int8=False, data=None)")
         print("   Xuat mo hinh sang SafeTensors, ONNX, TensorRT, OpenVINO (FP16, INT8).")
         print("4. benchmark(data='data.yaml', iterations=20, warmup=5)")
         print("   Cham diem danh gia toc do suy luan (Do tre Latency ms / Toc do FPS).")
-
-
