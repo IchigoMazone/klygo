@@ -149,31 +149,6 @@ class DetectorModel(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def crop(
-        self,
-        source: Any,
-        text_prompt: Optional[List[str]] = None,
-        threshold: float = 0.4,
-        text_threshold: float = 0.3,
-        data: Optional[str] = None,
-    ) -> CropResult:
-        """
-        Tác dụng:
-        - Nhận diện và cắt các đối tượng tìm thấy trên 1 ảnh duy nhất thành các ảnh con độc lập.
-
-        Đầu vào:
-        - source [Any]: 1 bức ảnh đầu vào (Đường dẫn file, PIL.Image, NumPy array hoặc PyTorch Tensor).
-        - text_prompt [List[str]]: Danh sách các tên nhãn từ khóa cần cắt.
-        - threshold [float]: Ngưỡng lọc khung giới hạn. Mặc định: 0.4.
-        - text_threshold [float]: Ngưỡng tương đồng văn bản. Mặc định: 0.3.
-        - data [str]: Đường dẫn file data.yaml (tự động lấy nhãn lớp giống YOLO).
-
-        Đầu ra:
-        - [CropResult]: Đối tượng tập hợp chứa các ảnh con và siêu dữ liệu tọa độ gốc.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
     def export(
         self,
         output_path: str,
@@ -236,35 +211,6 @@ class DetectorModel(ABC):
 
         Đầu ra:
         - [PreviewResult]: Đối tượng tập hợp kết quả trực quan hóa, hỗ trợ .show(), .save().
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def dataset(
-        self,
-        output_path: str,
-        format: str,
-        source: Optional[Union[str, List[Any]]] = None,
-        text_prompt: Optional[List[str]] = None,
-        data: Optional[str] = None,
-        batch_size: int = 16,
-        threshold: float = 0.4,
-        verbose: bool = True,
-        **kwargs,
-    ) -> None:
-        """
-        Tác dụng:
-        - Tự động tạo bộ dữ liệu huấn luyện định dạng Detection hoặc Classification từ nguồn ảnh/video.
-
-        Đầu vào:
-        - output_path [str]: Thư mục lưu trữ bộ dữ liệu đầu ra.
-        - format [str]: Định dạng xuất ('detection' hoặc 'classification').
-        - source [str | List]: Đường dẫn thư mục ảnh, file video, hoặc danh sách ảnh đã đọc sẵn từ media.load.
-        - text_prompt [List[str]]: Danh sách các lớp nhãn đối tượng cần trích xuất.
-        - data [str]: File cấu hình data.yaml để nạp tự động ảnh và nhãn.
-        - batch_size [int]: Kích thước xử lý theo lô. Mặc định: 16.
-        - threshold [float]: Ngưỡng độ tin cậy nhận diện. Mặc định: 0.4.
-        - verbose [bool]: Hiển thị thanh tiến trình ProgressBar. Mặc định: True.
         """
         raise NotImplementedError
 

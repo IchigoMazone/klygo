@@ -266,58 +266,6 @@ class GroundingDinoDetect(DetectorModel):
 
         return DetectionResult(source_image=image, objects=detected_objects, speed=speed)
 
-    def crop(
-        self,
-        source: Any,
-        text_prompt: Optional[List[str]] = None,
-        threshold: float = 0.4,
-        text_threshold: float = 0.3,
-        data: Optional[str] = None,
-    ) -> CropResult:
-        """
-        Tác dụng:
-        - Nhận diện và cắt các đối tượng tìm thấy trên 1 bức ảnh duy nhất thành các ảnh con độc lập.
-
-        Đầu vào:
-        - source [Any]: 1 bức ảnh (Đường dẫn file, PIL.Image, NumPy array hoặc PyTorch Tensor).
-        - text_prompt [List[str]]: Danh sách các tên nhãn từ khóa cần cắt.
-        - threshold [float]: Ngưỡng lọc khung giới hạn. Mặc định: 0.4.
-        - text_threshold [float]: Ngưỡng tương đồng văn bản. Mặc định: 0.3.
-        - data [str]: Đường dẫn file data.yaml (tự động lấy danh sách nhãn lớp giống YOLO).
-
-        Đầu ra:
-        - [CropResult]: Đối tượng tập hợp chứa các ảnh con và siêu dữ liệu tọa độ gốc.
-        """
-        image = _load_source_image(source)
-        pred = self.predict(
-            source=image,
-            text_prompt=text_prompt,
-            threshold=threshold,
-            text_threshold=text_threshold,
-            data=data,
-        )
-
-        cropped_objects = []
-        for obj in pred.objects:
-            box = obj.box
-            xmin = max(0, int(box[0]))
-            ymin = max(0, int(box[1]))
-            xmax = min(image.width, int(box[2]))
-            ymax = min(image.height, int(box[3]))
-
-            cropped_img = image.crop((xmin, ymin, xmax, ymax))
-            cropped_objects.append(
-                CroppedObject(
-                    image=cropped_img,
-                    label=obj.label,
-                    score=obj.score,
-                    box=obj.box,
-                    box_normalized=obj.box_normalized,
-                )
-            )
-
-        return CropResult(source_image=image, crops=cropped_objects)
-
     def export(
         self,
         output_path: str,
@@ -398,52 +346,6 @@ class GroundingDinoDetect(DetectorModel):
         files.save(klygo_file, config_data, overwrite=True, verbose=False)
 
         return output_path
-
-    def dataset(
-        self,
-        output_path: str,
-        format: str,
-        source: Optional[Union[str, List[Any]]] = None,
-        text_prompt: Optional[List[str]] = None,
-        data: Optional[str] = None,
-        batch_size: int = 16,
-        threshold: float = 0.4,
-        verbose: bool = True,
-        **kwargs,
-    ) -> None:
-        """
-        Tác dụng:
-        - Tự động tạo bộ dữ liệu huấn luyện định dạng Detection hoặc Classification từ nguồn ảnh/video.
-
-        Đầu vào:
-        - output_path [str]: Thư mục lưu trữ bộ dữ liệu đầu ra.
-        - format [str]: Định dạng xuất ('detection' hoặc 'classification').
-        - source [str | List]: Đường dẫn thư mục ảnh, file video, hoặc danh sách ảnh đã đọc sẵn từ media.load.
-        - text_prompt [List[str]]: Danh sách các lớp nhãn đối tượng cần trích xuất.
-        - data [str]: File cấu hình data.yaml để nạp tự động ảnh và nhãn.
-        - batch_size [int]: Kích thước xử lý theo lô. Mặc định: 16.
-        - threshold [float]: Ngưỡng độ tin cậy nhận diện. Mặc định: 0.4.
-        - verbose [bool]: Hiển thị thanh tiến trình. Mặc định: True.
-        """
-        from ..interfaces.base import _parse_data_yaml
-        from klygo.datasets import detect
-
-        if data:
-            d_source, d_names = _parse_data_yaml(data)
-            source = source or d_source
-            text_prompt = text_prompt or d_names
-
-        detect.export(
-            model=self,
-            output_path=output_path,
-            format=format,
-            source=source,
-            text_prompt=text_prompt,
-            batch_size=batch_size,
-            threshold=threshold,
-            verbose=verbose,
-            **kwargs,
-        )
 
     def benchmark(
         self,
@@ -763,17 +665,13 @@ class GroundingDinoDetect(DetectorModel):
         """In ra thông tin mô hình và danh sách các hàm nghiệp vụ."""
         print(f"MODEL: {self.model_id} ({self.backend}/{self.task})")
         print("=" * 52)
-        print("1. predict(source, text_prompt, threshold=0.4, text_threshold=0.3)")
-        print("   Nhan dien doi tuong tren 1 anh (Path, PIL, NumPy, Tensor).")
-        print("2. crop(source, text_prompt, threshold=0.4, text_threshold=0.3)")
-        print("   Cat doi tuong thanh danh sach anh con PIL Images.")
-        print("3. preview(source, text_prompt, output_path=None, show=True, limit=None)")
+        print("1. predict(source, text_prompt=None, threshold=0.4, text_threshold=0.3, data=None)")
+        print("   Nhan dien doi tuong tren 1 anh (Path, PIL, NumPy, Tensor) hoac qua file data.yaml.")
+        print("2. preview(source=None, text_prompt=None, output_path=None, show=True, data=None)")
         print("   Xem truoc truc quan hoa video, folder anh hoac media.load va xuat file theo dinh dang dau vao.")
-        print("4. dataset(output_path, format, source, text_prompt, batch_size=16, threshold=0.4)")
-        print("   Tao dataset 'detection' hoac 'classification' tu thu muc anh, video, hoac List[PIL.Image].")
-        print("5. export(output_path, format='safetensors', half=False)")
-        print("   Xuat mo hinh sang SafeTensors FP16, ONNX, TensorRT, OpenVINO.")
-        print("6. benchmark(source=None, iterations=20, warmup=5)")
+        print("3. export(output_path, format='safetensors', half=False, int8=False, data=None)")
+        print("   Xuat mo hinh sang SafeTensors, ONNX, TensorRT, OpenVINO (FP16, INT8).")
+        print("4. benchmark(data='data.yaml', iterations=20, warmup=5)")
         print("   Cham diem danh gia toc do suy luan (Do tre Latency ms / Toc do FPS).")
 
 

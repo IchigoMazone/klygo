@@ -26,9 +26,9 @@ Mọi mô hình trong Klygo phải đảm bảo:
 
 ---
 
-## 2. Cấu trúc Giao diện Chuẩn (7 Phương Thức Nghiệp Vụ)
+## 2. Cấu trúc Giao diện Chuẩn (Các Phương Thức Nghiệp Vụ)
 
-Mọi lớp mô hình phải kế thừa từ `DetectorModel` trong `klygo.models.interfaces` và triển khai đầy đủ 7 phương thức sau:
+Mọi lớp mô hình phải kế thừa từ `DetectorModel` trong `klygo.models.interfaces` và triển khai đầy đủ các phương thức sau:
 
 ```
                               ┌─────────────────────────────────────────┐
@@ -38,25 +38,18 @@ Mọi lớp mô hình phải kế thừa từ `DetectorModel` trong `klygo.model
          ┌──────────────────┬──────────────────────┼─────────────────────┬──────────────────┐
          │                  │                      │                     │                  │
  ┌───────▼────────┐ ┌───────▼────────┐     ┌───────▼────────┐    ┌───────▼────────┐ ┌───────▼────────┐
- │ predict()      │ │ crop()         │     │ preview()      │    │ dataset()      │ │ export()       │
- │ Nhận diện 1 ảnh│ │ Cắt đối tượng  │     │ Batch/Video    │    │ Tạo dataset    │ │ FP16/INT8/ONNX │
+ │ predict()      │ │ preview()      │     │ export()       │    │ benchmark()    │ │ warmup/unload  │
+ │ Nhận diện 1 ảnh│ │ Batch/Video    │     │ FP16/INT8/ONNX │    │ Đo Latency/FPS │ │ Quản lý GPU/VRAM│
  └────────────────┘ └────────────────┘     └────────────────┘    └────────────────┘ └────────────────┘
-         │                  │
- ┌───────▼────────┐ ┌───────▼────────┐
- │ benchmark()    │ │ warmup/unload  │
- │ Đo Latency/FPS │ │ Quản lý GPU/VRAM│
- └────────────────┘ └────────────────┘
 ```
 
 | STT | Phương Thức | Đầu Vào Chính | Đầu Ra Trả Về | Mô Tả |
 | :--- | :--- | :--- | :--- | :--- |
-| **1** | `predict()` | `source`, `text_prompt`, `data`, `threshold` | `DetectionResult` | Suy luận nhận diện trên 1 ảnh duy nhất. |
-| **2** | `crop()` | `source`, `text_prompt`, `data`, `threshold` | `CropResult` | Cắt các vật thể thành danh sách ảnh con `CroppedObject`. |
-| **3** | `preview()` | `source`, `text_prompt`, `output_path`, `show` | `PreviewResult` | Chạy hàng loạt trên thư mục ảnh / file video, xuất file đúng định dạng đầu vào. |
-| **4** | `dataset()` | `output_path`, `format`, `source`, `data` | `str` (Thư mục) | Auto-labeling tạo bộ dữ liệu train Detection hoặc Classification. |
-| **5** | `export()` | `output_path`, `format`, `half`, `int8`, `data` | `str` (Thư mục) | Xuất mô hình sang SafeTensors, ONNX, TensorRT, OpenVINO (FP16/INT8). |
-| **6** | `benchmark()` | `data`, `source`, `iterations`, `warmup` | `dict` (Báo cáo) | Đo đạc Latency (ms) và tốc độ FPS. |
-| **7** | `to() / warmup() / unload() / help()` | `device_name` | `self` / `None` | Quản lý thiết bị tính toán và bộ nhớ VRAM. |
+| **1** | `predict()` | `source`, `text_prompt`, `data`, `threshold` | `DetectionResult` | Suy luận nhận diện trên 1 ảnh duy nhất (hoặc theo data.yaml). |
+| **2** | `preview()` | `source`, `text_prompt`, `output_path`, `show` | `PreviewResult` | Chạy hàng loạt trên thư mục ảnh / file video / media.load, xuất file đúng định dạng đầu vào. |
+| **3** | `export()` | `output_path`, `format`, `half`, `int8`, `data` | `str` (Thư mục) | Xuất mô hình sang SafeTensors, ONNX, TensorRT, OpenVINO (FP16/INT8). |
+| **4** | `benchmark()` | `data`, `source`, `iterations`, `warmup` | `dict` (Báo cáo) | Đo đạc Latency (ms) và tốc độ FPS. |
+| **5** | `to() / warmup() / unload() / help()` | `device_name` | `self` / `None` | Quản lý thiết bị tính toán và bộ nhớ VRAM. |
 
 ---
 
@@ -205,41 +198,7 @@ class CustomDetectorModel(DetectorModel):
         )
 
     # =========================================================================
-    # 2. CROP: Nhận diện và cắt các đối tượng thành ảnh con
-    # =========================================================================
-    def crop(
-        self,
-        source: Any,
-        text_prompt: Optional[Union[str, List[str]]] = None,
-        threshold: float = 0.4,
-        text_threshold: float = 0.3,
-        data: Optional[str] = None,
-    ) -> CropResult:
-        res = self.predict(
-            source=source,
-            text_prompt=text_prompt,
-            threshold=threshold,
-            text_threshold=text_threshold,
-            data=data,
-        )
-        crops = []
-        w_img, h_img = res.image.size
-        for obj in res.objects:
-            xmin, ymin, xmax, ymax = obj.box
-            crop_img = res.image.crop((int(xmin), int(ymin), int(xmax), int(ymax)))
-            crops.append(
-                CroppedObject(
-                    image=crop_img,
-                    label=obj.label,
-                    score=obj.score,
-                    box=obj.box,
-                    original_size=(w_img, h_img),
-                )
-            )
-        return CropResult(crops)
-
-    # =========================================================================
-    # 3. PREVIEW: Trực quan hóa trên Folder ảnh / Video / media.load
+    # 2. PREVIEW: Trực quan hóa trên Folder ảnh / Video / media.load
     # =========================================================================
     def preview(
         self,
@@ -318,40 +277,7 @@ class CustomDetectorModel(DetectorModel):
             return PreviewResult(results=results, source_type="directory", output_path=output_path, annotated_frames=annotated_frames)
 
     # =========================================================================
-    # 4. DATASET: Auto-labeling tạo tập dữ liệu huấn luyện
-    # =========================================================================
-    def dataset(
-        self,
-        output_path: str,
-        format: str = "detection",
-        source: Optional[Union[str, List[Any]]] = None,
-        text_prompt: Optional[List[str]] = None,
-        data: Optional[str] = None,
-        batch_size: int = 16,
-        threshold: float = 0.4,
-        verbose: bool = True,
-        **kwargs,
-    ) -> str:
-        from klygo.datasets import detect
-        if data:
-            d_source, d_names = _parse_data_yaml(data)
-            source = source or d_source
-            text_prompt = text_prompt or d_names
-
-        return detect.export(
-            model=self,
-            output_path=output_path,
-            format=format,
-            source=source,
-            text_prompt=text_prompt,
-            batch_size=batch_size,
-            threshold=threshold,
-            verbose=verbose,
-            **kwargs,
-        )
-
-    # =========================================================================
-    # 5. EXPORT: Xuất mô hình đa backend (SafeTensors, ONNX, TensorRT, OpenVINO)
+    # 3. EXPORT: Xuất mô hình đa backend (SafeTensors, ONNX, TensorRT, OpenVINO)
     # =========================================================================
     def export(
         self,
@@ -397,7 +323,7 @@ class CustomDetectorModel(DetectorModel):
         return output_path
 
     # =========================================================================
-    # 6. BENCHMARK: Đánh giá tốc độ & độ trễ
+    # 4. BENCHMARK: Đánh giá tốc độ & độ trễ
     # =========================================================================
     def benchmark(
         self,
@@ -420,7 +346,7 @@ class CustomDetectorModel(DetectorModel):
         )
 
     # =========================================================================
-    # 7. CÁC HÀM TIỆN ÍCH
+    # 5. CÁC HÀM TIỆN ÍCH
     # =========================================================================
     def warmup(self) -> None:
         dummy = PIL.Image.new("RGB", (64, 64), color="black")
@@ -438,12 +364,10 @@ class CustomDetectorModel(DetectorModel):
     def help(self) -> None:
         print(f"MODEL: {self.model_id} ({self.backend}/{self.task})")
         print("=" * 52)
-        print("1. predict(source, text_prompt, threshold=0.4)")
-        print("2. crop(source, text_prompt, threshold=0.4)")
-        print("3. preview(source, text_prompt, output_path=None, show=True)")
-        print("4. dataset(output_path, format='detection', source=None, data=None)")
-        print("5. export(output_path, format='safetensors', half=False, int8=False)")
-        print("6. benchmark(data='data.yaml', iterations=20, warmup=5)")
+        print("1. predict(source, text_prompt=None, threshold=0.4, data=None)")
+        print("2. preview(source=None, text_prompt=None, output_path=None, show=True, data=None)")
+        print("3. export(output_path, format='safetensors', half=False, int8=False, data=None)")
+        print("4. benchmark(data='data.yaml', iterations=20, warmup=5)")
 ```
 
 ---
