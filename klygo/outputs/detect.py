@@ -1,3 +1,13 @@
+"""
+Các lớp kết quả đầu ra chuẩn hóa cho nhận diện đối tượng (`klygo.outputs.detect`).
+
+Hệ thống phân cấp 4 tầng:
+- Box        → 1 BBox / 1 vật thể
+- Crops      → Tập hợp các ảnh con đã cắt (alias: Boxes)
+- Detection  → Kết quả nhận diện trên 1 ảnh / 1 frame
+- Detections → Kết quả nhận diện toàn bộ video / folder
+"""
+
 import os
 import math
 import json
@@ -44,12 +54,12 @@ def _is_notebook() -> bool:
 
 
 # =============================================================================
-# 1. CẤP HẠT NHÂN: CropResult (crop) - Đại diện cho 1 BBox / 1 Ảnh con
+# 1. CẤP HẠT NHÂN: Box - Đại diện cho 1 BBox / 1 Vật thể
 # =============================================================================
-class CropResult:
+class Box:
     """
     Đại diện cho một vật thể / một Bounding Box / một ảnh con đã cắt.
-    results[0][0] == result[0] == crops[0] == crop
+    detections[0][0] == detection[0] == crops[0] == box
     """
 
     def __init__(
@@ -141,13 +151,13 @@ class CropResult:
         """Alias của score."""
         return self.score
 
-    def with_label(self, new_label: str) -> "CropResult":
+    def with_label(self, new_label: str) -> "Box":
         """Tạo bản sao mới với nhãn được đổi."""
-        return CropResult(self.id, str(new_label), self.score, self.box, self.parent_image, self.pad)
+        return Box(self.id, str(new_label), self.score, self.box, self.parent_image, self.pad)
 
-    def with_score(self, new_score: float) -> "CropResult":
+    def with_score(self, new_score: float) -> "Box":
         """Tạo bản sao mới với điểm số được đổi."""
-        return CropResult(self.id, self.label, float(new_score), self.box, self.parent_image, self.pad)
+        return Box(self.id, self.label, float(new_score), self.box, self.parent_image, self.pad)
 
     def normalize(self, img_size: Optional[tuple] = None) -> List[float]:
         """Tọa độ chuẩn hóa tỉ lệ [0.0, 1.0] dạng [xmin, ymin, xmax, ymax]."""
@@ -198,7 +208,7 @@ class CropResult:
         }
 
     def __array__(self, dtype=None):
-        """Hỗ trợ tự động cast sang NumPy Array cho Matplotlib plt.imshow(crop)."""
+        """Hỗ trợ tự động cast sang NumPy Array cho Matplotlib plt.imshow(box)."""
         import numpy as np
         img = self.image
         if img is None:
@@ -215,25 +225,20 @@ class CropResult:
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
     def __repr__(self) -> str:
-        return f"CropResult(id={self.id}, label='{self.label}', score={self.score:.3f}, box={[round(x, 1) for x in self.box]})"
-
-
-# Alias tương thích ngược
-DetectedObject = CropResult
-CroppedObject = CropResult
+        return f"Box(id={self.id}, label='{self.label}', score={self.score:.3f}, box={[round(x, 1) for x in self.box]})"
 
 
 # =============================================================================
-# 2. CẤP TẬP HỢP ẢNH CON: CropResults (crops)
+# 2. CẤP TẬP HỢP ẢNH CON: Crops (alias: Boxes)
 # =============================================================================
-class CropResults:
+class Crops:
     """
-    Tập hợp toàn bộ các ảnh con đã cắt (Cấp Classification).
+    Tập hợp toàn bộ các ảnh con đã cắt (Cấp Classification / Patch List).
     """
 
     def __init__(
         self,
-        crops: List[CropResult],
+        crops: List[Box],
         source_image: Optional[PIL.Image.Image] = None,
         pad: int = 0,
     ) -> None:
@@ -241,42 +246,42 @@ class CropResults:
         self.source_image = source_image
         self.pad = pad
 
-    def __getitem__(self, index: Union[int, slice]) -> Union[CropResult, "CropResults"]:
-        """crops[0] trả về 'crop', crops[m:n] trả về 'CropResults' con."""
+    def __getitem__(self, index: Union[int, slice]) -> Union[Box, "Crops"]:
+        """crops[0] trả về 'Box', crops[m:n] trả về 'Crops' con."""
         if isinstance(index, slice):
-            return CropResults(self.crops[index], self.source_image, self.pad)
+            return Crops(self.crops[index], self.source_image, self.pad)
         return self.crops[index]
 
     def __setitem__(self, index: Union[int, slice], value: Any) -> None:
-        """Gán hoặc thay thế ảnh con: crops[0] = new_crop hoặc crops[m:n] = [...]"""
+        """Gán hoặc thay thế ảnh con: crops[0] = new_box hoặc crops[m:n] = [...]"""
         self.crops[index] = value
 
     def __delitem__(self, index: Union[int, slice]) -> None:
         """Xóa ảnh con: del crops[0] hoặc del crops[m:n]"""
         del self.crops[index]
 
-    def append(self, crop: CropResult) -> None:
+    def append(self, crop: Box) -> None:
         """Thêm 1 ảnh con mới vào tập hợp."""
         self.crops.append(crop)
 
-    def extend(self, other: Union[List[CropResult], "CropResults"]) -> None:
-        """Nối thêm nhiều ảnh con từ list hoặc từ CropResults khác."""
-        items = other.crops if isinstance(other, CropResults) else list(other)
+    def extend(self, other: Union[List[Box], "Crops"]) -> None:
+        """Nối thêm nhiều ảnh con từ list hoặc từ Crops khác."""
+        items = other.crops if isinstance(other, Crops) else list(other)
         self.crops.extend(items)
         for i, c in enumerate(self.crops):
             c.id = i
 
-    def pop(self, index: int = -1) -> CropResult:
+    def pop(self, index: int = -1) -> Box:
         """Lấy ra và xóa ảnh con tại vị trí index."""
         return self.crops.pop(index)
 
-    def insert(self, index: int, crop: CropResult) -> None:
+    def insert(self, index: int, crop: Box) -> None:
         """Chèn 1 ảnh con vào vị trí index."""
         self.crops.insert(index, crop)
         for i, c in enumerate(self.crops):
             c.id = i
 
-    def remove(self, crop: CropResult) -> None:
+    def remove(self, crop: Box) -> None:
         """Xóa 1 ảnh con cụ thể."""
         self.crops.remove(crop)
         for i, c in enumerate(self.crops):
@@ -289,12 +294,12 @@ class CropResults:
     def __len__(self) -> int:
         return len(self.crops)
 
-    def __add__(self, other: "CropResults") -> "CropResults":
+    def __add__(self, other: "Crops") -> "Crops":
         """Ghép 2 tập hợp ảnh con: crops = crops_1 + crops_2"""
-        if not isinstance(other, CropResults):
-            raise TypeError(f"Không thể cộng CropResults với kiểu {type(other)}")
+        if not isinstance(other, Crops):
+            raise TypeError(f"Không thể cộng Crops với kiểu {type(other)}")
         combined = [
-            CropResult(
+            Box(
                 id=i,
                 label=c.label,
                 score=c.score,
@@ -304,7 +309,7 @@ class CropResults:
             )
             for i, c in enumerate(list(self.crops) + list(other.crops))
         ]
-        return CropResults(combined, self.source_image, self.pad)
+        return Crops(combined, self.source_image, self.pad)
 
     def __iter__(self):
         return iter(self.crops)
@@ -351,62 +356,62 @@ class CropResults:
             counts[c.label] = counts.get(c.label, 0) + 1
         return counts
 
-    def filter(self, fn: Callable[[CropResult], bool]) -> "CropResults":
-        """Lọc tập ảnh con bằng Lambda -> Trả về CropResults mới."""
+    def filter(self, fn: Callable[[Box], bool]) -> "Crops":
+        """Lọc tập ảnh con bằng Lambda -> Trả về Crops mới."""
         filtered = [c for c in self.crops if fn(c)]
         reindexed = [
-            CropResult(i, c.label, c.score, c.box, c.parent_image, c.pad)
+            Box(i, c.label, c.score, c.box, c.parent_image, c.pad)
             for i, c in enumerate(filtered)
         ]
-        return CropResults(reindexed, self.source_image, self.pad)
+        return Crops(reindexed, self.source_image, self.pad)
 
     def sort(
         self,
-        key: Optional[Callable[[CropResult], Any]] = None,
+        key: Optional[Callable[[Box], Any]] = None,
         reverse: bool = True,
-    ) -> "CropResults":
-        """Sắp xếp tập ảnh con bằng Lambda -> Trả về CropResults mới."""
+    ) -> "Crops":
+        """Sắp xếp tập ảnh con bằng Lambda -> Trả về Crops mới."""
         sort_fn = key or (lambda c: c.score)
         sorted_crops = sorted(self.crops, key=sort_fn, reverse=reverse)
         reindexed = [
-            CropResult(i, c.label, c.score, c.box, c.parent_image, c.pad)
+            Box(i, c.label, c.score, c.box, c.parent_image, c.pad)
             for i, c in enumerate(sorted_crops)
         ]
-        return CropResults(reindexed, self.source_image, self.pad)
+        return Crops(reindexed, self.source_image, self.pad)
 
     def group_by(
         self,
-        key: Optional[Callable[[CropResult], Any]] = None,
-    ) -> Dict[Any, "CropResults"]:
+        key: Optional[Callable[[Box], Any]] = None,
+    ) -> Dict[Any, "Crops"]:
         """Gom nhóm các ảnh con theo Class hoặc điều kiện."""
         key_fn = key or (lambda c: c.label)
-        groups: Dict[Any, List[CropResult]] = {}
+        groups: Dict[Any, List[Box]] = {}
         for c in self.crops:
             k = key_fn(c)
             groups.setdefault(k, []).append(c)
         return {
-            k: CropResults(v, self.source_image, self.pad)
+            k: Crops(v, self.source_image, self.pad)
             for k, v in groups.items()
         }
 
     def map(
         self,
-        fn: Union[Dict[str, str], Callable[[CropResult], Any]],
-    ) -> "CropResults":
+        fn: Union[Dict[str, str], Callable[[Box], Any]],
+    ) -> "Crops":
         """Biến đổi dữ liệu ảnh con bằng Dict đổi nhãn hoặc Lambda."""
         mapped = []
         for i, c in enumerate(self.crops):
             if isinstance(fn, dict):
                 new_label = fn.get(c.label, c.label)
-                mapped.append(CropResult(i, new_label, c.score, c.box, c.parent_image, c.pad))
+                mapped.append(Box(i, new_label, c.score, c.box, c.parent_image, c.pad))
             elif callable(fn):
                 res = fn(c)
-                if isinstance(res, CropResult):
+                if isinstance(res, Box):
                     res.id = i
                     mapped.append(res)
                 elif isinstance(res, str):
-                    mapped.append(CropResult(i, res, c.score, c.box, c.parent_image, c.pad))
-        return CropResults(mapped, self.source_image, self.pad)
+                    mapped.append(Box(i, res, c.score, c.box, c.parent_image, c.pad))
+        return Crops(mapped, self.source_image, self.pad)
 
     def show(
         self,
@@ -499,7 +504,7 @@ class CropResults:
         }
 
     def __repr__(self) -> str:
-        summary = f"CropResults: {len(self.crops)} crops"
+        summary = f"Crops: {len(self.crops)} crops"
         if len(self.crops) > 0:
             details = ", ".join([f"{c.label} ({c.score:.2f})" for c in self.crops[:5]])
             if len(self.crops) > 5:
@@ -509,118 +514,136 @@ class CropResults:
 
 
 # =============================================================================
-# 3. CẤP 1 BỨC ẢNH / 1 FRAME: DetectionResult (result)
+# 3. CẤP 1 BỨC ẢNH / 1 FRAME: Detection
 # =============================================================================
-class DetectionResult:
+class Detection:
     """
     Đầu ra chuẩn hóa chứa tất cả kết quả nhận diện của một bức ảnh / 1 frame.
-    results[0] == result
-    result[0] == crop
+    detections[0] == detection
+    detection[0] == box
     """
 
     def __init__(
         self,
         source_image: PIL.Image.Image,
-        objects: List[CropResult],
+        objects: List[Box],
         speed: Optional[dict] = None,
         image_frame_index: int = 0,
-        text_prompt: Optional[Union[str, List[str]]] = None,
-        threshold: float = 0.4,
-        text_threshold: float = 0.3,
+        config: Optional[Dict[str, Any]] = None,
+        **kwargs,
     ) -> None:
         self.source_image = source_image
-        self.objects = objects  # Danh sách các CropResult (crop)
-        self.speed = speed or {"preprocess": 0.0, "inference": 0.0, "postprocess": 0.0}
+        self.objects = objects  # Danh sách các Box
+        self.speed = speed or {"preprocess": 0.0, "inference": 0.0, "postprocess": 0.0, "total": 0.0}
         self.image_frame_index = image_frame_index
-        self.text_prompt = text_prompt
-        self.threshold = threshold
-        self.text_threshold = text_threshold
         self.timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
-        # Gán liên kết ảnh mẹ vào từng crop
+        # Cấu hình tự do linh hoạt (Open Configuration)
+        self.config: Dict[str, Any] = dict(config or {})
+        self.config.update(kwargs)
+
+        # Gán liên kết ảnh mẹ vào từng box
         for c in self.objects:
             c.parent_image = self.source_image
 
-    def __getitem__(self, index: Union[int, slice]) -> Union[CropResult, "DetectionResult"]:
-        """🎯 result[0] trả về 'crop', result[m:n] trả về 'DetectionResult' con."""
+    @property
+    def text_prompt(self) -> Optional[Union[str, List[str]]]:
+        """Từ khóa/Nhãn nhận diện (truy xuất từ config)."""
+        return self.config.get("text_prompt", self.config.get("prompt"))
+
+    @property
+    def threshold(self) -> Optional[float]:
+        """Ngưỡng độ tin cậy (truy xuất từ config)."""
+        return self.config.get("threshold", self.config.get("conf"))
+
+    @property
+    def conf(self) -> Optional[float]:
+        """Alias của threshold."""
+        return self.threshold
+
+    @property
+    def text_threshold(self) -> Optional[float]:
+        """Ngưỡng tương đồng văn bản Open-Vocabulary (truy xuất từ config)."""
+        return self.config.get("text_threshold")
+
+    def __getitem__(self, index: Union[int, slice]) -> Union[Box, "Detection"]:
+        """🎯 detection[0] trả về 'Box', detection[m:n] trả về 'Detection' con."""
         if isinstance(index, slice):
-            return DetectionResult(
+            return Detection(
                 self.source_image,
                 self.objects[index],
                 self.speed,
                 self.image_frame_index,
-                self.text_prompt,
-                self.threshold,
-                self.text_threshold,
+                config=self.config,
             )
         return self.objects[index]
 
     def __setitem__(self, index: Union[int, slice], value: Any) -> None:
-        """Gán hoặc thay thế box: result[0] = new_crop hoặc result[m:n] = [...]"""
-        if isinstance(value, CropResult):
+        """Gán hoặc thay thế box: detection[0] = new_box hoặc detection[m:n] = [...]"""
+        if isinstance(value, Box):
             value.parent_image = self.source_image
         elif isinstance(value, (list, tuple)):
             for item in value:
-                if isinstance(item, CropResult):
+                if isinstance(item, Box):
                     item.parent_image = self.source_image
         self.objects[index] = value
 
     def __delitem__(self, index: Union[int, slice]) -> None:
-        """Xóa box: del result[0] hoặc del result[m:n]"""
+        """Xóa box: del detection[0] hoặc del detection[m:n]"""
         del self.objects[index]
 
-    def append(self, crop: CropResult) -> None:
-        """Thêm 1 box mới vào result."""
-        if isinstance(crop, CropResult):
+    def append(self, crop: Box) -> None:
+        """Thêm 1 box mới vào detection."""
+        if isinstance(crop, Box):
             crop.parent_image = self.source_image
         self.objects.append(crop)
 
-    def extend(self, other: Union[List[CropResult], "DetectionResult", "CropResults"]) -> None:
-        """Nối thêm nhiều box từ list hoặc từ result khác."""
-        if isinstance(other, DetectionResult):
+    def extend(self, other: Union[List[Box], "Detection", Crops]) -> None:
+        """Nối thêm nhiều box từ list hoặc từ detection khác."""
+        if isinstance(other, Detection):
             items = other.objects
-        elif isinstance(other, CropResults):
+        elif isinstance(other, Crops):
             items = other.crops
         else:
             items = list(other)
         for c in items:
-            if isinstance(c, CropResult):
+            if isinstance(c, Box):
                 c.parent_image = self.source_image
             self.objects.append(c)
         for i, c in enumerate(self.objects):
             c.id = i
 
-    def pop(self, index: int = -1) -> CropResult:
+    def pop(self, index: int = -1) -> Box:
         """Lấy ra và xóa box tại vị trí index."""
         return self.objects.pop(index)
 
-    def insert(self, index: int, crop: CropResult) -> None:
+    def insert(self, index: int, crop: Box) -> None:
         """Chèn 1 box vào vị trí index."""
-        if isinstance(crop, CropResult):
+        if isinstance(crop, Box):
             crop.parent_image = self.source_image
         self.objects.insert(index, crop)
         for i, c in enumerate(self.objects):
             c.id = i
 
-    def remove(self, crop: CropResult) -> None:
-        """Xóa 1 box cụ thể khỏi result."""
+    def remove(self, crop: Box) -> None:
+        """Xóa 1 box cụ thể khỏi detection."""
         self.objects.remove(crop)
         for i, c in enumerate(self.objects):
             c.id = i
 
     def clear(self) -> None:
-        """Xóa sạch toàn bộ box trong result."""
+        """Xóa sạch toàn bộ box trong detection."""
         self.objects.clear()
 
     def __len__(self) -> int:
         return len(self.objects)
 
-    def __add__(self, other: "DetectionResult") -> "DetectionResult":
-        """Ghép 2 kết quả nhận diện trên cùng 1 ảnh: result = result_1 + result_2"""
-        if not isinstance(other, DetectionResult):
-            raise TypeError(f"Không thể cộng DetectionResult với kiểu {type(other)}")
+    def __add__(self, other: "Detection") -> "Detection":
+        """Ghép 2 kết quả nhận diện trên cùng 1 ảnh: det = det_1 + det_2"""
+        if not isinstance(other, Detection):
+            raise TypeError(f"Không thể cộng Detection với kiểu {type(other)}")
         combined = [
-            CropResult(
+            Box(
                 id=i,
                 label=c.label,
                 score=c.score,
@@ -630,14 +653,12 @@ class DetectionResult:
             )
             for i, c in enumerate(list(self.objects) + list(other.objects))
         ]
-        return DetectionResult(
+        return Detection(
             self.source_image,
             combined,
             self.speed,
             self.image_frame_index,
-            self.text_prompt,
-            self.threshold,
-            self.text_threshold,
+            config=self.config,
         )
 
     def __iter__(self):
@@ -709,22 +730,22 @@ class DetectionResult:
             counts[c.label] = counts.get(c.label, 0) + 1
         return counts
 
-    def crop(self, pad: int = 0) -> CropResults:
-        """Cắt toàn bộ các box trong ảnh -> Trả về CropResults."""
+    def crop(self, pad: int = 0) -> Crops:
+        """Cắt toàn bộ các box trong ảnh -> Trả về Crops."""
         crop_items = [
-            CropResult(c.id, c.label, c.score, c.box, self.source_image, pad=pad)
+            Box(c.id, c.label, c.score, c.box, self.source_image, pad=pad)
             for c in self.objects
         ]
-        return CropResults(crop_items, self.source_image, pad=pad)
+        return Crops(crop_items, self.source_image, pad=pad)
 
-    def filter(self, fn: Callable[[CropResult], bool]) -> "DetectionResult":
-        """Lọc các box trong ảnh bằng Lambda -> Trả về DetectionResult mới đã lọc."""
+    def filter(self, fn: Callable[[Box], bool]) -> "Detection":
+        """Lọc các box trong ảnh bằng Lambda -> Trả về Detection mới đã lọc."""
         filtered = [c for c in self.objects if fn(c)]
         reindexed = [
-            CropResult(i, c.label, c.score, c.box, self.source_image, c.pad)
+            Box(i, c.label, c.score, c.box, self.source_image, c.pad)
             for i, c in enumerate(filtered)
         ]
-        return DetectionResult(
+        return Detection(
             self.source_image,
             reindexed,
             self.speed,
@@ -736,17 +757,17 @@ class DetectionResult:
 
     def sort(
         self,
-        key: Optional[Callable[[CropResult], Any]] = None,
+        key: Optional[Callable[[Box], Any]] = None,
         reverse: bool = True,
-    ) -> "DetectionResult":
-        """Sắp xếp các box trong ảnh bằng Lambda -> Trả về DetectionResult mới."""
+    ) -> "Detection":
+        """Sắp xếp các box trong ảnh bằng Lambda -> Trả về Detection mới."""
         sort_fn = key or (lambda c: c.score)
         sorted_objs = sorted(self.objects, key=sort_fn, reverse=reverse)
         reindexed = [
-            CropResult(i, c.label, c.score, c.box, self.source_image, c.pad)
+            Box(i, c.label, c.score, c.box, self.source_image, c.pad)
             for i, c in enumerate(sorted_objs)
         ]
-        return DetectionResult(
+        return Detection(
             self.source_image,
             reindexed,
             self.speed,
@@ -758,37 +779,37 @@ class DetectionResult:
 
     def group_by(
         self,
-        key: Optional[Callable[[CropResult], Any]] = None,
-    ) -> Dict[Any, "DetectionResult"]:
+        key: Optional[Callable[[Box], Any]] = None,
+    ) -> Dict[Any, "Detection"]:
         """Gom nhóm các box theo Class hoặc điều kiện."""
         key_fn = key or (lambda c: c.label)
-        groups: Dict[Any, List[CropResult]] = {}
+        groups: Dict[Any, List[Box]] = {}
         for c in self.objects:
             k = key_fn(c)
             groups.setdefault(k, []).append(c)
         return {
-            k: DetectionResult(self.source_image, v, self.speed, self.image_frame_index)
+            k: Detection(self.source_image, v, self.speed, self.image_frame_index)
             for k, v in groups.items()
         }
 
     def map(
         self,
-        fn: Union[Dict[str, str], Callable[[CropResult], Any]],
-    ) -> "DetectionResult":
+        fn: Union[Dict[str, str], Callable[[Box], Any]],
+    ) -> "Detection":
         """Biến đổi dữ liệu box bằng Dict đổi nhãn hoặc Lambda."""
         mapped = []
         for i, c in enumerate(self.objects):
             if isinstance(fn, dict):
                 new_label = fn.get(c.label, c.label)
-                mapped.append(CropResult(i, new_label, c.score, c.box, self.source_image, c.pad))
+                mapped.append(Box(i, new_label, c.score, c.box, self.source_image, c.pad))
             elif callable(fn):
                 res = fn(c)
-                if isinstance(res, CropResult):
+                if isinstance(res, Box):
                     res.id = i
                     mapped.append(res)
                 elif isinstance(res, str):
-                    mapped.append(CropResult(i, res, c.score, c.box, self.source_image, c.pad))
-        return DetectionResult(
+                    mapped.append(Box(i, res, c.score, c.box, self.source_image, c.pad))
+        return Detection(
             self.source_image,
             mapped,
             self.speed,
@@ -825,18 +846,18 @@ class DetectionResult:
 
     def to_dict(self) -> Dict[str, Any]:
         """Xuất toàn bộ kết quả về dạng dict chuẩn COCO/Roboflow."""
-        return {
+        d = {
             "image_format": self.image_format,
             "image_mode": self.image_mode,
             "image_size": list(self.source_image.size),
             "image_frame_index": self.image_frame_index,
             "timestamp": self.timestamp,
-            "text_prompt": self.text_prompt,
-            "threshold": self.threshold,
-            "text_threshold": self.text_threshold,
             "objects": [c.to_dict() for c in self.objects],
             "speed": self.speed,
         }
+        if self.config:
+            d["config"] = self.config
+        return d
 
     def plot(
         self,
@@ -991,7 +1012,7 @@ class DetectionResult:
             annotated.show()
 
     def __repr__(self) -> str:
-        summary = f"DetectionResult: {len(self.objects)} objects detected"
+        summary = f"Detection: {len(self.objects)} objects detected"
         if len(self.objects) > 0:
             details = ", ".join([f"{c.label} ({c.score:.2f})" for c in self.objects[:5]])
             if len(self.objects) > 5:
@@ -1001,18 +1022,18 @@ class DetectionResult:
 
 
 # =============================================================================
-# 4. CẤP TOÀN BỘ VIDEO / FOLDER: DetectionResults (results)
+# 4. CẤP TOÀN BỘ VIDEO / FOLDER: Detections
 # =============================================================================
-class DetectionResults:
+class Detections:
     """
-    Tập hợp tất cả các DetectionResult của toàn bộ Video / Folder ảnh.
-    results[0] == result
-    results[0][0] == crop
+    Tập hợp tất cả các Detection của toàn bộ Video / Folder ảnh.
+    detections[0] == detection
+    detections[0][0] == box
     """
 
     def __init__(
         self,
-        frames: List[DetectionResult],
+        frames: List[Detection],
         source_type: str = "video",
         fps: float = 30.0,
         output_path: Optional[str] = None,
@@ -1023,46 +1044,46 @@ class DetectionResults:
         self.output_path = output_path
         self.results = frames  # alias
 
-    def __getitem__(self, index: Union[int, slice]) -> Union[DetectionResult, "DetectionResults"]:
-        """🎯 results[0] trả về 'result', results[m:n] trả về 'DetectionResults' con."""
+    def __getitem__(self, index: Union[int, slice]) -> Union[Detection, "Detections"]:
+        """🎯 detections[0] trả về 'Detection', detections[m:n] trả về 'Detections' con."""
         if isinstance(index, slice):
-            return DetectionResults(self.frames[index], self.source_type, self.fps, self.output_path)
+            return Detections(self.frames[index], self.source_type, self.fps, self.output_path)
         return self.frames[index]
 
     def __setitem__(self, index: Union[int, slice], value: Any) -> None:
-        """Gán hoặc thay thế frame: results[0] = new_result hoặc results[m:n] = [...]"""
+        """Gán hoặc thay thế frame: detections[0] = new_detection hoặc detections[m:n] = [...]"""
         self.frames[index] = value
 
     def __delitem__(self, index: Union[int, slice]) -> None:
-        """Xóa frame: del results[0] hoặc del results[m:n]"""
+        """Xóa frame: del detections[0] hoặc del detections[m:n]"""
         del self.frames[index]
 
-    def append(self, frame: DetectionResult) -> None:
-        """Thêm 1 result mới vào cuối results."""
+    def append(self, frame: Detection) -> None:
+        """Thêm 1 detection mới vào cuối detections."""
         self.frames.append(frame)
 
-    def extend(self, other: Union[List[DetectionResult], "DetectionResults"]) -> None:
-        """Nối thêm nhiều result vào results."""
-        items = other.frames if isinstance(other, DetectionResults) else list(other)
+    def extend(self, other: Union[List[Detection], "Detections"]) -> None:
+        """Nối thêm nhiều detection vào detections."""
+        items = other.frames if isinstance(other, Detections) else list(other)
         self.frames.extend(items)
 
-    def pop(self, index: int = -1) -> DetectionResult:
+    def pop(self, index: int = -1) -> Detection:
         """Lấy ra và xóa frame tại index (mặc định frame cuối)."""
         return self.frames.pop(index)
 
-    def insert(self, index: int, frame: DetectionResult) -> None:
-        """Chèn 1 result vào vị trí index."""
+    def insert(self, index: int, frame: Detection) -> None:
+        """Chèn 1 detection vào vị trí index."""
         self.frames.insert(index, frame)
 
     def __len__(self) -> int:
         return len(self.frames)
 
-    def __add__(self, other: "DetectionResults") -> "DetectionResults":
-        """Ghép 2 tập hợp video / folder: results = results_1 + results_2"""
-        if not isinstance(other, DetectionResults):
-            raise TypeError(f"Không thể cộng DetectionResults với kiểu {type(other)}")
+    def __add__(self, other: "Detections") -> "Detections":
+        """Ghép 2 tập hợp video / folder: detections = detections_1 + detections_2"""
+        if not isinstance(other, Detections):
+            raise TypeError(f"Không thể cộng Detections với kiểu {type(other)}")
         combined = list(self.frames) + list(other.frames)
-        return DetectionResults(combined, self.source_type, self.fps, self.output_path)
+        return Detections(combined, self.source_type, self.fps, self.output_path)
 
     def __iter__(self):
         return iter(self.frames)
@@ -1110,13 +1131,13 @@ class DetectionResults:
     def filter(
         self,
         fn: Callable[[Any], bool],
-    ) -> "DetectionResults":
+    ) -> "Detections":
         """
         Lọc dữ liệu trên toàn bộ video/folder:
-        - Nếu fn nhận frame (DetectionResult): lọc chọn các frame thỏa mãn.
-        - Nếu fn nhận crop (CropResult): tự động lọc các box trong từng frame.
+        - Nếu fn nhận frame (Detection): lọc chọn các frame thỏa mãn.
+        - Nếu fn nhận box (Box): tự động lọc các box trong từng frame.
         """
-        # Thử nghiệm xem lambda nhận frame hay crop
+        # Thử nghiệm xem lambda nhận frame hay box
         filtered_frames = []
         for f in self.frames:
             # Thử gọi trên frame trước
@@ -1124,55 +1145,55 @@ class DetectionResults:
                 if fn(f):
                     filtered_frames.append(f)
             except Exception:
-                # Nếu lỗi thuộc tính của frame, áp dụng lọc trên từng crop của frame
+                # Nếu lỗi thuộc tính của frame, áp dụng lọc trên từng box của frame
                 cleaned_frame = f.filter(fn)
                 if len(cleaned_frame) > 0:
                     filtered_frames.append(cleaned_frame)
 
-        return DetectionResults(filtered_frames, self.source_type, self.fps, self.output_path)
+        return Detections(filtered_frames, self.source_type, self.fps, self.output_path)
 
     def sort(
         self,
-        key: Optional[Callable[[DetectionResult], Any]] = None,
+        key: Optional[Callable[[Detection], Any]] = None,
         reverse: bool = True,
-    ) -> "DetectionResults":
+    ) -> "Detections":
         """Sắp xếp các frame trong video."""
         sort_fn = key or (lambda f: len(f))
         sorted_frames = sorted(self.frames, key=sort_fn, reverse=reverse)
-        return DetectionResults(sorted_frames, self.source_type, self.fps, self.output_path)
+        return Detections(sorted_frames, self.source_type, self.fps, self.output_path)
 
     def group_by(
         self,
-        key: Optional[Callable[[DetectionResult], Any]] = None,
-    ) -> Dict[Any, "DetectionResults"]:
+        key: Optional[Callable[[Detection], Any]] = None,
+    ) -> Dict[Any, "Detections"]:
         """Gom nhóm các frame theo điều kiện."""
         key_fn = key or (lambda f: f.image_frame_index)
-        groups: Dict[Any, List[DetectionResult]] = {}
+        groups: Dict[Any, List[Detection]] = {}
         for f in self.frames:
             k = key_fn(f)
             groups.setdefault(k, []).append(f)
         return {
-            k: DetectionResults(v, self.source_type, self.fps)
+            k: Detections(v, self.source_type, self.fps)
             for k, v in groups.items()
         }
 
     def map(
         self,
-        fn: Union[Dict[str, str], Callable[[DetectionResult], DetectionResult]],
-    ) -> "DetectionResults":
+        fn: Union[Dict[str, str], Callable[[Detection], Detection]],
+    ) -> "Detections":
         """Biến đổi hàng loạt trên các frame."""
         mapped = []
         for f in self.frames:
             mapped.append(f.map(fn))
-        return DetectionResults(mapped, self.source_type, self.fps, self.output_path)
+        return Detections(mapped, self.source_type, self.fps, self.output_path)
 
     def crop(
         self,
         output_path: Optional[str] = None,
         pad: int = 0,
-    ) -> CropResults:
-        """Cắt toàn bộ vật thể trên tất cả các frame -> Trả về CropResults (crops)."""
-        all_crops: List[CropResult] = []
+    ) -> Crops:
+        """Cắt toàn bộ vật thể trên tất cả các frame -> Trả về Crops."""
+        all_crops: List[Box] = []
         for f in self.frames:
             crops_obj = f.crop(pad=pad)
             all_crops.extend(crops_obj.crops)
@@ -1181,7 +1202,7 @@ class DetectionResults:
         for i, c in enumerate(all_crops):
             c.id = i
 
-        crops_collection = CropResults(all_crops, pad=pad)
+        crops_collection = Crops(all_crops, pad=pad)
         if output_path:
             crops_collection.export(output_path, format="classification")
         return crops_collection
@@ -1287,8 +1308,17 @@ class DetectionResults:
         }
 
     def __repr__(self) -> str:
-        return f"<DetectionResults frames={len(self.frames)}, total_objects={self.total_objects}, unique_labels={self.unique_labels}>"
+        return f"<Detections frames={len(self.frames)}, total_objects={self.total_objects}, unique_labels={self.unique_labels}>"
 
 
-# Alias tương thích
-PreviewResult = DetectionResults
+# =============================================================================
+# ALIASES TƯƠNG THÍCH NGƯỢC
+# =============================================================================
+CropResult = Box
+DetectedObject = Box
+CroppedObject = Box
+Boxes = Crops
+CropResults = Crops
+DetectionResult = Detection
+DetectionResults = Detections
+PreviewResult = Detections

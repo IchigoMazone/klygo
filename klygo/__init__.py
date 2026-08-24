@@ -25,6 +25,7 @@ from . import datasets
 from . import files
 from . import media
 from . import models
+from . import outputs
 from . import utils
 from . import validators
 from . import visualize
@@ -41,6 +42,7 @@ __all__ = [
     "files",
     "media",
     "models",
+    "outputs",
     "utils",
     "validators",
     "visualize",

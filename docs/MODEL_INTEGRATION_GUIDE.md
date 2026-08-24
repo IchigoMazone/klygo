@@ -27,7 +27,7 @@ Mọi mô hình trong Klygo phải đảm bảo:
 ---
 
 ## 2. Cấu trúc Giao diện Chuẩn (Các Phương Thức Nghiệp Vụ)
-
+    
 Mọi lớp mô hình phải kế thừa từ `DetectorModel` trong `klygo.models.interfaces` và triển khai đầy đủ các phương thức sau:
 
 ```

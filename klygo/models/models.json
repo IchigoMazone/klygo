@@ -1,37 +1,37 @@
 {
   "yolo11*.pt": {
-    "class": "YOLODetect",
-    "task": "Object-Detection",
-    "backend": "Ultralytics",
-    "num_params": "None" 
-  },
-  "yolo26*.pt": { 
-    "class": "YOLODetect",
+    "class": "klygo.models.detection.YOLODetect",
     "task": "Object-Detection",
     "backend": "Ultralytics",
     "num_params": "None"
   },
-  "locate-anything": { 
-    "class": "LocateAnythingDetect",
+  "yolo26*.pt": {
+    "class": "klygo.models.detection.YOLODetect",
+    "task": "Object-Detection",
+    "backend": "Ultralytics",
+    "num_params": "None"
+  },
+  "locate-anything": {
+    "class": "klygo.models.detection.LocateAnythingDetect",
     "task": "Object-Detection",
     "backend": "Hugging Face",
     "num_params": "3B",
     "model_id": ""
   },
   "grounding-dino-*": {
-    "class": "GroundingDinoDetect",
+    "class": "klygo.models.detection.GroundingDinoDetect",
     "task": "Object-Detection",
     "backend": "Hugging Face",
     "num_params": null,
-    "option": { 
-      "base": { 
+    "option": {
+      "base": {
         "num_params": "232M",
-        "model_id": "IDEA-Research/grounding-dino-base" 
+        "model_id": "IDEA-Research/grounding-dino-base"
       },
-      "tiny": { 
+      "tiny": {
         "num_params": "172M",
-        "model_id": "IDEA-Research/grounding-dino-tiny" 
+        "model_id": "IDEA-Research/grounding-dino-tiny"
       }
-    } 
+    }
   }
 }

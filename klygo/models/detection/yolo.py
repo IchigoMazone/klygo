@@ -1,68 +1,35 @@
-from typing import Any, List
-from ..interfaces import DetectorModel, DetectionResult, CropResult
+from typing import Any, List, Dict, Union
+import PIL.Image
+from klygo.models import base
+from klygo.outputs.detect import Detection
 
 
-class YOLODetect(DetectorModel):
+class YOLODetect(base.Detector):
     """
     Trình bao bọc mô hình nhận diện đối tượng kiến trúc YOLO.
     """
 
-    def __init__(self, task: str, backend: str, num_params: str, **kwargs) -> None:
-        self.task = task
-        self.backend = backend
-        self.num_params = num_params
-        self._device = "cpu"
+    def __init__(self, metadata: Union[Dict[str, Any], str], **kwargs) -> None:
+        super().__init__(metadata, **kwargs)
 
-    @property
-    def device(self) -> str:
-        return self._device
-
-    def to(self, device_name: str) -> "YOLODetect":
-        self._device = device_name
-        return self
-
-    def predict(
+    def _infer_batch(
         self,
-        source: Any,
-        text_prompt: List[str],
-        threshold: float = 0.4,
-        text_threshold: float = 0.3,
-    ) -> DetectionResult:
+        batch_imgs: List[PIL.Image.Image],
+        prompt: List[str],
+        conf: float,
+        text_threshold: float,
+        half: bool,
+    ) -> List[Detection]:
         raise NotImplementedError
-
-    def crop(
-        self,
-        source: Any,
-        text_prompt: List[str],
-        threshold: float = 0.4,
-        text_threshold: float = 0.3,
-    ) -> CropResult:
-        raise NotImplementedError
-
-    def export(self, output_path: str, format: str = "onnx", half: bool = False) -> str:
-        raise NotImplementedError
-
-    def dataset(
-        self,
-        output_path: str,
-        format: str,
-        source: str,
-        text_prompt: List[str],
-        batch_size: int = 16,
-        threshold: float = 0.4,
-    ) -> None:
-        raise NotImplementedError
-
-    def warmup(self) -> None:
-        pass
-
-    def unload(self) -> None:
-        pass
 
     def help(self) -> None:
+        """In ra thông tin mô hình và danh sách các hàm nghiệp vụ."""
         print(f"MODEL: YOLO ({self.backend}/{self.task})")
-        print("=" * 52)
-        print("1. predict(source: Any, text_prompt: List[str], threshold=0.4, text_threshold=0.3)")
-        print("2. crop(source: Any, text_prompt: List[str], threshold=0.4, text_threshold=0.3)")
-        print("3. dataset(output_path: str, format: str, source: str, text_prompt: List[str], batch_size=16, threshold=0.4)")
-        print("4. export(output_path: str, format='onnx', half=False)")
+        print(f"CLASS: {self.class_name}")
+        print("=" * 60)
+        print("1. predict(source, prompt, conf=0.25, batch=1, vid_stride=1, max_frames=None, half=False, device=None)")
+        print("   Nhan dien doi tuong tren anh, video, folder tu media.load.")
+        print("2. benchmark(data='data.yaml', iterations=20, warmup=5)")
+        print("   Cham diem danh gia toc do suy luan (Do tre Latency ms / Toc do FPS).")
+        print("3. export(output_dir='my_model')")
+        print("   Xuat toan bo mo hinh (Weights + klygo.json) ra thu muc de chay Offline.")
