@@ -2,10 +2,10 @@
 Các lớp kết quả đầu ra chuẩn hóa cho nhận diện đối tượng (`klygo.outputs.detect`).
 
 Hệ thống phân cấp 4 tầng:
-- Box        → 1 BBox / 1 vật thể
-- Crops      → Tập hợp các ảnh con đã cắt (alias: Boxes)
-- Detection  → Kết quả nhận diện trên 1 ảnh / 1 frame
-- Detections → Kết quả nhận diện toàn bộ video / folder
+- Box        : 1 BBox / 1 vật thể
+- Crops      : Tập hợp các ảnh con đã cắt (alias: Boxes)
+- Detection  : Kết quả nhận diện trên 1 ảnh / 1 frame
+- Detections : Kết quả nhận diện toàn bộ video / folder
 """
 
 import os
@@ -13,7 +13,7 @@ import datetime
 from typing import List, Dict, Any, Optional, Union, Callable
 import PIL.Image
 
-from klygo import files, media, visualize
+from klygo import files, media, visual
 
 
 # =============================================================================
@@ -136,7 +136,7 @@ class Box:
         """Hiển thị ảnh con trên màn hình hoặc notebook."""
         img = self.image
         if img:
-            visualize.show_image(img, width=width)
+            visual.show_image(img, width=width)
 
     def save(self, output_path: str) -> None:
         """Lưu ảnh con ra đĩa thông qua klygo.media.save."""
@@ -309,7 +309,7 @@ class Crops:
         """Hiển thị tập ảnh con trên màn hình hoặc notebook."""
         items = self.images[:limit] if limit else self.images
         for img in items:
-            visualize.show_image(img, width=cell_size)
+            visual.show_image(img, width=cell_size)
 
     def export(
         self,
@@ -577,8 +577,8 @@ class Detection:
         scores: bool = True,
         **kwargs,
     ) -> PIL.Image.Image:
-        """Vẽ bounding box và nhãn lên ảnh sử dụng klygo.visualize.draw_bboxes."""
-        return visualize.draw_bboxes(
+        """Vẽ bounding box và nhãn lên ảnh sử dụng klygo.visual.draw_bboxes."""
+        return visual.draw_bboxes(
             image=self.source_image,
             bboxes=self.boxes,
             labels=self.labels if labels else None,
@@ -592,9 +592,9 @@ class Detection:
         media.save(output_path, annotated, overwrite=True, verbose=False)
 
     def show(self, line_width: Optional[int] = None, width: Optional[int] = None, **kwargs) -> None:
-        """Vẽ và hiển thị ảnh nhận diện bằng klygo.visualize.show_image."""
+        """Vẽ và hiển thị ảnh nhận diện bằng klygo.visual.show_image."""
         annotated = self.plot(line_width=line_width, **kwargs)
-        visualize.show_image(annotated, width=width)
+        visual.show_image(annotated, width=width)
 
     def export(self, output_path: str, format: str = "yolo") -> None:
         """Xuất file nhãn YOLO (.txt) hoặc JSON sử dụng klygo.files.save."""
@@ -798,7 +798,7 @@ class Detections:
             return output_path
 
     def show(self, limit: Optional[int] = 5) -> None:
-        """Xem trước các frame đầu tiên bằng klygo.visualize.show_image."""
+        """Xem trước các frame đầu tiên bằng klygo.visual.show_image."""
         display_items = self.frames if limit is None else self.frames[:limit]
         for res in display_items:
             res.show()

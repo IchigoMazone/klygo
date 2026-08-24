@@ -28,8 +28,11 @@ from . import models
 from . import outputs
 from . import utils
 from . import validators
-from . import visualize
+from . import visual
 from .config import Config
+
+# Alias tương thích ngược
+visualize = visual
 
 __version__ = "2.0.20"
 __author__ = "IchigoMazone"
@@ -45,6 +48,7 @@ __all__ = [
     "outputs",
     "utils",
     "validators",
+    "visual",
     "visualize",
     "Config",
 ]
