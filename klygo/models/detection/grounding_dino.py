@@ -24,11 +24,7 @@ class GroundingDinoDetect(Detector):
         # 1. Boc tach ro rang cau hinh khoi tao tu metadata
         cfg = self.metadata.get("config", {})
         proc_kw = dict(cfg.get("processor", {}))
-        mod_kw = dict(cfg.get("model", {}))
-
-        # 2. Parse torch_dtype neu co khai bao dang chuoi
-        if "torch_dtype" in mod_kw and isinstance(mod_kw["torch_dtype"], str):
-            mod_kw["torch_dtype"], self._dtype, self.half_mode = self._parse_dtype_str(mod_kw["torch_dtype"])
+        mod_kw = self._resolve_dtype(dict(cfg.get("model", {})))
 
         # 3. Khoi tao Processor & Model tu Hugging Face
         with warnings.catch_warnings():

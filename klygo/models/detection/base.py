@@ -191,18 +191,24 @@ class Detector(BaseModel):
     # =========================================================================
     # PRIVATE HELPERS CHO TANG 3 (giam boilerplate khi viet model moi)
     # =========================================================================
+    _DTYPE_MAP = {
+        "float16": (torch.float16, "float16", True),
+        "fp16": (torch.float16, "float16", True),
+        "half": (torch.float16, "float16", True),
+        "bfloat16": (torch.bfloat16, "bfloat16", False),
+        "bf16": (torch.bfloat16, "bfloat16", False),
+    }
+
     def _parse_dtype_str(self, dt_str: str):
-        """
-        'float16'/'fp16'/'half' -> (torch.float16, 'float16', half_mode=True)
-        'bfloat16'/'bf16'       -> (torch.bfloat16, 'bfloat16', False)
-        anything else           -> (torch.float32, 'float32', False)
-        """
-        s = dt_str.lower()
-        if s in ("bfloat16", "bf16"):
-            return torch.bfloat16, "bfloat16", False
-        if s in ("float16", "fp16", "half"):
-            return torch.float16, "float16", True
-        return torch.float32, "float32", False
+        """Map chuoi dinh dang dtype sang (torch.dtype, dtype_str, half_mode)."""
+        return self._DTYPE_MAP.get(str(dt_str).lower(), (torch.float32, "float32", False))
+
+    def _resolve_dtype(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        """Tu dong chuan hoa torch_dtype trong kwargs va dong bo state cua model."""
+        dt = kwargs.get("torch_dtype")
+        if isinstance(dt, str):
+            kwargs["torch_dtype"], self._dtype, self.half_mode = self._parse_dtype_str(dt)
+        return kwargs
 
     def _current_device(self) -> torch.device:
         """Device thuc te cua model (lay tu parameter dau tien)."""
