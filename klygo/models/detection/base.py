@@ -307,8 +307,8 @@ class Detector(BaseModel):
     def cast_inputs(self, inputs):
         """
         Cast tất cả floating tensors trong inputs lên đúng device + dtype của model.
-        Mutate in-place để giữ nguyên kiểu object gốc (BatchFeature, dict, ...).
-        Non-tensor và integer tensor chỉ cần .to(device), không đổi dtype.
+        Đặc biệt hỗ trợ device_map='auto' (Multi-GPU sharding): Tự động đồng bộ dtype
+        để triệt tiêu lỗi Float và Half giữa các submodule.
         """
         dev   = self.current_device()
         dtype = self.current_dtype()
@@ -328,7 +328,8 @@ class Detector(BaseModel):
         """
         dev = self.current_device()
         from klygo import cuda as klygo_cuda
-        is_gpu = ("cuda" in str(dev) or self._is_multi_gpu()) and klygo_cuda.is_available()
+        is_sharded = self._is_multi_gpu() or (hasattr(self, "model") and hasattr(self.model, "hf_device_map"))
+        is_gpu = ("cuda" in str(dev) or is_sharded) and klygo_cuda.is_available()
         cur_dt = self.current_dtype()
         use_half = (cur_dt == torch.float16) or self.half_mode
         dev_type = "cuda" if is_gpu else "cpu"
