@@ -21,7 +21,7 @@ class GroundingDinoDetect(Detector):
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
         super().__init__(metadata=metadata, unsupported=("train", "val"), **kwargs)
 
-        # 1. Boc tach 3 nhom cau hinh ro rang (mod_kw tu dong chuan hoa torch_dtype & sync state)
+        # 1. Boc tach 3 nhom cau hinh tu metadata
         mod_kw, proc_kw, _ = self.parse_config()
 
         # 2. Khoi tao Processor & Model tu Hugging Face
@@ -41,12 +41,8 @@ class GroundingDinoDetect(Detector):
         processor_kwargs: Dict[str, Any],
         post_kwargs: Dict[str, Any],
     ) -> List[Detection]:
-        # 1. Preprocess & device casting
-        labels = [p.strip().rstrip(".").lower() for p in prompt if p.strip()]
-        inputs = self.cast_inputs(self.processor(
-            images=images, text=[labels] * len(images),
-            return_tensors="pt", **processor_kwargs,
-        ))
+        # 1. Preprocess (chuan hoa prompt + processor + device casting gon trong 1 dong)
+        inputs = self.process_inputs(images, prompt, **processor_kwargs)
 
         # 2. Inference (AMP, GPU sync tu dong)
         outputs = self.run_inference(inputs, **model_kwargs)

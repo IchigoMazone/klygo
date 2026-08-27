@@ -224,6 +224,44 @@ class Detector(BaseModel):
         post_kw = dict(cfg.get("post", {}))
         return mod_kw, proc_kw, post_kw
 
+    def split_kwargs(
+        self,
+        kwargs: Optional[Dict[str, Any]] = None,
+        model_kwargs: Optional[Dict[str, Any]] = None,
+        processor_kwargs: Optional[Dict[str, Any]] = None,
+        post_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+        """
+        Bóc tách và hợp nhất 3 nhóm kwargs (model_kwargs, processor_kwargs, post_kwargs).
+        Trả về tuple 3 phần tử: (model_kwargs, processor_kwargs, post_kwargs).
+        Ví dụ: mod_kw, proc_kw, post_kw = self.split_kwargs(kwargs)
+        """
+        if model_kwargs is not None or processor_kwargs is not None or post_kwargs is not None:
+            return (model_kwargs or {}), (processor_kwargs or {}), (post_kwargs or {})
+        return utils.resolve_sub_kwargs(kwargs=kwargs or {}, json_config=self.metadata.get("config"))
+
+    def process_inputs(
+        self,
+        images: List[PIL.Image.Image],
+        prompt: Union[str, List[str]],
+        **processor_kwargs,
+    ):
+        """
+        Tiền xử lý chuẩn cho Vision-Language Detection:
+        Chuẩn hóa prompt text, gọi self.processor(images, text, return_tensors='pt')
+        và tự động cast tất cả tensors lên đúng device & dtype của model.
+        """
+        raw_prompt = [prompt] if isinstance(prompt, str) else list(prompt)
+        labels = [p.strip().rstrip(".").lower() for p in raw_prompt if p.strip()]
+        text = [labels] * len(images)
+        raw_inputs = self.processor(
+            images=images,
+            text=text,
+            return_tensors="pt",
+            **processor_kwargs,
+        )
+        return self.cast_inputs(raw_inputs)
+
     def current_device(self) -> torch.device:
         """Device thực tế của model (lấy từ parameter đầu tiên)."""
         try:
