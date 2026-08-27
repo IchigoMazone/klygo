@@ -399,6 +399,7 @@ class Detector(BaseModel):
     # =========================================================================
     def reset(self) -> "Detector":
         self._settings = dict(self._default_settings)  # Reset Klygo runtime settings
+        self.state = "READY"
         self.cpu()
         self.state = "READY"
         return self
@@ -435,7 +436,7 @@ class Detector(BaseModel):
     def val(self, *args, **kwargs):
         raise NotImplementedError("Model '{}' chua ho tro pipeline val().".format(self.model_id))
 
-    def export(self, output_dir: str) -> str:
+    def export(self, output_dir: str, verbose: bool = True) -> str:
         """Xuat toan bo mo hinh (Weights + klygo.json) thanh 1 thu muc Offline doc lap."""
         from klygo import files
         abs_out = os.path.abspath(output_dir)
@@ -468,6 +469,9 @@ class Detector(BaseModel):
         meta_to_save["config"] = self.settings
         klygo_json_path = os.path.join(abs_out, "klygo.json")
         files.save(klygo_json_path, meta_to_save, verbose=False)
+
+        if verbose:
+            print(f" * Da xuat mo hinh offline thanh cong tai: {abs_out}")
 
         return abs_out
 

@@ -406,6 +406,12 @@ class Detection:
     def text_threshold(self) -> Optional[float]:
         return self.config.get("text_threshold")
 
+    def __getattr__(self, name: str) -> Any:
+        cfg = object.__getattribute__(self, "__dict__").get("config", {})
+        if name in cfg:
+            return cfg[name]
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
     def __getitem__(self, index: Union[int, slice]) -> Union[Box, "Detection"]:
         """🎯 detection[0] trả về 'Box', detection[m:n] trả về 'Detection' con."""
         if isinstance(index, slice):
