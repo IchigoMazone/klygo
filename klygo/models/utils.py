@@ -8,8 +8,46 @@ import logging
 import warnings
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Any, List, Dict, Union, Tuple, Optional
+from typing import Any, List, Dict, Union, Tuple, Optional, Sequence, Set
 import PIL.Image
+
+
+import functools
+
+def suppress_warnings(func=None):
+    """
+    Decorator hoặc Context Manager tắt mọi warning (Python warnings + Hugging Face/PyTorch loggers)
+    trong phạm vi thực thi của hàm hoặc khối code.
+
+    Cách 1: Decorator trên hàm / method:
+        @suppress_warnings
+        def load_model(): ...
+
+    Cách 2: Context Manager:
+        with suppress_warnings():
+            ...
+    """
+    class SuppressContext:
+        def __enter__(self):
+            suppress_ai_warnings()
+            self._ctx = warnings.catch_warnings()
+            self._ctx.__enter__()
+            warnings.filterwarnings("ignore")
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return self._ctx.__exit__(exc_type, exc_val, exc_tb)
+
+        def __call__(self, fn):
+            @functools.wraps(fn)
+            def wrapper(*args, **kwargs):
+                with self:
+                    return fn(*args, **kwargs)
+            return wrapper
+
+    if func is not None:
+        return SuppressContext()(func)
+    return SuppressContext()
 
 
 def suppress_ai_warnings() -> None:
@@ -132,11 +170,6 @@ def resolve_sub_kwargs_dict(
                 buckets[g][clean_key] = value
                 matched = True
                 break
-
-        # Dạng 3: Bất kỳ tham số tùy biến / metadata nào chưa khớp -> Cho vào nhóm post (hoặc nhóm cuối cùng)
-        if not matched:
-            target_group = "post" if "post" in buckets else group_list[-1]
-            buckets[target_group][key] = value
 
     return buckets
 

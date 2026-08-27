@@ -3,16 +3,12 @@ Grounding DINO Zero-Shot Object Detection (klygo.models.detection.grounding_dino
 TANG 3: Cau hinh model & processor ro rang, forward() ngan gon nho cac helper cua Detector.
 """
 
-import warnings
 from typing import Any, List, Dict, Union
 import PIL.Image
 from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
-from klygo.models import utils
 from klygo.models.detection.base import Detector
 from klygo.outputs.detect import Detection
-
-utils.suppress_ai_warnings()
 
 
 class GroundingDinoDetect(Detector):
@@ -25,8 +21,7 @@ class GroundingDinoDetect(Detector):
         mod_kw, proc_kw, _ = self.parse_config()
 
         # 2. Khoi tao Processor & Model tu Hugging Face
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore")
+        with self.suppress_warnings():
             self.processor = AutoProcessor.from_pretrained(self.model_id, **proc_kw)
             self.model = AutoModelForZeroShotObjectDetection.from_pretrained(self.model_id, **mod_kw)
             if "device_map" not in mod_kw:
@@ -51,9 +46,7 @@ class GroundingDinoDetect(Detector):
         # 4. Postprocess dac thu cua Grounding DINO
         thresh = post_kw.get("threshold", 0.25)
         text_thresh = post_kw.get("text_threshold", 0.3)
-        
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=FutureWarning)
+        with self.suppress_warnings():
             raw = self.processor.post_process_grounded_object_detection(
                 outputs=outputs,
                 input_ids=inputs.input_ids,

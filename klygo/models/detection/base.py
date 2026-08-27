@@ -29,6 +29,7 @@ class Detector(BaseModel):
         self,
         metadata: Optional[Dict[str, Any]] = None,
         unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
+        flags: Optional[Sequence[str]] = None,
         model: Optional[Any] = None,
         **kwargs,
     ) -> None:
@@ -41,7 +42,7 @@ class Detector(BaseModel):
                 "backend": "PyTorch",
                 "task": "Object-Detection",
             }
-        super().__init__(metadata=metadata, unsupported=unsupported, **kwargs)
+        super().__init__(metadata=metadata, unsupported=unsupported, flags=flags, **kwargs)
         self.task = "Object-Detection"
         self._flags: Tuple[str, ...] = tuple(flags) if flags else ("model", "processor", "post")
         self._device: str = "cpu"
@@ -120,6 +121,15 @@ class Detector(BaseModel):
         # Ho tro Klygo-style: to(0) -> to("cuda:0")
         if len(args) == 1 and isinstance(args[0], int):
             args = ("cuda:{}".format(args[0]),)
+        # Tu dong chuyen chuoi dtype thanh torch.dtype
+        if "dtype" in kwargs and isinstance(kwargs["dtype"], str):
+            kwargs["dtype"] = self.parse_dtype(kwargs["dtype"])[0]
+        args = tuple(
+            self.parse_dtype(a)[0]
+            if isinstance(a, str) and a in ("float32", "float16", "bfloat16", "float64", "half", "fp32", "fp16", "bf16")
+            else a
+            for a in args
+        )
         # Goi nn.Module.to() that su — xu ly toan bo submodule tu dong
         nn.Module.to(self, *args, **kwargs)
         # Neu chuyen sang CPU voi FP16 -> tu dong ve FP32 de tranh loi
@@ -423,49 +433,6 @@ class Detector(BaseModel):
     # =========================================================================
     # AI LIFECYCLE CHUNG CHO DETECTION
     # =========================================================================
-    def export(self, output_dir: str, verbose: bool = True) -> str:
-        """Xuat toan bo mo hinh (Weights + klygo.json) thanh 1 thu muc Offline doc lap."""
-        from klygo import files
-        abs_out = os.path.abspath(output_dir)
-        files.mkdir(abs_out)
-
-        # 1. Luu processor va model weights
-        if hasattr(self, "processor") and hasattr(self.processor, "save_pretrained"):
-            try:
-                self.processor.save_pretrained(abs_out)
-            except Exception:
-                pass
-
-        if hasattr(self, "model") and self.model is not None:
-            if hasattr(self.model, "save_pretrained"):
-                try:
-                    self.model.save_pretrained(abs_out)
-                except Exception:
-                    pass
-            elif hasattr(self.model, "save"):
-                try:
-                    self.model.save(os.path.join(abs_out, "model.pt"))
-                except Exception:
-                    pass
-
-        # 2. Tao va luu file dinh danh klygo.json
-        # Dung self.settings (Klygo dict) thay vi self.config (co the la HF PretrainedConfig)
-        meta_to_save = dict(self.metadata)
-        meta_to_save["class"] = self.class_name
-        meta_to_save["model_id"] = abs_out
-        meta_to_save["config"] = self.settings
-        klygo_json_path = os.path.join(abs_out, "klygo.json")
-        files.save(klygo_json_path, meta_to_save, verbose=False)
-
-        if verbose:
-            print(f" * Da xuat mo hinh offline thanh cong tai: {abs_out}")
-
-        return abs_out
-
-    def save(self, output_dir: str) -> str:
-        """Alias cua export."""
-        return self.export(output_dir)
-
     def benchmark(
         self,
         source: Optional[Any] = None,
@@ -546,8 +513,6 @@ class Detector(BaseModel):
 
         print("\n2. benchmark(iterations=20, warmup=5)")
         print("   Danh gia toc do suy luan (Latency ms / FPS).")
-        print("3. export(output_dir='my_offline_model')")
-        print("   Xuat toan bo mo hinh thanh goi Offline doc lap.")
         print("=" * 60)
 
     # =========================================================================
@@ -568,20 +533,21 @@ class Detector(BaseModel):
         - Nếu truyền Tensor -> Gọi thẳng nn.Module bên dưới (Chuẩn PyTorch thuần).
         - Nếu truyền ảnh/đường dẫn/prompt -> Gọi predict() (Chuẩn Klygo Engine).
         """
-        if args and not isinstance(args[0], (PIL.Image.Image, str, list, tuple)):
-            import sys
-            if "torch" in sys.modules:
-                import torch
-                if isinstance(args[0], torch.Tensor):
-                    if hasattr(self, "model") and callable(self.model):
-                        return self.model(*args, **kwargs)
-        if "prompt" in kwargs or (args and isinstance(args[0], (str, PIL.Image.Image, list))):
-            return self.predict(*args, **kwargs)
-        if hasattr(self, "model") and callable(self.model):
-            return self.model(*args, **kwargs)
-        if hasattr(self, "forward"):
-            return self.forward(*args, **kwargs)
-        raise TypeError(f"'{type(self).__name__}' object is not callable.")
+        with utils.suppress_warnings():
+            if args and not isinstance(args[0], (PIL.Image.Image, str, list, tuple)):
+                import sys
+                if "torch" in sys.modules:
+                    import torch
+                    if isinstance(args[0], torch.Tensor):
+                        if hasattr(self, "model") and callable(self.model):
+                            return self.model(*args, **kwargs)
+            if "prompt" in kwargs or (args and isinstance(args[0], (str, PIL.Image.Image, list))):
+                return self.predict(*args, **kwargs)
+            if hasattr(self, "model") and callable(self.model):
+                return self.model(*args, **kwargs)
+            if hasattr(self, "forward"):
+                return self.forward(*args, **kwargs)
+            raise TypeError(f"'{type(self).__name__}' object is not callable.")
 
     def predict(
         self,
@@ -609,14 +575,14 @@ class Detector(BaseModel):
 
         actual_batch = max(1, int(batch))
 
-        # 3. Context inference mode tự động tăng tốc
+        # 3. Context inference mode và chặn toàn bộ warning tự động
         try:
             import torch
             infer_context = torch.inference_mode()
         except Exception:
             infer_context = utils.nullcontext()
 
-        with infer_context:
+        with infer_context, utils.suppress_warnings():
             # A. Trường hợp 1 ảnh đơn lẻ
             if is_single:
                 t_start = time.perf_counter()

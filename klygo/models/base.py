@@ -6,7 +6,7 @@ va co che khoa method (_unsupported), properties transparent sang Hugging Face.
 
 import os
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, Union, Sequence, Set, List
+from typing import Dict, Any, Optional, Union, Sequence, Set, List, Tuple
 
 import torch
 import torch.nn as nn
@@ -33,10 +33,14 @@ class BaseModel(ABC, nn.Module):
         self,
         metadata: Dict[str, Any],
         unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
+        flags: Optional[Sequence[str]] = None,
         **kwargs,
     ) -> None:
         # nn.Module PHAI duoc khoi tao TRUOC MOI assignment
         nn.Module.__init__(self)
+
+        from . import utils
+        utils.suppress_ai_warnings()
 
         self.state: str = "LOADING"
         self.metadata: Dict[str, Any] = dict(metadata)
@@ -46,14 +50,24 @@ class BaseModel(ABC, nn.Module):
         self.class_name: str = f"{self.__class__.__module__}.{self.__class__.__qualname__}"
         self._default_settings: Dict[str, Any] = dict(self.metadata.get("config", {}))
         self._settings: Dict[str, Any] = dict(self._default_settings)
+        self._flags: Tuple[str, ...] = tuple(flags) if flags else ("model", "processor", "post")
         self._unsupported: Set[str] = set(unsupported or ())
         if hasattr(self, "__UNSUPPORTED__"):
             self._unsupported.update(getattr(self, "__UNSUPPORTED__"))
         self.state = "READY"
 
+    def suppress_warnings(self):
+        """Context manager / Helper tắt mọi cảnh báo cho các tác vụ xử lý custom."""
+        from . import utils
+        return utils.suppress_warnings()
+
     def _inner_model(self) -> Optional[Any]:
-        """Tra ve inner nn.Module (self.model) an toan qua _modules."""
-        return self.__dict__.get("_modules", {}).get("model", None)
+        """Tra ve inner model (self.model) an toan qua _modules hoac __dict__."""
+        inst_dict = object.__getattribute__(self, "__dict__")
+        mod = inst_dict.get("_modules", {}).get("model", None)
+        if mod is not None:
+            return mod
+        return inst_dict.get("model", None)
 
     # =========================================================================
     # QUAN LY UNSUPPORTED & INTROSPECTION
@@ -137,6 +151,7 @@ class BaseModel(ABC, nn.Module):
         dev = getattr(self, "device", "cpu")
         dt = getattr(self, "dtype", "float32")
         print("Device/Dtype: " + str(dev) + " / " + str(dt))
+        print("Flags       : " + str(list(self.flags)))
         print("Settings    : " + str(self.settings))
         if self.params:
             print("Params      : " + ", ".join(f"{k}={v}" for k, v in self.params.items()))
@@ -144,8 +159,17 @@ class BaseModel(ABC, nn.Module):
         print("=" * 60)
 
     # =========================================================================
-    # PROPERTIES: config, hf_config, settings, params
+    # PROPERTIES: flags, config, hf_config, settings, params
     # =========================================================================
+    @property
+    def flags(self) -> Tuple[str, ...]:
+        """Danh sach cac co/nhom module cua mo hinh (vi du: ('model', 'processor', 'post') hoac ('backbone', 'head', 'nms'))."""
+        return getattr(self, "_flags", ("model", "processor", "post"))
+
+    def has_flag(self, flag: str) -> bool:
+        """Kiem tra xem mo hinh co ho tro co/nhom module nay khong."""
+        return str(flag) in self.flags
+
     @property
     def params(self) -> Dict[str, Any]:
         """
@@ -208,6 +232,23 @@ class BaseModel(ABC, nn.Module):
     def runtime_config(self) -> Dict[str, Any]:
         return self.settings
 
+    @property
+    def device_map(self) -> Optional[Any]:
+        """Device map của Hugging Face nếu có, hoặc None."""
+        inner = self._inner_model()
+        return getattr(inner, "hf_device_map", getattr(inner, "device_map", None)) if inner is not None else None
+
+    @property
+    def devices(self) -> List[str]:
+        """Danh sách tất cả các devices mà tham số mô hình đang nằm trên đó."""
+        dev_set = set()
+        try:
+            for p in nn.Module.parameters(self):
+                dev_set.add(str(p.device))
+        except Exception:
+            pass
+        return sorted(list(dev_set)) if dev_set else [str(getattr(self, "device", "cpu"))]
+
     # =========================================================================
     # OVERRIDE nn.Module METHODS (guard da duoc xu ly tu dong boi __getattribute__)
     # =========================================================================
@@ -217,12 +258,15 @@ class BaseModel(ABC, nn.Module):
 
     def train(self, mode: bool = True, *args, **kwargs) -> Any:
         """
-        train(True/False) -> chuyen che do nn.Module.
-        train(dataloader, ...) -> pipeline huan luyen (chua implement).
+        train(True/False) -> Chuyển chế độ nn.Module.
+        train(data=..., epochs=...) -> Delegate sang inner model (e.g. Ultralytics YOLO).
         """
         if args or (kwargs and not set(kwargs.keys()).issubset({"mode"})):
+            inner = self._inner_model()
+            if inner is not None and hasattr(inner, "train") and callable(inner.train):
+                return inner.train(*args, **kwargs)
             raise NotImplementedError(
-                "Model '{}' chua ho tro pipeline train() voi tham so nay.".format(self.model_id)
+                f"Model '{self.model_id}' chưa hỗ trợ pipeline train() với tham số này."
             )
         nn.Module.train(self, mode)
         return self
@@ -254,13 +298,13 @@ class BaseModel(ABC, nn.Module):
         except AttributeError:
             pass
         # 2. Delegate sang inner model
-        inner = self.__dict__.get("_modules", {}).get("model", None)
+        inner = self._inner_model()
         if inner is not None:
             try:
                 return getattr(inner, name)
             except AttributeError:
                 pass
-        raise AttributeError("'{}' has no attribute '{}'".format(type(self).__name__, name))
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     # =========================================================================
     # HOP DONG PHAN CUNG (Abstract)
@@ -276,19 +320,11 @@ class BaseModel(ABC, nn.Module):
         raise NotImplementedError
 
     @abstractmethod
-    def val(self, *args, **kwargs):
-        raise NotImplementedError
-
-    @abstractmethod
     def predict(self, *args, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
     def benchmark(self, *args, **kwargs):
-        raise NotImplementedError
-
-    @abstractmethod
-    def export(self, output_dir: str) -> str:
         raise NotImplementedError
 
     @abstractmethod

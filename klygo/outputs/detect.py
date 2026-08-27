@@ -391,6 +391,11 @@ class Detection:
             c.parent_image = self.source_image
 
     @property
+    def metadata(self) -> Dict[str, Any]:
+        """Dictionary metadata và tham số cấu hình của frame."""
+        return self.config
+
+    @property
     def text_prompt(self) -> Optional[Union[str, List[str]]]:
         return self.config.get("text_prompt", self.config.get("prompt"))
 

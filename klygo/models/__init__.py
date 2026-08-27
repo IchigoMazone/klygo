@@ -16,6 +16,7 @@ from . import utils
 from .base import BaseModel, DetectorModel
 from .detection.base import Detector
 from .load import load, register
+from .utils import suppress_warnings, suppress_ai_warnings
 
 __all__ = [
     "load",
@@ -26,4 +27,6 @@ __all__ = [
     "BaseModel",
     "Detector",
     "DetectorModel",
+    "suppress_warnings",
+    "suppress_ai_warnings",
 ]
