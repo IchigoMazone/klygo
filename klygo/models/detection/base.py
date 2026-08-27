@@ -189,6 +189,144 @@ class Detector(BaseModel):
         return self
 
     # =========================================================================
+    # PRIVATE HELPERS CHO TANG 3 (giam boilerplate khi viet model moi)
+    # =========================================================================
+    def _parse_dtype_str(self, dt_str: str):
+        """
+        'float16'/'fp16'/'half' -> (torch.float16, 'float16', half_mode=True)
+        'bfloat16'/'bf16'       -> (torch.bfloat16, 'bfloat16', False)
+        anything else           -> (torch.float32, 'float32', False)
+        """
+        s = dt_str.lower()
+        if s in ("bfloat16", "bf16"):
+            return torch.bfloat16, "bfloat16", False
+        if s in ("float16", "fp16", "half"):
+            return torch.float16, "float16", True
+        return torch.float32, "float32", False
+
+    def _current_device(self) -> torch.device:
+        """Device thuc te cua model (lay tu parameter dau tien)."""
+        try:
+            return next(nn.Module.parameters(self)).device
+        except StopIteration:
+            return torch.device(self._device)
+
+    def _current_dtype(self) -> torch.dtype:
+        """Dtype thuc te cua model (lay tu parameter dau tien)."""
+        try:
+            return next(nn.Module.parameters(self)).dtype
+        except StopIteration:
+            return torch.float32
+
+    def _cast_inputs(self, inputs):
+        """
+        Cast tat ca floating tensors trong inputs len dung device + dtype cua model.
+        Mutate in-place de giu nguyen kieu object goc (BatchFeature, dict, ...).
+        Non-tensor va integer tensor chi can .to(device), khong doi dtype.
+        """
+        dev   = self._current_device()
+        dtype = self._current_dtype()
+        for k in list(inputs.keys()):
+            v = inputs[k]
+            if not isinstance(v, torch.Tensor):
+                continue
+            if v.is_floating_point() and dtype in (torch.float16, torch.bfloat16):
+                inputs[k] = v.to(device=dev, dtype=dtype)
+            else:
+                inputs[k] = v.to(device=dev)
+        return inputs
+
+    def _load_hf_components(self, model_cls=None, processor_cls=None, **kwargs):
+        """
+        Helper nap nhanh model & processor tu Hugging Face chuan Klygo config.
+        Tu dong parse torch_dtype, apply device_map/device va dua ve eval mode.
+        """
+        import warnings
+        cfg = self.metadata.get("config", {})
+        mod_kw = dict(cfg.get("model", {}))
+        proc_kw = dict(cfg.get("processor", {}))
+        mod_kw.update(kwargs)
+
+        if isinstance(mod_kw.get("torch_dtype"), str):
+            mod_kw["torch_dtype"], self._dtype, self.half_mode = self._parse_dtype_str(mod_kw["torch_dtype"])
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            if processor_cls is not None:
+                self.processor = processor_cls.from_pretrained(self.model_id, **proc_kw)
+            if model_cls is not None:
+                self.model = model_cls.from_pretrained(self.model_id, **mod_kw)
+                if "device_map" not in mod_kw:
+                    self.model.to(self._device)
+                self.model.eval()
+        return self.processor, self.model
+
+    def _run_inference(self, inputs, **model_kwargs):
+        """
+        Thuc thi forward cua self.model voi AMP autocast va device sync tu dong.
+        """
+        dev = self._current_device()
+        from klygo import cuda as klygo_cuda
+        is_gpu = ("cuda" in str(dev) or self._is_multi_gpu()) and klygo_cuda.is_available()
+        use_half = is_gpu and self.half_mode
+        dev_type = "cuda" if is_gpu else "cpu"
+        eff_dtype = "float16" if use_half else ("bfloat16" if self._current_dtype() == torch.bfloat16 else "float32")
+
+        with utils.amp_autocast_if_needed(use_half=use_half, dtype=eff_dtype, device_type=dev_type):
+            if hasattr(inputs, "items") or isinstance(inputs, dict):
+                outputs = self.model(**inputs, **model_kwargs)
+            elif isinstance(inputs, torch.Tensor):
+                outputs = self.model(inputs, **model_kwargs)
+            elif isinstance(inputs, (list, tuple)):
+                outputs = self.model(*inputs, **model_kwargs)
+            else:
+                outputs = self.model(inputs, **model_kwargs)
+
+        if is_gpu:
+            utils.cuda_sync()
+        return outputs
+
+    def _build_detections(
+        self,
+        images: List[PIL.Image.Image],
+        raw_results: List[Dict[str, Any]],
+        prompt: Optional[Union[str, List[str]]] = None,
+        threshold: float = 0.25,
+        text_threshold: Optional[float] = None,
+    ) -> List[Detection]:
+        """
+        Chuan hoa danh sach ket qua raw [{'scores', 'labels', 'boxes'}] thanh List[Detection].
+        """
+        results = []
+        for res, img in zip(raw_results, images):
+            boxes = []
+            scores = res.get("scores", [])
+            labels = res.get("labels", [])
+            raw_boxes = res.get("boxes", [])
+            for i, (score, label, box) in enumerate(zip(scores, labels, raw_boxes)):
+                b_list = box.tolist() if hasattr(box, "tolist") else list(box)
+                s_val = float(score.item()) if hasattr(score, "item") else float(score)
+                boxes.append(
+                    Box(
+                        id=i,
+                        label=str(label),
+                        score=round(s_val, 3),
+                        box=[round(float(x), 2) for x in b_list],
+                        parent_image=img,
+                    )
+                )
+            results.append(
+                Detection(
+                    source_image=img,
+                    objects=boxes,
+                    prompt=prompt,
+                    threshold=threshold,
+                    text_threshold=text_threshold,
+                )
+            )
+        return results
+
+    # =========================================================================
     # VONG DOI & BO NHO (Lifecycle & Resource Management)
     # =========================================================================
     def reset(self) -> "Detector":
