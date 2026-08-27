@@ -88,15 +88,32 @@ class GroundingDinoDetect(Detector):
             text=text_labels,
             return_tensors="pt",
             **processor_kwargs,
-        ).to(dev)
+        )
+
+        import torch
+        target_dtype = None
+        if hasattr(self.model, "parameters"):
+            try:
+                target_dtype = next(self.model.parameters()).dtype
+            except Exception:
+                pass
+
+        for k, v in list(inputs.items()):
+            if isinstance(v, torch.Tensor):
+                if v.is_floating_point() and target_dtype in (torch.bfloat16, torch.float16):
+                    inputs[k] = v.to(device=dev, dtype=target_dtype)
+                else:
+                    inputs[k] = v.to(device=dev)
 
         # 2. Suy luận AI
-        use_half = "cuda" in str(dev) and self.half_mode
-        dev_type = "cuda" if "cuda" in str(dev) else "cpu"
+        from klygo import cuda
+        is_gpu = ("cuda" in str(dev) or self.device == "multi-gpu") and cuda.is_available()
+        use_half = is_gpu and self.half_mode
+        dev_type = "cuda" if is_gpu else "cpu"
         with utils.amp_autocast_if_needed(use_half=use_half, dtype=self.dtype, device_type=dev_type):
             outputs = self.model(**inputs, **model_kwargs)
 
-        if "cuda" in str(dev):
+        if is_gpu:
             utils.cuda_sync()
 
         # 3. Hậu xử lý (Sử dụng trực tiếp threshold & text_threshold chuẩn)

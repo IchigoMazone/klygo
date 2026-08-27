@@ -264,12 +264,12 @@ class Detector(BaseModel):
 
         # 2. Đo lường chính xác
         latencies = []
-        is_cuda = cuda.is_available() and "cuda" in str(self.device)
+        is_gpu = cuda.is_available() and ("cuda" in str(self.device) or self.device == "multi-gpu")
 
         for _ in range(iterations):
             t_start = time.perf_counter()
             self.predict(source=img, prompt=prompts, verbose=False, **kwargs)
-            if is_cuda:
+            if is_gpu:
                 utils.cuda_sync()
             t_end = time.perf_counter()
             latencies.append(t_end - t_start)

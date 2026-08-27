@@ -45,6 +45,23 @@ def suppress_ai_warnings() -> None:
         except Exception:
             pass
 
+    # Tự động đồng bộ dtype trong grid_sample (sửa lỗi deformable attention của Transformers trên CPU/Multi-GPU)
+    try:
+        import torch
+        import torch.nn.functional as F
+        if not getattr(F, "_klygo_grid_sample_patched", False):
+            _orig_grid_sample = F.grid_sample
+
+            def _safe_grid_sample(input, grid, *args, **kwargs):
+                if hasattr(grid, "dtype") and hasattr(input, "dtype") and grid.dtype != input.dtype:
+                    grid = grid.to(input.dtype)
+                return _orig_grid_sample(input, grid, *args, **kwargs)
+
+            F.grid_sample = _safe_grid_sample
+            F._klygo_grid_sample_patched = True
+    except Exception:
+        pass
+
 
 def resolve_sub_kwargs(
     kwargs: Dict[str, Any],
