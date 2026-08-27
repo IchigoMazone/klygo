@@ -60,7 +60,7 @@ class GroundingDinoDetect(Detector):
                 threshold=thresh,
                 text_threshold=text_thresh,
                 target_sizes=[img.size[::-1] for img in images],
-                **{k: v for k, v in post_kw.items() if k not in ("threshold", "text_threshold", "target_sizes")}
+                **self.filter_kwargs(post_kw, "threshold", "text_threshold", "target_sizes"),
             )
 
         # 5. Pack output

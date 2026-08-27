@@ -253,6 +253,19 @@ class Detector(BaseModel):
             base_post.update(post_k)
         return base_m, base_p, base_post
 
+    def filter_kwargs(self, kwargs: Dict[str, Any], *exclude_keys: Union[str, Sequence[str]]) -> Dict[str, Any]:
+        """
+        Lọc bỏ các key đã xử lý khỏi dictionary kwargs để truyền an toàn các tham số còn lại.
+        Ví dụ: self.filter_kwargs(post_kw, "threshold", "text_threshold", "target_sizes")
+        """
+        exclude_set = set()
+        for item in exclude_keys:
+            if isinstance(item, (tuple, list, set)):
+                exclude_set.update(item)
+            else:
+                exclude_set.add(item)
+        return {k: v for k, v in kwargs.items() if k not in exclude_set}
+
     def process_inputs(
         self,
         images: List[PIL.Image.Image],
