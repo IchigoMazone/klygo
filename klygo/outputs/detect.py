@@ -586,6 +586,8 @@ class Detection:
             thickness=line_width or 2,
         )
 
+    draw = plot
+
     def save(self, output_path: str, line_width: Optional[int] = None, **kwargs) -> None:
         """Vẽ và lưu trực tiếp ảnh nhận diện ra đĩa bằng klygo.media.save."""
         annotated = self.plot(line_width=line_width, **kwargs)
@@ -796,6 +798,10 @@ class Detections:
                 res.save(img_path)
             self.output_path = output_path
             return output_path
+
+    def draw(self, **kwargs) -> List[PIL.Image.Image]:
+        """Vẽ bounding box lên tất cả các frame và trả về danh sách ảnh PIL."""
+        return [f.draw(**kwargs) for f in self.frames]
 
     def show(self, limit: Optional[int] = 5) -> None:
         """Xem trước các frame đầu tiên bằng klygo.visual.show_image."""
