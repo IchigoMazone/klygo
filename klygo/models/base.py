@@ -100,7 +100,7 @@ class BaseModel(ABC, nn.Module):
             class_name = d.get('class_name', '')
         except AttributeError:
             return attr
-        if state == 'UNLOADED':
+        if state == 'UNLOADED' and name not in ('reset', 'unload', 'info', 'help', 'supports', 'methods'):
             raise InvalidStateError(
                 "Mo hinh '{}' da bi UNLOADED. Khong the goi '{}'.".format(model_id, name)
             )
@@ -150,16 +150,15 @@ class BaseModel(ABC, nn.Module):
     def params(self) -> Dict[str, Any]:
         """
         Tong hop toan bo tham so dac thu co the tuy chinh khi goi predict().
-        Uu tien thu tu: post -> processor -> model.
+        Tu dong quet moi nhom cau hinh trong settings.
         """
         s = getattr(self, "_settings", {})
-        post = dict(s.get("post", {}))
-        processor = dict(s.get("processor", {}))
-        model_cfg = dict(s.get("model", {}))
-        combined = {}
-        combined.update(model_cfg)
-        combined.update(processor)
-        combined.update(post)
+        combined: Dict[str, Any] = {}
+        for k, v in s.items():
+            if isinstance(v, dict):
+                combined.update(v)
+            else:
+                combined[k] = v
         return combined
 
     @property

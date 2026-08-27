@@ -63,78 +63,93 @@ def suppress_ai_warnings() -> None:
         pass
 
 
-def resolve_sub_kwargs(
+def resolve_sub_kwargs_dict(
     kwargs: Dict[str, Any],
     json_config: Optional[Dict[str, Any]] = None,
-) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    groups: Optional[Sequence[str]] = None,
+) -> Dict[str, Dict[str, Any]]:
     """
-    Phân giải và chia tách thành 3 sub-kwargs độc lập:
-    - model_kwargs
-    - processor_kwargs
-    - post_kwargs
-
-    Hỗ trợ đồng thời cả 3 dạng truyền cấu hình:
-    1. Dạng 1: Tên chuẩn nguyên bản có sẵn trong config.json -> Tự động định tuyến
-    2. Dạng 2: Cú pháp kẹp tiền/hậu tố: model_<param>_, processor_<param>_, post_<param>_ -> 100% chống trùng
-    3. Dạng 3: Khối Dictionary tường minh model={...}, processor={...}, post={...}
+    Phân giải và chia tách thành dictionary các nhóm cấu hình động.
+    Mặc định hỗ trợ chuẩn Hugging Face ('model', 'processor', 'post') nhưng tự động
+    nhận diện bất kỳ nhóm cờ nào được khai báo trong json_config hoặc groups.
     """
     json_cfg = dict(json_config or {})
 
-    # 1. Khởi tạo 3 nhóm từ config.json gốc
-    model_kwargs = dict(json_cfg.get("model", {}))
-    processor_kwargs = dict(json_cfg.get("processor", {}))
-    post_kwargs = dict(json_cfg.get("post", {}))
+    # Xác định danh sách các nhóm cờ
+    if groups:
+        group_list = tuple(groups)
+    elif any(isinstance(v, dict) for v in json_cfg.values()):
+        group_list = tuple(k for k, v in json_cfg.items() if isinstance(v, dict))
+    else:
+        group_list = ("model", "processor", "post")
 
-    # Mặc định các tham số post cốt lõi nếu chưa có
-    post_kwargs.setdefault("threshold", 0.25)
-    post_kwargs.setdefault("text_threshold", 0.3)
+    # Khởi tạo các nhóm từ json_config
+    buckets: Dict[str, Dict[str, Any]] = {g: dict(json_cfg.get(g, {})) for g in group_list}
 
-    # 2. Xử lý Dạng 3: Khối Dictionary tường minh
-    if "model" in kwargs and isinstance(kwargs["model"], dict):
-        model_kwargs.update(kwargs["model"])
-    if "processor" in kwargs and isinstance(kwargs["processor"], dict):
-        processor_kwargs.update(kwargs["processor"])
-    if "post" in kwargs and isinstance(kwargs["post"], dict):
-        post_kwargs.update(kwargs["post"])
+    # Mặc định tham số post nếu có nhóm 'post'
+    if "post" in buckets:
+        buckets["post"].setdefault("threshold", 0.25)
+        buckets["post"].setdefault("text_threshold", 0.3)
 
-    # 3. Duyệt qua tất cả các tham số phẳng còn lại
+    # 1. Xử lý dạng Dictionary tường minh: group={...}
+    for g in group_list:
+        if g in kwargs and isinstance(kwargs[g], dict):
+            buckets[g].update(kwargs[g])
+
+    # 2. Xử lý các tham số phẳng còn lại
     for key, value in kwargs.items():
-        if key in ("model", "processor", "post"):
+        if key in group_list:
             continue
 
         # Alias tiện ích: conf -> threshold
-        if key == "conf":
-            post_kwargs["threshold"] = value
+        if key == "conf" and "post" in buckets:
+            buckets["post"]["threshold"] = value
             continue
 
-        # Điều hướng các tham số Model phổ biến: torch_dtype, dtype, device_map
-        if key in ("torch_dtype", "dtype"):
-            model_kwargs["torch_dtype"] = value
+        # Điều hướng các tham số Model phổ biến
+        if key in ("torch_dtype", "dtype") and "model" in buckets:
+            buckets["model"]["torch_dtype"] = value
             continue
-        if key in ("device_map", "low_cpu_mem_usage", "load_in_8bit", "load_in_4bit", "quantization_config"):
-            model_kwargs[key] = value
+        if key in ("device_map", "low_cpu_mem_usage", "load_in_8bit", "load_in_4bit", "quantization_config") and "model" in buckets:
+            buckets["model"][key] = value
             continue
 
-        # Dạng 1: Đã có sẵn trong config.json -> Ghi đè tự nhiên
-        if key in model_kwargs:
-            model_kwargs[key] = value
-        elif key in processor_kwargs:
-            processor_kwargs[key] = value
-        elif key in post_kwargs:
-            post_kwargs[key] = value
+        # Dạng 1: Khớp trực tiếp key có sẵn trong nhóm nào đó
+        matched = False
+        for g in group_list:
+            if key in buckets[g]:
+                buckets[g][key] = value
+                matched = True
+                break
+        if matched:
+            continue
 
-        # Dạng 2: Cú pháp tiền tố model_<param>, processor_<param>, post_<param> (hỗ trợ cả có hoặc không có dấu gạch dưới cuối)
-        elif key.startswith("model_"):
-            clean_key = key[6:-1] if key.endswith("_") else key[6:]
-            model_kwargs[clean_key] = value
-        elif key.startswith("processor_"):
-            clean_key = key[10:-1] if key.endswith("_") else key[10:]
-            processor_kwargs[clean_key] = value
-        elif key.startswith("post_"):
-            clean_key = key[5:-1] if key.endswith("_") else key[5:]
-            post_kwargs[clean_key] = value
+        # Dạng 2: Cú pháp tiền tố động: <group>_<param>_ hoặc <group>_<param>
+        for g in group_list:
+            prefix = f"{g}_"
+            if key.startswith(prefix):
+                clean_key = key[len(prefix):-1] if key.endswith("_") else key[len(prefix):]
+                buckets[g][clean_key] = value
+                matched = True
+                break
 
-    return model_kwargs, processor_kwargs, post_kwargs
+    return buckets
+
+
+def resolve_sub_kwargs(
+    kwargs: Dict[str, Any],
+    json_config: Optional[Dict[str, Any]] = None,
+    groups: Optional[Sequence[str]] = None,
+) -> Tuple[Dict[str, Any], ...]:
+    """
+    Phân giải và trả về tuple các nhóm cấu hình (mặc định tuple 3 phần tử: model_kw, proc_kw, post_kw).
+    """
+    buckets = resolve_sub_kwargs_dict(kwargs=kwargs, json_config=json_config, groups=groups)
+    if groups:
+        return tuple(buckets.get(g, {}) for g in groups)
+    if "model" in buckets and "processor" in buckets and "post" in buckets:
+        return buckets["model"], buckets["processor"], buckets["post"]
+    return tuple(buckets.values())
 
 
 def resolve_images(

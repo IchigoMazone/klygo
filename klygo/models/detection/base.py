@@ -43,6 +43,7 @@ class Detector(BaseModel):
             }
         super().__init__(metadata=metadata, unsupported=unsupported, **kwargs)
         self.task = "Object-Detection"
+        self._flags: Tuple[str, ...] = tuple(flags) if flags else ("model", "processor", "post")
         self._device: str = "cpu"
         self._dtype: str = "float32"
         self.half_mode: bool = False
@@ -213,47 +214,36 @@ class Detector(BaseModel):
             kwargs["torch_dtype"], self._dtype, self.half_mode = self.parse_dtype(dt)
         return kwargs
 
-    def parse_config(self) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    def parse_config(self, *groups: str) -> Tuple[Dict[str, Any], ...]:
         """
-        Bóc tách 3 nhóm cấu hình (model, processor, post) từ self.metadata['config'],
-        tự động chuẩn hóa torch_dtype cho model_kwargs và đồng bộ model state.
-        Trả về tuple 3 phần tử: (model_kwargs, processor_kwargs, post_kwargs).
-        Ví dụ: mod_kw, proc_kw, _ = self.parse_config()
+        Bóc tách các nhóm cấu hình từ self.metadata['config'].
+        Mặc định sử dụng self._flags ('model', 'processor', 'post' cho Hugging Face)
+        hoặc bất kỳ danh sách nhóm nào được truyền vào.
         """
+        target_groups = groups if groups else getattr(self, "_flags", ("model", "processor", "post"))
         cfg = self.metadata.get("config", {})
-        mod_kw = self.resolve_dtype(dict(cfg.get("model", {})))
-        proc_kw = dict(cfg.get("processor", {}))
-        post_kw = dict(cfg.get("post", {}))
-        return mod_kw, proc_kw, post_kw
+        result = []
+        for g in target_groups:
+            val = dict(cfg.get(g, {}))
+            if g == "model":
+                val = self.resolve_dtype(val)
+            result.append(val)
+        return tuple(result)
 
     def split_kwargs(
         self,
         kwargs: Optional[Dict[str, Any]] = None,
-        model_kwargs: Optional[Dict[str, Any]] = None,
-        processor_kwargs: Optional[Dict[str, Any]] = None,
-        post_kwargs: Optional[Dict[str, Any]] = None,
+        *groups: str,
         **extra_kwargs,
-    ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    ) -> Tuple[Dict[str, Any], ...]:
         """
-        Bóc tách và hợp nhất 3 nhóm kwargs (model_kwargs, processor_kwargs, post_kwargs).
-        Trả về tuple 3 phần tử: (model_kwargs, processor_kwargs, post_kwargs).
+        Bóc tách và hợp nhất các nhóm kwargs theo self._flags (hoặc groups truyền vào).
         Ví dụ: mod_kw, proc_kw, post_kw = self.split_kwargs(kwargs)
         """
         kw = dict(kwargs or {})
         kw.update(extra_kwargs)
-
-        m_kw = model_kwargs if model_kwargs is not None else kw.pop("model_kwargs", None)
-        p_kw = processor_kwargs if processor_kwargs is not None else kw.pop("processor_kwargs", None)
-        post_k = post_kwargs if post_kwargs is not None else kw.pop("post_kwargs", None)
-
-        base_m, base_p, base_post = utils.resolve_sub_kwargs(kwargs=kw, json_config=self.metadata.get("config"))
-        if m_kw:
-            base_m.update(m_kw)
-        if p_kw:
-            base_p.update(p_kw)
-        if post_k:
-            base_post.update(post_k)
-        return base_m, base_p, base_post
+        target_groups = groups if groups else getattr(self, "_flags", ("model", "processor", "post"))
+        return utils.resolve_sub_kwargs(kwargs=kw, json_config=self.metadata.get("config"), groups=target_groups)
 
     def filter_kwargs(self, kwargs: Dict[str, Any], *exclude_keys: Union[str, Sequence[str]]) -> Dict[str, Any]:
         """
@@ -548,20 +538,14 @@ class Detector(BaseModel):
         print("1. predict(source, prompt, batch=1, vid_stride=1, max_frames=None, verbose=True, **kwargs)")
         print("   Nhan dien doi tuong tren anh, video, folder thong qua klygo.media.load.")
 
-        post_p = self.settings.get("post", {})
-        proc_p = self.settings.get("processor", {})
-        mod_p = self.settings.get("model", {})
-        if post_p or proc_p or mod_p:
+        settings_dict = self.settings
+        has_params = any(bool(v) for v in settings_dict.values()) if isinstance(settings_dict, dict) else False
+        if has_params:
             print("\n   [Tham so dac thu co the tuy chinh trong predict]:")
-            if post_p:
-                for k, v in post_p.items():
-                    print(f"     * {k}={v} (nguong / hau xu ly)")
-            if proc_p:
-                for k, v in proc_p.items():
-                    print(f"     * {k}={v} (tien xu ly)")
-            if mod_p:
-                for k, v in mod_p.items():
-                    print(f"     * {k}={v} (mo hinh)")
+            for group_name, group_val in settings_dict.items():
+                if isinstance(group_val, dict) and group_val:
+                    for k, v in group_val.items():
+                        print(f"     * {k}={v} (nhom: {group_name})")
 
         print("\n2. benchmark(iterations=20, warmup=5)")
         print("   Danh gia toc do suy luan (Latency ms / FPS).")

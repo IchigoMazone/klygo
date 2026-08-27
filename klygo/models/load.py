@@ -233,18 +233,14 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
             f"Mô hình '{model}' không tồn tại trong registry và không phải thư mục/file mô hình offline hợp lệ."
         )
 
-    # 5. Phân giải và hợp nhất 3 nhóm cấu hình
-    model_kwargs, processor_kwargs, post_kwargs = utils.resolve_sub_kwargs(
+    # 5. Phân giải và hợp nhất các nhóm cấu hình
+    resolved_config = utils.resolve_sub_kwargs_dict(
         kwargs=kwargs,
         json_config=entry.get("config"),
     )
 
     final_metadata = dict(entry)
-    final_metadata["config"] = {
-        "model": model_kwargs,
-        "processor": processor_kwargs,
-        "post": post_kwargs,
-    }
+    final_metadata["config"] = resolved_config
 
     class_path = final_metadata.get("class")
     cls = _resolve_class(class_path, search_dir=search_dir)

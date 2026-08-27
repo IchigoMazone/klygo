@@ -2,7 +2,7 @@
 Trình bao bọc mô hình nhận diện đối tượng kiến trúc LocateAnything (klygo.models.detection.locate_anything).
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Union
 import PIL.Image
 
 from klygo.models.detection.base import Detector
@@ -22,9 +22,7 @@ class LocateAnythingDetect(Detector):
     def forward(
         self,
         images: List[PIL.Image.Image],
-        prompt: List[str],
-        model_kwargs: Dict[str, Any],
-        processor_kwargs: Dict[str, Any],
-        post_kwargs: Dict[str, Any],
+        prompt: Union[str, List[str]] = None,
+        **kwargs,
     ) -> List[Detection]:
         return []
