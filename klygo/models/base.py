@@ -111,7 +111,11 @@ class BaseModel(ABC, nn.Module):
         return attr
 
     def supports(self, op_name: str) -> bool:
-        return hasattr(self, op_name) and (op_name not in self._unsupported)
+        d = object.__getattribute__(self, '__dict__')
+        unsupported = d.get('_unsupported', set())
+        if op_name in unsupported:
+            return False
+        return hasattr(type(self), op_name) or (op_name in d)
 
     def methods(self) -> Dict[str, List[str]]:
         d = object.__getattribute__(self, '__dict__')

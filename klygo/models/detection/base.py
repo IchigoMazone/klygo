@@ -157,13 +157,15 @@ class Detector(BaseModel):
 
     def half(self) -> "Detector":
         """Chuyen model sang FP16 (chi ap dung that su tren GPU)."""
-        self.half_mode = True
-        self._dtype = "float16"
         from klygo import cuda as klygo_cuda
         if "cuda" in str(self.device) and klygo_cuda.is_available():
+            self.half_mode = True
+            self._dtype = "float16"
             nn.Module.half(self)   # Ap dung FP16 that su tren GPU
         else:
-            # CPU: ghi nhan half_mode nhung giu FP32 de tranh loi
+            # CPU: PyTorch CPU khong ho tro tot FP16 cho moi op -> giu float32 an toan
+            self.half_mode = False
+            self._dtype = "float32"
             nn.Module.float(self)
         self.state = "MODIFIED"
         return self
