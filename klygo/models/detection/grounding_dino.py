@@ -43,16 +43,15 @@ class GroundingDinoDetect(Detector):
         # 3. Inference (AMP, GPU sync tu dong)
         outputs = self.run_inference(inputs, **mod_kw)
 
-        # 4. Postprocess dac thu cua Grounding DINO
+        # 4. Dong bo Multi-GPU va Postprocess dac thu cua Grounding DINO
         thresh = post_kw.get("threshold", 0.25)
         text_thresh = post_kw.get("text_threshold", 0.3)
-        target_dev = outputs.logits.device if hasattr(outputs, "logits") else self.current_device()
-        inp_ids = inputs.input_ids.to(target_dev) if hasattr(inputs, "input_ids") else None
+        aligned_inputs, target_dev = self.align_inputs_with_outputs(inputs, outputs)
 
         with self.suppress_warnings():
             raw = self.processor.post_process_grounded_object_detection(
                 outputs=outputs,
-                input_ids=inp_ids,
+                input_ids=aligned_inputs.get("input_ids"),
                 threshold=thresh,
                 text_threshold=text_thresh,
                 target_sizes=[img.size[::-1] for img in images],

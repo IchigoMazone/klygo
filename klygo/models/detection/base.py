@@ -304,22 +304,84 @@ class Detector(BaseModel):
         except StopIteration:
             return torch.float32
 
+    def get_output_device(self, outputs: Any) -> torch.device:
+        """Dò tìm thiết bị thực tế của tensor đầu ra (hỗ trợ ModelOutput, Dict, List, Tensor)."""
+        if hasattr(outputs, "logits") and isinstance(outputs.logits, torch.Tensor):
+            return outputs.logits.device
+        if hasattr(outputs, "pred_boxes") and isinstance(outputs.pred_boxes, torch.Tensor):
+            return outputs.pred_boxes.device
+        if isinstance(outputs, torch.Tensor):
+            return outputs.device
+        if isinstance(outputs, dict):
+            for v in outputs.values():
+                if isinstance(v, torch.Tensor):
+                    return v.device
+        if isinstance(outputs, (list, tuple)):
+            for item in outputs:
+                if isinstance(item, torch.Tensor):
+                    return item.device
+                if isinstance(item, dict):
+                    for v in item.values():
+                        if isinstance(v, torch.Tensor):
+                            return v.device
+        return self.current_device()
+
+    def align_inputs_with_outputs(self, inputs: Any, outputs: Any) -> Tuple[Any, torch.device]:
+        """
+        Đồng bộ toàn bộ tensors trong inputs sang đúng device của outputs.
+        Triệt tiêu 100% lỗi 'Expected all tensors to be on the same device' khi chạy Multi-GPU sharded (device_map='auto').
+        """
+        target_dev = self.get_output_device(outputs)
+        if hasattr(inputs, "items") or isinstance(inputs, dict):
+            aligned = {}
+            for k, v in inputs.items():
+                if isinstance(v, torch.Tensor):
+                    aligned[k] = v.to(target_dev)
+                else:
+                    aligned[k] = v
+            return aligned, target_dev
+        elif isinstance(inputs, torch.Tensor):
+            return inputs.to(target_dev), target_dev
+        elif isinstance(inputs, (list, tuple)):
+            return [x.to(target_dev) if isinstance(x, torch.Tensor) else x for x in inputs], target_dev
+        return inputs, target_dev
+
     def cast_inputs(self, inputs):
         """
-        Cast tất cả floating tensors trong inputs lên đúng device + dtype của model.
-        Đặc biệt hỗ trợ device_map='auto' (Multi-GPU sharding): Tự động đồng bộ dtype
-        để triệt tiêu lỗi Float và Half giữa các submodule.
+        Cast tất cả floating tensors trong inputs lên đúng device + dtype an toàn của model.
+        - Trên CPU: Luôn giữ Float32 để tránh lỗi mat1 and mat2 (CPU không hỗ trợ FP16).
+        - Trên GPU: Tự động khớp FP16 / BF16 / FP32.
+        - Tensor số nguyên (input_ids, attention_mask): Giữ nguyên int64/bool.
         """
-        dev   = self.current_device()
+        dev = self.current_device()
         dtype = self.current_dtype()
-        for k in list(inputs.keys()):
-            v = inputs[k]
-            if not isinstance(v, torch.Tensor):
-                continue
-            if v.is_floating_point() and dtype in (torch.float16, torch.bfloat16):
-                inputs[k] = v.to(device=dev, dtype=dtype)
+        is_cpu = (dev.type == "cpu")
+
+        if hasattr(inputs, "keys"):
+            for k in list(inputs.keys()):
+                v = inputs[k]
+                if not isinstance(v, torch.Tensor):
+                    continue
+                if v.is_floating_point():
+                    if is_cpu:
+                        inputs[k] = v.to(device=dev, dtype=torch.float32)
+                    elif dtype in (torch.float16, torch.bfloat16):
+                        inputs[k] = v.to(device=dev, dtype=dtype)
+                    else:
+                        inputs[k] = v.to(device=dev, dtype=torch.float32)
+                else:
+                    inputs[k] = v.to(device=dev)
+        elif isinstance(inputs, torch.Tensor):
+            if inputs.is_floating_point():
+                if is_cpu:
+                    inputs = inputs.to(device=dev, dtype=torch.float32)
+                elif dtype in (torch.float16, torch.bfloat16):
+                    inputs = inputs.to(device=dev, dtype=dtype)
+                else:
+                    inputs = inputs.to(device=dev, dtype=torch.float32)
             else:
-                inputs[k] = v.to(device=dev)
+                inputs = inputs.to(device=dev)
+
         return inputs
 
     def run_inference(self, inputs, **model_kwargs):
@@ -570,11 +632,9 @@ class Detector(BaseModel):
         """
         Thực thi nhận diện đối tượng trên ảnh, video hoặc folder (luôn trả về tập hợp kết quả Detections).
         """
-        # 1. Bắt buộc kiểm tra prompt
-        actual_prompt = prompt or kwargs.pop("classes", None) or kwargs.pop("text_prompt", None)
-        if actual_prompt is None:
-            raise ValueError("Vui lòng cung cấp nhãn cần nhận diện qua tham số 'prompt'.")
-        target_prompt = utils.normalize_prompt(actual_prompt)
+        # 1. Phân giải prompt (nếu có)
+        actual_prompt = prompt if prompt is not None else (kwargs.pop("classes", None) or kwargs.pop("text_prompt", None))
+        target_prompt = utils.normalize_prompt(actual_prompt) if actual_prompt is not None else None
 
         # 2. Phân giải nguồn dữ liệu qua klygo.media.load
         images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames)
