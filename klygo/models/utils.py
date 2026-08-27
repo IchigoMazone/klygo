@@ -133,6 +133,11 @@ def resolve_sub_kwargs_dict(
                 matched = True
                 break
 
+        # Dạng 3: Bất kỳ tham số tùy biến / metadata nào chưa khớp -> Cho vào nhóm post (hoặc nhóm cuối cùng)
+        if not matched:
+            target_group = "post" if "post" in buckets else group_list[-1]
+            buckets[target_group][key] = value
+
     return buckets
 
 

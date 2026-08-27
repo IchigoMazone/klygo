@@ -607,15 +607,9 @@ class Detector(BaseModel):
         if not images:
             return Detections(frames=[], source_type="list", fps=30.0)
 
-        # 3. Phân giải 3 gói kwargs cho lần predict này
-        model_kwargs, processor_kwargs, post_kwargs = utils.resolve_sub_kwargs(
-            kwargs=kwargs,
-            json_config=self.metadata.get("config"),
-        )
-
         actual_batch = max(1, int(batch))
 
-        # 4. Context inference mode tự động tăng tốc
+        # 3. Context inference mode tự động tăng tốc
         try:
             import torch
             infer_context = torch.inference_mode()
@@ -629,9 +623,7 @@ class Detector(BaseModel):
                 dets = self.forward(
                     images=images,
                     prompt=target_prompt,
-                    model_kwargs=model_kwargs,
-                    processor_kwargs=processor_kwargs,
-                    post_kwargs=post_kwargs,
+                    **kwargs,
                 )
                 t_end = time.perf_counter()
                 lat_ms = round((t_end - t_start) * 1000, 2)
@@ -664,9 +656,7 @@ class Detector(BaseModel):
                     dets = self.forward(
                         images=batch_imgs,
                         prompt=target_prompt,
-                        model_kwargs=model_kwargs,
-                        processor_kwargs=processor_kwargs,
-                        post_kwargs=post_kwargs,
+                        **kwargs,
                     )
                     t_end = time.perf_counter()
                     lat_per_frame = round(((t_end - t_start) * 1000) / len(batch_imgs), 2)
