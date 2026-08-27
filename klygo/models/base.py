@@ -67,25 +67,61 @@ class BaseModel(ABC, nn.Module):
         return self
 
     def _check_supported(self, op_name: str) -> None:
-        if self.state == "UNLOADED":
+        """Giu lai de backward compat / goi thu cong neu can. Logic chinh o __getattribute__."""
+        instance_dict = object.__getattribute__(self, '__dict__')
+        state = instance_dict.get('state', 'READY')
+        unsupported = instance_dict.get('_unsupported', set())
+        model_id = instance_dict.get('model_id', 'model')
+        class_name = instance_dict.get('class_name', '')
+        if state == 'UNLOADED':
             raise InvalidStateError(
-                "Mo hinh '{}' da bi UNLOADED. Khong the goi '{}'.".format(self.model_id, op_name)
+                "Mo hinh '{}' da bi UNLOADED. Khong the goi '{}'.".format(model_id, op_name)
             )
-        if op_name in self._unsupported:
+        if op_name in unsupported:
             raise UnsupportedOperationError(
-                "Mo hinh '{}' ({}) khong ho tro thao tac '{}'.".format(
-                    self.model_id, self.class_name, op_name
-                )
+                "Mo hinh '{}' ({}) khong ho tro thao tac '{}'.".format(model_id, class_name, op_name)
             )
+
+    def __getattribute__(self, name: str) -> Any:
+        """
+        Universal guard: tu dong chan TẤT CA cac public method bi unsupported tai diem truy cap.
+        Khong can them _check_supported() vao tung method nua — them method moi la tu dong duoc bao ve.
+        """
+        attr = super().__getattribute__(name)
+        # Chi guard cac public callable method (khong phai dunder, khong phai attribute thuong)
+        if name.startswith('_') or not callable(attr) or isinstance(attr, type):
+            return attr
+        # Doc internal state bang object.__getattribute__ de tranh goi de quy vao chinh no
+        try:
+            d = object.__getattribute__(self, '__dict__')
+            state = d.get('state', 'READY')
+            unsupported = d.get('_unsupported', set())
+            model_id = d.get('model_id', 'model')
+            class_name = d.get('class_name', '')
+        except AttributeError:
+            return attr
+        if state == 'UNLOADED':
+            raise InvalidStateError(
+                "Mo hinh '{}' da bi UNLOADED. Khong the goi '{}'.".format(model_id, name)
+            )
+        if name in unsupported:
+            raise UnsupportedOperationError(
+                "Mo hinh '{}' ({}) khong ho tro thao tac '{}'.".format(model_id, class_name, name)
+            )
+        return attr
 
     def supports(self, op_name: str) -> bool:
         return hasattr(self, op_name) and (op_name not in self._unsupported)
 
     def methods(self) -> Dict[str, List[str]]:
-        public = [m for m in dir(self) if not m.startswith("_") and callable(getattr(self, m))]
+        d = object.__getattribute__(self, '__dict__')
+        unsupported = d.get('_unsupported', set())
+        # Bypass __getattribute__ guard khi lay list method (tranh raise luc introspect)
+        cls_attrs = [m for m in dir(type(self)) if not m.startswith('_')]
+        public = [m for m in cls_attrs if callable(getattr(type(self), m, None))]
         return {
-            "supported": [m for m in public if m not in self._unsupported],
-            "unsupported": sorted(list(self._unsupported)),
+            "supported": [m for m in public if m not in unsupported],
+            "unsupported": sorted(list(unsupported)),
         }
 
     def info(self) -> None:
@@ -147,22 +183,18 @@ class BaseModel(ABC, nn.Module):
         return self.settings
 
     # =========================================================================
-    # OVERRIDE nn.Module METHODS DE THEM _check_supported GUARD
+    # OVERRIDE nn.Module METHODS (guard da duoc xu ly tu dong boi __getattribute__)
     # =========================================================================
     def eval(self) -> "BaseModel":
-        """Che do Evaluation voi Klygo guard."""
-        self._check_supported("eval")
         nn.Module.eval(self)
         return self
 
     def train(self, mode: bool = True, *args, **kwargs) -> Any:
         """
-        Chuyen che do train PyTorch OR thuc thi pipeline huan luyen.
-        train(True/False) -> chuyen che do nn.Module, KHONG can guard.
-        train(dataloader, ...) -> pipeline huan luyen, CO guard unsupported.
+        train(True/False) -> chuyen che do nn.Module.
+        train(dataloader, ...) -> pipeline huan luyen (chua implement).
         """
         if args or (kwargs and not set(kwargs.keys()).issubset({"mode"})):
-            self._check_supported("train")
             raise NotImplementedError(
                 "Model '{}' chua ho tro pipeline train() voi tham so nay.".format(self.model_id)
             )
@@ -171,7 +203,6 @@ class BaseModel(ABC, nn.Module):
 
     def state_dict(self, *args, **kwargs) -> Dict[str, Any]:
         """Backward compat: state_dict cua inner model (khong co prefix 'model.')."""
-        self._check_supported("state_dict")
         inner = self._inner_model()
         if inner is not None and hasattr(inner, "state_dict"):
             return inner.state_dict(*args, **kwargs)
@@ -179,7 +210,6 @@ class BaseModel(ABC, nn.Module):
 
     def load_state_dict(self, state_dict: Dict[str, Any], strict: bool = True):
         """Nap trong so tu state_dict vao mo hinh."""
-        self._check_supported("load_state_dict")
         inner = self._inner_model()
         if inner is not None and hasattr(inner, "load_state_dict"):
             return inner.load_state_dict(state_dict, strict=strict)

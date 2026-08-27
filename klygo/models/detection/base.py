@@ -112,7 +112,6 @@ class Detector(BaseModel):
 
     def to(self, *args, **kwargs) -> "Detector":
         """Chuyen model sang device/dtype chi dinh. Ho tro ca Klygo-style (int) va PyTorch-style."""
-        self._check_supported("to")
         # Guard: HF multi-GPU sharding khong duoc goi .to()
         if self._is_multi_gpu():
             self.state = "MODIFIED"
@@ -136,7 +135,6 @@ class Detector(BaseModel):
 
     def cpu(self) -> "Detector":
         """Chuyen model ve CPU."""
-        self._check_supported("cpu")
         nn.Module.cpu(self)      # Di chuyen toan bo submodule ve CPU
         nn.Module.float(self)   # CPU khong ho tro FP16 inference -> auto float32
         self.half_mode = False
@@ -146,7 +144,6 @@ class Detector(BaseModel):
 
     def cuda(self, device=None) -> "Detector":
         """Chuyen model len GPU CUDA chi dinh."""
-        self._check_supported("cuda")
         if self._is_multi_gpu():
             self.state = "MODIFIED"
             return self
@@ -160,7 +157,6 @@ class Detector(BaseModel):
 
     def half(self) -> "Detector":
         """Chuyen model sang FP16 (chi ap dung that su tren GPU)."""
-        self._check_supported("half")
         self.half_mode = True
         self._dtype = "float16"
         from klygo import cuda as klygo_cuda
@@ -174,7 +170,6 @@ class Detector(BaseModel):
 
     def bfloat16(self) -> "Detector":
         """Chuyen model sang BF16."""
-        self._check_supported("bfloat16")
         self.half_mode = False
         self._dtype = "bfloat16"
         nn.Module.to(self, torch.bfloat16)
@@ -187,7 +182,6 @@ class Detector(BaseModel):
 
     def float(self) -> "Detector":
         """Chuyen model ve FP32."""
-        self._check_supported("float")
         self.half_mode = False
         self._dtype = "float32"
         nn.Module.float(self)   # Chuyen toan bo submodule ve float32
@@ -198,14 +192,12 @@ class Detector(BaseModel):
     # VONG DOI & BO NHO (Lifecycle & Resource Management)
     # =========================================================================
     def reset(self) -> "Detector":
-        self._check_supported("reset")
         self._settings = dict(self._default_settings)  # Reset Klygo runtime settings
         self.cpu()
         self.state = "READY"
         return self
 
     def warmup(self) -> None:
-        self._check_supported("warmup")
         dummy_img = PIL.Image.new("RGB", (1, 1), color="black")
         try:
             self.predict(source=dummy_img, prompt=["dummy"], verbose=False)
@@ -213,7 +205,6 @@ class Detector(BaseModel):
             pass
 
     def clear_cache(self) -> None:
-        self._check_supported("clear_cache")
         from klygo import cuda
         if cuda.is_available():
             try:
@@ -222,7 +213,6 @@ class Detector(BaseModel):
                 pass
 
     def unload(self) -> None:
-        self._check_supported("unload")
         self.cpu()
         self.clear_cache()
         if hasattr(self, "model"):
@@ -237,12 +227,10 @@ class Detector(BaseModel):
     # AI LIFECYCLE CHUNG CHO DETECTION
     # =========================================================================
     def val(self, *args, **kwargs):
-        self._check_supported("val")
         raise NotImplementedError("Model '{}' chua ho tro pipeline val().".format(self.model_id))
 
     def export(self, output_dir: str) -> str:
         """Xuat toan bo mo hinh (Weights + klygo.json) thanh 1 thu muc Offline doc lap."""
-        self._check_supported("export")
         from klygo import files
         abs_out = os.path.abspath(output_dir)
         files.mkdir(abs_out)
@@ -291,7 +279,6 @@ class Detector(BaseModel):
         **kwargs,
     ) -> Dict[str, Any]:
         """Đo đạc và đánh giá hiệu năng suy luận (Latency ms / FPS) của mô hình."""
-        self._check_supported("benchmark")
         from klygo import cuda
         img = source if source is not None else PIL.Image.new("RGB", (640, 640), color=(100, 100, 100))
         prompts = utils.normalize_prompt(prompt or ["object"])
@@ -402,8 +389,6 @@ class Detector(BaseModel):
         """
         Thực thi nhận diện đối tượng trên ảnh, video hoặc folder (luôn trả về tập hợp kết quả Detections).
         """
-        self._check_supported("predict")
-
         # 1. Bắt buộc kiểm tra prompt
         actual_prompt = prompt or kwargs.pop("classes", None) or kwargs.pop("text_prompt", None)
         if actual_prompt is None:
