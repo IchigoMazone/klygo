@@ -357,23 +357,25 @@ class Detector(BaseModel):
         """Thực thi forward pass trên mô hình bên dưới."""
         if hasattr(self, "model") and callable(self.model):
             return self.model(images, prompt=prompt, **model_kwargs)
-        raise NotImplementedError(f"Lớp '{self.class_name}' chưa triển khai hàm forward() cụ thể.")
-
     def __call__(self, *args, **kwargs) -> Any:
-        """Cho phép gọi trực tiếp instance mô hình như một callable / PyTorch module."""
+        """Cho phép gọi trực tiếp instance mô hình:
+        - Nếu truyền Tensor -> Gọi thẳng nn.Module bên dưới (Chuẩn PyTorch thuần).
+        - Nếu truyền ảnh/đường dẫn/prompt -> Gọi predict() (Chuẩn Klygo Engine).
+        """
+        if args and not isinstance(args[0], (PIL.Image.Image, str, list, tuple)):
+            import sys
+            if "torch" in sys.modules:
+                import torch
+                if isinstance(args[0], torch.Tensor):
+                    if hasattr(self, "model") and callable(self.model):
+                        return self.model(*args, **kwargs)
+        if "prompt" in kwargs or (args and isinstance(args[0], (str, PIL.Image.Image, list))):
+            return self.predict(*args, **kwargs)
         if hasattr(self, "model") and callable(self.model):
             return self.model(*args, **kwargs)
         if hasattr(self, "forward"):
             return self.forward(*args, **kwargs)
         raise TypeError(f"'{type(self).__name__}' object is not callable.")
-        """
-        Phương thức suy luận AI cốt lõi: Nhận trực tiếp 3 gói kwargs:
-        - processor_kwargs : Tiền xử lý
-        - model_kwargs     : Suy luận AI
-        - post_kwargs      : Hậu xử lý
-        Lớp con cài đặt phương thức này.
-        """
-        raise NotImplementedError
 
     def predict(
         self,

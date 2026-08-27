@@ -40,9 +40,9 @@ class BaseModel(ABC):
         self.task: str = str(self.metadata.get("task", "Universal"))
         self.class_name: str = f"{self.__class__.__module__}.{self.__class__.__qualname__}"
 
-        # 2. Cấu hình 2 tầng (default_config gốc & config runtime)
-        self.default_config: Dict[str, Any] = dict(self.metadata.get("config", {}))
-        self.config: Dict[str, Any] = dict(self.default_config)
+        # 2. Cấu hình runtime Klygo (settings) & cấu hình mặc định
+        self._default_settings: Dict[str, Any] = dict(self.metadata.get("config", {}))
+        self._settings: Dict[str, Any] = dict(self._default_settings)
 
         # 3. Quản lý tập Unsupported
         self._unsupported: Set[str] = set(unsupported or ())
@@ -95,6 +95,50 @@ class BaseModel(ABC):
         print(f"Config      : {self.config}")
         print(f"Unsupported : {sorted(list(self._unsupported))}")
         print("=" * 60)
+
+    @property
+    def config(self) -> Any:
+        """Trả về PretrainedConfig (nếu là HF model) hoặc runtime settings dict."""
+        model = getattr(self, "model", None)
+        if model is not None and hasattr(model, "config") and model.config is not None:
+            return model.config
+        return getattr(self, "_settings", {})
+
+    @config.setter
+    def config(self, value: Any) -> None:
+        if isinstance(value, dict):
+            self._settings = dict(value)
+        else:
+            model = getattr(self, "model", None)
+            if model is not None and hasattr(model, "config"):
+                model.config = value
+            else:
+                self._settings = value
+
+    @property
+    def hf_config(self) -> Any:
+        """Truy cập trực tiếp PretrainedConfig của Hugging Face."""
+        model = getattr(self, "model", None)
+        return getattr(model, "config", None) if model is not None else None
+
+    @property
+    def settings(self) -> Dict[str, Any]:
+        """Cấu hình tham số runtime của Klygo."""
+        return getattr(self, "_settings", {})
+
+    @settings.setter
+    def settings(self, value: Dict[str, Any]) -> None:
+        self._settings = dict(value)
+
+    @property
+    def default_config(self) -> Dict[str, Any]:
+        """Cấu hình mặc định gốc của Klygo."""
+        return getattr(self, "_default_settings", {})
+
+    @property
+    def runtime_config(self) -> Dict[str, Any]:
+        """Alias của settings."""
+        return self.settings
 
     # =========================================================================
     # HỢP ĐỒNG PHẦN CỨNG & ĐỘ CHÍNH XÁC (Pure Abstract Interface)
@@ -309,6 +353,21 @@ class BaseModel(ABC):
                 self.model.train(mode)
             elif hasattr(self.model, "model") and hasattr(self.model.model, "train"):
                 self.model.model.train(mode)
+    def zero_grad(self, set_to_none: bool = True) -> Any:
+        """Xóa gradients của tất cả tham số mô hình."""
+        if hasattr(self, "model") and self.model is not None:
+            if hasattr(self.model, "zero_grad"):
+                return self.model.zero_grad(set_to_none=set_to_none)
+            if hasattr(self.model, "model") and hasattr(self.model.model, "zero_grad"):
+                return self.model.model.zero_grad(set_to_none=set_to_none)
+
+    def requires_grad_(self, requires_grad: bool = True) -> "BaseModel":
+        """Thay đổi thuộc tính requires_grad của toàn bộ tham số."""
+        if hasattr(self, "model") and self.model is not None:
+            if hasattr(self.model, "requires_grad_"):
+                self.model.requires_grad_(requires_grad)
+            elif hasattr(self.model, "model") and hasattr(self.model.model, "requires_grad_"):
+                self.model.model.requires_grad_(requires_grad)
         return self
 
     def __getattr__(self, name: str) -> Any:
