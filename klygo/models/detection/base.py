@@ -423,9 +423,6 @@ class Detector(BaseModel):
     # =========================================================================
     # AI LIFECYCLE CHUNG CHO DETECTION
     # =========================================================================
-    def val(self, *args, **kwargs):
-        raise NotImplementedError("Model '{}' chua ho tro pipeline val().".format(self.model_id))
-
     def export(self, output_dir: str, verbose: bool = True) -> str:
         """Xuat toan bo mo hinh (Weights + klygo.json) thanh 1 thu muc Offline doc lap."""
         from klygo import files
