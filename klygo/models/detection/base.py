@@ -230,15 +230,28 @@ class Detector(BaseModel):
         model_kwargs: Optional[Dict[str, Any]] = None,
         processor_kwargs: Optional[Dict[str, Any]] = None,
         post_kwargs: Optional[Dict[str, Any]] = None,
+        **extra_kwargs,
     ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
         """
         Bóc tách và hợp nhất 3 nhóm kwargs (model_kwargs, processor_kwargs, post_kwargs).
         Trả về tuple 3 phần tử: (model_kwargs, processor_kwargs, post_kwargs).
         Ví dụ: mod_kw, proc_kw, post_kw = self.split_kwargs(kwargs)
         """
-        if model_kwargs is not None or processor_kwargs is not None or post_kwargs is not None:
-            return (model_kwargs or {}), (processor_kwargs or {}), (post_kwargs or {})
-        return utils.resolve_sub_kwargs(kwargs=kwargs or {}, json_config=self.metadata.get("config"))
+        kw = dict(kwargs or {})
+        kw.update(extra_kwargs)
+
+        m_kw = model_kwargs if model_kwargs is not None else kw.pop("model_kwargs", None)
+        p_kw = processor_kwargs if processor_kwargs is not None else kw.pop("processor_kwargs", None)
+        post_k = post_kwargs if post_kwargs is not None else kw.pop("post_kwargs", None)
+
+        base_m, base_p, base_post = utils.resolve_sub_kwargs(kwargs=kw, json_config=self.metadata.get("config"))
+        if m_kw:
+            base_m.update(m_kw)
+        if p_kw:
+            base_p.update(p_kw)
+        if post_k:
+            base_post.update(post_k)
+        return base_m, base_p, base_post
 
     def process_inputs(
         self,
@@ -528,14 +541,13 @@ class Detector(BaseModel):
     def forward(
         self,
         images: List[PIL.Image.Image],
-        prompt: List[str],
-        model_kwargs: Dict[str, Any],
-        processor_kwargs: Dict[str, Any],
-        post_kwargs: Dict[str, Any],
+        prompt: Union[str, List[str]],
+        **kwargs,
     ) -> List[Detection]:
         """Thực thi forward pass trên mô hình bên dưới."""
+        mod_kw, _, _ = self.split_kwargs(kwargs)
         if hasattr(self, "model") and callable(self.model):
-            return self.model(images, prompt=prompt, **model_kwargs)
+            return self.model(images, prompt=prompt, **mod_kw)
     def __call__(self, *args, **kwargs) -> Any:
         """Cho phép gọi trực tiếp instance mô hình:
         - Nếu truyền Tensor -> Gọi thẳng nn.Module bên dưới (Chuẩn PyTorch thuần).

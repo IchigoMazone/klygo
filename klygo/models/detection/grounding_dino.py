@@ -4,7 +4,7 @@ TANG 3: Cau hinh model & processor ro rang, forward() ngan gon nho cac helper cu
 """
 
 import warnings
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Union
 import PIL.Image
 from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
@@ -36,20 +36,21 @@ class GroundingDinoDetect(Detector):
     def forward(
         self,
         images: List[PIL.Image.Image],
-        prompt: List[str],
-        model_kwargs: Dict[str, Any],
-        processor_kwargs: Dict[str, Any],
-        post_kwargs: Dict[str, Any],
+        prompt: Union[str, List[str]],
+        **kwargs,
     ) -> List[Detection]:
-        # 1. Preprocess (chuan hoa prompt + processor + device casting gon trong 1 dong)
-        inputs = self.process_inputs(images, prompt, **processor_kwargs)
+        # 1. Boc tach 3 nhom kwargs tu **kwargs
+        mod_kw, proc_kw, post_kw = self.split_kwargs(kwargs)
 
-        # 2. Inference (AMP, GPU sync tu dong)
-        outputs = self.run_inference(inputs, **model_kwargs)
+        # 2. Preprocess (chuan hoa prompt + processor + device casting gon trong 1 dong)
+        inputs = self.process_inputs(images, prompt, **proc_kw)
 
-        # 3. Postprocess dac thu cua Grounding DINO
-        thresh = post_kwargs.get("threshold", 0.25)
-        text_thresh = post_kwargs.get("text_threshold", 0.3)
+        # 3. Inference (AMP, GPU sync tu dong)
+        outputs = self.run_inference(inputs, **mod_kw)
+
+        # 4. Postprocess dac thu cua Grounding DINO
+        thresh = post_kw.get("threshold", 0.25)
+        text_thresh = post_kw.get("text_threshold", 0.3)
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=FutureWarning)
             raw = self.processor.post_process_grounded_object_detection(
@@ -58,8 +59,8 @@ class GroundingDinoDetect(Detector):
                 threshold=thresh,
                 text_threshold=text_thresh,
                 target_sizes=[img.size[::-1] for img in images],
-                **{k: v for k, v in post_kwargs.items() if k not in ("threshold", "text_threshold", "target_sizes")}
+                **{k: v for k, v in post_kw.items() if k not in ("threshold", "text_threshold", "target_sizes")}
             )
 
-        # 4. Pack output
+        # 5. Pack output
         return self.build_detections(images, raw, prompt=prompt, threshold=thresh, text_threshold=text_thresh)
