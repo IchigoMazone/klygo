@@ -329,9 +329,16 @@ class Detector(BaseModel):
         dev = self.current_device()
         from klygo import cuda as klygo_cuda
         is_gpu = ("cuda" in str(dev) or self._is_multi_gpu()) and klygo_cuda.is_available()
-        use_half = is_gpu and self.half_mode
+        cur_dt = self.current_dtype()
+        use_half = (cur_dt == torch.float16) or self.half_mode
         dev_type = "cuda" if is_gpu else "cpu"
-        eff_dtype = "float16" if use_half else ("bfloat16" if self.current_dtype() == torch.bfloat16 else "float32")
+
+        if cur_dt == torch.bfloat16:
+            eff_dtype = "bfloat16"
+        elif use_half and is_gpu:
+            eff_dtype = "float16"
+        else:
+            eff_dtype = "float32"
 
         with utils.amp_autocast_if_needed(use_half=use_half, dtype=eff_dtype, device_type=dev_type):
             if hasattr(inputs, "items") or isinstance(inputs, dict):
