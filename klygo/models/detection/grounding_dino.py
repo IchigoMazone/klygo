@@ -46,7 +46,7 @@ class GroundingDinoDetect(Detector):
         # 4. Dong bo Multi-GPU va Postprocess dac thu cua Grounding DINO
         thresh = post_kw.get("threshold", 0.25)
         text_thresh = post_kw.get("text_threshold", 0.3)
-        aligned_inputs, target_dev = self.align_inputs_with_outputs(inputs, outputs)
+        aligned_inputs = self.align_inputs_with_outputs(inputs, outputs)
 
         with self.suppress_warnings():
             raw = self.processor.post_process_grounded_object_detection(

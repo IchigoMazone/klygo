@@ -326,7 +326,7 @@ class Detector(BaseModel):
                             return v.device
         return self.current_device()
 
-    def align_inputs_with_outputs(self, inputs: Any, outputs: Any) -> Tuple[Any, torch.device]:
+    def align_inputs_with_outputs(self, inputs: Any, outputs: Any) -> Any:
         """
         Đồng bộ toàn bộ tensors trong inputs sang đúng device của outputs.
         Triệt tiêu 100% lỗi 'Expected all tensors to be on the same device' khi chạy Multi-GPU sharded (device_map='auto').
@@ -339,12 +339,12 @@ class Detector(BaseModel):
                     aligned[k] = v.to(target_dev)
                 else:
                     aligned[k] = v
-            return aligned, target_dev
+            return aligned
         elif isinstance(inputs, torch.Tensor):
-            return inputs.to(target_dev), target_dev
+            return inputs.to(target_dev)
         elif isinstance(inputs, (list, tuple)):
-            return [x.to(target_dev) if isinstance(x, torch.Tensor) else x for x in inputs], target_dev
-        return inputs, target_dev
+            return [x.to(target_dev) if isinstance(x, torch.Tensor) else x for x in inputs]
+        return inputs
 
     def cast_inputs(self, inputs):
         """
