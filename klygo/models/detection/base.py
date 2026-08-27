@@ -336,12 +336,12 @@ class Detector(BaseModel):
         self,
         images: List[PIL.Image.Image],
         raw_results: List[Dict[str, Any]],
-        prompt: Optional[Union[str, List[str]]] = None,
-        threshold: float = 0.25,
-        text_threshold: Optional[float] = None,
+        **metadata,
     ) -> List[Detection]:
         """
         Chuẩn hóa danh sách kết quả raw [{'scores', 'labels', 'boxes'}] thành List[Detection].
+        Nhận linh hoạt mọi metadata (prompt, threshold, text_threshold, iou, nms, ...) qua **metadata.
+        Ví dụ: self.build_detections(images, raw, prompt=prompt, **post_kw)
         """
         results = []
         for res, img in zip(raw_results, images):
@@ -365,9 +365,7 @@ class Detector(BaseModel):
                 Detection(
                     source_image=img,
                     objects=boxes,
-                    prompt=prompt,
-                    threshold=threshold,
-                    text_threshold=text_threshold,
+                    **metadata,
                 )
             )
         return results

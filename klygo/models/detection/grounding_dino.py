@@ -51,6 +51,7 @@ class GroundingDinoDetect(Detector):
         # 4. Postprocess dac thu cua Grounding DINO
         thresh = post_kw.get("threshold", 0.25)
         text_thresh = post_kw.get("text_threshold", 0.3)
+        
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=FutureWarning)
             raw = self.processor.post_process_grounded_object_detection(
@@ -63,4 +64,4 @@ class GroundingDinoDetect(Detector):
             )
 
         # 5. Pack output
-        return self.build_detections(images, raw, prompt=prompt, threshold=thresh, text_threshold=text_thresh)
+        return self.build_detections(images, raw, prompt=prompt, **post_kw)
