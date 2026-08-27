@@ -236,31 +236,6 @@ class Detector(BaseModel):
                 inputs[k] = v.to(device=dev)
         return inputs
 
-    def _load_hf_components(self, model_cls=None, processor_cls=None, **kwargs):
-        """
-        Helper nap nhanh model & processor tu Hugging Face chuan Klygo config.
-        Tu dong parse torch_dtype, apply device_map/device va dua ve eval mode.
-        """
-        import warnings
-        cfg = self.metadata.get("config", {})
-        mod_kw = dict(cfg.get("model", {}))
-        proc_kw = dict(cfg.get("processor", {}))
-        mod_kw.update(kwargs)
-
-        if isinstance(mod_kw.get("torch_dtype"), str):
-            mod_kw["torch_dtype"], self._dtype, self.half_mode = self._parse_dtype_str(mod_kw["torch_dtype"])
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore")
-            if processor_cls is not None:
-                self.processor = processor_cls.from_pretrained(self.model_id, **proc_kw)
-            if model_cls is not None:
-                self.model = model_cls.from_pretrained(self.model_id, **mod_kw)
-                if "device_map" not in mod_kw:
-                    self.model.to(self._device)
-                self.model.eval()
-        return self.processor, self.model
-
     def _run_inference(self, inputs, **model_kwargs):
         """
         Thuc thi forward cua self.model voi AMP autocast va device sync tu dong.

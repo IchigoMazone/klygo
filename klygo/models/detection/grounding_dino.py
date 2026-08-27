@@ -1,6 +1,6 @@
 """
 Grounding DINO Zero-Shot Object Detection (klygo.models.detection.grounding_dino).
-TANG 3: Chi cai dat forward() dac thu — toan bo pipeline dung chung duoc Detector ho tro.
+TANG 3: Cau hinh model & processor ro rang, forward() ngan gon nho cac helper cua Detector.
 """
 
 import warnings
@@ -20,10 +20,24 @@ class GroundingDinoDetect(Detector):
 
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
         super().__init__(metadata=metadata, unsupported=("train", "val"), **kwargs)
-        self._load_hf_components(
-            model_cls=AutoModelForZeroShotObjectDetection,
-            processor_cls=AutoProcessor,
-        )
+
+        # 1. Boc tach ro rang cau hinh khoi tao tu metadata
+        cfg = self.metadata.get("config", {})
+        proc_kw = dict(cfg.get("processor", {}))
+        mod_kw = dict(cfg.get("model", {}))
+
+        # 2. Parse torch_dtype neu co khai bao dang chuoi
+        if "torch_dtype" in mod_kw and isinstance(mod_kw["torch_dtype"], str):
+            mod_kw["torch_dtype"], self._dtype, self.half_mode = self._parse_dtype_str(mod_kw["torch_dtype"])
+
+        # 3. Khoi tao Processor & Model tu Hugging Face
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore")
+            self.processor = AutoProcessor.from_pretrained(self.model_id, **proc_kw)
+            self.model = AutoModelForZeroShotObjectDetection.from_pretrained(self.model_id, **mod_kw)
+            if "device_map" not in mod_kw:
+                self.model.to(self._device)
+            self.model.eval()
 
     def forward(
         self,
@@ -40,10 +54,10 @@ class GroundingDinoDetect(Detector):
             return_tensors="pt", **processor_kwargs,
         ))
 
-        # 2. Inference
+        # 2. Inference (AMP, GPU sync tu dong)
         outputs = self._run_inference(inputs, **model_kwargs)
 
-        # 3. Postprocess
+        # 3. Postprocess dac thu cua Grounding DINO
         thresh = post_kwargs.get("threshold", 0.25)
         text_thresh = post_kwargs.get("text_threshold", 0.3)
         with warnings.catch_warnings():
