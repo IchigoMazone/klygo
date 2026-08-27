@@ -328,34 +328,36 @@ class Detector(BaseModel):
 
     def align_inputs_with_outputs(self, inputs: Any, outputs: Any) -> Any:
         """
-        Đồng bộ toàn bộ tensors trong inputs sang đúng device của outputs.
+        Đồng bộ toàn bộ tensors trong inputs sang đúng device của outputs với non_blocking=True.
         Triệt tiêu 100% lỗi 'Expected all tensors to be on the same device' khi chạy Multi-GPU sharded (device_map='auto').
         """
         target_dev = self.get_output_device(outputs)
+        is_cuda = (target_dev.type == "cuda")
         if hasattr(inputs, "items") or isinstance(inputs, dict):
             aligned = {}
             for k, v in inputs.items():
                 if isinstance(v, torch.Tensor):
-                    aligned[k] = v.to(target_dev)
+                    aligned[k] = v.to(target_dev, non_blocking=is_cuda)
                 else:
                     aligned[k] = v
             return aligned
         elif isinstance(inputs, torch.Tensor):
-            return inputs.to(target_dev)
+            return inputs.to(target_dev, non_blocking=is_cuda)
         elif isinstance(inputs, (list, tuple)):
-            return [x.to(target_dev) if isinstance(x, torch.Tensor) else x for x in inputs]
+            return [x.to(target_dev, non_blocking=is_cuda) if isinstance(x, torch.Tensor) else x for x in inputs]
         return inputs
 
     def cast_inputs(self, inputs):
         """
         Cast tất cả floating tensors trong inputs lên đúng device + dtype an toàn của model.
         - Trên CPU: Luôn giữ Float32 để tránh lỗi mat1 and mat2 (CPU không hỗ trợ FP16).
-        - Trên GPU: Tự động khớp FP16 / BF16 / FP32.
+        - Trên GPU: Tự động khớp FP16 / BF16 / FP32 với non_blocking=True.
         - Tensor số nguyên (input_ids, attention_mask): Giữ nguyên int64/bool.
         """
         dev = self.current_device()
         dtype = self.current_dtype()
         is_cpu = (dev.type == "cpu")
+        is_cuda = (dev.type == "cuda")
 
         if hasattr(inputs, "keys"):
             for k in list(inputs.keys()):
@@ -366,21 +368,21 @@ class Detector(BaseModel):
                     if is_cpu:
                         inputs[k] = v.to(device=dev, dtype=torch.float32)
                     elif dtype in (torch.float16, torch.bfloat16):
-                        inputs[k] = v.to(device=dev, dtype=dtype)
+                        inputs[k] = v.to(device=dev, dtype=dtype, non_blocking=is_cuda)
                     else:
-                        inputs[k] = v.to(device=dev, dtype=torch.float32)
+                        inputs[k] = v.to(device=dev, dtype=torch.float32, non_blocking=is_cuda)
                 else:
-                    inputs[k] = v.to(device=dev)
+                    inputs[k] = v.to(device=dev, non_blocking=is_cuda)
         elif isinstance(inputs, torch.Tensor):
             if inputs.is_floating_point():
                 if is_cpu:
                     inputs = inputs.to(device=dev, dtype=torch.float32)
                 elif dtype in (torch.float16, torch.bfloat16):
-                    inputs = inputs.to(device=dev, dtype=dtype)
+                    inputs = inputs.to(device=dev, dtype=dtype, non_blocking=is_cuda)
                 else:
-                    inputs = inputs.to(device=dev, dtype=torch.float32)
+                    inputs = inputs.to(device=dev, dtype=torch.float32, non_blocking=is_cuda)
             else:
-                inputs = inputs.to(device=dev)
+                inputs = inputs.to(device=dev, non_blocking=is_cuda)
 
         return inputs
 
