@@ -6,7 +6,7 @@ import os
 import fnmatch
 import importlib
 import importlib.util
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 from functools import lru_cache
 
 from klygo import files
@@ -129,11 +129,44 @@ def _resolve(name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def load(model: str, **kwargs) -> BaseModel:
+def load(model: Union[str, Any], **kwargs) -> BaseModel:
     """
-    Nạp mô hình AI từ Online Hub Registry hoặc Thư mục / File Offline cục bộ.
+    Nạp mô hình AI từ Online Hub Registry, Thư mục / File Offline cục bộ,
+    hoặc nhận trực tiếp một instance mô hình PyTorch (torch.nn.Module).
     Tự động phân giải cấu hình 3 nhóm (model, processor, post).
     """
+    # 0. Nhận trực tiếp BaseModel hoặc PyTorch nn.Module instance
+    if isinstance(model, BaseModel):
+        return model
+
+    try:
+        import torch.nn as nn
+        is_torch_module = isinstance(model, nn.Module)
+    except Exception:
+        is_torch_module = False
+
+    if is_torch_module or (not isinstance(model, (str, os.PathLike)) and hasattr(model, "parameters")):
+        model_cls_name = f"{model.__class__.__module__}.{model.__class__.__qualname__}" if hasattr(model, "__class__") else "CustomModule"
+        num_params = "Custom"
+        if hasattr(model, "parameters"):
+            try:
+                num_params = sum(p.numel() for p in model.parameters())
+            except Exception:
+                pass
+
+        final_metadata = {
+            "class": "klygo.models.detection.Detector",
+            "task": getattr(model, "task", "Object-Detection"),
+            "backend": "PyTorch (In-Memory)",
+            "num_params": num_params,
+            "model_id": getattr(model, "name", getattr(model, "__name__", model_cls_name)),
+            "config": kwargs,
+        }
+        inst = Detector(metadata=final_metadata)
+        inst.model = model
+        inst.state = "READY"
+        return inst
+
     entry = None
     search_dir = None
 

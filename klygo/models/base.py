@@ -170,13 +170,158 @@ class BaseModel(ABC):
         raise NotImplementedError
 
     # =========================================================================
+    # HỢP ĐỒNG PYTORCH MODULE & THAM SỐ (PyTorch Module Proxy Interface)
+    # =========================================================================
+    def parameters(self, recurse: bool = True):
+        """Trả về iterator các tham số (torch.nn.Parameter) của mô hình."""
+        self._check_supported("parameters")
+        if hasattr(self, "model") and self.model is not None:
+            if hasattr(self.model, "parameters"):
+                return self.model.parameters(recurse=recurse)
+            if hasattr(self.model, "model") and hasattr(self.model.model, "parameters"):
+                return self.model.model.parameters(recurse=recurse)
+        return iter(())
+
+    def named_parameters(self, prefix: str = "", recurse: bool = True, remove_duplicate: bool = True):
+        """Trả về iterator các cặp (tên, tham số) của mô hình."""
+        self._check_supported("named_parameters")
+        if hasattr(self, "model") and self.model is not None:
+            if hasattr(self.model, "named_parameters"):
+                try:
+                    return self.model.named_parameters(prefix=prefix, recurse=recurse, remove_duplicate=remove_duplicate)
+                except TypeError:
+                    return self.model.named_parameters(prefix=prefix, recurse=recurse)
+            if hasattr(self.model, "model") and hasattr(self.model.model, "named_parameters"):
+                try:
+                    return self.model.model.named_parameters(prefix=prefix, recurse=recurse, remove_duplicate=remove_duplicate)
+                except TypeError:
+                    return self.model.model.named_parameters(prefix=prefix, recurse=recurse)
+        return iter(())
+
+    def buffers(self, recurse: bool = True):
+        """Trả về iterator các bộ đệm (buffers) của mô hình."""
+        self._check_supported("buffers")
+        if hasattr(self, "model") and self.model is not None:
+            if hasattr(self.model, "buffers"):
+                return self.model.buffers(recurse=recurse)
+            if hasattr(self.model, "model") and hasattr(self.model.model, "buffers"):
+                return self.model.model.buffers(recurse=recurse)
+        return iter(())
+
+    def named_buffers(self, prefix: str = "", recurse: bool = True, remove_duplicate: bool = True):
+        """Trả về iterator các cặp (tên, buffer) của mô hình."""
+        self._check_supported("named_buffers")
+        if hasattr(self, "model") and self.model is not None:
+            if hasattr(self.model, "named_buffers"):
+                try:
+                    return self.model.named_buffers(prefix=prefix, recurse=recurse, remove_duplicate=remove_duplicate)
+                except TypeError:
+                    return self.model.named_buffers(prefix=prefix, recurse=recurse)
+            if hasattr(self.model, "model") and hasattr(self.model.model, "named_buffers"):
+                try:
+                    return self.model.model.named_buffers(prefix=prefix, recurse=recurse, remove_duplicate=remove_duplicate)
+                except TypeError:
+                    return self.model.model.named_buffers(prefix=prefix, recurse=recurse)
+        return iter(())
+
+    def modules(self):
+        """Trả về iterator qua toàn bộ các module trong mô hình."""
+        self._check_supported("modules")
+        if hasattr(self, "model") and self.model is not None:
+            if hasattr(self.model, "modules"):
+                return self.model.modules()
+            if hasattr(self.model, "model") and hasattr(self.model.model, "modules"):
+                return self.model.model.modules()
+        return iter(())
+
+    def named_modules(self, memo: Optional[Set[Any]] = None, prefix: str = "", remove_duplicate: bool = True):
+        """Trả về iterator các cặp (tên, module) của mô hình."""
+        self._check_supported("named_modules")
+        if hasattr(self, "model") and self.model is not None:
+            if hasattr(self.model, "named_modules"):
+                try:
+                    return self.model.named_modules(memo=memo, prefix=prefix, remove_duplicate=remove_duplicate)
+                except TypeError:
+                    return self.model.named_modules(memo=memo, prefix=prefix)
+            if hasattr(self.model, "model") and hasattr(self.model.model, "named_modules"):
+                try:
+                    return self.model.model.named_modules(memo=memo, prefix=prefix, remove_duplicate=remove_duplicate)
+                except TypeError:
+                    return self.model.model.named_modules(memo=memo, prefix=prefix)
+        return iter(())
+
+    def children(self):
+        """Trả về iterator các module con trực tiếp."""
+        self._check_supported("children")
+        if hasattr(self, "model") and self.model is not None:
+            if hasattr(self.model, "children"):
+                return self.model.children()
+            if hasattr(self.model, "model") and hasattr(self.model.model, "children"):
+                return self.model.model.children()
+        return iter(())
+
+    def named_children(self):
+        """Trả về iterator các cặp (tên, module con trực tiếp)."""
+        self._check_supported("named_children")
+        if hasattr(self, "model") and self.model is not None:
+            if hasattr(self.model, "named_children"):
+                return self.model.named_children()
+            if hasattr(self.model, "model") and hasattr(self.model.model, "named_children"):
+                return self.model.model.named_children()
+        return iter(())
+
+    def state_dict(self, *args, **kwargs) -> Dict[str, Any]:
+        """Trả về state_dict (weights & buffers) của mô hình PyTorch."""
+        self._check_supported("state_dict")
+        if hasattr(self, "model") and self.model is not None:
+            if hasattr(self.model, "state_dict"):
+                return self.model.state_dict(*args, **kwargs)
+            if hasattr(self.model, "model") and hasattr(self.model.model, "state_dict"):
+                return self.model.model.state_dict(*args, **kwargs)
+        return {}
+
+    def load_state_dict(self, state_dict: Dict[str, Any], strict: bool = True):
+        """Nạp trọng số từ state_dict vào mô hình."""
+        self._check_supported("load_state_dict")
+        if hasattr(self, "model") and self.model is not None:
+            if hasattr(self.model, "load_state_dict"):
+                return self.model.load_state_dict(state_dict, strict=strict)
+            if hasattr(self.model, "model") and hasattr(self.model.model, "load_state_dict"):
+                return self.model.model.load_state_dict(state_dict, strict=strict)
+        raise AttributeError(f"Mô hình '{self.model_id}' không hỗ trợ 'load_state_dict'.")
+
+    def eval(self) -> "BaseModel":
+        """Chuyển mô hình sang chế độ Evaluation (eval)."""
+        self._check_supported("eval")
+        if hasattr(self, "model") and self.model is not None:
+            if hasattr(self.model, "eval"):
+                self.model.eval()
+            elif hasattr(self.model, "model") and hasattr(self.model.model, "eval"):
+                self.model.model.eval()
+        return self
+
+    def train(self, mode: bool = True, *args, **kwargs) -> Any:
+        """Chuyển mô hình sang chế độ Huấn luyện (train mode) hoặc thực hiện huấn luyện."""
+        self._check_supported("train")
+        if hasattr(self, "model") and self.model is not None:
+            if hasattr(self.model, "train"):
+                self.model.train(mode)
+            elif hasattr(self.model, "model") and hasattr(self.model.model, "train"):
+                self.model.model.train(mode)
+        return self
+
+    def __getattr__(self, name: str) -> Any:
+        """Ủy quyền truy xuất thuộc tính sang mô hình PyTorch bên dưới nếu không tìm thấy trên wrapper."""
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+        model = self.__dict__.get("model", None)
+        if model is not None and hasattr(model, name):
+            return getattr(model, name)
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+    # =========================================================================
     # HỢP ĐỒNG VÒNG ĐỜI AI TOÀN DIỆN (Pure Abstract Interface)
     # =========================================================================
-    @abstractmethod
-    def train(self, *args, **kwargs):
-        """Hợp đồng huấn luyện / fine-tuning."""
-        raise NotImplementedError
-
     @abstractmethod
     def val(self, *args, **kwargs):
         """Hợp đồng đánh giá / kiểm định."""

@@ -25,16 +25,26 @@ class Detector(BaseModel):
 
     def __init__(
         self,
-        metadata: Dict[str, Any],
+        metadata: Optional[Dict[str, Any]] = None,
         unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
+        model: Optional[Any] = None,
         **kwargs,
     ) -> None:
+        if metadata is None:
+            model_name = "custom-detector"
+            if model is not None:
+                model_name = getattr(model, "name", getattr(model, "__name__", model.__class__.__name__))
+            metadata = {
+                "model_id": model_name,
+                "backend": "PyTorch",
+                "task": "Object-Detection",
+            }
         super().__init__(metadata=metadata, unsupported=unsupported, **kwargs)
         self.task = "Object-Detection"
         self._device: str = "cpu"
         self._dtype: str = "float32"
         self.half_mode: bool = False
-        self.model: Any = None
+        self.model: Any = model
         self.processor: Any = None
 
     # =========================================================================
@@ -203,10 +213,17 @@ class Detector(BaseModel):
 
     # =========================================================================
     # HỢP ĐỒNG AI LIFECYCLE CHUNG CHO DETECTION
-    # =========================================================================
-    def train(self, *args, **kwargs):
+    def train(self, mode: bool = True, *args, **kwargs) -> Any:
+        """Chuyển chế độ huấn luyện (train mode) của PyTorch hoặc thực thi huấn luyện."""
         self._check_supported("train")
-        raise NotImplementedError(f"Mô hình '{self.model_id}' chưa hỗ trợ pipeline huấn luyện train().")
+        if hasattr(self, "model") and self.model is not None:
+            if hasattr(self.model, "train"):
+                self.model.train(mode)
+            elif hasattr(self.model, "model") and hasattr(self.model.model, "train"):
+                self.model.model.train(mode)
+        if args or (kwargs and not set(kwargs.keys()).issubset({"mode"})):
+            raise NotImplementedError(f"Mô hình '{self.model_id}' chưa hỗ trợ pipeline huấn luyện train() với bộ tham số này.")
+        return self
 
     def val(self, *args, **kwargs):
         self._check_supported("val")
@@ -329,7 +346,6 @@ class Detector(BaseModel):
     # =========================================================================
     # ĐỘNG CƠ SUY LUẬN DETECTION HOÀN CHỈNH (predict & forward)
     # =========================================================================
-    @abstractmethod
     def forward(
         self,
         images: List[PIL.Image.Image],
@@ -338,6 +354,18 @@ class Detector(BaseModel):
         processor_kwargs: Dict[str, Any],
         post_kwargs: Dict[str, Any],
     ) -> List[Detection]:
+        """Thực thi forward pass trên mô hình bên dưới."""
+        if hasattr(self, "model") and callable(self.model):
+            return self.model(images, prompt=prompt, **model_kwargs)
+        raise NotImplementedError(f"Lớp '{self.class_name}' chưa triển khai hàm forward() cụ thể.")
+
+    def __call__(self, *args, **kwargs) -> Any:
+        """Cho phép gọi trực tiếp instance mô hình như một callable / PyTorch module."""
+        if hasattr(self, "model") and callable(self.model):
+            return self.model(*args, **kwargs)
+        if hasattr(self, "forward"):
+            return self.forward(*args, **kwargs)
+        raise TypeError(f"'{type(self).__name__}' object is not callable.")
         """
         Phương thức suy luận AI cốt lõi: Nhận trực tiếp 3 gói kwargs:
         - processor_kwargs : Tiền xử lý
