@@ -1,91 +1,146 @@
-import time
+"""
+Trình bao bọc mô hình Grounding DINO Zero-Shot Object Detection (klygo.models.detection.grounding_dino).
+TẦNG 3: Concrete Model kế thừa Detector, khóa các tính năng không hỗ trợ và cài đặt forward().
+"""
+
 import warnings
-from typing import Any, List, Dict, Union
+from typing import Any, List, Dict
 import torch
 import PIL.Image
-
 from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
-from klygo.models import base, utils
+from klygo.models import utils
+from klygo.models.detection.base import Detector
 from klygo.outputs.detect import Box, Detection
 
 utils.suppress_ai_warnings()
 
 
-class GroundingDinoDetect(base.Detector):
-    """Trình bao bọc mô hình Zero-shot Object Detection kiến trúc Grounding DINO."""
+class GroundingDinoDetect(Detector):
+    """Mô hình nhận diện Zero-shot Object Detection kiến trúc Grounding DINO."""
 
-    def __init__(self, metadata: Union[Dict[str, Any], str], **kwargs) -> None:
-        super().__init__(metadata, **kwargs)
+    def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
+        super().__init__(
+            metadata=metadata,
+            unsupported=("train", "val"),
+            **kwargs,
+        )
+
+        cfg = self.metadata.get("config", {})
+        proc_kw = dict(cfg.get("processor", {}))
+        mod_kw = dict(cfg.get("model", {}))
+
+        # Tự động chuyển đổi torch_dtype string -> torch.dtype
+        if "torch_dtype" in mod_kw:
+            dt = mod_kw["torch_dtype"]
+            if isinstance(dt, str):
+                dt_lower = dt.lower()
+                if dt_lower in ("bfloat16", "bf16"):
+                    import torch
+                    mod_kw["torch_dtype"] = torch.bfloat16
+                    self._dtype = "bfloat16"
+                elif dt_lower in ("float16", "fp16", "half"):
+                    import torch
+                    mod_kw["torch_dtype"] = torch.float16
+                    self._dtype = "float16"
+                    self.half_mode = True
+                elif dt_lower in ("float32", "fp32"):
+                    import torch
+                    mod_kw["torch_dtype"] = torch.float32
+                    self._dtype = "float32"
+
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
-            self.processor = AutoProcessor.from_pretrained(self.model_id)
-            self.model = AutoModelForZeroShotObjectDetection.from_pretrained(self.model_id).to(self._device).eval()
+            self.processor = AutoProcessor.from_pretrained(self.model_id, **proc_kw)
+            self.model = AutoModelForZeroShotObjectDetection.from_pretrained(self.model_id, **mod_kw)
+            if "device_map" not in mod_kw:
+                self.model.to(self._device)
+            self.model.eval()
 
-    def _infer_batch(
+    def forward(
         self,
-        batch_imgs: List[PIL.Image.Image],
+        images: List[PIL.Image.Image],
         prompt: List[str],
-        conf: float,
-        text_threshold: float,
-        half: bool,
+        model_kwargs: Dict[str, Any],
+        processor_kwargs: Dict[str, Any],
+        post_kwargs: Dict[str, Any],
     ) -> List[Detection]:
-        """Xử lý suy luận cho 1 lô ảnh (hỗ trợ cả 1 ảnh đơn lẻ lẫn batch nhiều ảnh)."""
-        t0 = time.perf_counter()
-        inputs = self.processor(images=batch_imgs, text=[prompt] * len(batch_imgs), return_tensors="pt")
-        dev = getattr(self.model, "device", self._device)
-        dtype = next(self.model.parameters()).dtype
+        """
+        Động cơ suy luận tinh khiết:
+        - 1. Tiền xử lý với processor_kwargs
+        - 2. Forward với model_kwargs
+        - 3. Hậu xử lý với post_kwargs
+        """
+        dev = getattr(self.model, "device", None)
+        if dev is None and hasattr(self.model, "parameters"):
+            try:
+                dev = next(self.model.parameters()).device
+            except Exception:
+                dev = self._device
+        else:
+            dev = dev or self._device
 
-        for k, v in inputs.items():
-            if isinstance(v, torch.Tensor):
-                inputs[k] = v.to(device=dev, dtype=dtype if torch.is_floating_point(v) else None)
+        # 1. Tiền xử lý (Định dạng List[List[str]] chuẩn Transformers mới)
+        labels_list = [p.strip().rstrip(".").lower() for p in prompt if p.strip()]
+        text_labels = [labels_list] * len(images)
+        inputs = self.processor(
+            images=images,
+            text=text_labels,
+            return_tensors="pt",
+            **processor_kwargs,
+        ).to(dev)
 
-        t1 = time.perf_counter()
-        use_half = "cuda" in str(dev) and (self.half_mode or half)
-        with torch.no_grad():
-            if use_half:
-                with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
-                    outputs = self.model(**inputs)
-            else:
-                outputs = self.model(**inputs)
+        # 2. Suy luận AI
+        use_half = "cuda" in str(dev) and self.half_mode
+        dev_type = "cuda" if "cuda" in str(dev) else "cpu"
+        with utils.amp_autocast_if_needed(use_half=use_half, dtype=self.dtype, device_type=dev_type):
+            outputs = self.model(**inputs, **model_kwargs)
 
-        if "cuda" in str(dev) and torch.cuda.is_available():
-            torch.cuda.synchronize()
-        t2 = time.perf_counter()
+        if "cuda" in str(dev):
+            utils.cuda_sync()
 
-        target_sizes = [img.size[::-1] for img in batch_imgs]
+        # 3. Hậu xử lý (Sử dụng trực tiếp threshold & text_threshold chuẩn)
+        thresh = post_kwargs.get("threshold", 0.25)
+        text_thresh = post_kwargs.get("text_threshold", 0.3)
+        target_sizes = [img.size[::-1] for img in images]
+
+        post_proc_kwargs = {
+            "outputs": outputs,
+            "input_ids": inputs.input_ids,
+            "threshold": thresh,
+            "text_threshold": text_thresh,
+            "target_sizes": target_sizes,
+        }
+        for k, v in post_kwargs.items():
+            if k not in post_proc_kwargs:
+                post_proc_kwargs[k] = v
+
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=FutureWarning)
-            batch_outs = self.processor.post_process_grounded_object_detection(
-                outputs=outputs,
-                target_sizes=target_sizes,
-                threshold=conf,
-                text_threshold=text_threshold,
+            raw_results = self.processor.post_process_grounded_object_detection(
+                **post_proc_kwargs
             )
 
-        t3 = time.perf_counter()
-        speed = utils.calculate_speed(t0, t1, t2, t3, count=len(batch_imgs))
-
+        # 4. Đóng gói kết quả
         results = []
-        for out, img in zip(batch_outs, batch_imgs):
-            labels = out.get("text_labels", out.get("labels", []))
+        for res, img in zip(raw_results, images):
             boxes = [
-                Box(id=i, label=str(l), score=round(s.item(), 3), box=[round(x, 2) for x in b.tolist()], parent_image=img)
-                for i, (b, s, l) in enumerate(zip(out["boxes"], out["scores"], labels))
+                Box(
+                    id=i,
+                    label=str(label),
+                    score=round(float(score.item()), 3),
+                    box=[round(float(x), 2) for x in box.tolist()],
+                    parent_image=img,
+                )
+                for i, (score, label, box) in enumerate(zip(res["scores"], res["labels"], res["boxes"]))
             ]
             results.append(
-                Detection(source_image=img, objects=boxes, speed=speed, text_prompt=prompt, threshold=conf, text_threshold=text_threshold)
+                Detection(
+                    source_image=img,
+                    objects=boxes,
+                    prompt=prompt,
+                    threshold=thresh,
+                    text_threshold=text_thresh,
+                )
             )
         return results
-
-    def help(self) -> None:
-        """In ra thông tin mô hình và danh sách các hàm nghiệp vụ."""
-        print(f"MODEL: {self.model_id} ({self.backend}/{self.task})")
-        print(f"CLASS: {self.class_name}")
-        print("=" * 60)
-        print("1. predict(source, prompt, conf=0.25, batch=1, vid_stride=1, max_frames=None, half=False, device=None)")
-        print("   Nhan dien doi tuong tren anh, video, folder tu media.load.")
-        print("2. benchmark(data='data.yaml', iterations=20, warmup=5)")
-        print("   Cham diem danh gia toc do suy luan (Do tre Latency ms / Toc do FPS).")
-        print("3. export(output_dir='my_model')")
-        print("   Xuat toan bo mo hinh (Weights + klygo.json) ra thu muc de chay Offline.")

@@ -6,6 +6,7 @@ import os
 import time
 import logging
 import warnings
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, List, Dict, Union, Tuple, Optional
 import PIL.Image
@@ -16,6 +17,7 @@ def suppress_ai_warnings() -> None:
     Tắt toàn bộ các cảnh báo không cần thiết từ Hugging Face Hub, Transformers, PyTorch và Tokenizers.
     """
     os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+    os.environ["HF_HUB_DISABLE_IMPLICIT_TOKEN_WARNING"] = "1"
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     warnings.filterwarnings("ignore")
 
@@ -31,11 +33,91 @@ def suppress_ai_warnings() -> None:
     except Exception:
         pass
 
-    for logger_name in ["huggingface_hub", "huggingface_hub.utils._http", "transformers"]:
+    for logger_name in [
+        "huggingface_hub",
+        "huggingface_hub.utils._http",
+        "transformers",
+        "urllib3",
+        "torch",
+    ]:
         try:
             logging.getLogger(logger_name).setLevel(logging.ERROR)
         except Exception:
             pass
+
+
+def resolve_sub_kwargs(
+    kwargs: Dict[str, Any],
+    json_config: Optional[Dict[str, Any]] = None,
+) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    """
+    Phân giải và chia tách thành 3 sub-kwargs độc lập:
+    - model_kwargs
+    - processor_kwargs
+    - post_kwargs
+
+    Hỗ trợ đồng thời cả 3 dạng truyền cấu hình:
+    1. Dạng 1: Tên chuẩn nguyên bản có sẵn trong config.json -> Tự động định tuyến
+    2. Dạng 2: Cú pháp kẹp tiền/hậu tố: model_<param>_, processor_<param>_, post_<param>_ -> 100% chống trùng
+    3. Dạng 3: Khối Dictionary tường minh model={...}, processor={...}, post={...}
+    """
+    json_cfg = dict(json_config or {})
+
+    # 1. Khởi tạo 3 nhóm từ config.json gốc
+    model_kwargs = dict(json_cfg.get("model", {}))
+    processor_kwargs = dict(json_cfg.get("processor", {}))
+    post_kwargs = dict(json_cfg.get("post", {}))
+
+    # Mặc định các tham số post cốt lõi nếu chưa có
+    post_kwargs.setdefault("threshold", 0.25)
+    post_kwargs.setdefault("text_threshold", 0.3)
+
+    # 2. Xử lý Dạng 3: Khối Dictionary tường minh
+    if "model" in kwargs and isinstance(kwargs["model"], dict):
+        model_kwargs.update(kwargs["model"])
+    if "processor" in kwargs and isinstance(kwargs["processor"], dict):
+        processor_kwargs.update(kwargs["processor"])
+    if "post" in kwargs and isinstance(kwargs["post"], dict):
+        post_kwargs.update(kwargs["post"])
+
+    # 3. Duyệt qua tất cả các tham số phẳng còn lại
+    for key, value in kwargs.items():
+        if key in ("model", "processor", "post"):
+            continue
+
+        # Alias tiện ích: conf -> threshold
+        if key == "conf":
+            post_kwargs["threshold"] = value
+            continue
+
+        # Điều hướng các tham số Model phổ biến: torch_dtype, dtype, device_map
+        if key in ("torch_dtype", "dtype"):
+            model_kwargs["torch_dtype"] = value
+            continue
+        if key in ("device_map", "low_cpu_mem_usage", "load_in_8bit", "load_in_4bit", "quantization_config"):
+            model_kwargs[key] = value
+            continue
+
+        # Dạng 1: Đã có sẵn trong config.json -> Ghi đè tự nhiên
+        if key in model_kwargs:
+            model_kwargs[key] = value
+        elif key in processor_kwargs:
+            processor_kwargs[key] = value
+        elif key in post_kwargs:
+            post_kwargs[key] = value
+
+        # Dạng 2: Cú pháp tiền tố model_<param>, processor_<param>, post_<param> (hỗ trợ cả có hoặc không có dấu gạch dưới cuối)
+        elif key.startswith("model_"):
+            clean_key = key[6:-1] if key.endswith("_") else key[6:]
+            model_kwargs[clean_key] = value
+        elif key.startswith("processor_"):
+            clean_key = key[10:-1] if key.endswith("_") else key[10:]
+            processor_kwargs[clean_key] = value
+        elif key.startswith("post_"):
+            clean_key = key[5:-1] if key.endswith("_") else key[5:]
+            post_kwargs[clean_key] = value
+
+    return model_kwargs, processor_kwargs, post_kwargs
 
 
 def resolve_images(
@@ -44,110 +126,103 @@ def resolve_images(
     max_frames: Optional[int] = None,
 ) -> Tuple[List[PIL.Image.Image], bool]:
     """
-    Tự động phân giải nguồn dữ liệu đầu vào (1 ảnh đơn lẻ hoặc video / folder / list ảnh),
-    hỗ trợ bỏ bớt frame (step/stride) và giới hạn số frame (max_frames).
-
-    Đầu vào:
-    - source: 1 ảnh PIL.Image, numpy array, hoặc danh sách/generator video từ media.load.
-    - step [int]: Bước nhảy frame khi duyệt video/folder (Mặc định: 1 - lấy đủ mọi frame). Ví dụ step=5 lấy frame 0, 5, 10...
-    - max_frames [Optional[int]]: Giới hạn số lượng frame tối đa cần xử lý.
-
-    Đầu ra:
-    - (List[PIL.Image.Image], is_single: bool):
-      + is_single = True nếu đầu vào là 1 ảnh duy nhất.
-      + is_single = False nếu đầu vào là video, folder hoặc list ảnh.
+    Tự động phân giải nguồn dữ liệu đầu vào thông qua klygo.media.
+    Đảm bảo 100% đầu ra chuyển về danh sách đối tượng PIL.Image (RGB).
     """
+    from klygo import media
+
+    # 1. Nếu là đường dẫn chuỗi hoặc Path -> Giao 100% cho klygo.media.load (backend='pil')
     if isinstance(source, (str, Path)):
-        raise TypeError(
-            f"Đầu vào dạng đường dẫn chuỗi '{source}' chưa được nạp. "
-            "Vui lòng nạp qua klygo.media.load() trước khi truyền vào model.predict() "
-            "(Ví dụ: img = media.load('image.jpg'); model.predict(img, ...))."
-        )
-
-    # 1. Trường hợp 1 ảnh PIL.Image đơn lẻ
-    if isinstance(source, PIL.Image.Image):
+        loaded = media.load(source, verbose=False)
+        raw_list = loaded if isinstance(loaded, list) else [loaded]
+        is_single = len(raw_list) == 1 and not str(source).lower().endswith(('.mp4', '.avi', '.mov', '.mkv', '.webm', '.m4v'))
+    # 2. Nếu đã là 1 ảnh PIL.Image đơn lẻ
+    elif isinstance(source, PIL.Image.Image):
         return [source.convert("RGB")], True
-
-    # 2. Trường hợp numpy array
-    if hasattr(source, "shape"):
-        if getattr(source, "ndim", 0) == 3:
-            return [PIL.Image.fromarray(source).convert("RGB")], True
+    # 3. Nếu là numpy array hoặc Tensor (tự động chuyển sang PIL)
+    elif hasattr(source, "shape"):
+        if getattr(source, "ndim", 0) in (2, 3):
+            return [media.to_pil(source).convert("RGB")], True
         elif getattr(source, "ndim", 0) == 4:
-            # Batch numpy array (B, H, W, C)
-            batch_list = [PIL.Image.fromarray(img).convert("RGB") for img in source]
+            batch_list = [media.to_pil(img).convert("RGB") for img in source]
             step = max(1, int(step))
             if step > 1:
                 batch_list = batch_list[::step]
             if max_frames is not None and max_frames > 0:
                 batch_list = batch_list[:max_frames]
             return batch_list, False
-
-    # 3. Trường hợp danh sách / tuple / generator
-    if isinstance(source, (list, tuple)):
         raw_list = list(source)
+        is_single = False
+    # 4. Nếu là danh sách ảnh hoặc Iterator
+    elif isinstance(source, (list, tuple)):
+        raw_list = list(source)
+        is_single = len(raw_list) == 1
     elif hasattr(source, "__iter__"):
         raw_list = list(source)
+        is_single = len(raw_list) == 1
     else:
         raise TypeError(
-            f"Đầu vào '{type(source).__name__}' không hợp lệ. "
-            "model.predict() nhận ảnh từ klygo.media.load() (PIL.Image hoặc List[PIL.Image])."
+            f"Đầu vào '{type(source).__name__}' không hợp lệ. Vui lòng truyền đường dẫn ảnh/video hoặc dữ liệu media."
         )
 
     if not raw_list:
-        return [], False
+        return [], is_single
 
-    # Áp dụng bước nhảy frame (step) và giới hạn số frame (max_frames)
     step = max(1, int(step))
     if step > 1:
         raw_list = raw_list[::step]
     if max_frames is not None and max_frames > 0:
         raw_list = raw_list[:max_frames]
 
-    # Chuyển đổi toàn bộ phần tử trong list sang RGB PIL.Image
     cleaned_images = []
     for item in raw_list:
         if isinstance(item, PIL.Image.Image):
             cleaned_images.append(item.convert("RGB"))
-        elif hasattr(item, "shape") and getattr(item, "ndim", 0) == 3:
-            cleaned_images.append(PIL.Image.fromarray(item).convert("RGB"))
         else:
-            raise TypeError(
-                f"Phần tử trong danh sách có kiểu '{type(item).__name__}' không phải ảnh hợp lệ."
-            )
+            try:
+                cleaned_images.append(media.to_pil(item).convert("RGB"))
+            except Exception as err:
+                raise TypeError(f"Không thể chuyển đổi phần tử kiểu '{type(item).__name__}' sang PIL Image: {err}")
 
-    return cleaned_images, False
-
-
-def prepare_image(image: Any) -> PIL.Image.Image:
-    """
-    Chuẩn hóa 1 bức ảnh đầu vào.
-    """
-    images, _ = resolve_images(image)
-    if not images:
-        raise ValueError("Không có dữ liệu ảnh hợp lệ.")
-    return images[0]
+    return cleaned_images, is_single
 
 
 def normalize_prompt(text_prompt: Union[str, List[str]]) -> List[str]:
-    """
-    Chuẩn hóa prompt nhãn từ khóa thành danh sách List[str].
-    """
+    """Chuẩn hóa prompt nhãn từ khóa thành danh sách List[str]."""
+    from klygo.validators import validate_type
+    validate_type(text_prompt, (str, list, tuple), "prompt")
     if isinstance(text_prompt, str):
-        return [text_prompt]
-    elif isinstance(text_prompt, (list, tuple)):
-        return list(text_prompt)
-    else:
-        raise TypeError("text_prompt phải là chuỗi ký tự (str) hoặc danh sách chuỗi ký tự (list[str]).")
+        return [text_prompt.strip()]
+    return [str(p).strip() for p in text_prompt if str(p).strip()]
 
 
-def calculate_speed(t_start: float, t_pre: float, t_infer: float, t_post: float, count: int = 1) -> Dict[str, float]:
-    """
-    Tính toán bảng tốc độ suy luận (ms/ảnh).
-    """
-    n = max(1, count)
-    return {
-        "preprocess": round(((t_pre - t_start) * 1000) / n, 2),
-        "inference": round(((t_infer - t_pre) * 1000) / n, 2),
-        "postprocess": round(((t_post - t_infer) * 1000) / n, 2),
-        "total": round(((t_post - t_start) * 1000) / n, 2),
-    }
+def amp_autocast_if_needed(
+    use_half: bool = False,
+    dtype: Optional[str] = None,
+    device_type: Optional[str] = None,
+):
+    """Context manager bọc torch.amp.autocast khi chạy FP16 hoặc BFLOAT16."""
+    from klygo import cuda
+    try:
+        import torch
+        dev_type = device_type or ("cuda" if cuda.is_available() else "cpu")
+        dt = (dtype or "").lower()
+
+        if dt in ("bfloat16", "bf16"):
+            return torch.amp.autocast(device_type=dev_type, dtype=torch.bfloat16)
+        elif (use_half or dt in ("float16", "fp16", "half")) and dev_type == "cuda":
+            return torch.amp.autocast(device_type="cuda", dtype=torch.float16)
+    except Exception:
+        pass
+    return nullcontext()
+
+
+def cuda_sync() -> None:
+    """Đồng bộ dòng tính toán trên GPU để đo đạc thời gian chính xác."""
+    from klygo import cuda
+    if cuda.is_available():
+        try:
+            import torch
+            torch.cuda.synchronize()
+        except Exception:
+            pass

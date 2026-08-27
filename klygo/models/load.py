@@ -1,3 +1,7 @@
+"""
+Bộ phân giải và nạp mô hình AI Klygo (klygo.models.load).
+"""
+
 import os
 import fnmatch
 import importlib
@@ -6,15 +10,20 @@ from typing import Dict, Any, Optional
 from functools import lru_cache
 
 from klygo import files
-from . import base
+from .base import BaseModel
+from . import utils
+from .detection.base import Detector
 from .detection.grounding_dino import GroundingDinoDetect
 from .detection.yolo import YOLODetect
 from .detection.locate_anything import LocateAnythingDetect
 
 CLASS_MAPPING = {
+    "Detector": Detector,
     "GroundingDinoDetect": GroundingDinoDetect,
     "YOLODetect": YOLODetect,
     "LocateAnythingDetect": LocateAnythingDetect,
+    "klygo.models.detection.Detector": Detector,
+    "klygo.models.detection.base.Detector": Detector,
     "klygo.models.detection.GroundingDinoDetect": GroundingDinoDetect,
     "klygo.models.detection.YOLODetect": YOLODetect,
     "klygo.models.detection.LocateAnythingDetect": LocateAnythingDetect,
@@ -36,15 +45,9 @@ def _get_registry() -> Dict[str, Any]:
     return _REGISTRY_CACHE
 
 
-def register(name: str, cls: Any, metadata: Optional[Dict[str, Any]] = None) -> None:
+def register(name: str, cls: Any, metadata: Optional[Dict[str, Any]] = None, config: Optional[Dict[str, Any]] = None) -> None:
     """
-    Tác dụng:
-    - Đăng ký một lớp mô hình nhận diện tùy chỉnh (Custom Model) vào hệ thống Klygo lúc Runtime.
-
-    Đầu vào:
-    - name [str]: Tên định danh gọi model (VD: 'my-custom-model').
-    - cls [type]: Lớp mô hình kế thừa từ base.Detector.
-    - metadata [Optional[dict]]: Cấu hình metadata tùy chọn.
+    Đăng ký một lớp mô hình tùy chỉnh (Custom Model) vào hệ thống Klygo lúc Runtime trong RAM.
     """
     class_full_name = f"{cls.__module__}.{cls.__qualname__}" if hasattr(cls, "__module__") else cls.__name__
     CLASS_MAPPING[name] = cls
@@ -54,17 +57,17 @@ def register(name: str, cls: Any, metadata: Optional[Dict[str, Any]] = None) -> 
     registry = _get_registry()
     meta = dict(metadata or {})
     meta.setdefault("class", class_full_name)
-    meta.setdefault("task", "Object-Detection")
+    meta.setdefault("task", getattr(cls, "task", "Object-Detection"))
     meta.setdefault("backend", "Custom")
     meta.setdefault("num_params", "Custom")
     meta.setdefault("model_id", name)
+    if config:
+        meta["config"] = config
     registry[name] = meta
 
 
 def _resolve_class(class_path: str, search_dir: Optional[str] = None) -> Any:
-    """
-    Nạp động lớp mô hình từ đường dẫn module hoặc từ file .py cục bộ trong thư mục model.
-    """
+    """Nạp động lớp mô hình từ đường dẫn module hoặc từ file .py cục bộ."""
     if class_path in CLASS_MAPPING:
         return CLASS_MAPPING[class_path]
 
@@ -104,7 +107,7 @@ def _resolve_class(class_path: str, search_dir: Optional[str] = None) -> Any:
 
 @lru_cache(maxsize=128)
 def _resolve(name: str) -> Optional[Dict[str, Any]]:
-    """Phân giải định danh mô hình với LRU Cache để tăng tốc độ phân giải tên lặp lại."""
+    """Phân giải định danh mô hình với LRU Cache."""
     registry = _get_registry()
     entry = registry.get(name)
     if entry and "*" not in name:
@@ -114,9 +117,9 @@ def _resolve(name: str) -> Optional[Dict[str, Any]]:
         if fnmatch.fnmatch(name, pattern):
             entry = dict(base_entry)
             option = entry.pop("option", {})
-            for key, override in option.items():
+            for key, override_cfg in option.items():
                 if key in name:
-                    entry.update(override)
+                    entry.update(override_cfg)
                     break
 
             if entry.get("num_params") is None:
@@ -126,16 +129,10 @@ def _resolve(name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def load(model: str, **kwargs) -> base.Detector:
+def load(model: str, **kwargs) -> BaseModel:
     """
-    Tác dụng:
-    - Nạp mô hình nhận diện đối tượng từ Registry trực tuyến (Online) hoặc từ Thư mục / File trọng số cục bộ (Offline).
-
-    Đầu vào:
-    - model [str]: Tên định danh mô hình (VD: 'grounding-dino-tiny') hoặc đường dẫn thư mục offline/exported, file .pt.
-
-    Đầu ra:
-    - [Detector]: Đối tượng mô hình nhận diện kế thừa từ lớp cơ sở Detector (mặc định nạp trên CPU).
+    Nạp mô hình AI từ Online Hub Registry hoặc Thư mục / File Offline cục bộ.
+    Tự động phân giải cấu hình 3 nhóm (model, processor, post).
     """
     entry = None
     search_dir = None
@@ -191,6 +188,19 @@ def load(model: str, **kwargs) -> base.Detector:
             f"Mô hình '{model}' không tồn tại trong registry và không phải thư mục/file mô hình offline hợp lệ."
         )
 
-    class_path = entry.get("class")
+    # 5. Phân giải và hợp nhất 3 nhóm cấu hình
+    model_kwargs, processor_kwargs, post_kwargs = utils.resolve_sub_kwargs(
+        kwargs=kwargs,
+        json_config=entry.get("config"),
+    )
+
+    final_metadata = dict(entry)
+    final_metadata["config"] = {
+        "model": model_kwargs,
+        "processor": processor_kwargs,
+        "post": post_kwargs,
+    }
+
+    class_path = final_metadata.get("class")
     cls = _resolve_class(class_path, search_dir=search_dir)
-    return cls(metadata=entry, **kwargs)
+    return cls(metadata=final_metadata)

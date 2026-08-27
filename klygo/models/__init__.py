@@ -1,8 +1,6 @@
 """
-Bộ công cụ Quản lý & Nạp Mô hình AI Nhận diện Đối tượng (`klygo.models`).
-
-Hướng dẫn sử dụng:
-- Nạp mô hình từ registry mẫu: `models.load("grounding-dino-tiny")`
+Bộ công cụ Quản lý & Nạp Mô hình AI Klygo (`klygo.models`).
+Kiến trúc 3 tầng: BaseModel -> Task Base Class (Detector) -> Concrete Models.
 """
 
 import warnings
@@ -13,8 +11,19 @@ warnings.filterwarnings("ignore", message=".*The key `labels` is will return int
 warnings.filterwarnings("ignore", message=".*text_labels.*")
 
 from . import base
+from . import errors
 from . import utils
+from .base import BaseModel, DetectorModel
+from .detection.base import Detector
 from .load import load, register
-from .base import Detector, DetectorModel
 
-__all__ = ["load", "register", "base", "utils", "Detector", "DetectorModel"]
+__all__ = [
+    "load",
+    "register",
+    "base",
+    "errors",
+    "utils",
+    "BaseModel",
+    "Detector",
+    "DetectorModel",
+]
