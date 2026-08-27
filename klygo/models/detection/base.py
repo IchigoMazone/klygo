@@ -8,7 +8,7 @@ quản lý phần cứng, export và benchmark.
 import os
 import time
 from abc import abstractmethod
-from typing import Dict, Any, Optional, Union, Sequence, Set, List
+from typing import Dict, Any, Optional, Union, Sequence, Set, List, Tuple
 import torch
 import torch.nn as nn
 import PIL.Image
@@ -189,49 +189,63 @@ class Detector(BaseModel):
         return self
 
     # =========================================================================
-    # PRIVATE HELPERS CHO TANG 3 (giam boilerplate khi viet model moi)
+    # PUBLIC HELPERS CHO MODEL IMPLEMENTATION (Tầng 3)
     # =========================================================================
-    _DTYPE_MAP = {
+    DTYPE_MAP = {
         "float16": (torch.float16, "float16", True),
         "fp16": (torch.float16, "float16", True),
         "half": (torch.float16, "float16", True),
         "bfloat16": (torch.bfloat16, "bfloat16", False),
         "bf16": (torch.bfloat16, "bfloat16", False),
     }
+    _DTYPE_MAP = DTYPE_MAP
 
-    def _parse_dtype_str(self, dt_str: str):
-        """Map chuoi dinh dang dtype sang (torch.dtype, dtype_str, half_mode)."""
-        return self._DTYPE_MAP.get(str(dt_str).lower(), (torch.float32, "float32", False))
+    def parse_dtype(self, dt_str: str):
+        """Map chuỗi định dạng dtype sang tuple: (torch.dtype, dtype_str, half_mode)."""
+        return self.DTYPE_MAP.get(str(dt_str).lower(), (torch.float32, "float32", False))
 
-    def _resolve_dtype(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        """Tu dong chuan hoa torch_dtype trong kwargs va dong bo state cua model."""
+    def resolve_dtype(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        """Tự động chuẩn hóa torch_dtype trong kwargs và đồng bộ state của model."""
         dt = kwargs.get("torch_dtype")
         if isinstance(dt, str):
-            kwargs["torch_dtype"], self._dtype, self.half_mode = self._parse_dtype_str(dt)
+            kwargs["torch_dtype"], self._dtype, self.half_mode = self.parse_dtype(dt)
         return kwargs
 
-    def _current_device(self) -> torch.device:
-        """Device thuc te cua model (lay tu parameter dau tien)."""
+    def parse_config(self) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+        """
+        Bóc tách 3 nhóm cấu hình (model, processor, post) từ self.metadata['config'],
+        tự động chuẩn hóa torch_dtype cho model_kwargs và đồng bộ model state.
+        Trả về tuple 3 phần tử: (model_kwargs, processor_kwargs, post_kwargs).
+        Ví dụ: mod_kw, proc_kw, _ = self.parse_config()
+        """
+        cfg = self.metadata.get("config", {})
+        mod_kw = self.resolve_dtype(dict(cfg.get("model", {})))
+        proc_kw = dict(cfg.get("processor", {}))
+        post_kw = dict(cfg.get("post", {}))
+        return mod_kw, proc_kw, post_kw
+
+    def current_device(self) -> torch.device:
+        """Device thực tế của model (lấy từ parameter đầu tiên)."""
         try:
             return next(nn.Module.parameters(self)).device
         except StopIteration:
             return torch.device(self._device)
 
-    def _current_dtype(self) -> torch.dtype:
-        """Dtype thuc te cua model (lay tu parameter dau tien)."""
+    def current_dtype(self) -> torch.dtype:
+        """Dtype thực tế của model (lấy từ parameter đầu tiên)."""
         try:
             return next(nn.Module.parameters(self)).dtype
         except StopIteration:
             return torch.float32
 
-    def _cast_inputs(self, inputs):
+    def cast_inputs(self, inputs):
         """
-        Cast tat ca floating tensors trong inputs len dung device + dtype cua model.
-        Mutate in-place de giu nguyen kieu object goc (BatchFeature, dict, ...).
-        Non-tensor va integer tensor chi can .to(device), khong doi dtype.
+        Cast tất cả floating tensors trong inputs lên đúng device + dtype của model.
+        Mutate in-place để giữ nguyên kiểu object gốc (BatchFeature, dict, ...).
+        Non-tensor và integer tensor chỉ cần .to(device), không đổi dtype.
         """
-        dev   = self._current_device()
-        dtype = self._current_dtype()
+        dev   = self.current_device()
+        dtype = self.current_dtype()
         for k in list(inputs.keys()):
             v = inputs[k]
             if not isinstance(v, torch.Tensor):
@@ -242,16 +256,16 @@ class Detector(BaseModel):
                 inputs[k] = v.to(device=dev)
         return inputs
 
-    def _run_inference(self, inputs, **model_kwargs):
+    def run_inference(self, inputs, **model_kwargs):
         """
-        Thuc thi forward cua self.model voi AMP autocast va device sync tu dong.
+        Thực thi forward của self.model với AMP autocast và device sync tự động.
         """
-        dev = self._current_device()
+        dev = self.current_device()
         from klygo import cuda as klygo_cuda
         is_gpu = ("cuda" in str(dev) or self._is_multi_gpu()) and klygo_cuda.is_available()
         use_half = is_gpu and self.half_mode
         dev_type = "cuda" if is_gpu else "cpu"
-        eff_dtype = "float16" if use_half else ("bfloat16" if self._current_dtype() == torch.bfloat16 else "float32")
+        eff_dtype = "float16" if use_half else ("bfloat16" if self.current_dtype() == torch.bfloat16 else "float32")
 
         with utils.amp_autocast_if_needed(use_half=use_half, dtype=eff_dtype, device_type=dev_type):
             if hasattr(inputs, "items") or isinstance(inputs, dict):
@@ -267,7 +281,7 @@ class Detector(BaseModel):
             utils.cuda_sync()
         return outputs
 
-    def _build_detections(
+    def build_detections(
         self,
         images: List[PIL.Image.Image],
         raw_results: List[Dict[str, Any]],
@@ -276,7 +290,7 @@ class Detector(BaseModel):
         text_threshold: Optional[float] = None,
     ) -> List[Detection]:
         """
-        Chuan hoa danh sach ket qua raw [{'scores', 'labels', 'boxes'}] thanh List[Detection].
+        Chuẩn hóa danh sách kết quả raw [{'scores', 'labels', 'boxes'}] thành List[Detection].
         """
         results = []
         for res, img in zip(raw_results, images):
@@ -306,6 +320,15 @@ class Detector(BaseModel):
                 )
             )
         return results
+
+    # Alias tương thích ngược
+    _parse_dtype_str = parse_dtype
+    _resolve_dtype = resolve_dtype
+    _current_device = current_device
+    _current_dtype = current_dtype
+    _cast_inputs = cast_inputs
+    _run_inference = run_inference
+    _build_detections = build_detections
 
     # =========================================================================
     # VONG DOI & BO NHO (Lifecycle & Resource Management)

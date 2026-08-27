@@ -21,12 +21,10 @@ class GroundingDinoDetect(Detector):
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
         super().__init__(metadata=metadata, unsupported=("train", "val"), **kwargs)
 
-        # 1. Boc tach ro rang cau hinh khoi tao tu metadata
-        cfg = self.metadata.get("config", {})
-        proc_kw = dict(cfg.get("processor", {}))
-        mod_kw = self._resolve_dtype(dict(cfg.get("model", {})))
+        # 1. Boc tach 3 nhom cau hinh ro rang (mod_kw tu dong chuan hoa torch_dtype & sync state)
+        mod_kw, proc_kw, _ = self.parse_config()
 
-        # 3. Khoi tao Processor & Model tu Hugging Face
+        # 2. Khoi tao Processor & Model tu Hugging Face
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
             self.processor = AutoProcessor.from_pretrained(self.model_id, **proc_kw)
@@ -45,13 +43,13 @@ class GroundingDinoDetect(Detector):
     ) -> List[Detection]:
         # 1. Preprocess & device casting
         labels = [p.strip().rstrip(".").lower() for p in prompt if p.strip()]
-        inputs = self._cast_inputs(self.processor(
+        inputs = self.cast_inputs(self.processor(
             images=images, text=[labels] * len(images),
             return_tensors="pt", **processor_kwargs,
         ))
 
         # 2. Inference (AMP, GPU sync tu dong)
-        outputs = self._run_inference(inputs, **model_kwargs)
+        outputs = self.run_inference(inputs, **model_kwargs)
 
         # 3. Postprocess dac thu cua Grounding DINO
         thresh = post_kwargs.get("threshold", 0.25)
@@ -68,4 +66,4 @@ class GroundingDinoDetect(Detector):
             )
 
         # 4. Pack output
-        return self._build_detections(images, raw, prompt=prompt, threshold=thresh, text_threshold=text_thresh)
+        return self.build_detections(images, raw, prompt=prompt, threshold=thresh, text_threshold=text_thresh)
