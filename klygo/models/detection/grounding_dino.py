@@ -71,14 +71,15 @@ class GroundingDinoDetect(Detector):
         - 2. Forward với model_kwargs
         - 3. Hậu xử lý với post_kwargs
         """
-        dev = getattr(self.model, "device", None)
-        if dev is None and hasattr(self.model, "parameters"):
+        # Luôn luôn lấy device thực tế từ parameter đầu tiên của mô hình
+        dev = None
+        if hasattr(self.model, "parameters"):
             try:
                 dev = next(self.model.parameters()).device
             except Exception:
-                dev = self._device
-        else:
-            dev = dev or self._device
+                pass
+        if dev is None:
+            dev = getattr(self.model, "device", None) or self._device
 
         # 1. Tiền xử lý (Định dạng List[List[str]] chuẩn Transformers mới)
         labels_list = [p.strip().rstrip(".").lower() for p in prompt if p.strip()]

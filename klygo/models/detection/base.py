@@ -45,13 +45,13 @@ class Detector(BaseModel):
         if hasattr(self, "model") and self.model is not None:
             if hasattr(self.model, "hf_device_map"):
                 return "multi-gpu"
-            if hasattr(self.model, "device"):
-                return str(self.model.device)
             if hasattr(self.model, "parameters"):
                 try:
                     return str(next(self.model.parameters()).device)
                 except Exception:
                     pass
+            if hasattr(self.model, "device"):
+                return str(self.model.device)
         return self._device
 
     @property
@@ -69,9 +69,10 @@ class Detector(BaseModel):
                 pass
         return self._dtype
 
-    def to(self, device_name: str) -> "Detector":
+    def to(self, device_name: Union[str, int]) -> "Detector":
         self._check_supported("to")
-        self._device = str(device_name)
+        target_device = f"cuda:{device_name}" if isinstance(device_name, int) else str(device_name)
+        self._device = target_device
         if hasattr(self, "model") and hasattr(self.model, "to"):
             # Nếu model đã được sharded qua device_map multi-gpu thì không gọi .to() đè
             if hasattr(self.model, "hf_device_map"):
@@ -79,19 +80,20 @@ class Detector(BaseModel):
                 return self
             try:
                 import torch
-                self.model.to(device_name)
-                if device_name == "cpu" and hasattr(self.model, "parameters"):
-                    if next(self.model.parameters()).dtype == torch.float16:
+                self.model.to(target_device)
+                if hasattr(self.model, "parameters"):
+                    actual_dev = next(self.model.parameters()).device
+                    self._device = str(actual_dev)
+                    if actual_dev.type == "cpu" and next(self.model.parameters()).dtype == torch.float16:
                         self.model = self.model.float()
                         self.half_mode = False
                         self._dtype = "float32"
-                elif ("cuda" in str(device_name) or device_name == "multi-gpu") and self.half_mode:
+                if ("cuda" in self._device or self._device == "multi-gpu") and self.half_mode:
                     if hasattr(self.model, "half"):
                         self.model = self.model.half()
                     self._dtype = "float16"
             except Exception:
-                if hasattr(self.model, "device"):
-                    self._device = str(self.model.device)
+                pass
         self.state = "MODIFIED"
         return self
 
@@ -101,9 +103,10 @@ class Detector(BaseModel):
         self.float()
         return self
 
-    def cuda(self) -> "Detector":
+    def cuda(self, device: Optional[Union[int, str]] = None) -> "Detector":
         self._check_supported("cuda")
-        return self.to("cuda")
+        target = "cuda" if device is None else (f"cuda:{device}" if isinstance(device, int) else str(device))
+        return self.to(target)
 
     def half(self) -> "Detector":
         self._check_supported("half")

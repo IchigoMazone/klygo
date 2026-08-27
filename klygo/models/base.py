@@ -112,8 +112,8 @@ class BaseModel(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def to(self, device_name: str) -> "BaseModel":
-        """Chuyển mô hình lên thiết bị tính toán được chỉ định."""
+    def to(self, device_name: Union[str, int]) -> "BaseModel":
+        """Chuyển mô hình lên thiết bị tính toán được chỉ định (ví dụ: 'cpu', 'cuda:0', 'cuda:1', 1)."""
         raise NotImplementedError
 
     @abstractmethod
@@ -122,8 +122,8 @@ class BaseModel(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def cuda(self) -> "BaseModel":
-        """Chuyển mô hình lên GPU CUDA mặc định."""
+    def cuda(self, device: Optional[Union[int, str]] = None) -> "BaseModel":
+        """Chuyển mô hình lên GPU CUDA chỉ định (ví dụ: 0, 1, 'cuda:1', hoặc None cho CUDA mặc định)."""
         raise NotImplementedError
 
     @abstractmethod
