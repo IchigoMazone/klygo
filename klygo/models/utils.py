@@ -60,6 +60,11 @@ def suppress_ai_warnings() -> None:
     warnings.filterwarnings("ignore")
 
     try:
+        import accelerate
+    except Exception:
+        pass
+
+    try:
         import huggingface_hub.utils.logging as hf_logging
         hf_logging.set_verbosity_error()
     except Exception:
