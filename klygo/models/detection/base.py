@@ -13,7 +13,7 @@ import PIL.Image
 
 from klygo.models.base import BaseModel, override
 from klygo.models import utils
-from klygo.outputs.detect import Detections, Detection
+from klygo.outputs.detect import Detections, Detection, Box
 from klygo.utils.progress import ProgressBar
 
 
@@ -215,14 +215,14 @@ class Detector(BaseModel):
     # HỢP ĐỒNG AI LIFECYCLE CHUNG CHO DETECTION
     def train(self, mode: bool = True, *args, **kwargs) -> Any:
         """Chuyển chế độ huấn luyện (train mode) của PyTorch hoặc thực thi huấn luyện."""
-        self._check_supported("train")
+        if args or (kwargs and not set(kwargs.keys()).issubset({"mode"})):
+            self._check_supported("train")
+            raise NotImplementedError(f"Mô hình '{self.model_id}' chưa hỗ trợ pipeline huấn luyện train() với bộ tham số này.")
         if hasattr(self, "model") and self.model is not None:
             if hasattr(self.model, "train"):
                 self.model.train(mode)
             elif hasattr(self.model, "model") and hasattr(self.model.model, "train"):
                 self.model.model.train(mode)
-        if args or (kwargs and not set(kwargs.keys()).issubset({"mode"})):
-            raise NotImplementedError(f"Mô hình '{self.model_id}' chưa hỗ trợ pipeline huấn luyện train() với bộ tham số này.")
         return self
 
     def val(self, *args, **kwargs):
@@ -432,6 +432,19 @@ class Detector(BaseModel):
                 fps_val = round(1000.0 / max(0.001, lat_ms), 1)
 
                 det = dets[0]
+                if isinstance(det, dict):
+                    cur_img = images[0]
+                    box_objs = []
+                    b_list = det.get("boxes", [])
+                    s_list = det.get("scores", [1.0] * len(b_list))
+                    l_list = det.get("labels", ["object"] * len(b_list))
+                    for b_idx, (b, s, l) in enumerate(zip(b_list, s_list, l_list)):
+                        box_objs.append(Box(id=b_idx, label=str(l), score=float(s), box=b, parent_image=cur_img))
+                    det = Detection(
+                        source_image=cur_img,
+                        objects=box_objs,
+                        image_frame_index=0,
+                    )
                 det.image_frame_index = 0
                 det.speed = {"inference": lat_ms, "fps": fps_val}
                 return Detections(frames=[det], source_type="image", fps=30.0)
@@ -454,9 +467,22 @@ class Detector(BaseModel):
                     fps_val = round(1000.0 / max(0.001, lat_per_frame), 1)
 
                     for idx, det in enumerate(dets):
+                        if isinstance(det, dict):
+                            cur_img = batch_imgs[idx] if idx < len(batch_imgs) else batch_imgs[0]
+                            box_objs = []
+                            b_list = det.get("boxes", [])
+                            s_list = det.get("scores", [1.0] * len(b_list))
+                            l_list = det.get("labels", ["object"] * len(b_list))
+                            for b_idx, (b, s, l) in enumerate(zip(b_list, s_list, l_list)):
+                                box_objs.append(Box(id=b_idx, label=str(l), score=float(s), box=b, parent_image=cur_img))
+                            det = Detection(
+                                source_image=cur_img,
+                                objects=box_objs,
+                                image_frame_index=i + idx,
+                            )
                         det.image_frame_index = i + idx
                         det.speed = {"inference": lat_per_frame, "fps": fps_val}
-                    frame_results.extend(dets)
+                        frame_results.append(det)
                     pbar.update(len(batch_imgs))
 
             return Detections(frames=frame_results, source_type="video" if len(images) > 1 else "image", fps=30.0)

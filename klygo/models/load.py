@@ -47,12 +47,24 @@ def _get_registry() -> Dict[str, Any]:
 
 def register(name: str, cls: Any, metadata: Optional[Dict[str, Any]] = None, config: Optional[Dict[str, Any]] = None) -> None:
     """
-    Đăng ký một lớp mô hình tùy chỉnh (Custom Model) vào hệ thống Klygo lúc Runtime trong RAM.
+    Đăng ký một lớp mô hình hoặc metadata tùy chỉnh (Custom Model) vào hệ thống Klygo lúc Runtime trong RAM.
     """
-    class_full_name = f"{cls.__module__}.{cls.__qualname__}" if hasattr(cls, "__module__") else cls.__name__
+    if isinstance(cls, dict):
+        meta = dict(cls)
+        meta.setdefault("model_id", name)
+        resolved_cls_path = meta.get("class", "klygo.models.detection.Detector")
+        actual_cls = _resolve_class(resolved_cls_path) if isinstance(resolved_cls_path, str) else resolved_cls_path
+        if actual_cls:
+            CLASS_MAPPING[name] = actual_cls
+        registry = _get_registry()
+        registry[name] = meta
+        return
+
+    class_full_name = f"{cls.__module__}.{cls.__qualname__}" if hasattr(cls, "__module__") else (cls.__name__ if hasattr(cls, "__name__") else str(cls))
     CLASS_MAPPING[name] = cls
     CLASS_MAPPING[class_full_name] = cls
-    CLASS_MAPPING[cls.__name__] = cls
+    if hasattr(cls, "__name__"):
+        CLASS_MAPPING[cls.__name__] = cls
 
     registry = _get_registry()
     meta = dict(metadata or {})

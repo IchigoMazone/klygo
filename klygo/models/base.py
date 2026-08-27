@@ -302,7 +302,8 @@ class BaseModel(ABC):
 
     def train(self, mode: bool = True, *args, **kwargs) -> Any:
         """Chuyển mô hình sang chế độ Huấn luyện (train mode) hoặc thực hiện huấn luyện."""
-        self._check_supported("train")
+        if args or (kwargs and not set(kwargs.keys()).issubset({"mode"})):
+            self._check_supported("train")
         if hasattr(self, "model") and self.model is not None:
             if hasattr(self.model, "train"):
                 self.model.train(mode)
