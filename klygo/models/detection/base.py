@@ -524,16 +524,33 @@ class Detector(BaseModel):
         return report
 
     def help(self) -> None:
-        """In ra hướng dẫn sử dụng chuẩn hóa cho mô hình Detection."""
+        """In ra huong dan su dung chuan hoa va cac tham so dac thu cua mo hinh."""
         print(f"MODEL: {self.model_id} ({self.backend}/{self.task})")
         print(f"CLASS: {self.class_name}")
         print("=" * 60)
         print("1. predict(source, prompt, batch=1, vid_stride=1, max_frames=None, verbose=True, **kwargs)")
         print("   Nhan dien doi tuong tren anh, video, folder thong qua klygo.media.load.")
-        print("2. benchmark(iterations=20, warmup=5)")
+
+        post_p = self.settings.get("post", {})
+        proc_p = self.settings.get("processor", {})
+        mod_p = self.settings.get("model", {})
+        if post_p or proc_p or mod_p:
+            print("\n   [Tham so dac thu co the tuy chinh trong predict]:")
+            if post_p:
+                for k, v in post_p.items():
+                    print(f"     * {k}={v} (nguong / hau xu ly)")
+            if proc_p:
+                for k, v in proc_p.items():
+                    print(f"     * {k}={v} (tien xu ly)")
+            if mod_p:
+                for k, v in mod_p.items():
+                    print(f"     * {k}={v} (mo hinh)")
+
+        print("\n2. benchmark(iterations=20, warmup=5)")
         print("   Danh gia toc do suy luan (Latency ms / FPS).")
         print("3. export(output_dir='my_offline_model')")
         print("   Xuat toan bo mo hinh thanh goi Offline doc lap.")
+        print("=" * 60)
 
     # =========================================================================
     # ĐỘNG CƠ SUY LUẬN DETECTION HOÀN CHỈNH (predict & forward)

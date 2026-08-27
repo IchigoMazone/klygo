@@ -134,12 +134,35 @@ class BaseModel(ABC, nn.Module):
         dt = getattr(self, "dtype", "float32")
         print("Device/Dtype: " + str(dev) + " / " + str(dt))
         print("Settings    : " + str(self.settings))
+        if self.params:
+            print("Params      : " + ", ".join(f"{k}={v}" for k, v in self.params.items()))
         print("Unsupported : " + str(sorted(list(self._unsupported))))
         print("=" * 60)
 
     # =========================================================================
-    # PROPERTIES: config, hf_config, settings
+    # PROPERTIES: config, hf_config, settings, params
     # =========================================================================
+    @property
+    def params(self) -> Dict[str, Any]:
+        """
+        Tong hop toan bo tham so dac thu co the tuy chinh khi goi predict().
+        Uu tien thu tu: post -> processor -> model.
+        """
+        s = getattr(self, "_settings", {})
+        post = dict(s.get("post", {}))
+        processor = dict(s.get("processor", {}))
+        model_cfg = dict(s.get("model", {}))
+        combined = {}
+        combined.update(model_cfg)
+        combined.update(processor)
+        combined.update(post)
+        return combined
+
+    @property
+    def predict_params(self) -> Dict[str, Any]:
+        """Alias cua params."""
+        return self.params
+
     @property
     def config(self) -> Any:
         """PyTorch-Core-First: HF PretrainedConfig neu co, fallback ve Klygo settings."""
