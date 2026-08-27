@@ -56,6 +56,8 @@ class Detector(BaseModel):
 
     @property
     def dtype(self) -> str:
+        if self.half_mode:
+            return "float16"
         if hasattr(self, "model") and self.model is not None and hasattr(self.model, "parameters"):
             try:
                 p_dtype = str(next(self.model.parameters()).dtype)
@@ -88,7 +90,8 @@ class Detector(BaseModel):
                         self.model = self.model.float()
                         self.half_mode = False
                         self._dtype = "float32"
-                if ("cuda" in self._device or self._device == "multi-gpu") and self.half_mode:
+                from klygo import cuda
+                if ("cuda" in self._device or self._device == "multi-gpu") and cuda.is_available() and self.half_mode:
                     if hasattr(self.model, "half"):
                         self.model = self.model.half()
                     self._dtype = "float16"
@@ -115,12 +118,15 @@ class Detector(BaseModel):
         if hasattr(self, "model"):
             try:
                 from klygo import cuda
-                if "cuda" in str(self.device) or self.device == "multi-gpu" or cuda.is_available():
+                if ("cuda" in str(self.device) or self.device == "multi-gpu") and cuda.is_available():
                     if hasattr(self.model, "half"):
                         self.model = self.model.half()
                     elif hasattr(self.model, "to"):
                         import torch
                         self.model = self.model.to(torch.float16)
+                else:
+                    if hasattr(self.model, "float"):
+                        self.model = self.model.float()
             except Exception:
                 pass
         self.state = "MODIFIED"

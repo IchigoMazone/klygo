@@ -111,7 +111,9 @@ class GroundingDinoDetect(Detector):
         is_gpu = ("cuda" in str(dev) or self.device == "multi-gpu") and cuda.is_available()
         use_half = is_gpu and self.half_mode
         dev_type = "cuda" if is_gpu else "cpu"
-        with utils.amp_autocast_if_needed(use_half=use_half, dtype=self.dtype, device_type=dev_type):
+        effective_dtype = "float16" if use_half else ("bfloat16" if target_dtype == torch.bfloat16 else "float32")
+
+        with utils.amp_autocast_if_needed(use_half=use_half, dtype=effective_dtype, device_type=dev_type):
             outputs = self.model(**inputs, **model_kwargs)
 
         if is_gpu:
