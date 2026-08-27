@@ -9,6 +9,8 @@ import os
 import time
 from abc import abstractmethod
 from typing import Dict, Any, Optional, Union, Sequence, Set, List
+import torch
+import torch.nn as nn
 import PIL.Image
 
 from klygo.models.base import BaseModel, override
@@ -48,135 +50,156 @@ class Detector(BaseModel):
         self.processor: Any = None
 
     # =========================================================================
-    # QUẢN LÝ PHẦN CỨNG & ĐỘ CHÍNH XÁC (Tầng 2 Detector Implementation)
+    # QUAN LY PHAN CUNG & DO CHINH XAC (Detector Implementation)
+    # nn.Module la Core: cuda/half/float/to/eval/train deu goi super() thang
+    # Detector chi can: guard _check_supported + sync state + multi-gpu guard
     # =========================================================================
+    def _sync_state(self) -> None:
+        """Dong bo _device va _dtype tu trang thai thuc te cua nn.Module parameters."""
+        try:
+            params = list(nn.Module.parameters(self))
+            if not params:
+                return
+            p = params[0]
+            self._device = str(p.device)
+            dtype_str = str(p.dtype)
+            if "bfloat16" in dtype_str:
+                self._dtype = "bfloat16"
+                self.half_mode = False
+            elif "float16" in dtype_str:
+                self._dtype = "float16"
+                self.half_mode = True
+            else:
+                self._dtype = "float32"
+        except Exception:
+            pass
+
+    def _is_multi_gpu(self) -> bool:
+        """Kiem tra xem inner model co dang dung HF device_map multi-GPU khong."""
+        inner = self.__dict__.get("_modules", {}).get("model", None)
+        return inner is not None and hasattr(inner, "hf_device_map")
+
     @property
     def device(self) -> str:
-        if hasattr(self, "model") and self.model is not None:
-            if hasattr(self.model, "hf_device_map"):
-                return "multi-gpu"
-            if hasattr(self.model, "parameters"):
-                try:
-                    return str(next(self.model.parameters()).device)
-                except Exception:
-                    pass
-            if hasattr(self.model, "device"):
-                return str(self.model.device)
+        if self._is_multi_gpu():
+            return "multi-gpu"
+        try:
+            params = list(nn.Module.parameters(self))
+            if params:
+                return str(params[0].device)
+        except Exception:
+            pass
+        inner = self.__dict__.get("_modules", {}).get("model", None)
+        if inner is not None and hasattr(inner, "device"):
+            return str(inner.device)
         return self._device
 
     @property
     def dtype(self) -> str:
         if self.half_mode:
             return "float16"
-        if hasattr(self, "model") and self.model is not None and hasattr(self.model, "parameters"):
-            try:
-                p_dtype = str(next(self.model.parameters()).dtype)
-                if "bfloat16" in p_dtype:
+        try:
+            params = list(nn.Module.parameters(self))
+            if params:
+                dtype_str = str(params[0].dtype)
+                if "bfloat16" in dtype_str:
                     return "bfloat16"
-                elif "float16" in p_dtype:
+                elif "float16" in dtype_str:
                     return "float16"
-                elif "float32" in p_dtype:
-                    return "float32"
-            except Exception:
-                pass
+        except Exception:
+            pass
         return self._dtype
 
-    def to(self, device_name: Union[str, int]) -> "Detector":
+    def to(self, *args, **kwargs) -> "Detector":
+        """Chuyen model sang device/dtype chi dinh. Ho tro ca Klygo-style (int) va PyTorch-style."""
         self._check_supported("to")
-        target_device = f"cuda:{device_name}" if isinstance(device_name, int) else str(device_name)
-        self._device = target_device
-        if hasattr(self, "model") and hasattr(self.model, "to"):
-            # Nếu model đã được sharded qua device_map multi-gpu thì không gọi .to() đè
-            if hasattr(self.model, "hf_device_map"):
-                self.state = "MODIFIED"
-                return self
-            try:
-                import torch
-                self.model.to(target_device)
-                if hasattr(self.model, "parameters"):
-                    actual_dev = next(self.model.parameters()).device
-                    self._device = str(actual_dev)
-                    if actual_dev.type == "cpu" and next(self.model.parameters()).dtype == torch.float16:
-                        self.model = self.model.float()
-                        self.half_mode = False
-                        self._dtype = "float32"
-                from klygo import cuda
-                if ("cuda" in self._device or self._device == "multi-gpu") and cuda.is_available() and self.half_mode:
-                    if hasattr(self.model, "half"):
-                        self.model = self.model.half()
-                    self._dtype = "float16"
-            except Exception:
-                pass
+        # Guard: HF multi-GPU sharding khong duoc goi .to()
+        if self._is_multi_gpu():
+            self.state = "MODIFIED"
+            return self
+        # Ho tro Klygo-style: to(0) -> to("cuda:0")
+        if len(args) == 1 and isinstance(args[0], int):
+            args = ("cuda:{}".format(args[0]),)
+        # Goi nn.Module.to() that su — xu ly toan bo submodule tu dong
+        nn.Module.to(self, *args, **kwargs)
+        # Neu chuyen sang CPU voi FP16 -> tu dong ve FP32 de tranh loi
+        try:
+            params = list(nn.Module.parameters(self))
+            if params and params[0].device.type == "cpu" and params[0].dtype == torch.float16:
+                nn.Module.float(self)
+                self.half_mode = False
+        except Exception:
+            pass
+        self._sync_state()
         self.state = "MODIFIED"
         return self
 
     def cpu(self) -> "Detector":
+        """Chuyen model ve CPU."""
         self._check_supported("cpu")
-        self.to("cpu")
-        self.float()
+        nn.Module.cpu(self)      # Di chuyen toan bo submodule ve CPU
+        nn.Module.float(self)   # CPU khong ho tro FP16 inference -> auto float32
+        self.half_mode = False
+        self._sync_state()
+        self.state = "MODIFIED"
         return self
 
-    def cuda(self, device: Optional[Union[int, str]] = None) -> "Detector":
+    def cuda(self, device=None) -> "Detector":
+        """Chuyen model len GPU CUDA chi dinh."""
         self._check_supported("cuda")
-        target = "cuda" if device is None else (f"cuda:{device}" if isinstance(device, int) else str(device))
-        return self.to(target)
+        if self._is_multi_gpu():
+            self.state = "MODIFIED"
+            return self
+        nn.Module.cuda(self, device)   # Di chuyen toan bo submodule len GPU
+        # Khoi phuc half_mode neu dang bat nhung chua o float16
+        if self.half_mode:
+            nn.Module.half(self)
+        self._sync_state()
+        self.state = "MODIFIED"
+        return self
 
     def half(self) -> "Detector":
+        """Chuyen model sang FP16 (chi ap dung that su tren GPU)."""
         self._check_supported("half")
         self.half_mode = True
         self._dtype = "float16"
-        if hasattr(self, "model"):
-            try:
-                from klygo import cuda
-                if ("cuda" in str(self.device) or self.device == "multi-gpu") and cuda.is_available():
-                    if hasattr(self.model, "half"):
-                        self.model = self.model.half()
-                    elif hasattr(self.model, "to"):
-                        import torch
-                        self.model = self.model.to(torch.float16)
-                else:
-                    if hasattr(self.model, "float"):
-                        self.model = self.model.float()
-            except Exception:
-                pass
+        from klygo import cuda as klygo_cuda
+        if "cuda" in str(self.device) and klygo_cuda.is_available():
+            nn.Module.half(self)   # Ap dung FP16 that su tren GPU
+        else:
+            # CPU: ghi nhan half_mode nhung giu FP32 de tranh loi
+            nn.Module.float(self)
         self.state = "MODIFIED"
         return self
 
     def bfloat16(self) -> "Detector":
+        """Chuyen model sang BF16."""
         self._check_supported("bfloat16")
         self.half_mode = False
         self._dtype = "bfloat16"
-        if hasattr(self, "model"):
-            try:
-                import torch
-                if hasattr(self.model, "bfloat16"):
-                    self.model = self.model.bfloat16()
-                elif hasattr(self.model, "to"):
-                    self.model = self.model.to(torch.bfloat16)
-            except Exception:
-                pass
+        nn.Module.to(self, torch.bfloat16)
         self.state = "MODIFIED"
         return self
 
     def bfloat(self) -> "Detector":
-        """Alias của bfloat16."""
+        """Alias cua bfloat16."""
         return self.bfloat16()
 
     def float(self) -> "Detector":
+        """Chuyen model ve FP32."""
         self._check_supported("float")
         self.half_mode = False
         self._dtype = "float32"
-        if hasattr(self, "model") and hasattr(self.model, "float"):
-            self.model = self.model.float()
+        nn.Module.float(self)   # Chuyen toan bo submodule ve float32
         self.state = "MODIFIED"
         return self
 
     # =========================================================================
-    # VÒNG ĐỜI & BỘ NHỚ (Lifecycle & Resource Management)
+    # VONG DOI & BO NHO (Lifecycle & Resource Management)
     # =========================================================================
     def reset(self) -> "Detector":
         self._check_supported("reset")
-        self.config = dict(self.default_config)
+        self._settings = dict(self._default_settings)  # Reset Klygo runtime settings
         self.cpu()
         self.state = "READY"
         return self
@@ -194,7 +217,6 @@ class Detector(BaseModel):
         from klygo import cuda
         if cuda.is_available():
             try:
-                import torch
                 torch.cuda.empty_cache()
             except Exception:
                 pass
@@ -212,38 +234,27 @@ class Detector(BaseModel):
         self.state = "UNLOADED"
 
     # =========================================================================
-    # HỢP ĐỒNG AI LIFECYCLE CHUNG CHO DETECTION
-    def train(self, mode: bool = True, *args, **kwargs) -> Any:
-        """Chuyển chế độ huấn luyện (train mode) của PyTorch hoặc thực thi huấn luyện."""
-        if args or (kwargs and not set(kwargs.keys()).issubset({"mode"})):
-            self._check_supported("train")
-            raise NotImplementedError(f"Mô hình '{self.model_id}' chưa hỗ trợ pipeline huấn luyện train() với bộ tham số này.")
-        if hasattr(self, "model") and self.model is not None:
-            if hasattr(self.model, "train"):
-                self.model.train(mode)
-            elif hasattr(self.model, "model") and hasattr(self.model.model, "train"):
-                self.model.model.train(mode)
-        return self
-
+    # AI LIFECYCLE CHUNG CHO DETECTION
+    # =========================================================================
     def val(self, *args, **kwargs):
         self._check_supported("val")
-        raise NotImplementedError(f"Mô hình '{self.model_id}' chưa hỗ trợ pipeline kiểm định val().")
+        raise NotImplementedError("Model '{}' chua ho tro pipeline val().".format(self.model_id))
 
     def export(self, output_dir: str) -> str:
-        """Xuất toàn bộ mô hình (Weights + klygo.json) thành 1 thư mục Offline độc lập."""
+        """Xuat toan bo mo hinh (Weights + klygo.json) thanh 1 thu muc Offline doc lap."""
         self._check_supported("export")
         from klygo import files
         abs_out = os.path.abspath(output_dir)
         files.mkdir(abs_out)
 
-        # 1. Lưu processor và model weights
+        # 1. Luu processor va model weights
         if hasattr(self, "processor") and hasattr(self.processor, "save_pretrained"):
             try:
                 self.processor.save_pretrained(abs_out)
             except Exception:
                 pass
 
-        if hasattr(self, "model"):
+        if hasattr(self, "model") and self.model is not None:
             if hasattr(self.model, "save_pretrained"):
                 try:
                     self.model.save_pretrained(abs_out)
@@ -255,18 +266,19 @@ class Detector(BaseModel):
                 except Exception:
                     pass
 
-        # 2. Tạo và lưu file định danh klygo.json qua klygo.files
+        # 2. Tao va luu file dinh danh klygo.json
+        # Dung self.settings (Klygo dict) thay vi self.config (co the la HF PretrainedConfig)
         meta_to_save = dict(self.metadata)
         meta_to_save["class"] = self.class_name
         meta_to_save["model_id"] = abs_out
-        meta_to_save["config"] = self.config
+        meta_to_save["config"] = self.settings
         klygo_json_path = os.path.join(abs_out, "klygo.json")
         files.save(klygo_json_path, meta_to_save, verbose=False)
 
         return abs_out
 
     def save(self, output_dir: str) -> str:
-        """Alias của export."""
+        """Alias cua export."""
         return self.export(output_dir)
 
     def benchmark(
