@@ -33,6 +33,7 @@ from .config import Config
 
 # Alias tương thích ngược
 visualize = visual
+sys.modules["klygo.visualize"] = visual
 
 __version__ = "2.0.20"
 __author__ = "IchigoMazone"
