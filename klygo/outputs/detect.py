@@ -746,7 +746,13 @@ class Detections:
 
     @property
     def images(self) -> List[PIL.Image.Image]:
+        """CẢNH BÁO: Tạo list toàn bộ ảnh render. Sẽ văng lỗi RAM nếu video quá dài!"""
         return [f.plot() for f in self.frames]
+
+    def iter_images(self, **kwargs):
+        """Generator sinh ảnh đã vẽ Box từng frame một (chống tràn RAM)."""
+        for f in self.frames:
+            yield f.plot(**kwargs)
 
     def filter(self, fn: Callable[[Any], bool]) -> "Detections":
         filtered = [f for f in self.frames if fn(f)]
@@ -796,7 +802,7 @@ class Detections:
         elif format.lower() == "json":
             files.save(output_path, self.to_dict(), verbose=False)
 
-    def save(self, output_path: str, fps: Optional[float] = None) -> str:
+    def save(self, output_path: str, fps: Optional[float] = None, **kwargs) -> str:
         """Lưu toàn bộ video hoặc thư mục ảnh thành phẩm đã vẽ Bounding Box."""
         target_fps = fps if fps is not None else self.fps
         p_str = str(output_path).lower()
@@ -804,14 +810,15 @@ class Detections:
 
         if self.source_type == "video" or is_video:
             final_path = output_path if is_video else os.path.join(output_path, "annotated_video.mp4")
-            media.save_video(final_path, self.images, fps=target_fps, overwrite=True, verbose=False)
+            # Sử dụng iter_images (Generator) thay vì self.images (List) để chống OOM RAM.
+            media.save_video(final_path, self.iter_images(**kwargs), fps=target_fps, overwrite=True, verbose=False)
             self.output_path = final_path
             return final_path
         else:
             files.mkdir(output_path)
             for idx, res in enumerate(self.frames, 1):
                 img_path = os.path.join(output_path, f"annotated_{idx:05d}.jpg")
-                res.save(img_path)
+                res.save(img_path, **kwargs)
             self.output_path = output_path
             return output_path
 
