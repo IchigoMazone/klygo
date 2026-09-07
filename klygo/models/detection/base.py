@@ -485,9 +485,9 @@ class Detector(BaseModel):
             except Exception:
                 pass
 
-    def export(self, output_dir: str) -> None:
+    def save(self, output_dir: str) -> None:
         """
-        Xuất toàn bộ mô hình (Metadata + Python Code + Trọng số) ra thư mục chuẩn Klygo.
+        Lưu toàn bộ mô hình (Metadata + Python Code + Trọng số) ra thư mục chuẩn Klygo.
         Mô hình xuất ra có thể được nạp lại hoàn chỉnh qua `models.load(folder)`.
         """
         from klygo import files
@@ -677,29 +677,60 @@ class Detector(BaseModel):
         vid_stride: int = 1,
         max_frames: Optional[int] = None,
         verbose: bool = True,
+        stream: bool = False,
         **kwargs,
-    ) -> Detections:
+    ) -> Union[Detections, Any]:
         """
-        Thực thi nhận diện đối tượng trên ảnh, video hoặc folder (luôn trả về Detections).
+        Thực thi nhận diện đối tượng trên ảnh, video hoặc folder.
+        Nếu stream=True, trả về Generator[Detection] (Chống tràn RAM video lớn).
+        Nếu stream=False, trả về Detections (RAM tiêu chuẩn).
         """
-        # 1. Phân giải prompt
         target_prompt = utils.normalize_prompt(prompt) if prompt is not None else None
-
-        # 2. Phân giải nguồn dữ liệu qua klygo.media.load
-        images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames)
-        if not images:
-            return Detections(frames=[], source_type="list", fps=30.0)
-
         actual_batch = max(1, int(batch))
 
-        # 3. Inference mode + suppress warnings
         try:
             infer_context = torch.inference_mode()
         except Exception:
             infer_context = utils.nullcontext()
 
+        # ==========================================
+        # LUỒNG STREAMING (CHỐNG TRÀN RAM)
+        # ==========================================
+        if stream:
+            images, _ = utils.resolve_images(source, step=vid_stride, max_frames=max_frames, stream=True)
+            
+            def _stream_generator():
+                import itertools
+                iterator = iter(images)
+                idx_offset = 0
+                with infer_context, utils.suppress_warnings():
+                    while True:
+                        batch_imgs = list(itertools.islice(iterator, actual_batch))
+                        if not batch_imgs:
+                            break
+                        
+                        t_start = time.perf_counter()
+                        dets = self.forward(images=batch_imgs, prompt=target_prompt, **kwargs)
+                        t_end = time.perf_counter()
+                        
+                        lat_per_frame = round(((t_end - t_start) * 1000) / len(batch_imgs), 2)
+                        fps_val = round(1000.0 / max(0.001, lat_per_frame), 1)
+                        
+                        for idx, det in enumerate(dets):
+                            img = batch_imgs[idx] if idx < len(batch_imgs) else batch_imgs[0]
+                            yield self._pack_detection(det, img, idx_offset + idx, lat_per_frame, fps_val)
+                            
+                        idx_offset += len(batch_imgs)
+            return _stream_generator()
+
+        # ==========================================
+        # LUỒNG TIÊU CHUẨN (LƯU VÀO RAM Detections)
+        # ==========================================
+        images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames, stream=False)
+        if not images:
+            return Detections(frames=[], source_type="list", fps=30.0)
+
         with infer_context, utils.suppress_warnings():
-            # A. 1 ảnh đơn lẻ
             if is_single:
                 t_start = time.perf_counter()
                 dets = self.forward(images=images, prompt=target_prompt, **kwargs)
@@ -709,7 +740,6 @@ class Detector(BaseModel):
                 det = self._pack_detection(dets[0], images[0], 0, lat_ms, fps_val)
                 return Detections(frames=[det], source_type="image", fps=30.0)
 
-            # B. Video / Folder / Batch
             frame_results = []
             with ProgressBar(total=len(images), desc="Predict", unit="frame", verbose=verbose, colour="cyan") as pbar:
                 for i in range(0, len(images), actual_batch):
@@ -724,4 +754,4 @@ class Detector(BaseModel):
                         frame_results.append(self._pack_detection(det, img, i + idx, lat_per_frame, fps_val))
                     pbar.update(len(batch_imgs))
 
-            return Detections(frames=frame_results, source_type="video" if len(images) > 1 else "image", fps=30.0)
+            return Detections(frames=frame_results, source_type="video" if not is_single else "image", fps=30.0)

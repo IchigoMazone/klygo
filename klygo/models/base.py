@@ -258,6 +258,25 @@ class BaseModel(ABC, nn.Module):
             return inner.load_state_dict(state_dict, strict=strict)
         return nn.Module.load_state_dict(self, state_dict, strict=strict)
 
+    def to(self, *args, **kwargs) -> "BaseModel":
+        """
+        [ĐƯỜNG ỐNG TRONG SUỐT] Ghi đè hàm to() của PyTorch để nhường quyền cho framework gốc.
+        """
+        inner = self._inner_model()
+        
+        # 1. TRẢ QUYỀN CHO LÕI: Nếu lõi là custom object (như YOLO, không phải nn.Module thuần)
+        # thì nhường lệnh cho nó tự xử lý. PyTorch nn.Module tự xử lý đệ quy nên bỏ qua.
+        if inner is not None and hasattr(inner, "to") and not isinstance(inner, nn.Module):
+            inner.to(*args, **kwargs)
+            
+        # 2. KIỂM SOÁT HUGGING FACE: Nếu đang xài Multi-GPU (device_map), cấm ép phần cứng
+        # vì sẽ phá vỡ cơ chế sharding của HF gây văng lỗi RAM.
+        if self._is_multi_gpu():
+            return self
+
+        # 3. MẶC ĐỊNH PYTORCH: Chạy nốt các tensor lẻ tẻ của Klygo
+        return nn.Module.to(self, *args, **kwargs)
+
     # =========================================================================
     # __getattr__: Delegate sang self.model neu khong tim thay tren wrapper.
     # Thu tu: nn.Module.__getattr__ -> inner model (HF/PyTorch)

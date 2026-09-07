@@ -183,28 +183,56 @@ def resolve_images(
     source: Any,
     step: int = 1,
     max_frames: Optional[int] = None,
-) -> Tuple[List[PIL.Image.Image], bool]:
+    stream: bool = False,
+) -> Tuple[Union[List[PIL.Image.Image], Any], bool]:
     """
     Tự động phân giải nguồn dữ liệu đầu vào thông qua klygo.media.
-    Đảm bảo 100% đầu ra chuyển về danh sách đối tượng PIL.Image (RGB).
+    Hỗ trợ stream=True để trả về Generator (chống văng RAM khi đọc video lớn).
     """
     from klygo import media
 
-    # 1. Nếu là đường dẫn chuỗi hoặc Path -> Giao 100% cho klygo.media.load (backend='pil')
+    step = max(1, int(step))
+
+    # Xử lý luồng Generator/Stream
+    if stream:
+        def _build_generator():
+            if isinstance(source, (str, Path)):
+                raw_stream = media.load(source, stream=True, verbose=False)
+            elif hasattr(source, "__iter__") and not isinstance(source, (list, tuple)):
+                raw_stream = source
+            else:
+                raw_stream = source if isinstance(source, (list, tuple)) else [source]
+            
+            count = 0
+            for idx, item in enumerate(raw_stream):
+                if max_frames is not None and count >= max_frames:
+                    break
+                if idx % step == 0:
+                    count += 1
+                    if isinstance(item, PIL.Image.Image):
+                        yield item.convert("RGB")
+                    else:
+                        yield media.to_pil(item).convert("RGB")
+
+        is_single = False
+        if isinstance(source, (str, Path)):
+            is_single = not str(source).lower().endswith(('.mp4', '.avi', '.mov', '.mkv', '.webm', '.m4v'))
+        elif isinstance(source, PIL.Image.Image):
+            is_single = True
+        return _build_generator(), is_single
+
+    # Xử lý luồng List (RAM tiêu chuẩn) - Giữ nguyên logic cũ
     if isinstance(source, (str, Path)):
-        loaded = media.load(source, verbose=False)
+        loaded = media.load(source, stream=False, verbose=False)
         raw_list = loaded if isinstance(loaded, list) else [loaded]
         is_single = len(raw_list) == 1 and not str(source).lower().endswith(('.mp4', '.avi', '.mov', '.mkv', '.webm', '.m4v'))
-    # 2. Nếu đã là 1 ảnh PIL.Image đơn lẻ
     elif isinstance(source, PIL.Image.Image):
         return [source.convert("RGB")], True
-    # 3. Nếu là numpy array hoặc Tensor (tự động chuyển sang PIL)
     elif hasattr(source, "shape"):
         if getattr(source, "ndim", 0) in (2, 3):
             return [media.to_pil(source).convert("RGB")], True
         elif getattr(source, "ndim", 0) == 4:
             batch_list = [media.to_pil(img).convert("RGB") for img in source]
-            step = max(1, int(step))
             if step > 1:
                 batch_list = batch_list[::step]
             if max_frames is not None and max_frames > 0:
@@ -212,7 +240,6 @@ def resolve_images(
             return batch_list, False
         raw_list = list(source)
         is_single = False
-    # 4. Nếu là danh sách ảnh hoặc Iterator
     elif isinstance(source, (list, tuple)):
         raw_list = list(source)
         is_single = len(raw_list) == 1
@@ -220,14 +247,11 @@ def resolve_images(
         raw_list = list(source)
         is_single = len(raw_list) == 1
     else:
-        raise TypeError(
-            f"Đầu vào '{type(source).__name__}' không hợp lệ. Vui lòng truyền đường dẫn ảnh/video hoặc dữ liệu media."
-        )
+        raise TypeError(f"Đầu vào '{type(source).__name__}' không hợp lệ.")
 
     if not raw_list:
         return [], is_single
 
-    step = max(1, int(step))
     if step > 1:
         raw_list = raw_list[::step]
     if max_frames is not None and max_frames > 0:
@@ -238,10 +262,7 @@ def resolve_images(
         if isinstance(item, PIL.Image.Image):
             cleaned_images.append(item.convert("RGB"))
         else:
-            try:
-                cleaned_images.append(media.to_pil(item).convert("RGB"))
-            except Exception as err:
-                raise TypeError(f"Không thể chuyển đổi phần tử kiểu '{type(item).__name__}' sang PIL Image: {err}")
+            cleaned_images.append(media.to_pil(item).convert("RGB"))
 
     return cleaned_images, is_single
 
