@@ -352,33 +352,25 @@ class Detector(BaseModel):
         """
         Thực thi forward của self.model với AMP autocast và device sync tự động.
         """
-        dev = self.current_device()
-        from klygo import cuda as klygo_cuda
-        is_sharded = self._is_multi_gpu() or (hasattr(self, "model") and hasattr(self.model, "hf_device_map"))
-        is_gpu = ("cuda" in str(dev) or is_sharded) and klygo_cuda.is_available()
         cur_dt = self.current_dtype()
         use_half = (cur_dt == torch.float16) or self.half_mode
-        dev_type = "cuda" if is_gpu else "cpu"
 
         if cur_dt == torch.bfloat16:
             eff_dtype = "bfloat16"
-        elif use_half and is_gpu:
+        elif use_half:
             eff_dtype = "float16"
         else:
             eff_dtype = "float32"
 
-        with utils.amp_autocast_if_needed(use_half=use_half, dtype=eff_dtype, device_type=dev_type):
-            if hasattr(inputs, "items") or isinstance(inputs, dict):
+        with utils.amp_autocast_if_needed(use_half=use_half, dtype=eff_dtype):
+            if isinstance(inputs, dict):
                 outputs = self.model(**inputs, **model_kwargs)
-            elif isinstance(inputs, torch.Tensor):
-                outputs = self.model(inputs, **model_kwargs)
             elif isinstance(inputs, (list, tuple)):
                 outputs = self.model(*inputs, **model_kwargs)
             else:
                 outputs = self.model(inputs, **model_kwargs)
 
-        if is_gpu:
-            utils.cuda_sync()
+        utils.cuda_sync()
         return outputs
 
     def build_detections(
