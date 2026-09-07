@@ -42,12 +42,12 @@ class GroundingDinoDetect(Detector):
         text_str = ". ".join([str(p).strip().rstrip(".").lower() for p in raw_prompt if str(p).strip()]) + "."
         text_batch = [text_str] * len(images) if text_str != "." else None
 
-        proc_args = {"images": images, "return_tensors": "pt"}
-        if text_batch:
-            proc_args["text"] = text_batch
-        proc_args.update(proc_kw)
-
-        inputs = self.processor(**proc_args)
+        inputs = self.processor(
+            images=images,
+            text=text_batch,
+            return_tensors="pt",
+            **proc_kw
+        )
         inputs = self.cast_inputs(inputs)
 
         # 3. Inference (AMP, GPU sync tu dong)
