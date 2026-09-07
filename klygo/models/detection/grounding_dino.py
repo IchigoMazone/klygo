@@ -43,15 +43,21 @@ class GroundingDinoDetect(Detector):
         # 3. Inference (AMP, GPU sync tu dong)
         outputs = self.run_inference(inputs, **mod_kw)
 
-        # 4. Dong bo Multi-GPU va Postprocess dac thu cua Grounding DINO
+        # 4. Postprocess đặc thù của Grounding DINO
         thresh = post_kw.get("threshold", 0.25)
         text_thresh = post_kw.get("text_threshold", 0.3)
-        aligned_inputs = self.align_inputs_with_outputs(inputs, outputs)
+
+        # Tường minh: Chỉ đồng bộ duy nhất 'input_ids' về cùng device của outputs khi cần thiết (Multi-GPU).
+        # Tuyệt đối không sao chép thừa thãi các tensor ảnh lớn (pixel_values) làm nghẽn PCIe / hao phí VRAM.
+        target_dev = self.get_output_device(outputs)
+        input_ids = inputs.get("input_ids") if isinstance(inputs, dict) else None
+        if isinstance(input_ids, torch.Tensor) and input_ids.device != target_dev:
+            input_ids = input_ids.to(target_dev, non_blocking=(target_dev.type == "cuda"))
 
         with self.suppress_warnings():
             raw = self.processor.post_process_grounded_object_detection(
                 outputs=outputs,
-                input_ids=aligned_inputs.get("input_ids"),
+                input_ids=input_ids,
                 threshold=thresh,
                 text_threshold=text_thresh,
                 target_sizes=[img.size[::-1] for img in images],
