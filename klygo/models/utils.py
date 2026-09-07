@@ -114,10 +114,15 @@ def resolve_sub_kwargs(
     """
     Phân giải và chia tách các nhóm cấu hình từ kwargs + json_config.
     Trả về tuple các nhóm (mặc định: model_kw, proc_kw, post_kw).
+
+    Hỗ trợ 3 cách truyền:
+    - Dict tường minh : post={"threshold": 0.5}
+    - Tiền tố nhóm   : post_threshold=0.5
+    - Flat key       : threshold=0.5 (chỉ khi key đã có sẵn trong json_config)
     """
     json_cfg = dict(json_config or {})
 
-    # Xác định danh sách các nhóm cờ
+    # Xác định danh sách nhóm
     if groups:
         group_list = tuple(groups)
     elif any(isinstance(v, dict) for v in json_cfg.values()):
@@ -125,54 +130,30 @@ def resolve_sub_kwargs(
     else:
         group_list = ("model", "processor", "post")
 
-    # Khởi tạo các nhóm từ json_config
+    # Khởi tạo từ json_config defaults
     buckets: Dict[str, Dict[str, Any]] = {g: dict(json_cfg.get(g, {})) for g in group_list}
 
-    # Mặc định tham số post nếu có nhóm 'post'
-    if "post" in buckets:
-        buckets["post"].setdefault("threshold", 0.25)
-        buckets["post"].setdefault("text_threshold", 0.3)
-
-    # 1. Xử lý dạng Dictionary tường minh: group={...}
-    for g in group_list:
-        if g in kwargs and isinstance(kwargs[g], dict):
-            buckets[g].update(kwargs[g])
-
-    # 2. Xử lý các tham số phẳng còn lại
     for key, value in kwargs.items():
-        if key in group_list:
+        # Cách 1: Dict tường minh — post={"threshold": 0.5}
+        if key in group_list and isinstance(value, dict):
+            buckets[key].update(value)
             continue
 
-        # Alias tiện ích: conf -> threshold
-        if key == "conf" and "post" in buckets:
-            buckets["post"]["threshold"] = value
-            continue
-
-        # Điều hướng các tham số Model phổ biến
-        if key in ("torch_dtype", "dtype") and "model" in buckets:
-            buckets["model"]["torch_dtype"] = value
-            continue
-        if key in ("device_map", "low_cpu_mem_usage", "load_in_8bit", "load_in_4bit", "quantization_config") and "model" in buckets:
-            buckets["model"][key] = value
-            continue
-
-        # Dạng 1: Khớp trực tiếp key có sẵn trong nhóm nào đó
+        # Cách 2: Tiền tố nhóm — post_threshold=0.5
         matched = False
         for g in group_list:
-            if key in buckets[g]:
-                buckets[g][key] = value
+            if key.startswith(f"{g}_"):
+                clean_key = key[len(g) + 1:]
+                buckets[g][clean_key] = value
                 matched = True
                 break
         if matched:
             continue
 
-        # Dạng 2: Cú pháp tiền tố động: <group>_<param>
+        # Cách 3: Flat key — chỉ nếu key đã tồn tại trong json_config của nhóm nào đó
         for g in group_list:
-            prefix = f"{g}_"
-            if key.startswith(prefix):
-                clean_key = key[len(prefix):-1] if key.endswith("_") else key[len(prefix):]
-                buckets[g][clean_key] = value
-                matched = True
+            if key in buckets[g]:
+                buckets[g][key] = value
                 break
 
     if groups:
@@ -197,9 +178,6 @@ def resolve_sub_kwargs_dict(
         group_list = ("model", "processor", "post")
     result = resolve_sub_kwargs(kwargs=kwargs, json_config=json_config, groups=group_list)
     return dict(zip(group_list, result))
-
-
-
 
 def resolve_images(
     source: Any,
