@@ -37,8 +37,18 @@ class GroundingDinoDetect(Detector):
         # 1. Boc tach 3 nhom kwargs tu **kwargs
         mod_kw, proc_kw, post_kw = self.split_kwargs(kwargs)
 
-        # 2. Preprocess (chuan hoa prompt + processor + device casting gon trong 1 dong)
-        inputs = self.process_inputs(images, prompt, **proc_kw)
+        # 2. Tiền xử lý tại chỗ (Đặc thù riêng của Grounding DINO)
+        raw_prompt = [prompt] if isinstance(prompt, str) else list(prompt) if prompt else []
+        text_str = ". ".join([str(p).strip().rstrip(".").lower() for p in raw_prompt if str(p).strip()]) + "."
+        text_batch = [text_str] * len(images) if text_str != "." else None
+
+        proc_args = {"images": images, "return_tensors": "pt"}
+        if text_batch:
+            proc_args["text"] = text_batch
+        proc_args.update(proc_kw)
+
+        inputs = self.processor(**proc_args)
+        inputs = self.cast_inputs(inputs)
 
         # 3. Inference (AMP, GPU sync tu dong)
         outputs = self.run_inference(inputs, **mod_kw)
