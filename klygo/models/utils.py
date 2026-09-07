@@ -106,15 +106,14 @@ def suppress_ai_warnings() -> None:
         pass
 
 
-def resolve_sub_kwargs_dict(
+def resolve_sub_kwargs(
     kwargs: Dict[str, Any],
     json_config: Optional[Dict[str, Any]] = None,
     groups: Optional[Sequence[str]] = None,
-) -> Dict[str, Dict[str, Any]]:
+) -> Tuple[Dict[str, Any], ...]:
     """
-    Phân giải và chia tách thành dictionary các nhóm cấu hình động.
-    Mặc định hỗ trợ chuẩn Hugging Face ('model', 'processor', 'post') nhưng tự động
-    nhận diện bất kỳ nhóm cờ nào được khai báo trong json_config hoặc groups.
+    Phân giải và chia tách các nhóm cấu hình từ kwargs + json_config.
+    Trả về tuple các nhóm (mặc định: model_kw, proc_kw, post_kw).
     """
     json_cfg = dict(json_config or {})
 
@@ -167,7 +166,7 @@ def resolve_sub_kwargs_dict(
         if matched:
             continue
 
-        # Dạng 2: Cú pháp tiền tố động: <group>_<param>_ hoặc <group>_<param>
+        # Dạng 2: Cú pháp tiền tố động: <group>_<param>
         for g in group_list:
             prefix = f"{g}_"
             if key.startswith(prefix):
@@ -176,23 +175,30 @@ def resolve_sub_kwargs_dict(
                 matched = True
                 break
 
-    return buckets
-
-
-def resolve_sub_kwargs(
-    kwargs: Dict[str, Any],
-    json_config: Optional[Dict[str, Any]] = None,
-    groups: Optional[Sequence[str]] = None,
-) -> Tuple[Dict[str, Any], ...]:
-    """
-    Phân giải và trả về tuple các nhóm cấu hình (mặc định tuple 3 phần tử: model_kw, proc_kw, post_kw).
-    """
-    buckets = resolve_sub_kwargs_dict(kwargs=kwargs, json_config=json_config, groups=groups)
     if groups:
         return tuple(buckets.get(g, {}) for g in groups)
     if "model" in buckets and "processor" in buckets and "post" in buckets:
         return buckets["model"], buckets["processor"], buckets["post"]
     return tuple(buckets.values())
+
+
+def resolve_sub_kwargs_dict(
+    kwargs: Dict[str, Any],
+    json_config: Optional[Dict[str, Any]] = None,
+    groups: Optional[Sequence[str]] = None,
+) -> Dict[str, Dict[str, Any]]:
+    """Phân giải cấu hình và trả về dict các nhóm thay vì tuple."""
+    json_cfg = dict(json_config or {})
+    if groups:
+        group_list = tuple(groups)
+    elif any(isinstance(v, dict) for v in json_cfg.values()):
+        group_list = tuple(k for k, v in json_cfg.items() if isinstance(v, dict))
+    else:
+        group_list = ("model", "processor", "post")
+    result = resolve_sub_kwargs(kwargs=kwargs, json_config=json_config, groups=group_list)
+    return dict(zip(group_list, result))
+
+
 
 
 def resolve_images(

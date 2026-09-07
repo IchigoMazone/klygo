@@ -80,21 +80,6 @@ class BaseModel(ABC, nn.Module):
                 self._unsupported.add(str(item))
         return self
 
-    def _check_supported(self, op_name: str) -> None:
-        """Giu lai de backward compat / goi thu cong neu can. Logic chinh o __getattribute__."""
-        instance_dict = object.__getattribute__(self, '__dict__')
-        state = instance_dict.get('state', 'READY')
-        unsupported = instance_dict.get('_unsupported', set())
-        model_id = instance_dict.get('model_id', 'model')
-        class_name = instance_dict.get('class_name', '')
-        if state == 'UNLOADED':
-            raise InvalidStateError(
-                "Mo hinh '{}' da bi UNLOADED. Khong the goi '{}'.".format(model_id, op_name)
-            )
-        if op_name in unsupported:
-            raise UnsupportedOperationError(
-                "Mo hinh '{}' ({}) khong ho tro thao tac '{}'.".format(model_id, class_name, op_name)
-            )
 
     def __getattribute__(self, name: str) -> Any:
         """
@@ -186,11 +171,6 @@ class BaseModel(ABC, nn.Module):
         return combined
 
     @property
-    def predict_params(self) -> Dict[str, Any]:
-        """Alias cua params."""
-        return self.params
-
-    @property
     def config(self) -> Any:
         """PyTorch-Core-First: HF PretrainedConfig neu co, fallback ve Klygo settings."""
         inner = self._inner_model()
@@ -228,9 +208,6 @@ class BaseModel(ABC, nn.Module):
     def default_config(self) -> Dict[str, Any]:
         return getattr(self, "_default_settings", {})
 
-    @property
-    def runtime_config(self) -> Dict[str, Any]:
-        return self.settings
 
     @property
     def device_map(self) -> Optional[Any]:

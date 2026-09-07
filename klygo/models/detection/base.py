@@ -457,14 +457,7 @@ class Detector(BaseModel):
             )
         return results
 
-    # Alias tương thích ngược
-    _parse_dtype_str = parse_dtype
-    _resolve_dtype = resolve_dtype
-    _current_device = current_device
-    _current_dtype = current_dtype
-    _cast_inputs = cast_inputs
-    _run_inference = run_inference
-    _build_detections = build_detections
+
 
     # =========================================================================
     # VONG DOI & BO NHO (Lifecycle & Resource Management)

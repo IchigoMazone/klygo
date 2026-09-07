@@ -244,4 +244,5 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
 
     class_path = final_metadata.get("class")
     cls = _resolve_class(class_path, search_dir=search_dir)
-    return cls(metadata=final_metadata)
+    with utils.suppress_warnings():
+        return cls(metadata=final_metadata)
