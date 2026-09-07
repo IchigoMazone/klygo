@@ -246,3 +246,23 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
     cls = _resolve_class(class_path, search_dir=search_dir)
     with utils.suppress_warnings():
         return cls(metadata=final_metadata)
+
+
+def init(model_id: str, **kwargs) -> Dict[str, Any]:
+    """
+    Hàm tiện ích khởi tạo metadata chuẩn cho các mô hình tự custom bằng Class.
+    Tự động chia tách kwargs thành các nhóm cấu hình an toàn (model, processor, post).
+    
+    Sử dụng:
+        metadata = models.init("weights.pt", post={"threshold": 0.4})
+        model = MyYOLO(metadata=metadata)
+    """
+    from klygo.models import utils
+    resolved_config = utils.resolve_sub_kwargs_dict(kwargs=kwargs)
+    
+    return {
+        "model_id": str(model_id),
+        "backend": "Custom",
+        "task": "Object-Detection",
+        "config": resolved_config
+    }

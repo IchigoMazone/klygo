@@ -609,21 +609,25 @@ class Detection:
         annotated = self.plot(line_width=line_width, **kwargs)
         visual.show_image(annotated, width=width)
 
-    def export(self, output_path: str, format: str = "yolo") -> None:
+    def export(self, output_path: str, format: str = "yolo", classes: Optional[List[str]] = None) -> None:
         """Xuất file nhãn YOLO (.txt) hoặc JSON sử dụng klygo.files.save."""
         if format.lower() == "yolo":
             w, h = self.source_image.size
-            unique_classes = sorted(list(set(self.labels)))
+            unique_classes = classes if classes is not None else sorted(list(set(self.labels)))
             lines = []
             for c in self.objects:
+                if c.label not in unique_classes:
+                    continue
                 cid = unique_classes.index(c.label)
                 cx = (c.box[0] + c.box[2]) / 2.0 / w
                 cy = (c.box[1] + c.box[3]) / 2.0 / h
                 bw = (c.box[2] - c.box[0]) / w
                 bh = (c.box[3] - c.box[1]) / h
                 lines.append(f"{cid} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}\n")
+            from klygo import files
             files.save(output_path, "".join(lines), verbose=False)
         elif format.lower() == "json":
+            from klygo import files
             files.save(output_path, self.to_dict(), verbose=False)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -767,18 +771,19 @@ class Detections:
 
     def export(self, output_path: str, format: str = "yolo") -> None:
         """Xuất toàn bộ Video thành Flat YOLO Dataset hoặc JSON sử dụng klygo.files và klygo.media."""
+        from klygo import files, media
         if format.lower() == "yolo":
             img_dir = os.path.join(output_path, "images")
             lbl_dir = os.path.join(output_path, "labels")
             files.mkdir(img_dir)
             files.mkdir(lbl_dir)
 
-            classes = self.unique_labels
+            classes = sorted(self.unique_labels)
             for idx, res in enumerate(self.frames):
                 img_name = f"frame_{idx:05d}.jpg"
                 lbl_name = f"frame_{idx:05d}.txt"
                 media.save(os.path.join(img_dir, img_name), res.source_image, overwrite=True, verbose=False)
-                res.export(os.path.join(lbl_dir, lbl_name), format="yolo")
+                res.export(os.path.join(lbl_dir, lbl_name), format="yolo", classes=classes)
 
             # Ghi file data.yaml qua klygo.files.save
             yaml_data = {

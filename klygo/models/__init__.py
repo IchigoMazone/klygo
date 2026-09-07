@@ -12,12 +12,13 @@ from . import errors
 from . import utils
 from .base import BaseModel
 from .detection.base import Detector
-from .load import load, register
+from .load import load, register, init
 from .utils import suppress_warnings, suppress_ai_warnings
 
 __all__ = [
     "load",
     "register",
+    "init",
     "base",
     "errors",
     "utils",

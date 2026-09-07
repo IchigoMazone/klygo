@@ -485,6 +485,40 @@ class Detector(BaseModel):
             except Exception:
                 pass
 
+    def export(self, output_dir: str) -> None:
+        """
+        Xuất toàn bộ mô hình (Metadata + Python Code + Trọng số) ra thư mục chuẩn Klygo.
+        Mô hình xuất ra có thể được nạp lại hoàn chỉnh qua `models.load(folder)`.
+        """
+        from klygo import files
+        import shutil
+        import sys
+        
+        abs_out = os.path.abspath(output_dir)
+        files.mkdir(abs_out)
+        
+        # 1. Ghi klygo.json
+        meta = dict(self.metadata)
+        meta.pop("num_params", None)
+        files.save(os.path.join(abs_out, "klygo.json"), meta, verbose=False)
+        
+        # 2. Xử lý Custom Class (copy model.py)
+        module_name = self.__class__.__module__
+        if not module_name.startswith("klygo.models."):
+            mod = sys.modules.get(module_name)
+            if mod and hasattr(mod, "__file__") and mod.__file__:
+                source_file = mod.__file__
+                if os.path.exists(source_file):
+                    shutil.copy2(source_file, os.path.join(abs_out, "model.py"))
+        
+        # 3. Trọng số & Artifacts (chỉ base fallback)
+        inner = self._inner_model()
+        if inner is not None:
+            if hasattr(inner, "save_pretrained"):
+                inner.save_pretrained(abs_out)
+        if hasattr(self, "processor") and hasattr(self.processor, "save_pretrained"):
+            self.processor.save_pretrained(abs_out)
+
     def unload(self) -> None:
         self.cpu()
         self.clear_cache()
