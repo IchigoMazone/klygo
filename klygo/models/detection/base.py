@@ -268,27 +268,7 @@ class Detector(BaseModel):
                 exclude_set.add(item)
         return {k: v for k, v in kwargs.items() if k not in exclude_set}
 
-    def process_inputs(
-        self,
-        images: List[PIL.Image.Image],
-        prompt: Union[str, List[str]],
-        **processor_kwargs,
-    ):
-        """
-        Tiền xử lý chuẩn cho Vision-Language Detection:
-        Chuẩn hóa prompt text, gọi self.processor(images, text, return_tensors='pt')
-        và tự động cast tất cả tensors lên đúng device & dtype của model.
-        """
-        raw_prompt = [prompt] if isinstance(prompt, str) else list(prompt)
-        labels = [p.strip().rstrip(".").lower() for p in raw_prompt if p.strip()]
-        text = [labels] * len(images)
-        raw_inputs = self.processor(
-            images=images,
-            text=text,
-            return_tensors="pt",
-            **processor_kwargs,
-        )
-        return self.cast_inputs(raw_inputs)
+
 
     def current_device(self) -> torch.device:
         """Device thực tế của model (lấy từ parameter đầu tiên)."""
@@ -325,27 +305,6 @@ class Detector(BaseModel):
                         if isinstance(v, torch.Tensor):
                             return v.device
         return self.current_device()
-
-    def align_inputs_with_outputs(self, inputs: Any, outputs: Any) -> Any:
-        """
-        Đồng bộ toàn bộ tensors trong inputs sang đúng device của outputs với non_blocking=True.
-        Triệt tiêu 100% lỗi 'Expected all tensors to be on the same device' khi chạy Multi-GPU sharded (device_map='auto').
-        """
-        target_dev = self.get_output_device(outputs)
-        is_cuda = (target_dev.type == "cuda")
-        if hasattr(inputs, "items") or isinstance(inputs, dict):
-            aligned = {}
-            for k, v in inputs.items():
-                if isinstance(v, torch.Tensor):
-                    aligned[k] = v.to(target_dev, non_blocking=is_cuda)
-                else:
-                    aligned[k] = v
-            return aligned
-        elif isinstance(inputs, torch.Tensor):
-            return inputs.to(target_dev, non_blocking=is_cuda)
-        elif isinstance(inputs, (list, tuple)):
-            return [x.to(target_dev, non_blocking=is_cuda) if isinstance(x, torch.Tensor) else x for x in inputs]
-        return inputs
 
     def cast_inputs(self, inputs):
         """
