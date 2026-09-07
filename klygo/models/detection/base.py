@@ -335,6 +335,22 @@ class Detector(BaseModel):
                         inputs[k] = v.to(device=dev, dtype=torch.float32, non_blocking=is_cuda)
                 else:
                     inputs[k] = v.to(device=dev, non_blocking=is_cuda)
+        elif isinstance(inputs, (list, tuple)):
+            casted = []
+            for v in inputs:
+                if isinstance(v, torch.Tensor):
+                    if v.is_floating_point():
+                        if is_cpu:
+                            casted.append(v.to(device=dev, dtype=torch.float32))
+                        elif dtype in (torch.float16, torch.bfloat16):
+                            casted.append(v.to(device=dev, dtype=dtype, non_blocking=is_cuda))
+                        else:
+                            casted.append(v.to(device=dev, dtype=torch.float32, non_blocking=is_cuda))
+                    else:
+                        casted.append(v.to(device=dev, non_blocking=is_cuda))
+                else:
+                    casted.append(v)
+            inputs = type(inputs)(casted)
         elif isinstance(inputs, torch.Tensor):
             if inputs.is_floating_point():
                 if is_cpu:
