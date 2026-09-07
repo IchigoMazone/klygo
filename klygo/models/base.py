@@ -14,9 +14,6 @@ import torch.nn as nn
 from .errors import UnsupportedOperationError, InvalidStateError
 
 
-def override(func):
-    func.__is_override__ = True
-    return func
 
 
 class BaseModel(ABC, nn.Module):
@@ -204,9 +201,8 @@ class BaseModel(ABC, nn.Module):
     def settings(self, value: Dict[str, Any]) -> None:
         self._settings = dict(value)
 
-    @property
-    def default_config(self) -> Dict[str, Any]:
-        return getattr(self, "_default_settings", {})
+
+
 
 
     @property
@@ -308,6 +304,3 @@ class BaseModel(ABC, nn.Module):
     def help(self) -> None:
         raise NotImplementedError
 
-
-# Alias tuong thich nguoc
-DetectorModel = BaseModel

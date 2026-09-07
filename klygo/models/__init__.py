@@ -10,7 +10,7 @@ utils.suppress_ai_warnings()
 from . import base
 from . import errors
 from . import utils
-from .base import BaseModel, DetectorModel
+from .base import BaseModel
 from .detection.base import Detector
 from .load import load, register
 from .utils import suppress_warnings, suppress_ai_warnings
@@ -23,7 +23,6 @@ __all__ = [
     "utils",
     "BaseModel",
     "Detector",
-    "DetectorModel",
     "suppress_warnings",
     "suppress_ai_warnings",
 ]

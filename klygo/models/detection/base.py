@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import PIL.Image
 
-from klygo.models.base import BaseModel, override
+from klygo.models.base import BaseModel
 from klygo.models import utils
 from klygo.outputs.detect import Detections, Detection, Box
 from klygo.utils.progress import ProgressBar
@@ -463,16 +463,17 @@ class Detector(BaseModel):
     # VONG DOI & BO NHO (Lifecycle & Resource Management)
     # =========================================================================
     def reset(self) -> "Detector":
-        self._settings = dict(self._default_settings)  # Reset Klygo runtime settings
+        self._settings = dict(self._default_settings)
         self.state = "READY"
         self.cpu()
         self.state = "READY"
         return self
 
     def warmup(self) -> None:
-        dummy_img = PIL.Image.new("RGB", (1, 1), color="black")
+        """Chạy thử 1 lần với ảnh 640x640 để khởi động GPU pipeline trước khi dùng thực."""
+        dummy_img = PIL.Image.new("RGB", (640, 640), color=(100, 100, 100))
         try:
-            self.predict(source=dummy_img, prompt=["dummy"], verbose=False)
+            self.predict(source=dummy_img, prompt=["object"], verbose=False)
         except Exception:
             pass
 
@@ -512,11 +513,9 @@ class Detector(BaseModel):
         img = source if source is not None else PIL.Image.new("RGB", (640, 640), color=(100, 100, 100))
         prompts = utils.normalize_prompt(prompt or ["object"])
 
-        # 1. Warmup
         for _ in range(warmup):
             self.predict(source=img, prompt=prompts, verbose=False, **kwargs)
 
-        # 2. Đo lường chính xác
         latencies = []
         is_gpu = cuda.is_available() and ("cuda" in str(self.device) or self.device == "multi-gpu")
 
@@ -583,6 +582,28 @@ class Detector(BaseModel):
     # =========================================================================
     # ĐỘNG CƠ SUY LUẬN DETECTION HOÀN CHỈNH (predict & forward)
     # =========================================================================
+    def _pack_detection(
+        self,
+        det: Any,
+        image: PIL.Image.Image,
+        frame_index: int,
+        lat_ms: float,
+        fps_val: float,
+    ) -> "Detection":
+        """Chuẩn hóa 1 kết quả thô (dict hoặc Detection) thành Detection đầy đủ."""
+        if isinstance(det, dict):
+            b_list = det.get("boxes", [])
+            s_list = det.get("scores", [1.0] * len(b_list))
+            l_list = det.get("labels", ["object"] * len(b_list))
+            box_objs = [
+                Box(id=i, label=str(l), score=float(s), box=b, parent_image=image)
+                for i, (b, s, l) in enumerate(zip(b_list, s_list, l_list))
+            ]
+            det = Detection(source_image=image, objects=box_objs, image_frame_index=frame_index)
+        det.image_frame_index = frame_index
+        det.speed = {"inference": lat_ms, "fps": fps_val}
+        return det
+
     def forward(
         self,
         images: List[PIL.Image.Image],
@@ -593,6 +614,8 @@ class Detector(BaseModel):
         mod_kw, _, _ = self.split_kwargs(kwargs)
         if hasattr(self, "model") and callable(self.model):
             return self.model(images, prompt=prompt, **mod_kw)
+        return []
+
     def __call__(self, *args, **kwargs) -> Any:
         """Cho phép gọi trực tiếp instance mô hình:
         - Nếu truyền Tensor -> Gọi thẳng nn.Module bên dưới (Chuẩn PyTorch thuần).
@@ -600,9 +623,7 @@ class Detector(BaseModel):
         """
         with utils.suppress_warnings():
             if args and not isinstance(args[0], (PIL.Image.Image, str, list, tuple)):
-                import sys
-                if "torch" in sys.modules:
-                    import torch
+                if "torch" in __import__("sys").modules:
                     if isinstance(args[0], torch.Tensor):
                         if hasattr(self, "model") and callable(self.model):
                             return self.model(*args, **kwargs)
@@ -625,11 +646,10 @@ class Detector(BaseModel):
         **kwargs,
     ) -> Detections:
         """
-        Thực thi nhận diện đối tượng trên ảnh, video hoặc folder (luôn trả về tập hợp kết quả Detections).
+        Thực thi nhận diện đối tượng trên ảnh, video hoặc folder (luôn trả về Detections).
         """
-        # 1. Phân giải prompt (nếu có)
-        actual_prompt = prompt if prompt is not None else (kwargs.pop("classes", None) or kwargs.pop("text_prompt", None))
-        target_prompt = utils.normalize_prompt(actual_prompt) if actual_prompt is not None else None
+        # 1. Phân giải prompt
+        target_prompt = utils.normalize_prompt(prompt) if prompt is not None else None
 
         # 2. Phân giải nguồn dữ liệu qua klygo.media.load
         images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames)
@@ -638,76 +658,36 @@ class Detector(BaseModel):
 
         actual_batch = max(1, int(batch))
 
-        # 3. Context inference mode và chặn toàn bộ warning tự động
+        # 3. Inference mode + suppress warnings
         try:
-            import torch
             infer_context = torch.inference_mode()
         except Exception:
             infer_context = utils.nullcontext()
 
         with infer_context, utils.suppress_warnings():
-            # A. Trường hợp 1 ảnh đơn lẻ
+            # A. 1 ảnh đơn lẻ
             if is_single:
                 t_start = time.perf_counter()
-                dets = self.forward(
-                    images=images,
-                    prompt=target_prompt,
-                    **kwargs,
-                )
+                dets = self.forward(images=images, prompt=target_prompt, **kwargs)
                 t_end = time.perf_counter()
                 lat_ms = round((t_end - t_start) * 1000, 2)
                 fps_val = round(1000.0 / max(0.001, lat_ms), 1)
-
-                det = dets[0]
-                if isinstance(det, dict):
-                    cur_img = images[0]
-                    box_objs = []
-                    b_list = det.get("boxes", [])
-                    s_list = det.get("scores", [1.0] * len(b_list))
-                    l_list = det.get("labels", ["object"] * len(b_list))
-                    for b_idx, (b, s, l) in enumerate(zip(b_list, s_list, l_list)):
-                        box_objs.append(Box(id=b_idx, label=str(l), score=float(s), box=b, parent_image=cur_img))
-                    det = Detection(
-                        source_image=cur_img,
-                        objects=box_objs,
-                        image_frame_index=0,
-                    )
-                det.image_frame_index = 0
-                det.speed = {"inference": lat_ms, "fps": fps_val}
+                det = self._pack_detection(dets[0], images[0], 0, lat_ms, fps_val)
                 return Detections(frames=[det], source_type="image", fps=30.0)
 
-            # B. Trường hợp Video / Folder / Batch ảnh
+            # B. Video / Folder / Batch
             frame_results = []
             with ProgressBar(total=len(images), desc="Predict", unit="frame", verbose=verbose, colour="cyan") as pbar:
                 for i in range(0, len(images), actual_batch):
                     batch_imgs = images[i : i + actual_batch]
                     t_start = time.perf_counter()
-                    dets = self.forward(
-                        images=batch_imgs,
-                        prompt=target_prompt,
-                        **kwargs,
-                    )
+                    dets = self.forward(images=batch_imgs, prompt=target_prompt, **kwargs)
                     t_end = time.perf_counter()
                     lat_per_frame = round(((t_end - t_start) * 1000) / len(batch_imgs), 2)
                     fps_val = round(1000.0 / max(0.001, lat_per_frame), 1)
-
                     for idx, det in enumerate(dets):
-                        if isinstance(det, dict):
-                            cur_img = batch_imgs[idx] if idx < len(batch_imgs) else batch_imgs[0]
-                            box_objs = []
-                            b_list = det.get("boxes", [])
-                            s_list = det.get("scores", [1.0] * len(b_list))
-                            l_list = det.get("labels", ["object"] * len(b_list))
-                            for b_idx, (b, s, l) in enumerate(zip(b_list, s_list, l_list)):
-                                box_objs.append(Box(id=b_idx, label=str(l), score=float(s), box=b, parent_image=cur_img))
-                            det = Detection(
-                                source_image=cur_img,
-                                objects=box_objs,
-                                image_frame_index=i + idx,
-                            )
-                        det.image_frame_index = i + idx
-                        det.speed = {"inference": lat_per_frame, "fps": fps_val}
-                        frame_results.append(det)
+                        img = batch_imgs[idx] if idx < len(batch_imgs) else batch_imgs[0]
+                        frame_results.append(self._pack_detection(det, img, i + idx, lat_per_frame, fps_val))
                     pbar.update(len(batch_imgs))
 
             return Detections(frames=frame_results, source_type="video" if len(images) > 1 else "image", fps=30.0)
