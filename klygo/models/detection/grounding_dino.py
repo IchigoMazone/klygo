@@ -15,7 +15,12 @@ class GroundingDinoDetect(Detector):
     """Zero-shot Object Detection — Grounding DINO."""
 
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
-        super().__init__(metadata=metadata, unsupported=("train", "val"), **kwargs)
+        super().__init__(
+            metadata=metadata, 
+            flags=("model", "processor", "post"), 
+            unsupported=("train", "val"), 
+            **kwargs
+        )
 
         # 1. Boc tach 3 nhom cau hinh tu metadata
         mod_kw, proc_kw, _ = self.parse_config()
@@ -42,12 +47,12 @@ class GroundingDinoDetect(Detector):
         text_str = ". ".join([str(p).strip().rstrip(".").lower() for p in raw_prompt if str(p).strip()]) + "."
         text_batch = [text_str] * len(images) if text_str != "." else None
 
-        inputs = self.processor(
-            images=images,
-            text=text_batch,
-            return_tensors="pt",
-            **proc_kw
-        )
+        proc_args = {"images": images, "return_tensors": "pt"}
+        if text_batch:
+            proc_args["text"] = text_batch
+        proc_args.update(proc_kw)
+
+        inputs = self.processor(**proc_args)
         inputs = self.cast_inputs(inputs)
 
         # 3. Inference (AMP, GPU sync tu dong)

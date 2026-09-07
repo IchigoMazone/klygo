@@ -15,6 +15,7 @@ class LocateAnythingDetect(Detector):
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
         super().__init__(
             metadata=metadata,
+            flags=("model", "post"),
             unsupported=("train", "val"),
             **kwargs,
         )

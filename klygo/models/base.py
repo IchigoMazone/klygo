@@ -29,8 +29,8 @@ class BaseModel(ABC, nn.Module):
     def __init__(
         self,
         metadata: Dict[str, Any],
+        flags: Sequence[str],
         unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
-        flags: Optional[Sequence[str]] = None,
         **kwargs,
     ) -> None:
         # nn.Module PHAI duoc khoi tao TRUOC MOI assignment
@@ -47,7 +47,7 @@ class BaseModel(ABC, nn.Module):
         self.class_name: str = f"{self.__class__.__module__}.{self.__class__.__qualname__}"
         self._default_settings: Dict[str, Any] = dict(self.metadata.get("config", {}))
         self._settings: Dict[str, Any] = dict(self._default_settings)
-        self._flags: Tuple[str, ...] = tuple(flags) if flags else ("model", "processor", "post")
+        self._flags: Tuple[str, ...] = tuple(flags)
         self._unsupported: Set[str] = set(unsupported or ())
         if hasattr(self, "__UNSUPPORTED__"):
             self._unsupported.update(getattr(self, "__UNSUPPORTED__"))

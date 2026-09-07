@@ -28,8 +28,8 @@ class Detector(BaseModel):
     def __init__(
         self,
         metadata: Optional[Dict[str, Any]] = None,
-        unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
         flags: Optional[Sequence[str]] = None,
+        unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
         model: Optional[Any] = None,
         **kwargs,
     ) -> None:
@@ -42,9 +42,12 @@ class Detector(BaseModel):
                 "backend": "PyTorch",
                 "task": "Object-Detection",
             }
-        super().__init__(metadata=metadata, unsupported=unsupported, flags=flags, **kwargs)
+        
+        if flags is None:
+            raise ValueError(f"Bắt buộc phải khai báo 'flags' (ví dụ: flags=('model', 'post')) khi khởi tạo mô hình {self.__class__.__name__} để đảm bảo sự tường minh.")
+
+        super().__init__(metadata=metadata, flags=flags, unsupported=unsupported, **kwargs)
         self.task = "Object-Detection"
-        self._flags: Tuple[str, ...] = tuple(flags) if flags else ("model", "processor", "post")
         self._device: str = "cpu"
         self._dtype: str = "float32"
         self.half_mode: bool = False
