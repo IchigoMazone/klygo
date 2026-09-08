@@ -60,43 +60,43 @@ class Detector(BaseModel):
     # Detector chi can: guard _check_supported + sync state + multi-gpu guard
     # =========================================================================
     def _sync_state(self) -> None:
-        """Dong bo _device va _dtype tu trang thai thuc te cua nn.Module parameters."""
+        """Dong bo _device va _dtype tu trang thai thuc te cua parameters."""
         try:
-            params = list(nn.Module.parameters(self))
-            if not params:
-                return
-            p = params[0]
-            self._device = str(p.device)
-            dtype_str = str(p.dtype)
-            if "bfloat16" in dtype_str:
-                self._dtype = "bfloat16"
-                self.half_mode = False
-            elif "float16" in dtype_str:
-                self._dtype = "float16"
-                self.half_mode = True
-            else:
-                self._dtype = "float32"
+            if hasattr(self.model, "parameters"):
+                params = list(self.model.parameters())
+                if not params:
+                    return
+                p = params[0]
+                self._device = str(p.device)
+                dtype_str = str(p.dtype)
+                if "bfloat16" in dtype_str:
+                    self._dtype = "bfloat16"
+                    self.half_mode = False
+                elif "float16" in dtype_str:
+                    self._dtype = "float16"
+                    self.half_mode = True
+                else:
+                    self._dtype = "float32"
         except Exception:
             pass
 
     def _is_multi_gpu(self) -> bool:
         """Kiem tra xem inner model co dang dung HF device_map multi-GPU khong."""
-        inner = self.__dict__.get("_modules", {}).get("model", None)
-        return inner is not None and hasattr(inner, "hf_device_map")
+        return self.model is not None and hasattr(self.model, "hf_device_map")
 
     @property
     def device(self) -> str:
         if self._is_multi_gpu():
             return "multi-gpu"
         try:
-            params = list(nn.Module.parameters(self))
-            if params:
-                return str(params[0].device)
+            if hasattr(self.model, "parameters"):
+                params = list(self.model.parameters())
+                if params:
+                    return str(params[0].device)
         except Exception:
             pass
-        inner = self.__dict__.get("_modules", {}).get("model", None)
-        if inner is not None and hasattr(inner, "device"):
-            return str(inner.device)
+        if self.model is not None and hasattr(self.model, "device"):
+            return str(self.model.device)
         return self._device
 
     @property
@@ -104,13 +104,14 @@ class Detector(BaseModel):
         if self.half_mode:
             return "float16"
         try:
-            params = list(nn.Module.parameters(self))
-            if params:
-                dtype_str = str(params[0].dtype)
-                if "bfloat16" in dtype_str:
-                    return "bfloat16"
-                elif "float16" in dtype_str:
-                    return "float16"
+            if hasattr(self.model, "parameters"):
+                params = list(self.model.parameters())
+                if params:
+                    dtype_str = str(params[0].dtype)
+                    if "bfloat16" in dtype_str:
+                        return "bfloat16"
+                    elif "float16" in dtype_str:
+                        return "float16"
         except Exception:
             pass
         return self._dtype
@@ -123,7 +124,9 @@ class Detector(BaseModel):
             return self
         # Ho tro Klygo-style: to(0) -> to("cuda:0")
         if len(args) == 1 and isinstance(args[0], int):
-            args = ("cuda:{}".format(args[0]),)
+            args = (f"cuda:{args[0]}",)
+            
+        import torch
         # Tu dong chuyen chuoi dtype thanh torch.dtype
         if "dtype" in kwargs and isinstance(kwargs["dtype"], str):
             kwargs["dtype"] = self.parse_dtype(kwargs["dtype"])[0]
@@ -133,14 +136,18 @@ class Detector(BaseModel):
             else a
             for a in args
         )
-        # Goi nn.Module.to() that su — xu ly toan bo submodule tu dong
-        nn.Module.to(self, *args, **kwargs)
+        
+        if hasattr(self.model, "to"):
+            self.model.to(*args, **kwargs)
+            
         # Neu chuyen sang CPU voi FP16 -> tu dong ve FP32 de tranh loi
         try:
-            params = list(nn.Module.parameters(self))
-            if params and params[0].device.type == "cpu" and params[0].dtype == torch.float16:
-                nn.Module.float(self)
-                self.half_mode = False
+            if hasattr(self.model, "parameters"):
+                params = list(self.model.parameters())
+                if params and params[0].device.type == "cpu" and params[0].dtype == torch.float16:
+                    if hasattr(self.model, "float"):
+                        self.model.float()
+                    self.half_mode = False
         except Exception:
             pass
         self._sync_state()
@@ -149,8 +156,10 @@ class Detector(BaseModel):
 
     def cpu(self) -> "Detector":
         """Chuyen model ve CPU."""
-        nn.Module.cpu(self)      # Di chuyen toan bo submodule ve CPU
-        nn.Module.float(self)   # CPU khong ho tro FP16 inference -> auto float32
+        if hasattr(self.model, "cpu"):
+            self.model.cpu()
+        if hasattr(self.model, "float"):
+            self.model.float()
         self.half_mode = False
         self._sync_state()
         self.state = "MODIFIED"
@@ -161,10 +170,11 @@ class Detector(BaseModel):
         if self._is_multi_gpu():
             self.state = "MODIFIED"
             return self
-        nn.Module.cuda(self, device)   # Di chuyen toan bo submodule len GPU
+        if hasattr(self.model, "cuda"):
+            self.model.cuda(device)
         # Khoi phuc half_mode neu dang bat nhung chua o float16
-        if self.half_mode:
-            nn.Module.half(self)
+        if self.half_mode and hasattr(self.model, "half"):
+            self.model.half()
         self._sync_state()
         self.state = "MODIFIED"
         return self
@@ -175,20 +185,23 @@ class Detector(BaseModel):
         if "cuda" in str(self.device) and klygo_cuda.is_available():
             self.half_mode = True
             self._dtype = "float16"
-            nn.Module.half(self)   # Ap dung FP16 that su tren GPU
+            if hasattr(self.model, "half"):
+                self.model.half()
         else:
-            # CPU: PyTorch CPU khong ho tro tot FP16 cho moi op -> giu float32 an toan
             self.half_mode = False
             self._dtype = "float32"
-            nn.Module.float(self)
+            if hasattr(self.model, "float"):
+                self.model.float()
         self.state = "MODIFIED"
         return self
 
     def bfloat16(self) -> "Detector":
         """Chuyen model sang BF16."""
+        import torch
         self.half_mode = False
         self._dtype = "bfloat16"
-        nn.Module.to(self, torch.bfloat16)
+        if hasattr(self.model, "to"):
+            self.model.to(torch.bfloat16)
         self.state = "MODIFIED"
         return self
 
@@ -200,7 +213,8 @@ class Detector(BaseModel):
         """Chuyen model ve FP32."""
         self.half_mode = False
         self._dtype = "float32"
-        nn.Module.float(self)   # Chuyen toan bo submodule ve float32
+        if hasattr(self.model, "float"):
+            self.model.float()
         self.state = "MODIFIED"
         return self
 
@@ -275,17 +289,23 @@ class Detector(BaseModel):
 
     def current_device(self) -> torch.device:
         """Device thực tế của model (lấy từ parameter đầu tiên)."""
+        import torch
         try:
-            return next(nn.Module.parameters(self)).device
+            if hasattr(self.model, "parameters"):
+                return next(self.model.parameters()).device
         except StopIteration:
-            return torch.device(self._device)
+            pass
+        return torch.device(self._device)
 
     def current_dtype(self) -> torch.dtype:
         """Dtype thực tế của model (lấy từ parameter đầu tiên)."""
+        import torch
         try:
-            return next(nn.Module.parameters(self)).dtype
+            if hasattr(self.model, "parameters"):
+                return next(self.model.parameters()).dtype
         except StopIteration:
-            return torch.float32
+            pass
+        return torch.float32
 
     def get_output_device(self, outputs: Any) -> torch.device:
         """Dò tìm thiết bị thực tế của tensor đầu ra (hỗ trợ ModelOutput, Dict, List, Tensor)."""

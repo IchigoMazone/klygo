@@ -16,12 +16,10 @@ from .errors import UnsupportedOperationError, InvalidStateError
 
 
 
-class BaseModel(ABC, nn.Module):
+class BaseModel(ABC):
     """
-    TANG 1: Universal Abstract Interface cho moi mo hinh AI trong Klygo.
-    Ke thua truc tiep tu PyTorch nn.Module (Core) -- moi method PyTorch deu la cong
-    dan hang nhat, khong can viet proxy thu cong.
-    Bo sung Klygo: Metadata, Blacklist __UNSUPPORTED__, Properties transparent sang HF.
+    TANG 1: Universal Abstract Interface cho mọi mô hình AI trong Klygo.
+    Độc lập hoàn toàn với PyTorch ở tầng Base, cho phép load ONNX, OpenVINO, hoặc API models.
     """
 
     __UNSUPPORTED__: Sequence[str] = ()
@@ -33,8 +31,6 @@ class BaseModel(ABC, nn.Module):
         unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
         **kwargs,
     ) -> None:
-        # nn.Module PHAI duoc khoi tao TRUOC MOI assignment
-        nn.Module.__init__(self)
 
         from . import utils
         utils.suppress_ai_warnings()
@@ -215,81 +211,60 @@ class BaseModel(ABC, nn.Module):
     def devices(self) -> List[str]:
         """Danh sách tất cả các devices mà tham số mô hình đang nằm trên đó."""
         dev_set = set()
-        try:
-            for p in nn.Module.parameters(self):
-                dev_set.add(str(p.device))
-        except Exception:
-            pass
+        inner = self._inner_model()
+        if inner is not None and hasattr(inner, "parameters"):
+            try:
+                for p in inner.parameters():
+                    dev_set.add(str(p.device))
+            except Exception:
+                pass
         return sorted(list(dev_set)) if dev_set else [str(getattr(self, "device", "cpu"))]
 
-    # =========================================================================
-    # OVERRIDE nn.Module METHODS (guard da duoc xu ly tu dong boi __getattribute__)
-    # =========================================================================
     def eval(self) -> "BaseModel":
-        nn.Module.eval(self)
+        inner = self._inner_model()
+        if inner is not None and hasattr(inner, "eval"):
+            inner.eval()
         return self
 
     def train(self, mode: bool = True, *args, **kwargs) -> Any:
-        """
-        train(True/False) -> Chuyển chế độ nn.Module.
-        train(data=..., epochs=...) -> Delegate sang inner model (e.g. Ultralytics YOLO).
-        """
+        inner = self._inner_model()
         if args or (kwargs and not set(kwargs.keys()).issubset({"mode"})):
-            inner = self._inner_model()
             if inner is not None and hasattr(inner, "train") and callable(inner.train):
                 return inner.train(*args, **kwargs)
             raise NotImplementedError(
                 f"Model '{self.model_id}' chưa hỗ trợ pipeline train() với tham số này."
             )
-        nn.Module.train(self, mode)
+        if inner is not None and hasattr(inner, "train"):
+            inner.train(mode)
         return self
 
     def state_dict(self, *args, **kwargs) -> Dict[str, Any]:
-        """Backward compat: state_dict cua inner model (khong co prefix 'model.')."""
         inner = self._inner_model()
         if inner is not None and hasattr(inner, "state_dict"):
             return inner.state_dict(*args, **kwargs)
-        return nn.Module.state_dict(self, *args, **kwargs)
+        return {}
 
     def load_state_dict(self, state_dict: Dict[str, Any], strict: bool = True):
-        """Nap trong so tu state_dict vao mo hinh."""
         inner = self._inner_model()
         if inner is not None and hasattr(inner, "load_state_dict"):
             return inner.load_state_dict(state_dict, strict=strict)
-        return nn.Module.load_state_dict(self, state_dict, strict=strict)
+        return None
 
     def to(self, *args, **kwargs) -> "BaseModel":
         """
-        [ĐƯỜNG ỐNG TRONG SUỐT] Ghi đè hàm to() của PyTorch để nhường quyền cho framework gốc.
+        [ĐƯỜNG ỐNG TRONG SUỐT] Delegate hàm to() cho framework gốc.
         """
-        inner = self._inner_model()
-        
-        # 1. TRẢ QUYỀN CHO LÕI: Nếu lõi là custom object (như YOLO, không phải nn.Module thuần)
-        # thì nhường lệnh cho nó tự xử lý. PyTorch nn.Module tự xử lý đệ quy nên bỏ qua.
-        if inner is not None and hasattr(inner, "to") and not isinstance(inner, nn.Module):
-            inner.to(*args, **kwargs)
-            
-        # 2. KIỂM SOÁT HUGGING FACE: Nếu đang xài Multi-GPU (device_map), cấm ép phần cứng
-        # vì sẽ phá vỡ cơ chế sharding của HF gây văng lỗi RAM.
         if self._is_multi_gpu():
             return self
 
-        # 3. MẶC ĐỊNH PYTORCH: Chạy nốt các tensor lẻ tẻ của Klygo
-        return nn.Module.to(self, *args, **kwargs)
+        inner = self._inner_model()
+        if inner is not None and hasattr(inner, "to"):
+            inner.to(*args, **kwargs)
+        return self
 
-    # =========================================================================
-    # __getattr__: Delegate sang self.model neu khong tim thay tren wrapper.
-    # Thu tu: nn.Module.__getattr__ -> inner model (HF/PyTorch)
-    # =========================================================================
     def __getattr__(self, name: str) -> Any:
         if name.startswith("__") and name.endswith("__"):
             raise AttributeError("'{}' has no attribute '{}'".format(type(self).__name__, name))
-        # 1. Thu nn.Module.__getattr__ truoc
-        try:
-            return nn.Module.__getattr__(self, name)
-        except AttributeError:
-            pass
-        # 2. Delegate sang inner model
         inner = self._inner_model()
         if inner is not None:
             try:
