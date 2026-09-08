@@ -4,6 +4,7 @@ TANG 3: Cau hinh model & processor ro rang, forward() ngan gon nho cac helper cu
 """
 
 from typing import Any, List, Dict, Union
+import torch
 import PIL.Image
 from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 

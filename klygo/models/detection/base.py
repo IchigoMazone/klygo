@@ -379,7 +379,7 @@ class Detector(BaseModel):
             eff_dtype = "float32"
 
         with utils.amp_autocast_if_needed(use_half=use_half, dtype=eff_dtype):
-            if isinstance(inputs, dict):
+            if hasattr(inputs, "items") or isinstance(inputs, dict):
                 outputs = self.model(**inputs, **model_kwargs)
             elif isinstance(inputs, (list, tuple)):
                 outputs = self.model(*inputs, **model_kwargs)
