@@ -260,16 +260,6 @@ class BaseModel(ABC):
     # =========================================================================
     # HOP DONG PHAN CUNG (Abstract)
     # =========================================================================
-    @property
-    @abstractmethod
-    def device(self) -> str:
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def dtype(self) -> str:
-        raise NotImplementedError
-
     @abstractmethod
     def predict(self, *args, **kwargs):
         raise NotImplementedError
