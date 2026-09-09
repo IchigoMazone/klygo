@@ -17,14 +17,12 @@ class BaseModel(ABC):
     Mọi thứ phần cứng → dùng model.model trực tiếp.
     """
 
-    FLAGS: Sequence[str] = ()
-    UNSUPPORTED: Sequence[str] = ()
     __UNSUPPORTED__: Sequence[str] = ()
 
     def __init__(
         self,
         metadata: Dict[str, Any],
-        flags: Optional[Sequence[str]] = None,
+        flags: Sequence[str],
         unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
         **kwargs,
     ) -> None:
@@ -41,11 +39,9 @@ class BaseModel(ABC):
         self._default_settings: Dict[str, Any] = dict(self.metadata.get("config", {}))
         self._settings: Dict[str, Any] = dict(self._default_settings)
 
-        # Cờ flags và unsupported khai báo từ Class/lớp kế thừa, KHÔNG nằm trên metadata
-        target_flags = flags if flags is not None else getattr(self, "FLAGS", ())
-        target_unsupported = unsupported if unsupported is not None else getattr(self, "UNSUPPORTED", ())
-        self._flags: Tuple[str, ...] = tuple(target_flags)
-        self._unsupported: Set[str] = set(target_unsupported or ())
+        # flags và unsupported truyền tường minh qua tham số hàm, không lấy hay lưu vào metadata
+        self._flags: Tuple[str, ...] = tuple(flags)
+        self._unsupported: Set[str] = set(unsupported or ())
         if hasattr(self, "__UNSUPPORTED__"):
             self._unsupported.update(getattr(self, "__UNSUPPORTED__"))
         self.state = "READY"

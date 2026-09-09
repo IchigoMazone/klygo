@@ -15,11 +15,13 @@ from klygo.outputs.detect import Detection
 class GroundingDinoDetect(Detector):
     """Zero-shot Object Detection — Grounding DINO."""
 
-    FLAGS: Sequence[str] = ("model", "processor", "post")
-    UNSUPPORTED: Sequence[str] = ("train", "val")
-
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
-        super().__init__(metadata=metadata, **kwargs)
+        super().__init__(
+            metadata=metadata,
+            flags=("model", "processor", "post"),
+            unsupported=("train", "val"),
+            **kwargs,
+        )
 
         # 1. Boc tach 3 nhom cau hinh tu metadata
         mod_kw, proc_kw, _ = self.parse_config()

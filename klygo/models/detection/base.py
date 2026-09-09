@@ -25,13 +25,10 @@ class Detector(BaseModel):
     Hoàn toàn framework-agnostic, đọc toàn bộ thông tin cấu hình từ metadata.
     """
 
-    FLAGS: Sequence[str] = ("model", "post")
-    UNSUPPORTED: Sequence[str] = ()
-
     def __init__(
         self,
         metadata: Dict[str, Any],
-        flags: Optional[Sequence[str]] = None,
+        flags: Sequence[str],
         unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
         **kwargs,
     ) -> None:

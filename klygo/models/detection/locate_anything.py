@@ -12,11 +12,13 @@ from klygo.outputs.detect import Detection
 class LocateAnythingDetect(Detector):
     """Mô hình nhận diện đối tượng LocateAnything."""
 
-    FLAGS: Sequence[str] = ("model", "post")
-    UNSUPPORTED: Sequence[str] = ("train", "val")
-
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
-        super().__init__(metadata=metadata, **kwargs)
+        super().__init__(
+            metadata=metadata,
+            flags=("model", "post"),
+            unsupported=("train", "val"),
+            **kwargs,
+        )
 
     def forward(
         self,

@@ -12,10 +12,12 @@ from klygo.outputs.detect import Detection
 class YOLODetect(Detector):
     """Mô hình nhận diện đối tượng thời gian thực YOLO."""
 
-    FLAGS: Sequence[str] = ("model", "post")
-
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
-        super().__init__(metadata=metadata, **kwargs)
+        super().__init__(
+            metadata=metadata,
+            flags=("model", "post"),
+            **kwargs,
+        )
         mod_kw, post_kw = self.parse_config()
         self.model = None
         if self.model_id and self.model_id not in ("custom-detector", "yolo-audit"):
