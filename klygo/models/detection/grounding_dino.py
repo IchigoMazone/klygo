@@ -35,11 +35,6 @@ class GroundingDinoDetect(Detector):
             self.model.eval()
 
     @property
-    def hf_config(self):
-        """PretrainedConfig của Hugging Face model."""
-        return getattr(self.model, "config", None)
-
-    @property
     def hf_device_map(self):
         """HF device map khi dùng multi-GPU sharding."""
         return getattr(self.model, "hf_device_map", getattr(self.model, "device_map", None))
