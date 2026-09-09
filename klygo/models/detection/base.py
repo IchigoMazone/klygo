@@ -14,7 +14,7 @@ import PIL.Image
 
 from klygo.models.base import BaseModel
 from klygo.models import utils
-from klygo.models.backend import hf, ultralytics
+from klygo.models.backend import huggingface, ultralytics
 from klygo.outputs.detect import Detections, Detection, Box
 from klygo.utils.progress import ProgressBar
 
@@ -106,16 +106,16 @@ class Detector(BaseModel):
     # HUGGING FACE BACKEND HELPERS (hf_*)
     # =========================================================================
     def hf_cast_inputs(self, inputs):
-        return hf.cast_inputs(inputs, dev=self.current_device(), dtype=self.current_dtype())
+        return huggingface.cast_inputs(inputs, dev=self.current_device(), dtype=self.current_dtype())
 
     def hf_run_inference(self, inputs, **model_kwargs):
-        return hf.run_inference(self.model, inputs, cur_dtype=self.current_dtype(), **model_kwargs)
+        return huggingface.run_inference(self.model, inputs, cur_dtype=self.current_dtype(), **model_kwargs)
 
     def hf_get_output_device(self, outputs: Any) -> torch.device:
-        return hf.get_output_device(outputs, default_device=self.current_device())
+        return huggingface.get_output_device(outputs, default_device=self.current_device())
 
     def hf_save(self, output_dir: str) -> None:
-        hf.save(self.model, getattr(self, "processor", None), output_dir)
+        huggingface.save(self.model, getattr(self, "processor", None), output_dir)
 
     def hf_unload(self) -> None:
         if hasattr(self, "processor"):

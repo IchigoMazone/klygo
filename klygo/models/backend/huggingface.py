@@ -1,5 +1,5 @@
 """
-Hugging Face Backend Logic (klygo.models.backend.hf).
+Hugging Face Backend Logic (klygo.models.backend.huggingface).
 Chứa toàn bộ logic xử lý đặc thù cho các mô hình Hugging Face Transformers.
 """
 
