@@ -10,7 +10,6 @@ import time
 from abc import abstractmethod
 from typing import Dict, Any, Optional, Union, Sequence, Set, List, Tuple
 import torch
-import torch.nn as nn
 import PIL.Image
 
 from klygo.models.base import BaseModel
@@ -22,37 +21,22 @@ from klygo.utils.progress import ProgressBar
 class Detector(BaseModel):
     """
     TẦNG 2: Động cơ thực thi toàn diện cho bài toán Object Detection.
-    Đảm nhiệm toàn bộ phần cứng, vòng đời, suy luận batching, ProgressBar và xuất kết quả.
+    Đảm nhiệm vòng đời suy luận batching, ProgressBar và đóng gói Detections.
+    Hoàn toàn framework-agnostic, đọc toàn bộ thông tin từ metadata.
     """
 
     def __init__(
         self,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Dict[str, Any],
         flags: Optional[Sequence[str]] = None,
         unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
         model: Optional[Any] = None,
         **kwargs,
     ) -> None:
-        if metadata is None:
-            model_name = "custom-detector"
-            if model is not None:
-                model_name = getattr(model, "name", getattr(model, "__name__", model.__class__.__name__))
-            metadata = {
-                "model_id": model_name,
-                "backend": "PyTorch",
-                "task": "Object-Detection",
-            }
-        
-        if flags is None:
-            raise ValueError(f"Bắt buộc phải khai báo 'flags' (ví dụ: flags=('model', 'post')) khi khởi tạo mô hình {self.__class__.__name__} để đảm bảo sự tường minh.")
-
-        super().__init__(metadata=metadata, flags=flags, unsupported=unsupported, **kwargs)
-        self.task = "Object-Detection"
-        self._device: str = "cpu"
-        self._dtype: str = "float32"
-        self.half_mode: bool = False
-        self.model: Any = model
-        self.processor: Any = None
+        target_flags = flags or metadata.get("flags") or ("model", "post")
+        target_unsupported = unsupported or metadata.get("unsupported")
+        super().__init__(metadata=metadata, flags=target_flags, unsupported=target_unsupported, **kwargs)
+        self.model: Any = model or metadata.get("model")
 
 
     # =========================================================================
@@ -63,7 +47,12 @@ class Detector(BaseModel):
         Bóc tách các nhóm cấu hình từ self.settings (mặc định lấy từ model.json).
         Sử dụng self._flags hoặc bất kỳ danh sách nhóm nào được truyền vào.
         """
-        target_groups = groups if groups else getattr(self, "_flags", ("model", "processor", "post"))
+    def parse_config(self, *groups: str) -> Tuple[Dict[str, Any], ...]:
+        """
+        Bóc tách các nhóm cấu hình từ self.settings (mặc định lấy từ metadata['config']).
+        Sử dụng self.flags hoặc bất kỳ danh sách nhóm nào được truyền vào.
+        """
+        target_groups = groups if groups else self.flags
         cfg = self.settings
         return tuple(dict(cfg.get(g, {})) for g in target_groups)
 
@@ -74,17 +63,13 @@ class Detector(BaseModel):
         **extra_kwargs,
     ) -> Tuple[Dict[str, Any], ...]:
         """
-        Bóc tách và hợp nhất 2 tầng tham số theo self._flags (hoặc groups truyền vào):
-        - Tầng 1: Cấu hình mặc định (từ model.json / self.settings)
+        Bóc tách và hợp nhất 2 tầng tham số theo self.flags (hoặc groups truyền vào):
+        - Tầng 1: Cấu hình mặc định (từ metadata['config'] / self.settings)
         - Tầng 2: Runtime kwargs truyền vào khi gọi predict() / forward()
-        
-        Quy tắc 1: Tham số phẳng đã có trong cấu hình mặc định -> tự động gom vào nhóm tương ứng.
-        Quy tắc 2: Tham số chỉ định nhóm ({group}_* hoặc {group}={...}) -> gom vào nhóm đó.
-        Quy tắc 3: Tham số lạ không thuộc nhóm nào -> cảnh báo warning và bỏ qua (chống silent drop / typo).
         """
         kw = dict(kwargs or {})
         kw.update(extra_kwargs)
-        target_groups = groups if groups else getattr(self, "_flags", ("model", "processor", "post"))
+        target_groups = groups if groups else self.flags
         return utils.resolve_sub_kwargs(
             kwargs=kw,
             json_config=self.settings,
@@ -105,17 +90,17 @@ class Detector(BaseModel):
                 exclude_set.add(item)
         return {k: v for k, v in kwargs.items() if k not in exclude_set}
 
-
-
     def current_device(self) -> torch.device:
         """Device thực tế của model (lấy từ parameter đầu tiên)."""
         import torch
         try:
             if hasattr(self.model, "parameters"):
                 return next(self.model.parameters()).device
-        except StopIteration:
+        except (StopIteration, Exception):
             pass
-        return torch.device(self._device)
+        if hasattr(self.model, "device"):
+            return torch.device(self.model.device)
+        return torch.device("cpu")
 
     def current_dtype(self) -> torch.dtype:
         """Dtype thực tế của model (lấy từ parameter đầu tiên)."""
@@ -123,31 +108,9 @@ class Detector(BaseModel):
         try:
             if hasattr(self.model, "parameters"):
                 return next(self.model.parameters()).dtype
-        except StopIteration:
+        except (StopIteration, Exception):
             pass
         return torch.float32
-
-    def get_output_device(self, outputs: Any) -> torch.device:
-        """Dò tìm thiết bị thực tế của tensor đầu ra (hỗ trợ ModelOutput, Dict, List, Tensor)."""
-        if hasattr(outputs, "logits") and isinstance(outputs.logits, torch.Tensor):
-            return outputs.logits.device
-        if hasattr(outputs, "pred_boxes") and isinstance(outputs.pred_boxes, torch.Tensor):
-            return outputs.pred_boxes.device
-        if isinstance(outputs, torch.Tensor):
-            return outputs.device
-        if isinstance(outputs, dict):
-            for v in outputs.values():
-                if isinstance(v, torch.Tensor):
-                    return v.device
-        if isinstance(outputs, (list, tuple)):
-            for item in outputs:
-                if isinstance(item, torch.Tensor):
-                    return item.device
-                if isinstance(item, dict):
-                    for v in item.values():
-                        if isinstance(v, torch.Tensor):
-                            return v.device
-        return self.current_device()
 
     def cast_inputs(self, inputs):
         """
@@ -209,7 +172,7 @@ class Detector(BaseModel):
         Thực thi forward của self.model với AMP autocast và device sync tự động.
         """
         cur_dt = self.current_dtype()
-        use_half = (cur_dt == torch.float16) or self.half_mode
+        use_half = (cur_dt == torch.float16)
 
         if cur_dt == torch.bfloat16:
             eff_dtype = "bfloat16"
@@ -324,8 +287,8 @@ class Detector(BaseModel):
         # 3. Trọng số & Artifacts (chỉ base fallback)
         if self.model is not None and hasattr(self.model, "save_pretrained"):
             self.model.save_pretrained(abs_out)
-        if hasattr(self, "processor") and hasattr(self.processor, "save_pretrained"):
-            self.processor.save_pretrained(abs_out)
+        elif self.model is not None and hasattr(self.model, "save"):
+            self.model.save(abs_out)
 
     def unload(self) -> None:
         if hasattr(self.model, "cpu"):
@@ -334,9 +297,6 @@ class Detector(BaseModel):
         if hasattr(self, "model"):
             del self.model
             self.model = None
-        if hasattr(self, "processor"):
-            del self.processor
-            self.processor = None
         self.state = "UNLOADED"
 
     # =========================================================================
