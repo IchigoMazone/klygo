@@ -14,6 +14,7 @@ import PIL.Image
 
 from klygo.models.base import BaseModel
 from klygo.models import utils
+from klygo.models.backend import hf, ultralytics
 from klygo.outputs.detect import Detections, Detection, Box
 from klygo.utils.progress import ProgressBar
 
@@ -105,103 +106,18 @@ class Detector(BaseModel):
     # HUGGING FACE BACKEND HELPERS (hf_*)
     # =========================================================================
     def hf_cast_inputs(self, inputs):
-        """
-        Cast các floating tensors trong inputs (Hugging Face BatchFeature / Dict)
-        lên đúng device + dtype an toàn của model (giữ nguyên int64 cho input_ids).
-        """
-        dev = self.current_device()
-        dtype = self.current_dtype()
-        is_cpu = (dev.type == "cpu")
-        is_cuda = (dev.type == "cuda")
-
-        if hasattr(inputs, "keys"):
-            for k in list(inputs.keys()):
-                v = inputs[k]
-                if not isinstance(v, torch.Tensor):
-                    continue
-                if v.is_floating_point():
-                    if is_cpu:
-                        inputs[k] = v.to(device=dev, dtype=torch.float32)
-                    elif dtype in (torch.float16, torch.bfloat16):
-                        inputs[k] = v.to(device=dev, dtype=dtype, non_blocking=is_cuda)
-                    else:
-                        inputs[k] = v.to(device=dev, dtype=torch.float32, non_blocking=is_cuda)
-                else:
-                    inputs[k] = v.to(device=dev, non_blocking=is_cuda)
-        elif isinstance(inputs, (list, tuple)):
-            casted = []
-            for v in inputs:
-                if isinstance(v, torch.Tensor):
-                    if v.is_floating_point():
-                        if is_cpu:
-                            casted.append(v.to(device=dev, dtype=torch.float32))
-                        elif dtype in (torch.float16, torch.bfloat16):
-                            casted.append(v.to(device=dev, dtype=dtype, non_blocking=is_cuda))
-                        else:
-                            casted.append(v.to(device=dev, dtype=torch.float32, non_blocking=is_cuda))
-                    else:
-                        casted.append(v.to(device=dev, non_blocking=is_cuda))
-                else:
-                    casted.append(v)
-            inputs = type(inputs)(casted)
-        elif isinstance(inputs, torch.Tensor):
-            if inputs.is_floating_point():
-                if is_cpu:
-                    inputs = inputs.to(device=dev, dtype=torch.float32)
-                elif dtype in (torch.float16, torch.bfloat16):
-                    inputs = inputs.to(device=dev, dtype=dtype, non_blocking=is_cuda)
-                else:
-                    inputs = inputs.to(device=dev, dtype=torch.float32, non_blocking=is_cuda)
-            else:
-                inputs = inputs.to(device=dev, non_blocking=is_cuda)
-
-        return inputs
+        return hf.cast_inputs(inputs, dev=self.current_device(), dtype=self.current_dtype())
 
     def hf_run_inference(self, inputs, **model_kwargs):
-        """
-        Thực thi forward của Hugging Face model với AMP autocast và device sync tự động.
-        """
-        cur_dt = self.current_dtype()
-        use_half = (cur_dt == torch.float16)
-
-        if cur_dt == torch.bfloat16:
-            eff_dtype = "bfloat16"
-        elif use_half:
-            eff_dtype = "float16"
-        else:
-            eff_dtype = "float32"
-
-        with utils.amp_autocast_if_needed(use_half=use_half, dtype=eff_dtype):
-            if hasattr(inputs, "items") or isinstance(inputs, dict):
-                outputs = self.model(**inputs, **model_kwargs)
-            elif isinstance(inputs, (list, tuple)):
-                outputs = self.model(*inputs, **model_kwargs)
-            else:
-                outputs = self.model(inputs, **model_kwargs)
-
-        utils.cuda_sync()
-        return outputs
+        return hf.run_inference(self.model, inputs, cur_dtype=self.current_dtype(), **model_kwargs)
 
     def hf_get_output_device(self, outputs: Any) -> torch.device:
-        """Dò tìm thiết bị thực tế của tensor đầu ra Hugging Face ModelOutput."""
-        if hasattr(outputs, "logits") and isinstance(outputs.logits, torch.Tensor):
-            return outputs.logits.device
-        if hasattr(outputs, "pred_boxes") and isinstance(outputs.pred_boxes, torch.Tensor):
-            return outputs.pred_boxes.device
-        if isinstance(outputs, torch.Tensor):
-            return outputs.device
-        return self.current_device()
+        return hf.get_output_device(outputs, default_device=self.current_device())
 
     def hf_save(self, output_dir: str) -> None:
-        """Lưu model & processor theo chuẩn Hugging Face save_pretrained()."""
-        abs_out = os.path.abspath(output_dir)
-        if self.model is not None and hasattr(self.model, "save_pretrained"):
-            self.model.save_pretrained(abs_out)
-        if hasattr(self, "processor") and hasattr(self.processor, "save_pretrained"):
-            self.processor.save_pretrained(abs_out)
+        hf.save(self.model, getattr(self, "processor", None), output_dir)
 
     def hf_unload(self) -> None:
-        """Dọn dẹp processor và giải phóng tài nguyên của Hugging Face."""
         if hasattr(self, "processor"):
             del self.processor
             self.processor = None
@@ -210,28 +126,12 @@ class Detector(BaseModel):
     # ULTRALYTICS BACKEND HELPERS (ul_*)
     # =========================================================================
     def ul_format_results(self, ultra_results: Any) -> List[Dict[str, Any]]:
-        """Bóc tách boxes, scores, labels từ kết quả trả về của Ultralytics YOLO."""
-        raw_list = []
-        if ultra_results is not None:
-            for res in ultra_results:
-                boxes_data, scores_data, labels_data = [], [], []
-                if getattr(res, "boxes", None) is not None:
-                    for b in res.boxes:
-                        boxes_data.append(b.xyxy[0].tolist())
-                        scores_data.append(float(b.conf[0].item()))
-                        cls_id = int(b.cls[0].item())
-                        labels_data.append(res.names.get(cls_id, str(cls_id)))
-                raw_list.append({"boxes": boxes_data, "scores": scores_data, "labels": labels_data})
-        return raw_list
+        return ultralytics.format_results(ultra_results)
 
     def ul_save(self, output_dir: str) -> None:
-        """Lưu trọng số theo chuẩn Ultralytics YOLO."""
-        abs_out = os.path.abspath(output_dir)
-        if self.model is not None and hasattr(self.model, "save"):
-            self.model.save(abs_out)
+        ultralytics.save(self.model, output_dir)
 
     def ul_unload(self) -> None:
-        """Dọn dẹp tài nguyên Ultralytics."""
         pass
 
     # =========================================================================
