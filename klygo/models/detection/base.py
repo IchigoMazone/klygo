@@ -29,7 +29,7 @@ class Detector(BaseModel):
     def __init__(
         self,
         metadata: Dict[str, Any],
-        flags: Sequence[str],
+        flags: Sequence[str] = ("model", "post"),
         unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
         **kwargs,
     ) -> None:
