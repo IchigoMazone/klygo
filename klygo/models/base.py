@@ -183,12 +183,6 @@ class BaseModel(ABC):
                 self._settings = value
 
     @property
-    def hf_config(self) -> Any:
-        """Truy cap truc tiep PretrainedConfig cua Hugging Face."""
-        inner = self._inner_model()
-        return getattr(inner, "config", None) if inner is not None else None
-
-    @property
     def settings(self) -> Dict[str, Any]:
         """Cau hinh tham so runtime cua Klygo."""
         return getattr(self, "_settings", {})
@@ -196,16 +190,6 @@ class BaseModel(ABC):
     @settings.setter
     def settings(self, value: Dict[str, Any]) -> None:
         self._settings = dict(value)
-
-
-
-
-
-    @property
-    def device_map(self) -> Optional[Any]:
-        """Device map của Hugging Face nếu có, hoặc None."""
-        inner = self._inner_model()
-        return getattr(inner, "hf_device_map", getattr(inner, "device_map", None)) if inner is not None else None
 
     @property
     def devices(self) -> List[str]:
