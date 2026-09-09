@@ -214,31 +214,49 @@ def resolve_images(
 
     # Xử lý luồng Generator/Stream
     if stream:
+        raw_stream = None
+        total_frames = None
+        fps_val = 30.0
+        if isinstance(source, (str, Path)):
+            raw_stream = media.load(source, stream=True, verbose=False)
+            total_frames = getattr(raw_stream, "total_frames", None)
+            fps_val = getattr(raw_stream, "fps", 30.0)
+        elif hasattr(source, "__iter__") and not isinstance(source, (list, tuple)):
+            raw_stream = source
+            total_frames = getattr(source, "total_frames", None)
+            fps_val = getattr(source, "fps", 30.0)
+        else:
+            raw_stream = source if isinstance(source, (list, tuple)) else [source]
+            total_frames = len(raw_stream)
+
         def _build_generator():
-            if isinstance(source, (str, Path)):
-                raw_stream = media.load(source, stream=True, verbose=False)
-            elif hasattr(source, "__iter__") and not isinstance(source, (list, tuple)):
-                raw_stream = source
-            else:
-                raw_stream = source if isinstance(source, (list, tuple)) else [source]
-            
             count = 0
             for idx, item in enumerate(raw_stream):
                 if max_frames is not None and count >= max_frames:
                     break
                 if idx % step == 0:
                     count += 1
-                    if isinstance(item, PIL.Image.Image):
-                        yield item.convert("RGB")
-                    else:
-                        yield media.to_pil(item).convert("RGB")
+                    pil_img = media.to_pil(item).convert("RGB")
+                    if hasattr(item, "path"):
+                        pil_img.path = item.path
+                    elif isinstance(item, (str, Path)):
+                        pil_img.path = Path(item)
+                    yield pil_img
 
         is_single = False
         if isinstance(source, (str, Path)):
             is_single = Path(str(source)).suffix.lower() not in media.VIDEO_SUFFIXES
         elif isinstance(source, PIL.Image.Image):
             is_single = True
-        return _build_generator(), is_single
+
+        out_frames = media.MediaFrames(
+            _build_generator(),
+            stream=True,
+            total_frames=total_frames,
+            fps=fps_val,
+            source_path=source if isinstance(source, (str, Path)) else None,
+        )
+        return out_frames, is_single
 
     # Xử lý luồng List (RAM tiêu chuẩn) - Giữ nguyên logic cũ
     if isinstance(source, (str, Path)):
@@ -278,10 +296,12 @@ def resolve_images(
 
     cleaned_images = []
     for item in raw_list:
-        if isinstance(item, PIL.Image.Image):
-            cleaned_images.append(item.convert("RGB"))
-        else:
-            cleaned_images.append(media.to_pil(item).convert("RGB"))
+        pil_img = media.to_pil(item).convert("RGB")
+        if hasattr(item, "path"):
+            pil_img.path = item.path
+        elif isinstance(item, (str, Path)):
+            pil_img.path = Path(item)
+        cleaned_images.append(pil_img)
 
     return cleaned_images, is_single
 

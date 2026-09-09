@@ -315,22 +315,35 @@ class Detector(BaseModel):
     def _pack_detection(
         self,
         det: Any,
-        image: PIL.Image.Image,
+        image: Any,
         frame_index: int,
         lat_ms: float,
         fps_val: float,
     ) -> "Detection":
         """Chuẩn hóa 1 kết quả thô (dict hoặc Detection) thành Detection đầy đủ."""
+        from klygo import media
+        img_path = getattr(image, "path", getattr(image, "filename", None))
+        final_image = media.LazyImage(img_path) if img_path is not None else image
+
         if isinstance(det, dict):
             b_list = det.get("boxes", [])
             s_list = det.get("scores", [1.0] * len(b_list))
             l_list = det.get("labels", ["object"] * len(b_list))
             box_objs = [
-                Box(id=i, label=str(l), score=float(s), box=b, parent_image=image)
+                Box(id=i, label=str(l), score=float(s), box=b, parent_image=final_image)
                 for i, (b, s, l) in enumerate(zip(b_list, s_list, l_list))
             ]
-            det = Detection(source_image=image, objects=box_objs, image_frame_index=frame_index)
+            det = Detection(source_image=final_image, objects=box_objs, image_frame_index=frame_index)
+        else:
+            det.source_image = final_image
+            if img_path is not None:
+                det.source_path = str(img_path)
+                det.url = str(img_path)
+            for b in det.objects:
+                b.parent_image = final_image
+
         det.image_frame_index = frame_index
+        det.frame_index = frame_index
         det.speed = {"inference": lat_ms, "fps": fps_val}
         return det
 
@@ -393,8 +406,21 @@ class Detector(BaseModel):
         # LUỒNG STREAMING (CHỐNG TRÀN RAM)
         # ==========================================
         if stream:
-            images, _ = utils.resolve_images(source, step=vid_stride, max_frames=max_frames, stream=True)
+            images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames, stream=True)
             
+            total_count = None
+            if hasattr(images, "total_frames") and images.total_frames is not None:
+                total_count = images.total_frames
+                if vid_stride > 1:
+                    total_count = (total_count + vid_stride - 1) // vid_stride
+                if max_frames is not None:
+                    total_count = min(total_count, max_frames)
+            elif hasattr(images, "__len__"):
+                try:
+                    total_count = len(images)
+                except Exception:
+                    pass
+
             def _stream_generator():
                 import itertools
                 iterator = iter(images)
@@ -417,7 +443,14 @@ class Detector(BaseModel):
                             yield self._pack_detection(det, img, idx_offset + idx, lat_per_frame, fps_val)
                             
                         idx_offset += len(batch_imgs)
-            return _stream_generator()
+
+            return Detections(
+                frames=_stream_generator(),
+                source_type="video" if not is_single else "image",
+                fps=getattr(images, "fps", 30.0),
+                stream=True,
+                total_frames=total_count,
+            )
 
         # ==========================================
         # LUỒNG TIÊU CHUẨN (LƯU VÀO RAM Detections)

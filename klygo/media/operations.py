@@ -37,6 +37,412 @@ VIDEO_SUFFIXES = {
 
 
 # =========================================================================
+# 0A. LazyImage: Zero-RAM URL/Path Proxy (PIL + NumPy Hybrid)
+# =========================================================================
+
+class LazyImage(Image.Image):
+    """
+    Đại diện cho một bức ảnh theo cơ chế nạp lười (Zero-RAM URL/Path Proxy).
+    Lưu trữ đường dẫn/URL file ảnh với chi phí RAM = 0.
+    Hỗ trợ Zero-RAM Lazy Crop: Cắt vùng ảnh con chỉ bằng cách lưu (URL, bounding_box),
+    không decode pixel vào RAM và tính toán size bằng hiệu tọa độ tức thì.
+    Kế thừa PIL.Image.Image để giữ 100% khả năng tương thích với isinstance(x, Image.Image).
+    Hỗ trợ đầy đủ cú pháp của cả PIL Image (.size, .crop, .show, .save, .convert)
+    và NumPy ndarray (.shape, .dtype, np.array).
+    """
+
+    def __init__(
+        self,
+        path: Union[str, Path, "LazyImage"],
+        backend: str = "pil",
+        crop_box: Optional[Tuple[int, int, int, int]] = None,
+    ) -> None:
+        self._im = None
+        self._image: Optional[Union[Image.Image, np.ndarray]] = None
+        self._cached_size: Optional[Tuple[int, int]] = None
+
+        if isinstance(path, LazyImage):
+            self._path = path.path
+            self._url = path.url
+            self.backend = path.backend
+            if path.crop_box is not None and crop_box is not None:
+                ox1, oy1, _, _ = path.crop_box
+                x1, y1, x2, y2 = crop_box
+                self._crop_box = (ox1 + x1, oy1 + y1, ox1 + x2, oy1 + y2)
+            else:
+                self._crop_box = crop_box or path.crop_box
+        else:
+            self._path = Path(path).resolve()
+            self._url = str(self._path)
+            self.backend = backend.lower()
+            self._crop_box = tuple(int(x) for x in crop_box) if crop_box is not None else None
+
+    @property
+    def path(self) -> Path:
+        """Đường dẫn tệp ảnh nguồn."""
+        return self._path
+
+    @path.setter
+    def path(self, new_path: Union[str, Path]) -> None:
+        self._path = Path(new_path).resolve()
+        self._url = str(self._path)
+        self._image = None
+        self._cached_size = None
+
+    @property
+    def url(self) -> str:
+        """URL hoặc chuỗi đường dẫn ảnh nguồn."""
+        return self._url
+
+    @url.setter
+    def url(self, new_url: Union[str, Path]) -> None:
+        self.path = new_url
+
+    @property
+    def crop_box(self) -> Optional[Tuple[int, int, int, int]]:
+        """Tọa độ vùng cắt (xmin, ymin, xmax, ymax)."""
+        return self._crop_box
+
+    @crop_box.setter
+    def crop_box(self, box: Optional[Tuple[int, int, int, int]]) -> None:
+        self._crop_box = tuple(int(x) for x in box) if box is not None else None
+        self._image = None
+        self._cached_size = None
+
+    def load(self) -> Union[Image.Image, np.ndarray]:
+        """Thực sự nạp ảnh từ đĩa vào bộ nhớ RAM."""
+        if self._image is None:
+            if self.backend == "opencv":
+                arr = cv.imread(str(self.path), cv.IMREAD_COLOR)
+                if arr is None:
+                    raise FileNotFoundError(f"Could not read image file: {self.path}")
+                if self.crop_box is not None:
+                    x1, y1, x2, y2 = self.crop_box
+                    arr = arr[max(0, y1):min(arr.shape[0], y2), max(0, x1):min(arr.shape[1], x2)]
+                self._image = arr
+                self._cached_size = (arr.shape[1], arr.shape[0])
+            else:
+                with Image.open(self.path) as source_image:
+                    source_image = source_image.convert("RGB")
+                    if self.crop_box is not None:
+                        source_image = source_image.crop(self.crop_box)
+                    self._image = source_image
+                    self._cached_size = self._image.size
+        return self._image
+
+    def unload(self) -> None:
+        """Giải phóng bộ nhớ pixel, đưa đối tượng về trạng thái URL thuần túy."""
+        self._image = None
+
+    def clear(self) -> None:
+        """Alias cho unload()."""
+        self.unload()
+
+    @property
+    def is_loaded(self) -> bool:
+        """Kiểm tra ảnh đã nạp pixel vào RAM hay chưa."""
+        return self._image is not None
+
+    @property
+    def image(self) -> Union[Image.Image, np.ndarray]:
+        """Truy cập hoặc gán lại dữ liệu ảnh (hỗ trợ sửa ảnh trực tiếp)."""
+        return self.load()
+
+    @image.setter
+    def image(self, value: Union[Image.Image, np.ndarray, "LazyImage"]) -> None:
+        if isinstance(value, LazyImage):
+            self._image = value.load()
+            self.path = value.path
+            self.url = value.url
+            self._cached_size = value.size
+            self.crop_box = value.crop_box
+        elif isinstance(value, Image.Image):
+            self._image = value
+            self._cached_size = value.size
+            self.crop_box = None
+        elif isinstance(value, np.ndarray):
+            self._image = value
+            self._cached_size = (value.shape[1], value.shape[0])
+            self.crop_box = None
+        else:
+            raise TypeError(f"Expected PIL.Image.Image, np.ndarray, or LazyImage, got {type(value)}")
+
+    @property
+    def im(self):
+        return self.to_pil().im
+
+    @property
+    def info(self) -> dict:
+        return getattr(self.to_pil(), "info", {})
+
+    @property
+    def format(self) -> Optional[str]:
+        return getattr(self.to_pil(), "format", None)
+
+    @property
+    def palette(self):
+        return getattr(self.to_pil(), "palette", None)
+
+    @property
+    def size(self) -> Tuple[int, int]:
+        """Kích thước (width, height) theo chuẩn PIL Image."""
+        if self.crop_box is not None:
+            return (max(0, self.crop_box[2] - self.crop_box[0]), max(0, self.crop_box[3] - self.crop_box[1]))
+        if self._cached_size is not None:
+            return self._cached_size
+        if self._image is not None:
+            if isinstance(self._image, Image.Image):
+                self._cached_size = self._image.size
+            else:
+                self._cached_size = (self._image.shape[1], self._image.shape[0])
+            return self._cached_size
+        try:
+            with Image.open(self.path) as im:
+                self._cached_size = im.size
+                return self._cached_size
+        except Exception:
+            return (0, 0)
+
+    @property
+    def width(self) -> int:
+        return self.size[0]
+
+    @property
+    def height(self) -> int:
+        return self.size[1]
+
+    @property
+    def shape(self) -> Tuple[int, int, int]:
+        """Kích thước (height, width, channels) theo chuẩn NumPy ndarray."""
+        return (self.height, self.width, 3)
+
+    @property
+    def dtype(self) -> np.dtype:
+        """Kiểu dữ liệu chuẩn NumPy (uint8)."""
+        return np.dtype("uint8")
+
+    @property
+    def mode(self) -> str:
+        return "RGB"
+
+    def to_pil(self) -> Image.Image:
+        """Chuyển thành PIL Image thật."""
+        loaded = self.load()
+        if isinstance(loaded, Image.Image):
+            return loaded
+        return Image.fromarray(cv.cvtColor(loaded, cv.COLOR_BGR2RGB))
+
+    def to_array(self) -> np.ndarray:
+        """Chuyển thành NumPy array thật."""
+        loaded = self.load()
+        if isinstance(loaded, np.ndarray):
+            return loaded
+        return np.array(loaded)
+
+    def lazy_crop(self, box: Tuple[int, int, int, int]) -> "LazyImage":
+        """
+        Zero-RAM Lazy Cropping: Tạo ảnh con từ vùng cắt mà KHÔNG nạp pixel vào RAM.
+        Chỉ lưu tọa độ bounding box và đường dẫn file ảnh gốc.
+        """
+        return LazyImage(self, backend=self.backend, crop_box=box)
+
+    def crop(self, *args, lazy: bool = False, **kwargs):
+        if lazy and args:
+            return self.lazy_crop(args[0])
+        return self.to_pil().crop(*args, **kwargs)
+
+    def convert(self, *args, **kwargs):
+        return self.to_pil().convert(*args, **kwargs)
+
+    def resize(self, *args, **kwargs):
+        return self.to_pil().resize(*args, **kwargs)
+
+    def rotate(self, *args, **kwargs):
+        return self.to_pil().rotate(*args, **kwargs)
+
+    def transpose(self, *args, **kwargs):
+        return self.to_pil().transpose(*args, **kwargs)
+
+    def filter(self, *args, **kwargs):
+        return self.to_pil().filter(*args, **kwargs)
+
+    def copy(self):
+        return self.to_pil().copy()
+
+    def save(self, *args, **kwargs):
+        return self.to_pil().save(*args, **kwargs)
+
+    def show(self, *args, **kwargs):
+        return self.to_pil().show(*args, **kwargs)
+
+    def tobytes(self, *args, **kwargs):
+        return self.to_pil().tobytes(*args, **kwargs)
+
+    def getpixel(self, *args, **kwargs):
+        return self.to_pil().getpixel(*args, **kwargs)
+
+    def putpixel(self, *args, **kwargs):
+        return self.to_pil().putpixel(*args, **kwargs)
+
+    def getdata(self, *args, **kwargs):
+        return self.to_pil().getdata(*args, **kwargs)
+
+    def getbbox(self):
+        return self.to_pil().getbbox()
+
+    def getbands(self):
+        return self.to_pil().getbands()
+
+    def getextrema(self):
+        return self.to_pil().getextrema()
+
+    def split(self):
+        return self.to_pil().split()
+
+    def thumbnail(self, *args, **kwargs):
+        return self.to_pil().thumbnail(*args, **kwargs)
+
+    def __array__(self, dtype=None) -> np.ndarray:
+        """Hỗ trợ tự động chuyển đổi khi gọi np.array(lazy_img)."""
+        arr = self.to_array()
+        if dtype is not None:
+            return arr.astype(dtype)
+        return arr
+
+    def __getattr__(self, name: str) -> Any:
+        """Chuyển tiếp tất cả các method và attribute của ảnh thật khi được gọi."""
+        loaded = self.load()
+        return getattr(loaded, name)
+
+    def __fspath__(self) -> str:
+        return str(self.path)
+
+    def __str__(self) -> str:
+        return str(self.path)
+
+    def __repr__(self) -> str:
+        status = "loaded" if self._image is not None else "unloaded"
+        w, h = self.size
+        crop_info = f" crop={self.crop_box}" if self.crop_box is not None else ""
+        return f"<LazyImage [{status}] url='{self.path.name}'{crop_info} size=({w}, {h})>"
+
+
+# =========================================================================
+# 0B. MediaFrames: Unified Media Container (List & Stream)
+# =========================================================================
+
+class MediaFrames(list):
+    """
+    Tập hợp các khung hình media (ảnh / video frames) trả về từ `klygo.media.load`.
+    Hỗ trợ đồng nhất cả chế độ In-Memory (danh sách) lẫn Stream (tiết kiệm RAM chống tràn bộ nhớ).
+    Kế thừa trực tiếp từ `list` để giữ trọn vẹn 100% tương thích ngược với isinstance(..., list).
+    """
+
+    def __init__(
+        self,
+        items: Optional[Union[Iterable, Generator]] = None,
+        *,
+        stream: bool = False,
+        total_frames: Optional[int] = None,
+        fps: float = 30.0,
+        source_path: Optional[Union[str, Path]] = None,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        source_type: str = "video",
+        cap: Optional[Any] = None,
+    ) -> None:
+        self.is_stream = bool(stream)
+        self.fps = float(fps) if fps else 30.0
+        self.source_path = str(source_path) if source_path is not None else None
+        self.width = width
+        self.height = height
+        self.source_type = source_type
+        self.total_frames = total_frames
+        self._cap = cap
+        self._cache: List[Any] = []
+
+        if self.is_stream:
+            super().__init__()
+            self._stream_gen = iter(items) if items is not None else iter(())
+        else:
+            super().__init__(items if items is not None else [])
+            if self.total_frames is None:
+                self.total_frames = super().__len__()
+
+    def __iter__(self):
+        if self.is_stream:
+            while self._cache:
+                yield self._cache.pop(0)
+            yield from self._stream_gen
+        else:
+            yield from super().__iter__()
+
+    def __len__(self) -> int:
+        if self.is_stream:
+            return self.total_frames if self.total_frames is not None else len(self._cache)
+        return super().__len__()
+
+    def __getitem__(self, index: Union[int, slice]) -> Any:
+        if self.is_stream:
+            if isinstance(index, int):
+                if index < 0:
+                    raise IndexError("Negative indexing is not supported in streaming MediaFrames.")
+                while len(self._cache) <= index:
+                    try:
+                        self._cache.append(next(self._stream_gen))
+                    except StopIteration:
+                        raise IndexError("MediaFrames stream index out of range")
+                return self._cache[index]
+            elif isinstance(index, slice):
+                raise TypeError("Slicing is not supported on streaming MediaFrames. Use list(frames)[slice] instead.")
+            raise TypeError(f"Invalid index type: {type(index)}")
+        return super().__getitem__(index)
+
+    def to_list(self) -> List[Any]:
+        """Chuyển đổi toàn bộ frame thành list chuẩn trong bộ nhớ."""
+        if self.is_stream:
+            items = list(self)
+            self.clear()
+            self.extend(items)
+            self.is_stream = False
+            return items
+        return list(self)
+
+    def save_video(self, output_path: Union[str, Path], fps: Optional[float] = None, **kwargs) -> Path:
+        """Đóng gói toàn bộ frames thành file video mp4/avi."""
+        target_fps = fps if fps is not None else self.fps
+        return globals()["save_video"](output_path, self, fps=target_fps, **kwargs)
+
+    def save_images(self, output_dir: Union[str, Path], prefix: str = "frame", **kwargs) -> Path:
+        """Lưu toàn bộ frames ra thư mục ảnh."""
+        return globals()["save_images"](output_dir, self, prefix=prefix, **kwargs)
+
+    def close(self) -> None:
+        """Giải phóng tài nguyên (OpenCV VideoCapture) nếu có."""
+        if getattr(self, "_cap", None) is not None:
+            try:
+                self._cap.release()
+            except Exception:
+                pass
+            self._cap = None
+
+    def __del__(self) -> None:
+        self.close()
+
+    def __enter__(self) -> "MediaFrames":
+        return self
+
+    def __exit__(self, *args) -> None:
+        self.close()
+
+    def __repr__(self) -> str:
+        if self.is_stream:
+            cnt_str = f"{self.total_frames} frames" if self.total_frames is not None else "streaming"
+            return f"<MediaFrames (Stream): {cnt_str}, type='{self.source_type}', fps={self.fps}>"
+        return f"<MediaFrames: {len(self)} frames, type='{self.source_type}', fps={self.fps}>"
+
+
+# =========================================================================
 # 1. Media Load / Save / Convert / Copy / Info
 # =========================================================================
 
@@ -45,12 +451,15 @@ def _read_video_frames(
     stream: bool = False,
     backend: str = "pil",
     verbose: bool = True,
-) -> Union[List[Union[Image.Image, np.ndarray]], Generator[Union[Image.Image, np.ndarray], None, None]]:
+) -> MediaFrames:
     cap = cv.VideoCapture(str(path))
     if not cap.isOpened():
         raise FileNotFoundError(f"Could not open video file: {path}")
 
     total_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
+    fps = float(cap.get(cv.CAP_PROP_FPS) or 30.0)
+    width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH) or 0)
+    height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT) or 0)
 
     def _frame_generator():
         try:
@@ -69,9 +478,28 @@ def _read_video_frames(
             cap.release()
 
     if stream:
-        return _frame_generator()
+        return MediaFrames(
+            _frame_generator(),
+            stream=True,
+            total_frames=total_frames,
+            fps=fps,
+            source_path=path,
+            width=width,
+            height=height,
+            source_type="video",
+            cap=cap,
+        )
     else:
-        return list(_frame_generator())
+        return MediaFrames(
+            list(_frame_generator()),
+            stream=False,
+            total_frames=total_frames,
+            fps=fps,
+            source_path=path,
+            width=width,
+            height=height,
+            source_type="video",
+        )
 
 
 def load(
@@ -80,10 +508,11 @@ def load(
     stream: bool = False,
     backend: str = "pil",
     verbose: bool = True,
-) -> Union[List[Union[Image.Image, np.ndarray]], Generator[Union[Image.Image, np.ndarray], None, None]]:
+) -> MediaFrames:
     """
     Tác dụng:
     - Đọc 1 file ảnh, file video, hoặc toàn bộ thư mục chứa ảnh.
+    - Luôn trả về đối tượng `MediaFrames` (kế thừa list) đồng nhất cho cả stream=False và stream=True.
 
     Định dạng tương thích:
     - Ảnh: .png, .jpg, .jpeg, .webp, .bmp, .tif, .tiff
@@ -92,17 +521,19 @@ def load(
     Đầu vào:
     - source [str | Path]: Đường dẫn file ảnh, file video hoặc thư mục chứa ảnh.
     - recursive [bool]: Duyệt đệ quy qua các thư mục con (khi source là thư mục). Mặc định: False.
-    - stream [bool]: Nếu True, trả về Generator đọc đệm từng frame (dùng cho video lớn). Mặc định: False.
+    - stream [bool]: Nếu True, trả về MediaFrames đọc đệm từng frame (dùng cho video lớn). Mặc định: False.
     - backend [str]: 'pil' (mặc định) hoặc 'opencv'.
     - verbose [bool]: Hiển thị thanh tiến trình ProgressBar khi đọc. Mặc định: True.
 
     Đầu ra:
-    - [List[Image.Image | np.ndarray] | Generator]: Danh sách hoặc Generator chứa dữ liệu ảnh.
+    - [MediaFrames]: Danh sách frames kế thừa list, hỗ trợ cả stream chống tràn RAM, lấy [0], len(frames).
 
     Ví dụ:
     >>> import klygo.media as media
     >>> imgs = media.load("image.jpg")
-    >>> frames = media.load("video.mp4")
+    >>> frames = media.load("video.mp4", stream=True)
+    >>> len(frames)        # Biết ngay tổng số frame của video!
+    >>> first = frames[0]  # Lấy frame đầu tiên mà không làm hỏng luồng stream!
     """
     validate_type(source, (str, Path), "source")
     validate_type(recursive, bool, "recursive")
@@ -141,20 +572,31 @@ def load(
     else:
         raise ValueError(f"source must be a file or directory: {p}")
 
-    images: List[Union[Image.Image, np.ndarray]] = []
-    with ProgressBar(total=len(image_paths), desc=f"Loading images from {p.name}", unit="file", verbose=verbose, colour="cyan") as pbar:
-        for img_path in image_paths:
-            if backend == "pil":
-                with Image.open(img_path) as source_image:
-                    images.append(source_image.convert("RGB"))
-            else:
-                image = cv.imread(str(img_path), cv.IMREAD_COLOR)
-                if image is None:
-                    raise ValueError(f"Could not read image: {img_path}")
-                images.append(image)
-            pbar.update(1)
+    # Zero-RAM Lazy Loading: wrap each path in a LazyImage (URL/Path Proxy)
+    lazy_frames = [LazyImage(f, backend=backend) for f in image_paths]
 
-    return images
+    if stream:
+        def _images_stream_generator():
+            with ProgressBar(total=len(lazy_frames), desc=f"Streaming images from {p.name}", unit="file", verbose=verbose, colour="cyan") as pbar:
+                for lz in lazy_frames:
+                    yield lz
+                    pbar.update(1)
+
+        return MediaFrames(
+            _images_stream_generator(),
+            stream=True,
+            total_frames=len(lazy_frames),
+            source_path=p,
+            source_type="folder" if p.is_dir() else "image",
+        )
+
+    return MediaFrames(
+        lazy_frames,
+        stream=False,
+        total_frames=len(lazy_frames),
+        source_path=p,
+        source_type="folder" if p.is_dir() else "image",
+    )
 
 
 def save(
@@ -193,6 +635,9 @@ def save(
 
     p.parent.mkdir(parents=True, exist_ok=True)
 
+    if isinstance(image, LazyImage):
+        image = image.load()
+
     with ProgressBar(total=1, desc=f"Saving image {p.name}", unit="file", verbose=verbose, colour="cyan") as pbar:
         if isinstance(image, Image.Image):
             image.save(p)
@@ -201,7 +646,7 @@ def save(
             if not res:
                 raise ValueError(f"Failed to save image to {p}")
         else:
-            raise TypeError("image must be PIL.Image.Image or numpy.ndarray")
+            raise TypeError("image must be PIL.Image.Image, numpy.ndarray, or LazyImage")
         pbar.update(1)
 
     return p
@@ -346,7 +791,7 @@ def save_video(
 
     def _write_frame(f):
         f_arr = to_array(f)
-        if isinstance(f, Image.Image) or (f_arr.ndim == 3 and f_arr.shape[2] == 3):
+        if isinstance(f, (Image.Image, LazyImage)) or (f_arr.ndim == 3 and f_arr.shape[2] == 3):
             f_bgr = cv.cvtColor(f_arr, cv.COLOR_RGB2BGR)
         else:
             f_bgr = f_arr
@@ -549,10 +994,10 @@ def info(path: Union[str, Path]) -> Dict[str, Any]:
 def to_array(image: Any) -> np.ndarray:
     """
     Tác dụng:
-    - Chuyển đổi linh hoạt hình ảnh từ PIL Image, PyTorch Tensor hoặc NumPy array sang mảng NumPy ndarray (dạng [H, W, C]).
+    - Chuyển đổi linh hoạt hình ảnh từ PIL Image, PyTorch Tensor, NumPy array hoặc LazyImage sang mảng NumPy ndarray (dạng [H, W, C]).
 
     Đầu vào:
-    - image [Image.Image | torch.Tensor | np.ndarray]: Đối tượng dữ liệu ảnh.
+    - image [Image.Image | torch.Tensor | np.ndarray | LazyImage]: Đối tượng dữ liệu ảnh.
 
     Đầu ra:
     - [np.ndarray]: Mảng NumPy ndarray.
@@ -561,6 +1006,9 @@ def to_array(image: Any) -> np.ndarray:
     >>> import klygo.media as media
     >>> arr = media.to_array(pil_img)
     """
+    if isinstance(image, LazyImage):
+        return image.to_array()
+
     if isinstance(image, np.ndarray):
         return image.copy()
 
@@ -584,10 +1032,10 @@ def to_array(image: Any) -> np.ndarray:
 def to_tensor(image: Any, normalize: bool = True) -> Any:
     """
     Tác dụng:
-    - Chuyển đổi hình ảnh (PIL Image hoặc NumPy array) sang PyTorch Tensor dạng chuẩn mô hình AI [C, H, W].
+    - Chuyển đổi hình ảnh (PIL Image, NumPy array hoặc LazyImage) sang PyTorch Tensor dạng chuẩn mô hình AI [C, H, W].
 
     Đầu vào:
-    - image [Image.Image | np.ndarray | torch.Tensor]: Dữ liệu ảnh.
+    - image [Image.Image | np.ndarray | torch.Tensor | LazyImage]: Dữ liệu ảnh.
     - normalize [bool]: Tự động chuẩn hóa giá trị về dải 0.0 - 1.0 (float32). Mặc định: True.
 
     Đầu ra:
@@ -597,6 +1045,9 @@ def to_tensor(image: Any, normalize: bool = True) -> Any:
     >>> import klygo.media as media
     >>> tensor = media.to_tensor(pil_img)
     """
+    if isinstance(image, LazyImage):
+        image = image.to_pil()
+
     if not _HAS_TORCH:
         raise RuntimeError("PyTorch is not installed in current environment.")
 
@@ -625,10 +1076,10 @@ def to_tensor(image: Any, normalize: bool = True) -> Any:
 def to_pil(image: Any) -> Image.Image:
     """
     Tác dụng:
-    - Chuyển đổi mảng NumPy ndarray hoặc PyTorch Tensor sang đối tượng PIL Image.
+    - Chuyển đổi mảng NumPy ndarray, PyTorch Tensor hoặc LazyImage sang đối tượng PIL Image.
 
     Đầu vào:
-    - image [np.ndarray | torch.Tensor | Image.Image]: Dữ liệu ảnh.
+    - image [np.ndarray | torch.Tensor | Image.Image | LazyImage]: Dữ liệu ảnh.
 
     Đầu ra:
     - [Image.Image]: Đối tượng PIL Image.
@@ -637,6 +1088,9 @@ def to_pil(image: Any) -> Image.Image:
     >>> import klygo.media as media
     >>> pil_img = media.to_pil(np_array)
     """
+    if isinstance(image, LazyImage):
+        return image.to_pil()
+
     if isinstance(image, Image.Image):
         return image.copy()
 
