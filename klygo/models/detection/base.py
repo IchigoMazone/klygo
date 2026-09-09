@@ -189,7 +189,11 @@ class Detector(BaseModel):
     # =========================================================================
     def reset(self) -> "Detector":
         self._settings = dict(self._default_settings)
-        if hasattr(self.model, "cpu"):
+        if self.backend == "Hugging Face":
+            huggingface.reset(self.model, getattr(self, "processor", None))
+        elif self.backend == "Ultralytics":
+            ultralytics.reset(self.model)
+        elif hasattr(self.model, "cpu"):
             self.model.cpu()
         self.state = "READY"
         return self
@@ -214,7 +218,7 @@ class Detector(BaseModel):
         """
         Lưu toàn bộ mô hình (Metadata + Python Code + Trọng số) ra thư mục chuẩn Klygo.
         Mô hình xuất ra có thể được nạp lại hoàn chỉnh qua `models.load(folder)`.
-        Tự động bọc hf_save() hoặc ul_save() theo backend.
+        Tự động ủy thác save() theo backend.
         """
         from klygo import files
         import shutil
@@ -237,7 +241,7 @@ class Detector(BaseModel):
                 if os.path.exists(source_file):
                     shutil.copy2(source_file, os.path.join(abs_out, "model.py"))
         
-        # 3. Trọng số & Artifacts (gọi trực tiếp theo backend)
+        # 3. Trọng số & Artifacts (ủy thác theo backend)
         if self.backend == "Hugging Face" or hasattr(self, "processor"):
             huggingface.save(self.model, getattr(self, "processor", None), abs_out)
         elif self.backend == "Ultralytics":
@@ -251,10 +255,16 @@ class Detector(BaseModel):
     def unload(self) -> None:
         """
         Giải phóng tài nguyên và đưa trạng thái về UNLOADED.
+        Tự động ủy thác unload() theo backend.
         """
-        if hasattr(self.model, "cpu"):
-            self.model.cpu()
         self.clear_cache()
+        if self.backend == "Hugging Face":
+            huggingface.unload(self.model, getattr(self, "processor", None))
+        elif self.backend == "Ultralytics":
+            ultralytics.unload(self.model)
+        elif hasattr(self.model, "cpu"):
+            self.model.cpu()
+
         if hasattr(self, "processor"):
             del self.processor
             self.processor = None

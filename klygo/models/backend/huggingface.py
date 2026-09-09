@@ -106,3 +106,15 @@ def save(model: Any, processor: Optional[Any], output_dir: str) -> None:
         model.save_pretrained(abs_out)
     if processor is not None and hasattr(processor, "save_pretrained"):
         processor.save_pretrained(abs_out)
+
+
+def reset(model: Any, processor: Optional[Any] = None) -> None:
+    """Đưa model Hugging Face về CPU khi reset trạng thái."""
+    if model is not None and hasattr(model, "cpu"):
+        model.cpu()
+
+
+def unload(model: Any, processor: Optional[Any] = None) -> None:
+    """Thu hồi tài nguyên Hugging Face model & processor."""
+    if model is not None and hasattr(model, "cpu"):
+        model.cpu()

@@ -28,3 +28,15 @@ def save(model: Any, output_dir: str) -> None:
     abs_out = os.path.abspath(output_dir)
     if model is not None and hasattr(model, "save"):
         model.save(abs_out)
+
+
+def reset(model: Any) -> None:
+    """Đưa model Ultralytics về CPU khi reset trạng thái."""
+    if model is not None and hasattr(model, "cpu"):
+        model.cpu()
+
+
+def unload(model: Any) -> None:
+    """Thu hồi tài nguyên Ultralytics YOLO model."""
+    if model is not None and hasattr(model, "cpu"):
+        model.cpu()
