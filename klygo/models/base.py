@@ -261,14 +261,36 @@ class BaseModel(ABC):
     # HOP DONG PHAN CUNG (Abstract)
     # =========================================================================
     @property
-    @abstractmethod
     def device(self) -> str:
-        raise NotImplementedError
+        inner = self._inner_model()
+        if inner is None:
+            return "cpu"
+        try:
+            if hasattr(inner, "parameters"):
+                params = list(inner.parameters())
+                if params:
+                    return str(params[0].device)
+        except Exception:
+            pass
+        return str(getattr(inner, "device", "cpu"))
 
     @property
-    @abstractmethod
     def dtype(self) -> str:
-        raise NotImplementedError
+        inner = self._inner_model()
+        if inner is None:
+            return "float32"
+        try:
+            if hasattr(inner, "parameters"):
+                params = list(inner.parameters())
+                if params:
+                    dtype_str = str(params[0].dtype)
+                    if "bfloat16" in dtype_str:
+                        return "bfloat16"
+                    elif "float16" in dtype_str:
+                        return "float16"
+        except Exception:
+            pass
+        return "float32"
 
     @abstractmethod
     def predict(self, *args, **kwargs):
