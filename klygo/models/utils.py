@@ -235,7 +235,7 @@ def resolve_images(
 
         is_single = False
         if isinstance(source, (str, Path)):
-            is_single = not str(source).lower().endswith(('.mp4', '.avi', '.mov', '.mkv', '.webm', '.m4v'))
+            is_single = Path(str(source)).suffix.lower() not in media.VIDEO_SUFFIXES
         elif isinstance(source, PIL.Image.Image):
             is_single = True
         return _build_generator(), is_single
@@ -244,7 +244,7 @@ def resolve_images(
     if isinstance(source, (str, Path)):
         loaded = media.load(source, stream=False, verbose=False)
         raw_list = loaded if isinstance(loaded, list) else [loaded]
-        is_single = len(raw_list) == 1 and not str(source).lower().endswith(('.mp4', '.avi', '.mov', '.mkv', '.webm', '.m4v'))
+        is_single = len(raw_list) == 1 and Path(str(source)).suffix.lower() not in media.VIDEO_SUFFIXES
     elif isinstance(source, PIL.Image.Image):
         return [source.convert("RGB")], True
     elif hasattr(source, "shape"):

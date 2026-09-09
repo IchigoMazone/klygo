@@ -51,14 +51,14 @@ def _resolve_class(class_path: str, search_dir: Optional[str] = None) -> Any:
         return CLASS_MAPPING[class_path]
 
     # 1. Nạp từ file model.py cục bộ nếu nằm trong thư mục model custom
-    if search_dir and os.path.isdir(search_dir):
+    if search_dir and files.is_dir(search_dir):
         py_files = [os.path.join(search_dir, "model.py")]
         if "." in class_path:
             mod_part = class_path.rsplit(".", 1)[0]
             py_files.append(os.path.join(search_dir, f"{mod_part}.py"))
 
         for py_path in py_files:
-            if os.path.exists(py_path):
+            if files.exists(py_path):
                 try:
                     spec = importlib.util.spec_from_file_location("custom_model_module", py_path)
                     if spec and spec.loader:
@@ -117,6 +117,36 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
     # 0. Nhận trực tiếp BaseModel hoặc PyTorch nn.Module instance
     if isinstance(model, BaseModel):
         return model
+
+    # 0.1. Nhận trực tiếp Box / Config object (klygo.config) hoặc dict cấu hình metadata
+    try:
+        from box import Box
+        if isinstance(model, Box):
+            model = dict(model.to_dict()) if hasattr(model, "to_dict") else dict(model)
+    except Exception:
+        pass
+
+    try:
+        from klygo.config import Config
+        if isinstance(model, Config):
+            model = dict(model.to_dict()) if hasattr(model, "to_dict") else dict(model)
+    except Exception:
+        pass
+
+    if isinstance(model, dict):
+        entry = dict(model)
+        search_dir = None
+        # Bỏ qua các bước phân giải đường dẫn bên dưới
+        final_metadata = dict(entry)
+        resolved_config = utils.resolve_sub_kwargs_dict(
+            kwargs=kwargs,
+            json_config=final_metadata.get("config"),
+        )
+        final_metadata["config"] = resolved_config
+        class_path = final_metadata.get("class")
+        cls = _resolve_class(class_path, search_dir=search_dir)
+        with utils.suppress_warnings():
+            return cls(metadata=final_metadata)
 
     try:
         import torch.nn as nn
@@ -177,12 +207,12 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
                     }
 
     # 2. Nạp từ file config .json trực tiếp
-    elif files.is_file(model) and model.endswith(".json"):
+    elif files.is_file(model) and files.extension(model).lower() == ".json":
         entry = files.load(model, verbose=False)
         search_dir = os.path.dirname(os.path.abspath(model))
 
     # 3. Nạp từ file trọng số YOLO .pt
-    elif files.is_file(model) and model.endswith(".pt"):
+    elif files.is_file(model) and files.extension(model).lower() == ".pt":
         entry = {
             "class": "klygo.models.detection.YOLODetect",
             "task": "Object-Detection",

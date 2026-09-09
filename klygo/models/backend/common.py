@@ -5,7 +5,6 @@ và bộ điều phối (dispatchers) vòng đời cho các backend framework kh
 """
 
 import os
-import shutil
 import sys
 from typing import Any, Optional, Dict, List, Tuple
 import torch
@@ -157,8 +156,8 @@ def save(
         mod = sys.modules.get(class_module)
         if mod and hasattr(mod, "__file__") and mod.__file__:
             source_file = mod.__file__
-            if os.path.exists(source_file):
-                shutil.copy2(source_file, os.path.join(abs_out, "model.py"))
+            if files.exists(source_file):
+                files.copy(source_file, os.path.join(abs_out, "model.py"), overwrite=True)
 
     # 3. Trọng số & Artifacts ủy thác theo backend
     if backend == "Hugging Face" or processor is not None:

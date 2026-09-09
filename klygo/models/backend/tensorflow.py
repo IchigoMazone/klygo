@@ -18,14 +18,19 @@ def cast_inputs(inputs: Any, dev: Any = None, dtype: Any = None) -> Any:
             return inputs
         if isinstance(inputs, (list, tuple)):
             import numpy as np
+            from klygo import media
             np_arrs = []
             for item in inputs:
-                if hasattr(item, "__array__"):
-                    np_arrs.append(np.array(item))
-                elif isinstance(item, np.ndarray):
+                if isinstance(item, np.ndarray):
                     np_arrs.append(item)
                 else:
-                    np_arrs.append(item)
+                    try:
+                        np_arrs.append(media.to_array(item))
+                    except Exception:
+                        if hasattr(item, "__array__"):
+                            np_arrs.append(np.array(item))
+                        else:
+                            np_arrs.append(item)
             if np_arrs and isinstance(np_arrs[0], np.ndarray):
                 stacked = np.stack(np_arrs, axis=0)
                 return tf.convert_to_tensor(stacked, dtype=tf.float32)

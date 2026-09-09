@@ -34,6 +34,8 @@ from .operations import (
     to_array,
     to_tensor,
     to_pil,
+    IMAGE_SUFFIXES,
+    VIDEO_SUFFIXES,
 )
 
 __all__ = [
