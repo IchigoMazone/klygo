@@ -34,28 +34,6 @@ class GroundingDinoDetect(Detector):
                 self.model.to("cpu")
             self.model.eval()
 
-    @staticmethod
-    def _get_output_device(outputs: Any) -> torch.device:
-        """Dò tìm thiết bị thực tế của tensor đầu ra Hugging Face ModelOutput."""
-        if hasattr(outputs, "logits") and isinstance(outputs.logits, torch.Tensor):
-            return outputs.logits.device
-        if hasattr(outputs, "pred_boxes") and isinstance(outputs.pred_boxes, torch.Tensor):
-            return outputs.pred_boxes.device
-        if isinstance(outputs, torch.Tensor):
-            return outputs.device
-        return torch.device("cpu")
-
-    def save(self, output_dir: str) -> None:
-        super().save(output_dir)
-        if hasattr(self, "processor") and hasattr(self.processor, "save_pretrained"):
-            self.processor.save_pretrained(str(output_dir))
-
-    def unload(self) -> None:
-        super().unload()
-        if hasattr(self, "processor"):
-            del self.processor
-            self.processor = None
-
     def forward(
         self,
         images: List[PIL.Image.Image],
@@ -87,7 +65,7 @@ class GroundingDinoDetect(Detector):
 
         # Tường minh: Chỉ đồng bộ duy nhất 'input_ids' về cùng device của outputs khi cần thiết (Multi-GPU).
         # Tuyệt đối không sao chép thừa thãi các tensor ảnh lớn (pixel_values) làm nghẽn PCIe / hao phí VRAM.
-        target_dev = self._get_output_device(outputs)
+        target_dev = self.hf_get_output_device(outputs)
         input_ids = inputs.get("input_ids") if isinstance(inputs, dict) else None
         if isinstance(input_ids, torch.Tensor) and input_ids.device != target_dev:
             input_ids = input_ids.to(target_dev, non_blocking=(target_dev.type == "cuda"))

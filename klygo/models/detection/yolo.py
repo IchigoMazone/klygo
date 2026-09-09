@@ -45,17 +45,8 @@ class YOLODetect(Detector):
                 verbose=False,
                 **self.filter_kwargs(mod_kw, "torch_dtype", "dtype"),
             )
-            for res in ultra_results:
-                boxes_data, scores_data, labels_data = [], [], []
-                if res.boxes is not None:
-                    for b in res.boxes:
-                        boxes_data.append(b.xyxy[0].tolist())
-                        scores_data.append(float(b.conf[0].item()))
-                        cls_id = int(b.cls[0].item())
-                        labels_data.append(res.names.get(cls_id, str(cls_id)))
-                raw_list.append({"boxes": boxes_data, "scores": scores_data, "labels": labels_data})
+            raw_list = self.ul_format_results(ultra_results)
         else:
-            for img in images:
-                raw_list.append({"boxes": [], "scores": [], "labels": []})
+            raw_list = [{"boxes": [], "scores": [], "labels": []} for _ in images]
 
         return self.build_detections(images, raw_list, **post_kw)

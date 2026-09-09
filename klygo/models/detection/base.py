@@ -101,12 +101,13 @@ class Detector(BaseModel):
             pass
         return torch.float32
 
-    def cast_inputs(self, inputs):
+    # =========================================================================
+    # HUGGING FACE BACKEND HELPERS (hf_*)
+    # =========================================================================
+    def hf_cast_inputs(self, inputs):
         """
-        Cast tất cả floating tensors trong inputs lên đúng device + dtype an toàn của model.
-        - Trên CPU: Luôn giữ Float32 để tránh lỗi mat1 and mat2 (CPU không hỗ trợ FP16).
-        - Trên GPU: Tự động khớp FP16 / BF16 / FP32 với non_blocking=True.
-        - Tensor số nguyên (input_ids, attention_mask): Giữ nguyên int64/bool.
+        Cast các floating tensors trong inputs (Hugging Face BatchFeature / Dict)
+        lên đúng device + dtype an toàn của model (giữ nguyên int64 cho input_ids).
         """
         dev = self.current_device()
         dtype = self.current_dtype()
@@ -156,9 +157,9 @@ class Detector(BaseModel):
 
         return inputs
 
-    def run_inference(self, inputs, **model_kwargs):
+    def hf_run_inference(self, inputs, **model_kwargs):
         """
-        Thực thi forward của self.model với AMP autocast và device sync tự động.
+        Thực thi forward của Hugging Face model với AMP autocast và device sync tự động.
         """
         cur_dt = self.current_dtype()
         use_half = (cur_dt == torch.float16)
@@ -180,6 +181,67 @@ class Detector(BaseModel):
 
         utils.cuda_sync()
         return outputs
+
+    def hf_get_output_device(self, outputs: Any) -> torch.device:
+        """Dò tìm thiết bị thực tế của tensor đầu ra Hugging Face ModelOutput."""
+        if hasattr(outputs, "logits") and isinstance(outputs.logits, torch.Tensor):
+            return outputs.logits.device
+        if hasattr(outputs, "pred_boxes") and isinstance(outputs.pred_boxes, torch.Tensor):
+            return outputs.pred_boxes.device
+        if isinstance(outputs, torch.Tensor):
+            return outputs.device
+        return self.current_device()
+
+    def hf_save(self, output_dir: str) -> None:
+        """Lưu model & processor theo chuẩn Hugging Face save_pretrained()."""
+        abs_out = os.path.abspath(output_dir)
+        if self.model is not None and hasattr(self.model, "save_pretrained"):
+            self.model.save_pretrained(abs_out)
+        if hasattr(self, "processor") and hasattr(self.processor, "save_pretrained"):
+            self.processor.save_pretrained(abs_out)
+
+    def hf_unload(self) -> None:
+        """Dọn dẹp processor và giải phóng tài nguyên của Hugging Face."""
+        if hasattr(self, "processor"):
+            del self.processor
+            self.processor = None
+
+    # =========================================================================
+    # ULTRALYTICS BACKEND HELPERS (ul_*)
+    # =========================================================================
+    def ul_format_results(self, ultra_results: Any) -> List[Dict[str, Any]]:
+        """Bóc tách boxes, scores, labels từ kết quả trả về của Ultralytics YOLO."""
+        raw_list = []
+        if ultra_results is not None:
+            for res in ultra_results:
+                boxes_data, scores_data, labels_data = [], [], []
+                if getattr(res, "boxes", None) is not None:
+                    for b in res.boxes:
+                        boxes_data.append(b.xyxy[0].tolist())
+                        scores_data.append(float(b.conf[0].item()))
+                        cls_id = int(b.cls[0].item())
+                        labels_data.append(res.names.get(cls_id, str(cls_id)))
+                raw_list.append({"boxes": boxes_data, "scores": scores_data, "labels": labels_data})
+        return raw_list
+
+    def ul_save(self, output_dir: str) -> None:
+        """Lưu trọng số theo chuẩn Ultralytics YOLO."""
+        abs_out = os.path.abspath(output_dir)
+        if self.model is not None and hasattr(self.model, "save"):
+            self.model.save(abs_out)
+
+    def ul_unload(self) -> None:
+        """Dọn dẹp tài nguyên Ultralytics."""
+        pass
+
+    # =========================================================================
+    # CONVENIENCE ALIASES
+    # =========================================================================
+    def cast_inputs(self, inputs):
+        return self.hf_cast_inputs(inputs)
+
+    def run_inference(self, inputs, **model_kwargs):
+        return self.hf_run_inference(inputs, **model_kwargs)
 
     def build_detections(
         self,
@@ -219,8 +281,6 @@ class Detector(BaseModel):
             )
         return results
 
-
-
     # =========================================================================
     # VONG DOI & BO NHO (Lifecycle & Resource Management)
     # =========================================================================
@@ -251,6 +311,7 @@ class Detector(BaseModel):
         """
         Lưu toàn bộ mô hình (Metadata + Python Code + Trọng số) ra thư mục chuẩn Klygo.
         Mô hình xuất ra có thể được nạp lại hoàn chỉnh qua `models.load(folder)`.
+        Tự động bọc hf_save() hoặc ul_save() theo backend.
         """
         from klygo import files
         import shutil
@@ -273,16 +334,29 @@ class Detector(BaseModel):
                 if os.path.exists(source_file):
                     shutil.copy2(source_file, os.path.join(abs_out, "model.py"))
         
-        # 3. Trọng số & Artifacts (chỉ base fallback)
-        if self.model is not None and hasattr(self.model, "save_pretrained"):
-            self.model.save_pretrained(abs_out)
-        elif self.model is not None and hasattr(self.model, "save"):
-            self.model.save(abs_out)
+        # 3. Trọng số & Artifacts (bọc theo backend)
+        if self.backend == "Hugging Face" or hasattr(self, "processor"):
+            self.hf_save(abs_out)
+        elif self.backend == "Ultralytics":
+            self.ul_save(abs_out)
+        elif self.model is not None:
+            if hasattr(self.model, "save_pretrained"):
+                self.model.save_pretrained(abs_out)
+            elif hasattr(self.model, "save"):
+                self.model.save(abs_out)
 
     def unload(self) -> None:
+        """
+        Giải phóng tài nguyên và đưa trạng thái về UNLOADED.
+        Tự động bọc hf_unload() hoặc ul_unload() theo backend.
+        """
         if hasattr(self.model, "cpu"):
             self.model.cpu()
         self.clear_cache()
+        if self.backend == "Hugging Face" or hasattr(self, "processor"):
+            self.hf_unload()
+        elif self.backend == "Ultralytics":
+            self.ul_unload()
         if hasattr(self, "model"):
             del self.model
             self.model = None
