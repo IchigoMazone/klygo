@@ -94,6 +94,11 @@ class BaseModel(ABC):
             return False
         return hasattr(type(self), op_name) or (op_name in d)
 
+    @property
+    def unsupported(self) -> Set[str]:
+        """Danh sách các phương thức/thao tác bị khóa của mô hình."""
+        return set(getattr(self, "_unsupported", set()))
+
     def methods(self) -> Dict[str, List[str]]:
         d = object.__getattribute__(self, '__dict__')
         unsupported = d.get('_unsupported', set())
