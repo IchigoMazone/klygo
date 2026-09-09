@@ -104,12 +104,19 @@ class Detector(BaseModel):
         """
         return common.run_inference(self.backend, self.model, inputs, cur_dtype=self.current_dtype(), **model_kwargs)
 
-    def get_output_device(self, outputs: Any) -> torch.device:
+    def get_output_device(self, outputs: Any) -> Any:
         """
         Dò tìm device thực tế của kết quả đầu ra (logits, pred_boxes, tensor).
         Ủy thác hoàn toàn cho backend tương ứng.
         """
         return common.get_output_device(self.backend, outputs, default_device=self.current_device())
+
+    def sync_device(self, tensor: Any, target_device: Any) -> Any:
+        """
+        Đồng bộ device của một tensor về cùng target_device nếu cần thiết.
+        Ủy thác hoàn toàn cho backend tương ứng.
+        """
+        return common.sync_device(self.backend, tensor, target_device=target_device)
 
     def format_results(self, raw_outputs: Any) -> List[Dict[str, Any]]:
         """

@@ -66,9 +66,8 @@ class GroundingDinoDetect(Detector):
         # Tường minh: Chỉ đồng bộ duy nhất 'input_ids' về cùng device của outputs khi cần thiết (Multi-GPU).
         # Tuyệt đối không sao chép thừa thãi các tensor ảnh lớn (pixel_values) làm nghẽn PCIe / hao phí VRAM.
         target_dev = self.get_output_device(outputs)
-        input_ids = inputs.get("input_ids") if isinstance(inputs, dict) else None
-        if isinstance(input_ids, torch.Tensor) and input_ids.device != target_dev:
-            input_ids = input_ids.to(target_dev, non_blocking=(target_dev.type == "cuda"))
+        raw_input_ids = inputs.get("input_ids") if isinstance(inputs, dict) else None
+        input_ids = self.sync_device(raw_input_ids, target_device=target_dev)
 
         with self.suppress_warnings():
             raw = self.processor.post_process_grounded_object_detection(

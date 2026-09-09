@@ -89,6 +89,13 @@ def get_output_device(backend: str, outputs: Any, default_device: Any) -> Any:
     return default_device
 
 
+def sync_device(backend: str, tensor: Any, target_device: Any) -> Any:
+    """Điều phối đồng bộ device của tensor."""
+    if backend == "Hugging Face":
+        return huggingface.sync_device(tensor, target_device)
+    return tensor
+
+
 def format_results(backend: str, raw_outputs: Any) -> List[Dict[str, Any]]:
     """Điều phối chuẩn hóa kết quả thô theo backend."""
     if backend == "Ultralytics":

@@ -99,6 +99,17 @@ def get_output_device(outputs: Any, default_device: Optional[torch.device] = Non
     return default_device or torch.device("cpu")
 
 
+def sync_device(tensor: Any, target_device: Any) -> Any:
+    """
+    Đồng bộ an toàn tensor (ví dụ: input_ids) về cùng device với target_device
+    (hữu ích khi chạy multi-GPU hoặc device_map='auto' trong HF).
+    """
+    if isinstance(tensor, torch.Tensor) and hasattr(target_device, "type"):
+        if tensor.device != target_device:
+            return tensor.to(target_device, non_blocking=(target_device.type == "cuda"))
+    return tensor
+
+
 def save(model: Any, processor: Optional[Any], output_dir: str) -> None:
     """Lưu model và processor theo chuẩn Hugging Face save_pretrained()."""
     abs_out = os.path.abspath(output_dir)
