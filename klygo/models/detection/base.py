@@ -103,6 +103,47 @@ class Detector(BaseModel):
         return torch.float32
 
     # =========================================================================
+    # BACKEND-AGNOSTIC EXECUTION HOOKS
+    # =========================================================================
+    def cast_inputs(self, inputs: Any) -> Any:
+        """
+        Tự động cast inputs (floating tensors) lên đúng device và dtype của model.
+        Tự động nhận diện và ủy thác theo self.backend.
+        """
+        if self.backend == "Hugging Face":
+            return huggingface.cast_inputs(inputs, dev=self.current_device(), dtype=self.current_dtype())
+        return inputs
+
+    def run_inference(self, inputs: Any, **model_kwargs) -> Any:
+        """
+        Thực thi forward của model với AMP autocast và CUDA sync tự động.
+        Tự động nhận diện và ủy thác theo self.backend.
+        """
+        if self.backend == "Hugging Face":
+            return huggingface.run_inference(self.model, inputs, cur_dtype=self.current_dtype(), **model_kwargs)
+        if callable(self.model):
+            return self.model(inputs, **model_kwargs)
+        return inputs
+
+    def get_output_device(self, outputs: Any) -> torch.device:
+        """
+        Dò tìm device thực tế của kết quả đầu ra (logits, pred_boxes, tensor).
+        Tự động nhận diện và ủy thác theo self.backend.
+        """
+        if self.backend == "Hugging Face":
+            return huggingface.get_output_device(outputs, default_device=self.current_device())
+        return self.current_device()
+
+    def format_results(self, raw_outputs: Any) -> List[Dict[str, Any]]:
+        """
+        Chuẩn hóa kết quả thô của backend thành format [{boxes, scores, labels}].
+        Tự động nhận diện và ủy thác theo self.backend.
+        """
+        if self.backend == "Ultralytics":
+            return ultralytics.format_results(raw_outputs)
+        return raw_outputs
+
+    # =========================================================================
     # CONVENIENCE HELPERS
     # =========================================================================
     def build_detections(

@@ -6,7 +6,6 @@ from typing import Dict, Any, List, Union, Sequence
 import PIL.Image
 
 from klygo.models.detection.base import Detector
-from klygo.models.backend import ultralytics
 from klygo.outputs.detect import Detection
 
 
@@ -46,7 +45,7 @@ class YOLODetect(Detector):
                 verbose=False,
                 **self.filter_kwargs(mod_kw, "torch_dtype", "dtype"),
             )
-            raw_list = ultralytics.format_results(ultra_results)
+            raw_list = self.format_results(ultra_results)
         else:
             raw_list = [{"boxes": [], "scores": [], "labels": []} for _ in images]
 
