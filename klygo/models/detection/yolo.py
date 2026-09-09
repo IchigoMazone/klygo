@@ -2,7 +2,7 @@
 Trình bao bọc mô hình nhận diện đối tượng kiến trúc YOLO (klygo.models.detection.yolo).
 """
 
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, List, Union, Sequence
 import PIL.Image
 
 from klygo.models.detection.base import Detector
@@ -12,8 +12,10 @@ from klygo.outputs.detect import Detection
 class YOLODetect(Detector):
     """Mô hình nhận diện đối tượng thời gian thực YOLO."""
 
+    FLAGS: Sequence[str] = ("model", "post")
+
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
-        super().__init__(metadata=metadata, flags=("model", "post"), **kwargs)
+        super().__init__(metadata=metadata, **kwargs)
         mod_kw, post_kw = self.parse_config()
         self.model = None
         if self.model_id and self.model_id not in ("custom-detector", "yolo-audit"):

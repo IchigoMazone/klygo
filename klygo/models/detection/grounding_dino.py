@@ -3,7 +3,7 @@ Grounding DINO Zero-Shot Object Detection (klygo.models.detection.grounding_dino
 TANG 3: Cau hinh model & processor ro rang, forward() ngan gon nho cac helper cua Detector.
 """
 
-from typing import Any, List, Dict, Union
+from typing import Any, List, Dict, Union, Sequence
 import torch
 import PIL.Image
 from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
@@ -15,13 +15,11 @@ from klygo.outputs.detect import Detection
 class GroundingDinoDetect(Detector):
     """Zero-shot Object Detection — Grounding DINO."""
 
+    FLAGS: Sequence[str] = ("model", "processor", "post")
+    UNSUPPORTED: Sequence[str] = ("train", "val")
+
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
-        super().__init__(
-            metadata=metadata, 
-            flags=("model", "processor", "post"), 
-            unsupported=("train", "val"), 
-            **kwargs
-        )
+        super().__init__(metadata=metadata, **kwargs)
 
         # 1. Boc tach 3 nhom cau hinh tu metadata
         mod_kw, proc_kw, _ = self.parse_config()

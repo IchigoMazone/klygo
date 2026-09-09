@@ -22,21 +22,21 @@ class Detector(BaseModel):
     """
     TẦNG 2: Động cơ thực thi toàn diện cho bài toán Object Detection.
     Đảm nhiệm vòng đời suy luận batching, ProgressBar và đóng gói Detections.
-    Hoàn toàn framework-agnostic, đọc toàn bộ thông tin từ metadata.
+    Hoàn toàn framework-agnostic, đọc toàn bộ thông tin cấu hình từ metadata.
     """
+
+    FLAGS: Sequence[str] = ("model", "post")
+    UNSUPPORTED: Sequence[str] = ()
 
     def __init__(
         self,
         metadata: Dict[str, Any],
         flags: Optional[Sequence[str]] = None,
         unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
-        model: Optional[Any] = None,
         **kwargs,
     ) -> None:
-        target_flags = flags or metadata.get("flags") or ("model", "post")
-        target_unsupported = unsupported or metadata.get("unsupported")
-        super().__init__(metadata=metadata, flags=target_flags, unsupported=target_unsupported, **kwargs)
-        self.model: Any = model or metadata.get("model")
+        super().__init__(metadata=metadata, flags=flags, unsupported=unsupported, **kwargs)
+        self.model: Any = None
 
 
     # =========================================================================
