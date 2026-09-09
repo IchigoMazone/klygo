@@ -9,6 +9,7 @@ import PIL.Image
 from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
 from klygo.models.detection.base import Detector
+from klygo.models.backend import huggingface
 from klygo.outputs.detect import Detection
 
 
@@ -54,10 +55,10 @@ class GroundingDinoDetect(Detector):
             return_tensors="pt",
             **proc_kw
         )
-        inputs = self.cast_inputs(inputs)
+        inputs = huggingface.cast_inputs(inputs, dev=self.current_device(), dtype=self.current_dtype())
 
         # 3. Inference (AMP, GPU sync tu dong)
-        outputs = self.run_inference(inputs, **mod_kw)
+        outputs = huggingface.run_inference(self.model, inputs, cur_dtype=self.current_dtype(), **mod_kw)
 
         # 4. Postprocess đặc thù của Grounding DINO
         thresh = post_kw.get("threshold", 0.25)
@@ -65,7 +66,7 @@ class GroundingDinoDetect(Detector):
 
         # Tường minh: Chỉ đồng bộ duy nhất 'input_ids' về cùng device của outputs khi cần thiết (Multi-GPU).
         # Tuyệt đối không sao chép thừa thãi các tensor ảnh lớn (pixel_values) làm nghẽn PCIe / hao phí VRAM.
-        target_dev = self.hf_get_output_device(outputs)
+        target_dev = huggingface.get_output_device(outputs, default_device=self.current_device())
         input_ids = inputs.get("input_ids") if isinstance(inputs, dict) else None
         if isinstance(input_ids, torch.Tensor) and input_ids.device != target_dev:
             input_ids = input_ids.to(target_dev, non_blocking=(target_dev.type == "cuda"))

@@ -103,46 +103,8 @@ class Detector(BaseModel):
         return torch.float32
 
     # =========================================================================
-    # HUGGING FACE BACKEND HELPERS (hf_*)
+    # CONVENIENCE HELPERS
     # =========================================================================
-    def hf_cast_inputs(self, inputs):
-        return huggingface.cast_inputs(inputs, dev=self.current_device(), dtype=self.current_dtype())
-
-    def hf_run_inference(self, inputs, **model_kwargs):
-        return huggingface.run_inference(self.model, inputs, cur_dtype=self.current_dtype(), **model_kwargs)
-
-    def hf_get_output_device(self, outputs: Any) -> torch.device:
-        return huggingface.get_output_device(outputs, default_device=self.current_device())
-
-    def hf_save(self, output_dir: str) -> None:
-        huggingface.save(self.model, getattr(self, "processor", None), output_dir)
-
-    def hf_unload(self) -> None:
-        if hasattr(self, "processor"):
-            del self.processor
-            self.processor = None
-
-    # =========================================================================
-    # ULTRALYTICS BACKEND HELPERS (ul_*)
-    # =========================================================================
-    def ul_format_results(self, ultra_results: Any) -> List[Dict[str, Any]]:
-        return ultralytics.format_results(ultra_results)
-
-    def ul_save(self, output_dir: str) -> None:
-        ultralytics.save(self.model, output_dir)
-
-    def ul_unload(self) -> None:
-        pass
-
-    # =========================================================================
-    # CONVENIENCE ALIASES
-    # =========================================================================
-    def cast_inputs(self, inputs):
-        return self.hf_cast_inputs(inputs)
-
-    def run_inference(self, inputs, **model_kwargs):
-        return self.hf_run_inference(inputs, **model_kwargs)
-
     def build_detections(
         self,
         images: List[PIL.Image.Image],
@@ -234,11 +196,11 @@ class Detector(BaseModel):
                 if os.path.exists(source_file):
                     shutil.copy2(source_file, os.path.join(abs_out, "model.py"))
         
-        # 3. Trọng số & Artifacts (bọc theo backend)
+        # 3. Trọng số & Artifacts (gọi trực tiếp theo backend)
         if self.backend == "Hugging Face" or hasattr(self, "processor"):
-            self.hf_save(abs_out)
+            huggingface.save(self.model, getattr(self, "processor", None), abs_out)
         elif self.backend == "Ultralytics":
-            self.ul_save(abs_out)
+            ultralytics.save(self.model, abs_out)
         elif self.model is not None:
             if hasattr(self.model, "save_pretrained"):
                 self.model.save_pretrained(abs_out)
@@ -248,15 +210,13 @@ class Detector(BaseModel):
     def unload(self) -> None:
         """
         Giải phóng tài nguyên và đưa trạng thái về UNLOADED.
-        Tự động bọc hf_unload() hoặc ul_unload() theo backend.
         """
         if hasattr(self.model, "cpu"):
             self.model.cpu()
         self.clear_cache()
-        if self.backend == "Hugging Face" or hasattr(self, "processor"):
-            self.hf_unload()
-        elif self.backend == "Ultralytics":
-            self.ul_unload()
+        if hasattr(self, "processor"):
+            del self.processor
+            self.processor = None
         if hasattr(self, "model"):
             del self.model
             self.model = None
