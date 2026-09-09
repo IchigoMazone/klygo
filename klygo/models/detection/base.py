@@ -14,7 +14,7 @@ import PIL.Image
 
 from klygo.models.base import BaseModel
 from klygo.models import utils
-from klygo.models.backend import huggingface, ultralytics
+from klygo.models.backend import common
 from klygo.outputs.detect import Detections, Detection, Box
 from klygo.utils.progress import ProgressBar
 
@@ -35,7 +35,6 @@ class Detector(BaseModel):
     ) -> None:
         super().__init__(metadata=metadata, flags=flags, unsupported=unsupported, **kwargs)
         self.model: Any = None
-
 
     def parse_config(self, *groups: str) -> Tuple[Dict[str, Any], ...]:
         """
@@ -81,26 +80,12 @@ class Detector(BaseModel):
         return {k: v for k, v in kwargs.items() if k not in exclude_set}
 
     def current_device(self) -> torch.device:
-        """Device thực tế của model (lấy từ parameter đầu tiên)."""
-        import torch
-        try:
-            if hasattr(self.model, "parameters"):
-                return next(self.model.parameters()).device
-        except (StopIteration, Exception):
-            pass
-        if hasattr(self.model, "device"):
-            return torch.device(self.model.device)
-        return torch.device("cpu")
+        """Device thực tế của model."""
+        return common.current_device(self.model)
 
     def current_dtype(self) -> torch.dtype:
-        """Dtype thực tế của model (lấy từ parameter đầu tiên)."""
-        import torch
-        try:
-            if hasattr(self.model, "parameters"):
-                return next(self.model.parameters()).dtype
-        except (StopIteration, Exception):
-            pass
-        return torch.float32
+        """Dtype thực tế của model."""
+        return common.current_dtype(self.model)
 
     # =========================================================================
     # BACKEND-AGNOSTIC EXECUTION HOOKS
@@ -108,40 +93,30 @@ class Detector(BaseModel):
     def cast_inputs(self, inputs: Any) -> Any:
         """
         Tự động cast inputs (floating tensors) lên đúng device và dtype của model.
-        Tự động nhận diện và ủy thác theo self.backend.
+        Ủy thác hoàn toàn cho backend tương ứng.
         """
-        if self.backend == "Hugging Face":
-            return huggingface.cast_inputs(inputs, dev=self.current_device(), dtype=self.current_dtype())
-        return inputs
+        return common.cast_inputs(self.backend, inputs, dev=self.current_device(), dtype=self.current_dtype())
 
     def run_inference(self, inputs: Any, **model_kwargs) -> Any:
         """
         Thực thi forward của model với AMP autocast và CUDA sync tự động.
-        Tự động nhận diện và ủy thác theo self.backend.
+        Ủy thác hoàn toàn cho backend tương ứng.
         """
-        if self.backend == "Hugging Face":
-            return huggingface.run_inference(self.model, inputs, cur_dtype=self.current_dtype(), **model_kwargs)
-        if callable(self.model):
-            return self.model(inputs, **model_kwargs)
-        return inputs
+        return common.run_inference(self.backend, self.model, inputs, cur_dtype=self.current_dtype(), **model_kwargs)
 
     def get_output_device(self, outputs: Any) -> torch.device:
         """
         Dò tìm device thực tế của kết quả đầu ra (logits, pred_boxes, tensor).
-        Tự động nhận diện và ủy thác theo self.backend.
+        Ủy thác hoàn toàn cho backend tương ứng.
         """
-        if self.backend == "Hugging Face":
-            return huggingface.get_output_device(outputs, default_device=self.current_device())
-        return self.current_device()
+        return common.get_output_device(self.backend, outputs, default_device=self.current_device())
 
     def format_results(self, raw_outputs: Any) -> List[Dict[str, Any]]:
         """
         Chuẩn hóa kết quả thô của backend thành format [{boxes, scores, labels}].
-        Tự động nhận diện và ủy thác theo self.backend.
+        Ủy thác hoàn toàn cho backend tương ứng.
         """
-        if self.backend == "Ultralytics":
-            return ultralytics.format_results(raw_outputs)
-        return raw_outputs
+        return common.format_results(self.backend, raw_outputs)
 
     # =========================================================================
     # CONVENIENCE HELPERS
@@ -189,12 +164,7 @@ class Detector(BaseModel):
     # =========================================================================
     def reset(self) -> "Detector":
         self._settings = dict(self._default_settings)
-        if self.backend == "Hugging Face":
-            huggingface.reset(self.model, getattr(self, "processor", None))
-        elif self.backend == "Ultralytics":
-            ultralytics.reset(self.model)
-        elif hasattr(self.model, "cpu"):
-            self.model.cpu()
+        common.reset(self.backend, self.model, getattr(self, "processor", None))
         self.state = "READY"
         return self
 
@@ -207,64 +177,29 @@ class Detector(BaseModel):
             pass
 
     def clear_cache(self) -> None:
-        from klygo import cuda
-        if cuda.is_available():
-            try:
-                torch.cuda.empty_cache()
-            except Exception:
-                pass
+        common.clear_cache()
 
     def save(self, output_dir: str) -> None:
         """
         Lưu toàn bộ mô hình (Metadata + Python Code + Trọng số) ra thư mục chuẩn Klygo.
         Mô hình xuất ra có thể được nạp lại hoàn chỉnh qua `models.load(folder)`.
-        Tự động ủy thác save() theo backend.
+        Ủy thác hoàn toàn việc lưu trữ cho backend.common.save().
         """
-        from klygo import files
-        import shutil
-        import sys
-        
-        abs_out = os.path.abspath(output_dir)
-        files.mkdir(abs_out)
-        
-        # 1. Ghi klygo.json
-        meta = dict(self.metadata)
-        meta.pop("num_params", None)
-        files.save(os.path.join(abs_out, "klygo.json"), meta, verbose=False)
-        
-        # 2. Xử lý Custom Class (copy model.py)
-        module_name = self.__class__.__module__
-        if not module_name.startswith("klygo.models."):
-            mod = sys.modules.get(module_name)
-            if mod and hasattr(mod, "__file__") and mod.__file__:
-                source_file = mod.__file__
-                if os.path.exists(source_file):
-                    shutil.copy2(source_file, os.path.join(abs_out, "model.py"))
-        
-        # 3. Trọng số & Artifacts (ủy thác theo backend)
-        if self.backend == "Hugging Face" or hasattr(self, "processor"):
-            huggingface.save(self.model, getattr(self, "processor", None), abs_out)
-        elif self.backend == "Ultralytics":
-            ultralytics.save(self.model, abs_out)
-        elif self.model is not None:
-            if hasattr(self.model, "save_pretrained"):
-                self.model.save_pretrained(abs_out)
-            elif hasattr(self.model, "save"):
-                self.model.save(abs_out)
+        common.save(
+            backend=self.backend,
+            model=self.model,
+            output_dir=output_dir,
+            metadata=self.metadata,
+            class_module=self.__class__.__module__,
+            processor=getattr(self, "processor", None),
+        )
 
     def unload(self) -> None:
         """
         Giải phóng tài nguyên và đưa trạng thái về UNLOADED.
-        Tự động ủy thác unload() theo backend.
+        Ủy thác hoàn toàn việc thu hồi tài nguyên cho backend.common.unload().
         """
-        self.clear_cache()
-        if self.backend == "Hugging Face":
-            huggingface.unload(self.model, getattr(self, "processor", None))
-        elif self.backend == "Ultralytics":
-            ultralytics.unload(self.model)
-        elif hasattr(self.model, "cpu"):
-            self.model.cpu()
-
+        common.unload(self.backend, self.model, getattr(self, "processor", None))
         if hasattr(self, "processor"):
             del self.processor
             self.processor = None
