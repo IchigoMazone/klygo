@@ -54,40 +54,8 @@ class Detector(BaseModel):
         self.model: Any = model
         self.processor: Any = None
 
-    # =========================================================================
-    # QUAN LY PHAN CUNG & DO CHINH XAC (Detector Implementation)
-    # nn.Module la Core: cuda/half/float/to/eval/train deu goi super() thang
-    # Detector chi can: guard _check_supported + sync state + multi-gpu guard
-    # =========================================================================
-    def _sync_state(self) -> None:
-        """Dong bo _device va _dtype tu trang thai thuc te cua parameters."""
-        try:
-            if hasattr(self.model, "parameters"):
-                params = list(self.model.parameters())
-                if not params:
-                    return
-                p = params[0]
-                self._device = str(p.device)
-                dtype_str = str(p.dtype)
-                if "bfloat16" in dtype_str:
-                    self._dtype = "bfloat16"
-                    self.half_mode = False
-                elif "float16" in dtype_str:
-                    self._dtype = "float16"
-                    self.half_mode = True
-                else:
-                    self._dtype = "float32"
-        except Exception:
-            pass
-
-    def _is_multi_gpu(self) -> bool:
-        """Kiem tra xem inner model co dang dung HF device_map multi-GPU khong."""
-        return self.model is not None and hasattr(self.model, "hf_device_map")
-
     @property
     def device(self) -> str:
-        if self._is_multi_gpu():
-            return "multi-gpu"
         try:
             if hasattr(self.model, "parameters"):
                 params = list(self.model.parameters())
@@ -101,8 +69,6 @@ class Detector(BaseModel):
 
     @property
     def dtype(self) -> str:
-        if self.half_mode:
-            return "float16"
         try:
             if hasattr(self.model, "parameters"):
                 params = list(self.model.parameters())
@@ -115,108 +81,6 @@ class Detector(BaseModel):
         except Exception:
             pass
         return self._dtype
-
-    def to(self, *args, **kwargs) -> "Detector":
-        """Chuyen model sang device/dtype chi dinh. Ho tro ca Klygo-style (int) va PyTorch-style."""
-        # Guard: HF multi-GPU sharding khong duoc goi .to()
-        if self._is_multi_gpu():
-            self.state = "MODIFIED"
-            return self
-        # Ho tro Klygo-style: to(0) -> to("cuda:0")
-        if len(args) == 1 and isinstance(args[0], int):
-            args = (f"cuda:{args[0]}",)
-            
-        import torch
-        # Tu dong chuyen chuoi dtype thanh torch.dtype
-        if "dtype" in kwargs and isinstance(kwargs["dtype"], str):
-            kwargs["dtype"] = self.parse_dtype(kwargs["dtype"])[0]
-        args = tuple(
-            self.parse_dtype(a)[0]
-            if isinstance(a, str) and a in ("float32", "float16", "bfloat16", "float64", "half", "fp32", "fp16", "bf16")
-            else a
-            for a in args
-        )
-        
-        if hasattr(self.model, "to"):
-            self.model.to(*args, **kwargs)
-            
-        # Neu chuyen sang CPU voi FP16 -> tu dong ve FP32 de tranh loi
-        try:
-            if hasattr(self.model, "parameters"):
-                params = list(self.model.parameters())
-                if params and params[0].device.type == "cpu" and params[0].dtype == torch.float16:
-                    if hasattr(self.model, "float"):
-                        self.model.float()
-                    self.half_mode = False
-        except Exception:
-            pass
-        self._sync_state()
-        self.state = "MODIFIED"
-        return self
-
-    def cpu(self) -> "Detector":
-        """Chuyen model ve CPU."""
-        if hasattr(self.model, "cpu"):
-            self.model.cpu()
-        if hasattr(self.model, "float"):
-            self.model.float()
-        self.half_mode = False
-        self._sync_state()
-        self.state = "MODIFIED"
-        return self
-
-    def cuda(self, device=None) -> "Detector":
-        """Chuyen model len GPU CUDA chi dinh."""
-        if self._is_multi_gpu():
-            self.state = "MODIFIED"
-            return self
-        if hasattr(self.model, "cuda"):
-            self.model.cuda(device)
-        # Khoi phuc half_mode neu dang bat nhung chua o float16
-        if self.half_mode and hasattr(self.model, "half"):
-            self.model.half()
-        self._sync_state()
-        self.state = "MODIFIED"
-        return self
-
-    def half(self) -> "Detector":
-        """Chuyen model sang FP16 (chi ap dung that su tren GPU)."""
-        from klygo import cuda as klygo_cuda
-        if "cuda" in str(self.device) and klygo_cuda.is_available():
-            self.half_mode = True
-            self._dtype = "float16"
-            if hasattr(self.model, "half"):
-                self.model.half()
-        else:
-            self.half_mode = False
-            self._dtype = "float32"
-            if hasattr(self.model, "float"):
-                self.model.float()
-        self.state = "MODIFIED"
-        return self
-
-    def bfloat16(self) -> "Detector":
-        """Chuyen model sang BF16."""
-        import torch
-        self.half_mode = False
-        self._dtype = "bfloat16"
-        if hasattr(self.model, "to"):
-            self.model.to(torch.bfloat16)
-        self.state = "MODIFIED"
-        return self
-
-    def bfloat(self) -> "Detector":
-        """Alias cua bfloat16."""
-        return self.bfloat16()
-
-    def float(self) -> "Detector":
-        """Chuyen model ve FP32."""
-        self.half_mode = False
-        self._dtype = "float32"
-        if hasattr(self.model, "float"):
-            self.model.float()
-        self.state = "MODIFIED"
-        return self
 
     # =========================================================================
     # PUBLIC HELPERS CHO MODEL IMPLEMENTATION (Tầng 3)
