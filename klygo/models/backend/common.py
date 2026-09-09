@@ -12,10 +12,14 @@ import torch
 
 from . import huggingface
 from . import ultralytics
+from . import tensorflow
 
 
-def current_device(model: Any) -> torch.device:
-    """Dò tìm device thực tế của model từ parameter đầu tiên."""
+def current_device(model: Any, backend: Optional[str] = None) -> Any:
+    """Dò tìm device thực tế của model."""
+    if backend == "TensorFlow":
+        return tensorflow.current_device(model)
+
     if model is not None:
         try:
             if hasattr(model, "parameters"):
@@ -30,14 +34,19 @@ def current_device(model: Any) -> torch.device:
     return torch.device("cpu")
 
 
-def current_dtype(model: Any) -> torch.dtype:
-    """Dò tìm dtype thực tế của model từ parameter đầu tiên."""
+def current_dtype(model: Any, backend: Optional[str] = None) -> Any:
+    """Dò tìm dtype thực tế của model."""
+    if backend == "TensorFlow":
+        return tensorflow.current_dtype(model)
+
     if model is not None:
         try:
             if hasattr(model, "parameters"):
                 return next(model.parameters()).dtype
         except (StopIteration, Exception):
             pass
+        if hasattr(model, "dtype"):
+            return model.dtype
     return torch.float32
 
 
@@ -51,26 +60,32 @@ def clear_cache() -> None:
         pass
 
 
-def cast_inputs(backend: str, inputs: Any, dev: torch.device, dtype: torch.dtype) -> Any:
+def cast_inputs(backend: str, inputs: Any, dev: Any, dtype: Any) -> Any:
     """Điều phối ép kiểu inputs theo backend."""
     if backend == "Hugging Face":
         return huggingface.cast_inputs(inputs, dev=dev, dtype=dtype)
+    if backend == "TensorFlow":
+        return tensorflow.cast_inputs(inputs, dev=dev, dtype=dtype)
     return inputs
 
 
-def run_inference(backend: str, model: Any, inputs: Any, cur_dtype: torch.dtype, **model_kwargs) -> Any:
+def run_inference(backend: str, model: Any, inputs: Any, cur_dtype: Any, **model_kwargs) -> Any:
     """Điều phối suy luận với autocast theo backend."""
     if backend == "Hugging Face":
         return huggingface.run_inference(model, inputs, cur_dtype=cur_dtype, **model_kwargs)
+    if backend == "TensorFlow":
+        return tensorflow.run_inference(model, inputs, **model_kwargs)
     if model is not None and callable(model):
         return model(inputs, **model_kwargs)
     return inputs
 
 
-def get_output_device(backend: str, outputs: Any, default_device: torch.device) -> torch.device:
+def get_output_device(backend: str, outputs: Any, default_device: Any) -> Any:
     """Điều phối dò tìm device đầu ra theo backend."""
     if backend == "Hugging Face":
         return huggingface.get_output_device(outputs, default_device=default_device)
+    if backend == "TensorFlow":
+        return default_device
     return default_device
 
 
@@ -78,6 +93,8 @@ def format_results(backend: str, raw_outputs: Any) -> List[Dict[str, Any]]:
     """Điều phối chuẩn hóa kết quả thô theo backend."""
     if backend == "Ultralytics":
         return ultralytics.format_results(raw_outputs)
+    if backend == "TensorFlow":
+        return tensorflow.format_results(raw_outputs)
     return raw_outputs
 
 
@@ -87,6 +104,8 @@ def reset(backend: str, model: Any, processor: Optional[Any] = None) -> None:
         huggingface.reset(model, processor=processor)
     elif backend == "Ultralytics":
         ultralytics.reset(model)
+    elif backend == "TensorFlow":
+        tensorflow.reset(model)
     elif model is not None and hasattr(model, "cpu"):
         model.cpu()
 
@@ -98,6 +117,8 @@ def unload(backend: str, model: Any, processor: Optional[Any] = None) -> None:
         huggingface.unload(model, processor=processor)
     elif backend == "Ultralytics":
         ultralytics.unload(model)
+    elif backend == "TensorFlow":
+        tensorflow.unload(model)
     elif model is not None and hasattr(model, "cpu"):
         model.cpu()
 
@@ -137,6 +158,8 @@ def save(
         huggingface.save(model, processor, abs_out)
     elif backend == "Ultralytics":
         ultralytics.save(model, abs_out)
+    elif backend == "TensorFlow":
+        tensorflow.save(model, abs_out)
     elif model is not None:
         if hasattr(model, "save_pretrained"):
             model.save_pretrained(abs_out)

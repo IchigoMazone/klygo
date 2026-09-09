@@ -79,13 +79,13 @@ class Detector(BaseModel):
                 exclude_set.add(item)
         return {k: v for k, v in kwargs.items() if k not in exclude_set}
 
-    def current_device(self) -> torch.device:
+    def current_device(self) -> Any:
         """Device thực tế của model."""
-        return common.current_device(self.model)
+        return common.current_device(self.model, backend=self.backend)
 
-    def current_dtype(self) -> torch.dtype:
+    def current_dtype(self) -> Any:
         """Dtype thực tế của model."""
-        return common.current_dtype(self.model)
+        return common.current_dtype(self.model, backend=self.backend)
 
     # =========================================================================
     # BACKEND-AGNOSTIC EXECUTION HOOKS
