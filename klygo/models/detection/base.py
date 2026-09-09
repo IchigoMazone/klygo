@@ -36,14 +36,6 @@ class Detector(BaseModel):
         self.model: Any = None
 
 
-    # =========================================================================
-    # PUBLIC HELPERS CHO MODEL IMPLEMENTATION (Tầng 3)
-    # =========================================================================
-    def parse_config(self, *groups: str) -> Tuple[Dict[str, Any], ...]:
-        """
-        Bóc tách các nhóm cấu hình từ self.settings (mặc định lấy từ model.json).
-        Sử dụng self._flags hoặc bất kỳ danh sách nhóm nào được truyền vào.
-        """
     def parse_config(self, *groups: str) -> Tuple[Dict[str, Any], ...]:
         """
         Bóc tách các nhóm cấu hình từ self.settings (mặc định lấy từ metadata['config']).
