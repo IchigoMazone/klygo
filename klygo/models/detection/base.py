@@ -28,12 +28,21 @@ class Detector(BaseModel):
 
     def __init__(
         self,
-        metadata: Dict[str, Any],
+        metadata: Optional[Dict[str, Any]] = None,
         flags: Sequence[str] = ("model", "post"),
         unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
+        backend: Optional[str] = None,
+        model_id: Optional[str] = None,
         **kwargs,
     ) -> None:
-        super().__init__(metadata=metadata, flags=flags, unsupported=unsupported, **kwargs)
+        super().__init__(
+            metadata=metadata,
+            flags=flags,
+            unsupported=unsupported,
+            backend=backend,
+            model_id=model_id,
+            **kwargs,
+        )
         self.model: Any = None
 
     def parse_config(self, *groups: str) -> Tuple[Dict[str, Any], ...]:

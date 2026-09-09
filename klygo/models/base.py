@@ -21,9 +21,12 @@ class BaseModel(ABC):
 
     def __init__(
         self,
-        metadata: Dict[str, Any],
+        metadata: Optional[Dict[str, Any]] = None,
         flags: Sequence[str] = (),
         unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
+        backend: Optional[str] = None,
+        model_id: Optional[str] = None,
+        task: Optional[str] = None,
         **kwargs,
     ) -> None:
 
@@ -31,10 +34,10 @@ class BaseModel(ABC):
         utils.suppress_ai_warnings()
 
         self.state: str = "LOADING"
-        self.metadata: Dict[str, Any] = dict(metadata)
-        self.model_id: str = str(self.metadata.get("model_id", "custom-model"))
-        self.backend: str = str(self.metadata.get("backend", "PyTorch"))
-        self.task: str = str(self.metadata.get("task", "Universal"))
+        self.metadata: Dict[str, Any] = dict(metadata or {})
+        self.model_id: str = str(model_id or self.metadata.get("model_id", "custom-model"))
+        self._backend: Optional[str] = backend or self.metadata.get("backend")
+        self.task: str = str(task or self.metadata.get("task", "Universal"))
         self.class_name: str = f"{self.__class__.__module__}.{self.__class__.__qualname__}"
         self._default_settings: Dict[str, Any] = dict(self.metadata.get("config", {}))
         self._settings: Dict[str, Any] = dict(self._default_settings)
@@ -45,6 +48,34 @@ class BaseModel(ABC):
         if hasattr(self, "__UNSUPPORTED__"):
             self._unsupported.update(getattr(self, "__UNSUPPORTED__"))
         self.state = "READY"
+
+    @property
+    def backend(self) -> str:
+        """Dò tìm backend tự động từ self._backend, os.environ, self.model hoặc metadata."""
+        if getattr(self, "_backend", None):
+            return self._backend
+        import os
+        env_backend = os.environ.get("KLYGO_BACKEND")
+        if env_backend:
+            return env_backend
+        model = getattr(self, "model", None)
+        if model is not None:
+            mod_cls = getattr(getattr(model, "__class__", None), "__module__", "")
+            if "keras" in mod_cls or hasattr(model, "save_to_preset"):
+                return "Keras"
+            if "ultralytics" in mod_cls or hasattr(model, "predictor"):
+                return "Ultralytics"
+            if "transformers" in mod_cls or hasattr(model, "save_pretrained"):
+                return "Hugging Face"
+            if "torch" in mod_cls:
+                return "PyTorch"
+        return self.metadata.get("backend", "PyTorch")
+
+    @backend.setter
+    def backend(self, value: str) -> None:
+        self._backend = value
+        if hasattr(self, "metadata") and isinstance(self.metadata, dict):
+            self.metadata["backend"] = value
 
     def suppress_warnings(self):
         """Context manager / Helper tắt mọi cảnh báo."""

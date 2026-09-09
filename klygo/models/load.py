@@ -263,3 +263,22 @@ def init(model_id: str, **kwargs) -> Dict[str, Any]:
         "task": "Object-Detection",
         "config": resolved_config
     }
+
+
+def set_backend(backend: str, engine: Optional[str] = None) -> None:
+    """
+    Thiết lập backend mặc định cho Klygo (và engine tính toán cho Keras 3 nếu có).
+    
+    Ví dụ:
+        models.set_backend("keras", engine="torch")
+        models.set_backend("ultralytics")
+        models.set_backend("huggingface")
+    """
+    os.environ["KLYGO_BACKEND"] = str(backend)
+    if engine is not None:
+        os.environ["KERAS_BACKEND"] = str(engine)
+
+
+def get_backend() -> str:
+    """Trả về backend hiện tại đang được cấu hình qua os.environ."""
+    return os.environ.get("KLYGO_BACKEND", "auto")
