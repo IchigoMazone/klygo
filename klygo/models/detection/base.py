@@ -291,8 +291,8 @@ class Detector(BaseModel):
     # =========================================================================
     def reset(self) -> "Detector":
         self._settings = dict(self._default_settings)
-        self.state = "READY"
-        self.cpu()
+        if hasattr(self.model, "cpu"):
+            self.model.cpu()
         self.state = "READY"
         return self
 
@@ -339,15 +339,14 @@ class Detector(BaseModel):
                     shutil.copy2(source_file, os.path.join(abs_out, "model.py"))
         
         # 3. Trọng số & Artifacts (chỉ base fallback)
-        inner = self._inner_model()
-        if inner is not None:
-            if hasattr(inner, "save_pretrained"):
-                inner.save_pretrained(abs_out)
+        if self.model is not None and hasattr(self.model, "save_pretrained"):
+            self.model.save_pretrained(abs_out)
         if hasattr(self, "processor") and hasattr(self.processor, "save_pretrained"):
             self.processor.save_pretrained(abs_out)
 
     def unload(self) -> None:
-        self.cpu()
+        if hasattr(self.model, "cpu"):
+            self.model.cpu()
         self.clear_cache()
         if hasattr(self, "model"):
             del self.model
@@ -378,7 +377,9 @@ class Detector(BaseModel):
             self.predict(source=img, prompt=prompts, verbose=False, **kwargs)
 
         latencies = []
-        is_gpu = cuda.is_available() and ("cuda" in str(self.device) or self.device == "multi-gpu")
+        cur_dev = self.current_device()
+        cur_dt = self.current_dtype()
+        is_gpu = cuda.is_available() and (cur_dev.type == "cuda")
 
         for _ in range(iterations):
             t_start = time.perf_counter()
@@ -395,8 +396,8 @@ class Detector(BaseModel):
         report = {
             "model_id": self.model_id,
             "backend": self.backend,
-            "device": self.device,
-            "dtype": self.dtype,
+            "device": str(cur_dev),
+            "dtype": str(cur_dt).replace("torch.", ""),
             "image_size": f"{w_dim}x{h_dim}",
             "iterations": iterations,
             "warmup": warmup,

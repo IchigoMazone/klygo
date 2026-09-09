@@ -39,13 +39,6 @@ class GroundingDinoDetect(Detector):
         """HF device map khi dùng multi-GPU sharding."""
         return getattr(self.model, "hf_device_map", getattr(self.model, "device_map", None))
 
-    def to(self, *args, **kwargs) -> "GroundingDinoDetect":
-        """Delegate to() xuống HF model. Chặn nếu đang dùng multi-GPU sharding."""
-        if self.hf_device_map:
-            return self
-        self.model.to(*args, **kwargs)
-        return self
-
     def forward(
         self,
         images: List[PIL.Image.Image],
