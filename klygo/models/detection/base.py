@@ -54,6 +54,32 @@ class Detector(BaseModel):
         self.model: Any = model
         self.processor: Any = None
 
+    @property
+    def device(self) -> str:
+        try:
+            if hasattr(self.model, "parameters"):
+                params = list(self.model.parameters())
+                if params:
+                    return str(params[0].device)
+        except Exception:
+            pass
+        return str(getattr(self.model, "device", self._device))
+
+    @property
+    def dtype(self) -> str:
+        try:
+            if hasattr(self.model, "parameters"):
+                params = list(self.model.parameters())
+                if params:
+                    dtype_str = str(params[0].dtype)
+                    if "bfloat16" in dtype_str:
+                        return "bfloat16"
+                    elif "float16" in dtype_str:
+                        return "float16"
+        except Exception:
+            pass
+        return self._dtype
+
 
     # =========================================================================
     # PUBLIC HELPERS CHO MODEL IMPLEMENTATION (Tầng 3)
