@@ -14,18 +14,15 @@ import PIL.Image
 
 import functools
 
+class KlygoKwargWarning(UserWarning):
+    """Cảnh báo khi người dùng truyền tham số lạ không thuộc nhóm cấu hình nào."""
+    pass
+
+
 def suppress_warnings(func=None):
     """
-    Decorator hoặc Context Manager tắt mọi warning (Python warnings + Hugging Face/PyTorch loggers)
-    trong phạm vi thực thi của hàm hoặc khối code.
-
-    Cách 1: Decorator trên hàm / method:
-        @suppress_warnings
-        def load_model(): ...
-
-    Cách 2: Context Manager:
-        with suppress_warnings():
-            ...
+    Decorator hoặc Context Manager tắt mọi warning (Python warnings + Hugging Face/PyTorch loggers),
+    nhưng vẫn giữ lại cảnh báo KlygoKwargWarning của Klygo.
     """
     class SuppressContext:
         def __enter__(self):
@@ -33,6 +30,7 @@ def suppress_warnings(func=None):
             self._ctx = warnings.catch_warnings()
             self._ctx.__enter__()
             warnings.filterwarnings("ignore")
+            warnings.filterwarnings("always", category=KlygoKwargWarning)
             return self
 
         def __exit__(self, exc_type, exc_val, exc_tb):
@@ -110,19 +108,21 @@ def resolve_sub_kwargs(
     kwargs: Dict[str, Any],
     json_config: Optional[Dict[str, Any]] = None,
     groups: Optional[Sequence[str]] = None,
+    warn_unmatched: bool = True,
 ) -> Tuple[Dict[str, Any], ...]:
     """
-    Phân giải và chia tách các nhóm cấu hình từ kwargs + json_config.
-    Trả về tuple các nhóm (mặc định: model_kw, proc_kw, post_kw).
+    Phân giải và chia tách 2 tầng tham số:
+    - Tầng 1: Cấu hình mặc định (từ model.json / self.settings)
+    - Tầng 2: Tham số runtime ghi đè (kwargs truyền vào khi gọi hàm)
 
-    Hỗ trợ 3 cách truyền:
-    - Dict tường minh : post={"threshold": 0.5}
-    - Tiền tố nhóm   : post_threshold=0.5
-    - Flat key       : threshold=0.5 (chỉ khi key đã có sẵn trong json_config)
+    Áp dụng 3 quy tắc:
+    - Quy tắc 1 (Tự động): Key đã có trong default config -> gom vào nhóm đó mà không cần tiền tố.
+    - Quy tắc 2 (Tường minh): Truyền dict {group}={...} hoặc tiền tố {group}_{key} -> thêm vào nhóm đó.
+    - Quy tắc 3 (Tham số ma): Key lạ không qua được 1 và 2 -> phát cảnh báo KlygoKwargWarning và bỏ qua.
     """
     json_cfg = dict(json_config or {})
 
-    # Xác định danh sách nhóm
+    # Xác định danh sách nhóm theo flags
     if groups:
         group_list = tuple(groups)
     elif any(isinstance(v, dict) for v in json_cfg.values()):
@@ -130,36 +130,54 @@ def resolve_sub_kwargs(
     else:
         group_list = ("model", "processor", "post")
 
-    # Khởi tạo từ json_config defaults
+    # Tầng 1: Khởi tạo buckets từ default json_config
     buckets: Dict[str, Dict[str, Any]] = {g: dict(json_cfg.get(g, {})) for g in group_list}
 
+    unmatched_keys = []
+
+    # Tầng 2: Phân giải runtime kwargs
     for key, value in kwargs.items():
-        # Cách 1: Dict tường minh — post={"threshold": 0.5}
+        # Quy tắc 2A: Dict tường minh theo nhóm — post={"threshold": 0.5, "custom": 1}
         if key in group_list and isinstance(value, dict):
             buckets[key].update(value)
             continue
 
-        # Cách 2: Tiền tố nhóm — post_threshold=0.5
-        matched = False
+        # Quy tắc 2B: Tiền tố nhóm tường minh — post_threshold=0.5, processor_max_length=256
+        matched_prefix = False
         for g in group_list:
             if key.startswith(f"{g}_"):
                 clean_key = key[len(g) + 1:]
                 buckets[g][clean_key] = value
-                matched = True
+                matched_prefix = True
                 break
-        if matched:
+        if matched_prefix:
             continue
 
-        # Cách 3: Flat key — chỉ nếu key đã tồn tại trong json_config của nhóm nào đó
+        # Quy tắc 1: Tham số phẳng ĐÃ CÓ trong cấu hình mặc định -> tự động map vào nhóm đó
+        matched_flat = False
         for g in group_list:
-            if key in buckets[g]:
+            if key in json_cfg.get(g, {}):
                 buckets[g][key] = value
+                matched_flat = True
                 break
+        if matched_flat:
+            continue
+
+        # Quy tắc 3: Tham số lạ không thuộc nhóm nào và không có tiền tố -> ghi nhận để cảnh báo
+        unmatched_keys.append(key)
+
+    if warn_unmatched and unmatched_keys:
+        available_groups = ", ".join(repr(g) for g in group_list)
+        for uk in unmatched_keys:
+            warnings.warn(
+                f"[Klygo Warning] Tham số lạ '{uk}' không thuộc bất kỳ nhóm cấu hình mặc định nào ({available_groups}) "
+                f"và không có tiền tố nhóm hợp lệ. Tham số này sẽ bị bỏ qua!",
+                KlygoKwargWarning,
+                stacklevel=3,
+            )
 
     if groups:
         return tuple(buckets.get(g, {}) for g in groups)
-    if "model" in buckets and "processor" in buckets and "post" in buckets:
-        return buckets["model"], buckets["processor"], buckets["post"]
     return tuple(buckets.values())
 
 
@@ -167,6 +185,7 @@ def resolve_sub_kwargs_dict(
     kwargs: Dict[str, Any],
     json_config: Optional[Dict[str, Any]] = None,
     groups: Optional[Sequence[str]] = None,
+    warn_unmatched: bool = True,
 ) -> Dict[str, Dict[str, Any]]:
     """Phân giải cấu hình và trả về dict các nhóm thay vì tuple."""
     json_cfg = dict(json_config or {})
@@ -176,7 +195,7 @@ def resolve_sub_kwargs_dict(
         group_list = tuple(k for k, v in json_cfg.items() if isinstance(v, dict))
     else:
         group_list = ("model", "processor", "post")
-    result = resolve_sub_kwargs(kwargs=kwargs, json_config=json_config, groups=group_list)
+    result = resolve_sub_kwargs(kwargs=kwargs, json_config=json_config, groups=group_list, warn_unmatched=warn_unmatched)
     return dict(zip(group_list, result))
 
 def resolve_images(

@@ -58,41 +58,14 @@ class Detector(BaseModel):
     # =========================================================================
     # PUBLIC HELPERS CHO MODEL IMPLEMENTATION (Tầng 3)
     # =========================================================================
-    DTYPE_MAP = {
-        "float16": (torch.float16, "float16", True),
-        "fp16": (torch.float16, "float16", True),
-        "half": (torch.float16, "float16", True),
-        "bfloat16": (torch.bfloat16, "bfloat16", False),
-        "bf16": (torch.bfloat16, "bfloat16", False),
-    }
-    _DTYPE_MAP = DTYPE_MAP
-
-    def parse_dtype(self, dt_str: str):
-        """Map chuỗi định dạng dtype sang tuple: (torch.dtype, dtype_str, half_mode)."""
-        return self.DTYPE_MAP.get(str(dt_str).lower(), (torch.float32, "float32", False))
-
-    def resolve_dtype(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        """Tự động chuẩn hóa torch_dtype trong kwargs và đồng bộ state của model."""
-        dt = kwargs.get("torch_dtype")
-        if isinstance(dt, str):
-            kwargs["torch_dtype"], self._dtype, self.half_mode = self.parse_dtype(dt)
-        return kwargs
-
     def parse_config(self, *groups: str) -> Tuple[Dict[str, Any], ...]:
         """
-        Bóc tách các nhóm cấu hình từ self.metadata['config'].
-        Mặc định sử dụng self._flags ('model', 'processor', 'post' cho Hugging Face)
-        hoặc bất kỳ danh sách nhóm nào được truyền vào.
+        Bóc tách các nhóm cấu hình từ self.settings (mặc định lấy từ model.json).
+        Sử dụng self._flags hoặc bất kỳ danh sách nhóm nào được truyền vào.
         """
         target_groups = groups if groups else getattr(self, "_flags", ("model", "processor", "post"))
-        cfg = self.metadata.get("config", {})
-        result = []
-        for g in target_groups:
-            val = dict(cfg.get(g, {}))
-            if g == "model":
-                val = self.resolve_dtype(val)
-            result.append(val)
-        return tuple(result)
+        cfg = self.settings
+        return tuple(dict(cfg.get(g, {})) for g in target_groups)
 
     def split_kwargs(
         self,
@@ -101,13 +74,23 @@ class Detector(BaseModel):
         **extra_kwargs,
     ) -> Tuple[Dict[str, Any], ...]:
         """
-        Bóc tách và hợp nhất các nhóm kwargs theo self._flags (hoặc groups truyền vào).
-        Ví dụ: mod_kw, proc_kw, post_kw = self.split_kwargs(kwargs)
+        Bóc tách và hợp nhất 2 tầng tham số theo self._flags (hoặc groups truyền vào):
+        - Tầng 1: Cấu hình mặc định (từ model.json / self.settings)
+        - Tầng 2: Runtime kwargs truyền vào khi gọi predict() / forward()
+        
+        Quy tắc 1: Tham số phẳng đã có trong cấu hình mặc định -> tự động gom vào nhóm tương ứng.
+        Quy tắc 2: Tham số chỉ định nhóm ({group}_* hoặc {group}={...}) -> gom vào nhóm đó.
+        Quy tắc 3: Tham số lạ không thuộc nhóm nào -> cảnh báo warning và bỏ qua (chống silent drop / typo).
         """
         kw = dict(kwargs or {})
         kw.update(extra_kwargs)
         target_groups = groups if groups else getattr(self, "_flags", ("model", "processor", "post"))
-        return utils.resolve_sub_kwargs(kwargs=kw, json_config=self.metadata.get("config"), groups=target_groups)
+        return utils.resolve_sub_kwargs(
+            kwargs=kw,
+            json_config=self.settings,
+            groups=target_groups,
+            warn_unmatched=True,
+        )
 
     def filter_kwargs(self, kwargs: Dict[str, Any], *exclude_keys: Union[str, Sequence[str]]) -> Dict[str, Any]:
         """
