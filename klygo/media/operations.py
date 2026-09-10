@@ -655,30 +655,16 @@ def save(
 def convert(
     source: Union[str, Path],
     target: Union[str, Path],
+    codec: Optional[str] = None,
+    crf: int = 23,
+    fps: Optional[float] = None,
     overwrite: bool = False,
     verbose: bool = True,
 ) -> Path:
     """
     Tác dụng:
-    - Chuyển đổi định dạng file ảnh (.png -> .jpg, .webp -> .png...) hoặc file video (.avi -> .mp4, .mkv -> .webm...).
-
-    Định dạng tương thích:
-    - Ảnh: .png, .jpg, .jpeg, .webp, .bmp, .tif, .tiff
-    - Video: .mp4, .avi, .mov, .mkv, .m4v, .webm
-
-    Đầu vào:
-    - source [str | Path]: Đường dẫn file ảnh hoặc video nguồn.
-    - target [str | Path]: Đường dẫn file media đích cần chuyển đổi.
-    - overwrite [bool]: Cho phép ghi đè nếu file đích đã tồn tại. Mặc định: False.
-    - verbose [bool]: Hiển thị thanh tiến trình ProgressBar khi chuyển đổi. Mặc định: True.
-
-    Đầu ra:
-    - [Path]: Đường dẫn file media mới sau khi đã chuyển đổi định dạng thành công.
-
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> media.convert("image.png", "image.jpg", overwrite=True)
-    >>> media.convert("video.avi", "video.mp4", overwrite=True)
+    - Chuyển đổi định dạng file ảnh (.png -> .jpg) hoặc file video (.avi -> .mp4, .mkv -> .webm...).
+    - Tự động nhận diện nhóm chuyển đổi Web-ready, Storage, Modern Web, hoặc Demo.
     """
     validate_type(source, (str, Path), "source")
     validate_type(target, (str, Path), "target")
@@ -698,10 +684,34 @@ def convert(
         imgs = load(src_p, verbose=False)
         return save(tgt_p, imgs[0], overwrite=overwrite, verbose=verbose)
     elif src_suf in VIDEO_SUFFIXES and tgt_suf in VIDEO_SUFFIXES:
+        # Codec mapping
+        fourcc = "mp4v"
+        if codec:
+            codec_lower = codec.lower()
+            if codec_lower in ("h264", "avc1"):
+                fourcc = "avc1"
+            elif codec_lower in ("h265", "hevc"):
+                fourcc = "hevc"
+            elif codec_lower in ("vp9", "webm"):
+                fourcc = "vp09"
+            elif codec_lower == "mjpeg":
+                fourcc = "MJPG"
+            else:
+                fourcc = codec
+        else:
+            # Auto-guess codec based on extension
+            if tgt_suf == ".mp4":
+                fourcc = "avc1"  # Default H264 for MP4
+            elif tgt_suf == ".webm":
+                fourcc = "vp09"
+            elif tgt_suf == ".avi":
+                fourcc = "MJPG"
+
         frames = load(src_p, stream=True, verbose=False)
-        v_info = info(src_p)
-        fps = v_info.get("fps", 30.0)
-        return save_video(tgt_p, frames, fps=fps, overwrite=overwrite, verbose=verbose)
+        v_info = probe(src_p)
+        target_fps = fps if fps is not None else v_info.get("fps", 30.0)
+        
+        return save_video(tgt_p, frames, fps=target_fps, fourcc=fourcc, overwrite=overwrite, verbose=verbose)
     else:
         raise ValueError(f"Cannot convert from {src_suf} to {tgt_suf}. Both files must be images or both must be videos.")
 
@@ -925,20 +935,20 @@ def iter_frames(
                 yield img
 
 
-def info(path: Union[str, Path]) -> Dict[str, Any]:
+def probe(path: Union[str, Path]) -> Dict[str, Any]:
     """
     Tác dụng:
-    - Trích xuất thông tin metadata chi tiết của một tập tin ảnh hoặc video.
+    - Trích xuất thông tin metadata chi tiết của một tập tin ảnh hoặc video (soi định dạng).
 
     Đầu vào:
     - path [str | Path]: Đường dẫn file ảnh hoặc file video.
 
     Đầu ra:
-    - [Dict[str, Any]]: Dictionary chứa metadata (name, path, type, width, height, size, fps, frame_count...).
+    - [Dict[str, Any]]: Dictionary chứa metadata (name, path, format, width, height, size, fps...).
 
     Ví dụ:
     >>> import klygo.media as media
-    >>> v_info = media.info("video.mp4")
+    >>> v_info = media.probe("video.mp4")
     >>> print(v_info['fps'], v_info['frame_count'])
     """
     p = Path(path)
