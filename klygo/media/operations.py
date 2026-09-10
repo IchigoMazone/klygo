@@ -797,6 +797,8 @@ def convert(
     codec: Optional[str] = None,
     crf: int = 23,
     fps: Optional[float] = None,
+    gpu: bool = False,
+    preset: Optional[str] = None,
     overwrite: bool = False,
     verbose: bool = False,
 ) -> Path:
@@ -804,6 +806,7 @@ def convert(
     Tác dụng:
     - Chuyển đổi định dạng file ảnh (.png -> .jpg) hoặc file video (.avi -> .mp4, .mkv -> .webm...).
     - Tự động nhận diện nhóm chuyển đổi Web-ready, Storage, Modern Web, hoặc Demo.
+    - Hỗ trợ tăng tốc phần cứng GPU (NVIDIA NVENC) khi đặt `gpu=True` để convert siêu tốc trên Colab/máy có card rời.
     """
     validate_type(source, (str, Path), "source")
     validate_type(target, (str, Path), "target")
@@ -830,13 +833,18 @@ def convert(
         import subprocess
 
         fourcc = "mp4v"
-        ffmpeg_vcodec = "libx264"
+        ffmpeg_vcodec = "h264_nvenc" if gpu else "libx264"
+        default_preset = "p4" if gpu else "fast"
+        active_preset = preset or default_preset
+
         if codec:
             codec_lower = codec.lower()
             if codec_lower in ("h264", "avc1"):
-                fourcc, ffmpeg_vcodec = "avc1", "libx264"
+                fourcc = "avc1"
+                ffmpeg_vcodec = "h264_nvenc" if gpu else "libx264"
             elif codec_lower in ("h265", "hevc"):
-                fourcc, ffmpeg_vcodec = "hevc", "libx265"
+                fourcc = "hevc"
+                ffmpeg_vcodec = "hevc_nvenc" if gpu else "libx265"
             elif codec_lower in ("vp9", "webm"):
                 fourcc, ffmpeg_vcodec = "vp09", "libvpx-vp9"
             elif codec_lower == "mjpeg":
@@ -845,7 +853,8 @@ def convert(
                 fourcc, ffmpeg_vcodec = codec, codec
         else:
             if tgt_suf == ".mp4":
-                fourcc, ffmpeg_vcodec = "avc1", "libx264"
+                fourcc = "avc1"
+                ffmpeg_vcodec = "h264_nvenc" if gpu else "libx264"
             elif tgt_suf == ".webm":
                 fourcc, ffmpeg_vcodec = "vp09", "libvpx-vp9"
             elif tgt_suf == ".avi":
@@ -855,13 +864,24 @@ def convert(
         if shutil.which("ffmpeg"):
             cmd = [
                 "ffmpeg", "-y" if overwrite else "-n",
+                "-threads", "0",
                 "-err_detect", "ignore_err",
                 "-i", str(src_p),
                 "-c:v", ffmpeg_vcodec,
                 "-pix_fmt", "yuv420p",
-                "-crf", str(crf),
-                "-preset", "fast",
             ]
+            if not gpu:
+                cmd.extend(["-crf", str(crf)])
+            else:
+                # NVENC uses -cq (constant quality) or -preset
+                cmd.extend(["-cq", str(crf)])
+
+            if active_preset:
+                cmd.extend(["-preset", str(active_preset)])
+
+            # Keep audio intact without re-encoding
+            cmd.extend(["-c:a", "copy"])
+
             if fps:
                 cmd.extend(["-r", str(fps)])
             cmd.append(str(tgt_p))
