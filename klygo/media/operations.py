@@ -601,7 +601,7 @@ def _read_video_frames(
     path: Path,
     stream: bool = False,
     backend: str = "pil",
-    verbose: bool = True,
+    verbose: bool = False,
 ) -> MediaFrames:
     cap = cv.VideoCapture(str(path))
     if not cap.isOpened():
@@ -662,7 +662,7 @@ def load(
     recursive: bool = False,
     stream: bool = False,
     backend: str = "pil",
-    verbose: bool = True,
+    verbose: bool = False,
 ) -> MediaFrames:
     """
     Tác dụng:
@@ -758,27 +758,11 @@ def save(
     path: Union[str, Path],
     image: Union[Image.Image, np.ndarray],
     overwrite: bool = False,
-    verbose: bool = True,
+    verbose: bool = False,
 ) -> Path:
     """
     Tác dụng:
     - Lưu một đối tượng ảnh (PIL Image, NumPy array, PyTorch Tensor) ra tập tin đĩa.
-
-    Định dạng tương thích:
-    - .png, .jpg, .jpeg, .webp, .bmp, .tif, .tiff
-
-    Đầu vào:
-    - path [str | Path]: Đường dẫn file ảnh đích cần lưu.
-    - image [Image.Image | np.ndarray]: Đối tượng dữ liệu ảnh cần ghi.
-    - overwrite [bool]: Ghi đè nếu file đã tồn tại. Mặc định: False.
-    - verbose [bool]: Hiển thị thanh tiến trình ProgressBar khi lưu. Mặc định: True.
-
-    Đầu ra:
-    - [Path]: Đường dẫn file ảnh đã lưu.
-
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> media.save("output.jpg", img_obj, overwrite=True)
     """
     validate_type(path, (str, Path), "path")
     validate_type(overwrite, bool, "overwrite")
@@ -814,7 +798,7 @@ def convert(
     crf: int = 23,
     fps: Optional[float] = None,
     overwrite: bool = False,
-    verbose: bool = True,
+    verbose: bool = False,
 ) -> Path:
     """
     Tác dụng:
@@ -836,8 +820,11 @@ def convert(
     tgt_suf = tgt_p.suffix.lower()
 
     if src_suf in IMAGE_SUFFIXES and tgt_suf in IMAGE_SUFFIXES:
-        imgs = load(src_p, verbose=False)
-        return save(tgt_p, imgs[0], overwrite=overwrite, verbose=verbose)
+        with ProgressBar(total=1, desc=f"Converting image {src_p.name} -> {tgt_p.name}", unit="file", verbose=verbose, colour="cyan") as pbar:
+            imgs = load(src_p, verbose=False)
+            res = save(tgt_p, imgs[0], overwrite=overwrite, verbose=False)
+            pbar.update(1)
+            return res
     elif src_suf in VIDEO_SUFFIXES and tgt_suf in VIDEO_SUFFIXES:
         import shutil
         import subprocess
@@ -880,16 +867,36 @@ def convert(
             cmd.append(str(tgt_p))
             
             try:
-                if verbose:
-                    print(f"Converting video using FFmpeg: {src_p.name} -> {tgt_p.name}")
-                result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                if result.returncode == 0:
-                    return tgt_p
-                elif verbose:
-                    print(f"FFmpeg conversion failed (code {result.returncode}), falling back to OpenCV...")
-            except Exception as e:
-                if verbose:
-                    print(f"FFmpeg execution failed: {e}, falling back to OpenCV...")
+                v_info = probe(src_p)
+                total_frames = v_info.get("frame_count") or 1
+                with ProgressBar(total=total_frames, desc=f"Converting {src_p.name} (FFmpeg)", unit="frame", verbose=verbose, colour="cyan") as pbar:
+                    # Run FFmpeg with progress monitoring if verbose, or silent if not
+                    if not verbose:
+                        result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    else:
+                        # Monitor FFmpeg progress output
+                        proc_cmd = cmd[:-1] + ["-progress", "pipe:1", str(tgt_p)]
+                        proc = subprocess.Popen(proc_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                        last_frame = 0
+                        for line in proc.stdout:
+                            if line.startswith("frame="):
+                                try:
+                                    cur_frame = int(line.split("=")[1].strip())
+                                    delta = cur_frame - last_frame
+                                    if delta > 0:
+                                        pbar.update(delta)
+                                        last_frame = cur_frame
+                                except Exception:
+                                    pass
+                        proc.wait()
+                        result = subprocess.CompletedProcess(cmd, proc.returncode)
+
+                    if result.returncode == 0:
+                        if verbose and last_frame < total_frames:
+                            pbar.update(total_frames - last_frame)
+                        return tgt_p
+            except Exception:
+                pass
 
         # 2. Fallback to OpenCV (frame-by-frame)
         frames = load(src_p, stream=True, verbose=False)
@@ -948,7 +955,7 @@ def save_video(
     fps: float = 30.0,
     fourcc: str = "mp4v",
     overwrite: bool = False,
-    verbose: bool = True,
+    verbose: bool = False,
 ) -> Path:
     """
     Tác dụng:
@@ -1020,7 +1027,7 @@ def save_images(
     prefix: str = "frame",
     extension: str = ".jpg",
     overwrite: bool = False,
-    verbose: bool = True,
+    verbose: bool = False,
 ) -> List[Path]:
     """
     Tác dụng:
