@@ -720,7 +720,9 @@ def convert(
                 "-err_detect", "ignore_err",
                 "-i", str(src_p),
                 "-c:v", ffmpeg_vcodec,
-                "-pix_fmt", "yuv420p"
+                "-pix_fmt", "yuv420p",
+                "-crf", str(crf),
+                "-preset", "fast",
             ]
             if fps:
                 cmd.extend(["-r", str(fps)])
