@@ -684,34 +684,71 @@ def convert(
         imgs = load(src_p, verbose=False)
         return save(tgt_p, imgs[0], overwrite=overwrite, verbose=verbose)
     elif src_suf in VIDEO_SUFFIXES and tgt_suf in VIDEO_SUFFIXES:
-        # Codec mapping
+        import shutil
+        import subprocess
+
         fourcc = "mp4v"
+        ffmpeg_vcodec = "libx264"
         if codec:
             codec_lower = codec.lower()
             if codec_lower in ("h264", "avc1"):
-                fourcc = "avc1"
+                fourcc, ffmpeg_vcodec = "avc1", "libx264"
             elif codec_lower in ("h265", "hevc"):
-                fourcc = "hevc"
+                fourcc, ffmpeg_vcodec = "hevc", "libx265"
             elif codec_lower in ("vp9", "webm"):
-                fourcc = "vp09"
+                fourcc, ffmpeg_vcodec = "vp09", "libvpx-vp9"
             elif codec_lower == "mjpeg":
-                fourcc = "MJPG"
+                fourcc, ffmpeg_vcodec = "MJPG", "mjpeg"
             else:
-                fourcc = codec
+                fourcc, ffmpeg_vcodec = codec, codec
         else:
-            # Auto-guess codec based on extension
             if tgt_suf == ".mp4":
-                fourcc = "avc1"  # Default H264 for MP4
+                fourcc, ffmpeg_vcodec = "avc1", "libx264"
             elif tgt_suf == ".webm":
-                fourcc = "vp09"
+                fourcc, ffmpeg_vcodec = "vp09", "libvpx-vp9"
             elif tgt_suf == ".avi":
-                fourcc = "MJPG"
+                fourcc, ffmpeg_vcodec = "MJPG", "mjpeg"
 
+        # 1. Try FFmpeg first (preserves audio, handles AV1, much faster)
+        if shutil.which("ffmpeg"):
+            cmd = [
+                "ffmpeg", "-y" if overwrite else "-n",
+                "-err_detect", "ignore_err",
+                "-i", str(src_p),
+                "-c:v", ffmpeg_vcodec,
+                "-pix_fmt", "yuv420p"
+            ]
+            if fps:
+                cmd.extend(["-r", str(fps)])
+            cmd.append(str(tgt_p))
+            
+            try:
+                if verbose:
+                    print(f"Converting video using FFmpeg: {src_p.name} -> {tgt_p.name}")
+                result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if result.returncode == 0:
+                    return tgt_p
+                elif verbose:
+                    print(f"FFmpeg conversion failed (code {result.returncode}), falling back to OpenCV...")
+            except Exception as e:
+                if verbose:
+                    print(f"FFmpeg execution failed: {e}, falling back to OpenCV...")
+
+        # 2. Fallback to OpenCV (frame-by-frame)
         frames = load(src_p, stream=True, verbose=False)
         v_info = probe(src_p)
         target_fps = fps if fps is not None else v_info.get("fps", 30.0)
         
-        return save_video(tgt_p, frames, fps=target_fps, fourcc=fourcc, overwrite=overwrite, verbose=verbose)
+        try:
+            return save_video(tgt_p, frames, fps=target_fps, fourcc=fourcc, overwrite=overwrite, verbose=verbose)
+        except ValueError as e:
+            if "iterable is empty" in str(e):
+                raise RuntimeError(
+                    f"OpenCV failed to decode any frames from '{src_p}'. "
+                    "The file might use an unsupported codec (e.g., AV1) or is corrupted. "
+                    "Please install FFmpeg to handle this format."
+                ) from None
+            raise
     else:
         raise ValueError(f"Cannot convert from {src_suf} to {tgt_suf}. Both files must be images or both must be videos.")
 
