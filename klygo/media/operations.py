@@ -37,14 +37,96 @@ VIDEO_SUFFIXES = {
 
 
 # =========================================================================
-# 0A. LazyImage: Zero-RAM URL/Path Proxy (PIL + NumPy Hybrid)
+# 0A. VideoReader: Smart Sequential & Random Access Video Seeker
+# =========================================================================
+
+class VideoReader:
+    """
+    Trình quản lý đọc video thông minh, tối ưu tốc độ đọc tuần tự và nhảy frame.
+    Duy trì kết nối cv.VideoCapture duy nhất, tự động theo dõi con trỏ vị trí frame `_current_pos`.
+    - Đọc tuần tự (frame sau = frame trước + 1): Gọi trực tiếp `cap.read()` đạt tốc độ gốc OpenCV
+      (300-500+ FPS), hoàn toàn loại bỏ độ trễ seek của `cap.set()`.
+    - Truy cập ngẫu nhiên (vd: frames[500] hoặc frames[-1]): Tự động gọi `cap.set(CAP_PROP_POS_FRAMES, index)`
+      rồi tiếp tục đọc tuần tự từ vị trí đó.
+    - Zero-RAM: Khởi tạo tức thì không decode bất kỳ frame pixel nào vào bộ nhớ RAM.
+    """
+
+    def __init__(self, path: Union[str, Path]) -> None:
+        self.path = Path(path).resolve()
+        if not self.path.exists():
+            raise FileNotFoundError(f"Could not find video file: {self.path}")
+
+        # Thăm dò nhanh metadata của video 1 lần duy nhất lúc mở
+        cap = cv.VideoCapture(str(self.path))
+        if not cap.isOpened():
+            raise FileNotFoundError(f"Could not open video file: {self.path}")
+
+        self.total_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT) or 0)
+        self.fps = float(cap.get(cv.CAP_PROP_FPS) or 30.0)
+        self.width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH) or 0)
+        self.height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT) or 0)
+        cap.release()
+
+        self._cap: Optional[cv.VideoCapture] = None
+        self._current_pos: int = 0
+
+    @property
+    def cap(self) -> cv.VideoCapture:
+        if self._cap is None or not self._cap.isOpened():
+            self._cap = cv.VideoCapture(str(self.path))
+            self._current_pos = 0
+        return self._cap
+
+    def read_frame(self, index: int) -> Optional[np.ndarray]:
+        """
+        Đọc frame pixel tại vị trí `index` với cơ chế Seeker thông minh.
+        """
+        if index < 0 or (self.total_frames > 0 and index >= self.total_frames):
+            return None
+
+        c = self.cap
+        if self._current_pos != index:
+            c.set(cv.CAP_PROP_POS_FRAMES, index)
+            self._current_pos = index
+
+        ret, frame = c.read()
+        if ret:
+            self._current_pos += 1
+            return frame
+
+        # Thử seek lại một lần nếu luồng bị mất đồng bộ
+        c.set(cv.CAP_PROP_POS_FRAMES, index)
+        ret, frame = c.read()
+        if ret:
+            self._current_pos = index + 1
+            return frame
+
+        return None
+
+    def release(self) -> None:
+        if self._cap is not None:
+            try:
+                self._cap.release()
+            except Exception:
+                pass
+            self._cap = None
+
+    def close(self) -> None:
+        self.release()
+
+    def __del__(self) -> None:
+        self.release()
+
+
+# =========================================================================
+# 0B. LazyImage: Zero-RAM URL/Path/Frame Proxy (PIL + NumPy Hybrid)
 # =========================================================================
 
 class LazyImage(Image.Image):
     """
-    Đại diện cho một bức ảnh theo cơ chế nạp lười (Zero-RAM URL/Path Proxy).
-    Lưu trữ đường dẫn/URL file ảnh với chi phí RAM = 0.
-    Hỗ trợ Zero-RAM Lazy Crop: Cắt vùng ảnh con chỉ bằng cách lưu (URL, bounding_box),
+    Đại diện cho một bức ảnh hoặc frame video theo cơ chế nạp lười (Zero-RAM URL/Path Proxy).
+    Lưu trữ đường dẫn/URL file ảnh hoặc vị trí frame video với chi phí RAM = 0.
+    Hỗ trợ Zero-RAM Lazy Crop mặc định: Cắt vùng ảnh con chỉ bằng cách lưu (URL/Frame, bounding_box),
     không decode pixel vào RAM và tính toán size bằng hiệu tọa độ tức thì.
     Kế thừa PIL.Image.Image để giữ 100% khả năng tương thích với isinstance(x, Image.Image).
     Hỗ trợ đầy đủ cú pháp của cả PIL Image (.size, .crop, .show, .save, .convert)
@@ -56,6 +138,8 @@ class LazyImage(Image.Image):
         path: Union[str, Path, "LazyImage"],
         backend: str = "pil",
         crop_box: Optional[Tuple[int, int, int, int]] = None,
+        frame_index: Optional[int] = None,
+        reader: Optional[VideoReader] = None,
     ) -> None:
         self._im = None
         self._image: Optional[Union[Image.Image, np.ndarray]] = None
@@ -65,6 +149,8 @@ class LazyImage(Image.Image):
             self._path = path.path
             self._url = path.url
             self.backend = path.backend
+            self.frame_index = path.frame_index if frame_index is None else frame_index
+            self.reader = path.reader if reader is None else reader
             if path.crop_box is not None and crop_box is not None:
                 ox1, oy1, _, _ = path.crop_box
                 x1, y1, x2, y2 = crop_box
@@ -75,11 +161,13 @@ class LazyImage(Image.Image):
             self._path = Path(path).resolve()
             self._url = str(self._path)
             self.backend = backend.lower()
+            self.frame_index = frame_index
+            self.reader = reader
             self._crop_box = tuple(int(x) for x in crop_box) if crop_box is not None else None
 
     @property
     def path(self) -> Path:
-        """Đường dẫn tệp ảnh nguồn."""
+        """Đường dẫn tệp ảnh hoặc video nguồn."""
         return self._path
 
     @path.setter
@@ -91,7 +179,7 @@ class LazyImage(Image.Image):
 
     @property
     def url(self) -> str:
-        """URL hoặc chuỗi đường dẫn ảnh nguồn."""
+        """URL hoặc chuỗi đường dẫn ảnh/video nguồn."""
         return self._url
 
     @url.setter
@@ -110,9 +198,29 @@ class LazyImage(Image.Image):
         self._cached_size = None
 
     def load(self) -> Union[Image.Image, np.ndarray]:
-        """Thực sự nạp ảnh từ đĩa vào bộ nhớ RAM."""
+        """Thực sự nạp ảnh hoặc frame video từ đĩa vào bộ nhớ RAM."""
         if self._image is None:
-            if self.backend == "opencv":
+            if self.frame_index is not None:
+                # Video frame decoding via reader
+                if self.reader is None:
+                    self.reader = VideoReader(self.path)
+                frame = self.reader.read_frame(self.frame_index)
+                if frame is None:
+                    raise IndexError(f"Could not read frame {self.frame_index} from video {self.path}")
+
+                if self.crop_box is not None:
+                    x1, y1, x2, y2 = self.crop_box
+                    h_max, w_max = frame.shape[:2]
+                    frame = frame[max(0, y1):min(h_max, y2), max(0, x1):min(w_max, x2)]
+
+                if self.backend == "opencv":
+                    self._image = frame
+                    self._cached_size = (frame.shape[1], frame.shape[0])
+                else:
+                    pil_img = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
+                    self._image = pil_img
+                    self._cached_size = self._image.size
+            elif self.backend == "opencv":
                 arr = cv.imread(str(self.path), cv.IMREAD_COLOR)
                 if arr is None:
                     raise FileNotFoundError(f"Could not read image file: {self.path}")
@@ -154,6 +262,8 @@ class LazyImage(Image.Image):
             self._image = value.load()
             self.path = value.path
             self.url = value.url
+            self.frame_index = value.frame_index
+            self.reader = value.reader
             self._cached_size = value.size
             self.crop_box = value.crop_box
         elif isinstance(value, Image.Image):
@@ -185,7 +295,7 @@ class LazyImage(Image.Image):
 
     @property
     def size(self) -> Tuple[int, int]:
-        """Kích thước (width, height) theo chuẩn PIL Image."""
+        """Kích thước (width, height) theo chuẩn PIL Image (Zero-RAM calculation)."""
         if self.crop_box is not None:
             return (max(0, self.crop_box[2] - self.crop_box[0]), max(0, self.crop_box[3] - self.crop_box[1]))
         if self._cached_size is not None:
@@ -196,6 +306,16 @@ class LazyImage(Image.Image):
             else:
                 self._cached_size = (self._image.shape[1], self._image.shape[0])
             return self._cached_size
+        if self.frame_index is not None:
+            if self.reader is not None:
+                self._cached_size = (self.reader.width, self.reader.height)
+                return self._cached_size
+            try:
+                self.reader = VideoReader(self.path)
+                self._cached_size = (self.reader.width, self.reader.height)
+                return self._cached_size
+            except Exception:
+                return (0, 0)
         try:
             with Image.open(self.path) as im:
                 self._cached_size = im.size
@@ -242,13 +362,36 @@ class LazyImage(Image.Image):
     def lazy_crop(self, box: Tuple[int, int, int, int]) -> "LazyImage":
         """
         Zero-RAM Lazy Cropping: Tạo ảnh con từ vùng cắt mà KHÔNG nạp pixel vào RAM.
-        Chỉ lưu tọa độ bounding box và đường dẫn file ảnh gốc.
+        Chỉ lưu tọa độ bounding box và đường dẫn file ảnh gốc/frame index.
         """
-        return LazyImage(self, backend=self.backend, crop_box=box)
+        return LazyImage(
+            self,
+            backend=self.backend,
+            crop_box=box,
+            frame_index=self.frame_index,
+            reader=self.reader,
+        )
 
-    def crop(self, *args, lazy: bool = False, **kwargs):
-        if lazy and args:
-            return self.lazy_crop(args[0])
+    def crop(self, *args, lazy: Optional[bool] = None, **kwargs) -> Any:
+        """
+        Cắt ảnh. Mặc định hoạt động theo cơ chế Zero-RAM Lazy Crop:
+        Trả về một LazyImage mới giữ nguyên URL/path/frame_index và tính toán size tức thì mà không nạp RAM.
+        Nếu truyền lazy=False rõ ràng, trả về đối tượng PIL Image thật.
+        """
+        if lazy is False:
+            return self.to_pil().crop(*args, **kwargs)
+
+        box = None
+        if len(args) == 1 and isinstance(args[0], (tuple, list)):
+            box = tuple(int(x) for x in args[0])
+        elif len(args) == 4:
+            box = tuple(int(x) for x in args)
+        elif "box" in kwargs:
+            box = tuple(int(x) for x in kwargs["box"])
+
+        if box is not None and len(box) == 4:
+            return self.lazy_crop(box)
+
         return self.to_pil().crop(*args, **kwargs)
 
     def convert(self, *args, **kwargs):
@@ -324,23 +467,28 @@ class LazyImage(Image.Image):
         status = "loaded" if self._image is not None else "unloaded"
         w, h = self.size
         crop_info = f" crop={self.crop_box}" if self.crop_box is not None else ""
-        return f"<LazyImage [{status}] url='{self.path.name}'{crop_info} size=({w}, {h})>"
+        frame_info = f" frame={self.frame_index}" if self.frame_index is not None else ""
+        return f"<LazyImage [{status}] url='{self.path.name}'{frame_info}{crop_info} size=({w}, {h})>"
 
 
 # =========================================================================
-# 0B. MediaFrames: Unified Media Container (List & Stream)
+# 0C. MediaFrames: Unified Zero-RAM List-like Media Container
 # =========================================================================
 
 class MediaFrames(list):
     """
     Tập hợp các khung hình media (ảnh / video frames) trả về từ `klygo.media.load`.
-    Hỗ trợ đồng nhất cả chế độ In-Memory (danh sách) lẫn Stream (tiết kiệm RAM chống tràn bộ nhớ).
-    Kế thừa trực tiếp từ `list` để giữ trọn vẹn 100% tương thích ngược với isinstance(..., list).
+    Kế thừa trực tiếp từ `list` của Python, hoạt động 100% như danh sách chuẩn:
+    - Zero-RAM: Toàn bộ frames là LazyImage, chi phí RAM = 0 khi load (dù 100 hay 100,000 frames).
+    - Indexing tự do: frames[0], frames[-1], frames[100]...
+    - Slicing mượt mà: frames[10:50], frames[::2] trả về MediaFrames con với Zero-RAM.
+    - List mutations: append, extend, insert, pop, __setitem__, __delitem__...
+    - Fast sequential decoding: Đọc tuần tự với tốc độ tối đa của OpenCV (300-500+ FPS).
     """
 
     def __init__(
         self,
-        items: Optional[Union[Iterable, Generator]] = None,
+        items: Optional[Iterable] = None,
         *,
         stream: bool = False,
         total_frames: Optional[int] = None,
@@ -349,259 +497,97 @@ class MediaFrames(list):
         width: Optional[int] = None,
         height: Optional[int] = None,
         source_type: str = "video",
+        reader: Optional[VideoReader] = None,
         cap: Optional[Any] = None,
     ) -> None:
+        super().__init__(items if items is not None else [])
         self.is_stream = bool(stream)
         self.fps = float(fps) if fps else 30.0
         self.source_path = str(source_path) if source_path is not None else None
         self.width = width
         self.height = height
         self.source_type = source_type
-        self.total_frames = total_frames
+        self.total_frames = total_frames if total_frames is not None else super().__len__()
+        self.reader = reader
         self._cap = cap
-        self._cache: List[Any] = []
-
-        if self.is_stream:
-            super().__init__()
-            self._stream_gen = iter(items) if items is not None else iter(())
-        else:
-            super().__init__(items if items is not None else [])
-            if self.total_frames is None:
-                self.total_frames = super().__len__()
-
-    def __iter__(self):
-        if self.is_stream:
-            idx = 0
-            while True:
-                if idx < len(self._cache):
-                    yield self._cache[idx]
-                else:
-                    try:
-                        item = next(self._stream_gen)
-                        self._cache.append(item)
-                        yield item
-                    except StopIteration:
-                        break
-                idx += 1
-        else:
-            yield from super().__iter__()
 
     def __len__(self) -> int:
-        if self.is_stream:
-            return self.total_frames if self.total_frames is not None else len(self._cache)
         return super().__len__()
 
     def __getitem__(self, index: Union[int, slice]) -> Any:
-        if self.is_stream:
-            if isinstance(index, int):
-                if index < 0:
-                    raise IndexError("Negative indexing is not supported in streaming MediaFrames.")
-                while len(self._cache) <= index:
-                    try:
-                        self._cache.append(next(self._stream_gen))
-                    except StopIteration:
-                        raise IndexError("MediaFrames stream index out of range")
-                return self._cache[index]
-            elif isinstance(index, slice):
-                import itertools
-                start, stop, step = index.start, index.stop, index.step
-                step = 1 if step is None else step
-                if step <= 0:
-                    raise ValueError("Slice step must be positive for streaming MediaFrames")
-
-                # If start is negative or stop is negative, require list conversion
-                if (start is not None and start < 0) or (stop is not None and stop < 0):
-                    raise ValueError("Negative slice indices are not supported on streaming MediaFrames. Use to_list() first.")
-
-                # Fast generator-level slicing without loading all to memory
-                def _slice_gen():
-                    # Yield cached items first if index is within cache
-                    idx = 0
-                    while True:
-                        if start is not None and idx < start:
-                            # Skip frames
-                            try:
-                                if idx < len(self._cache):
-                                    _ = self._cache[idx]
-                                else:
-                                    _ = next(self._stream_gen)
-                                idx += 1
-                                continue
-                            except StopIteration:
-                                break
-
-                        if stop is not None and idx >= stop:
-                            break
-
-                        # Check if this frame fits the step
-                        offset = idx if start is None else (idx - start)
-                        if offset % step == 0:
-                            try:
-                                if idx < len(self._cache):
-                                    frame = self._cache[idx]
-                                else:
-                                    frame = next(self._stream_gen)
-                                    self._cache.append(frame)
-                                yield frame
-                            except StopIteration:
-                                break
-                        else:
-                            try:
-                                if idx < len(self._cache):
-                                    _ = self._cache[idx]
-                                else:
-                                    frame = next(self._stream_gen)
-                                    self._cache.append(frame)
-                            except StopIteration:
-                                break
-                        idx += 1
-
-                # Estimate new total frames
-                new_total = None
-                if self.total_frames is not None:
-                    s_start = 0 if start is None else min(start, self.total_frames)
-                    s_stop = self.total_frames if stop is None else min(stop, self.total_frames)
-                    if s_stop > s_start:
-                        new_total = (s_stop - s_start + step - 1) // step
-                    else:
-                        new_total = 0
-
-                return MediaFrames(
-                    _slice_gen(),
-                    stream=True,
-                    total_frames=new_total,
-                    fps=self.fps / step if step > 1 else self.fps,
-                    source_path=self.source_path,
-                    width=self.width,
-                    height=self.height,
-                    source_type=self.source_type,
-                    cap=self._cap,
-                )
-            raise TypeError(f"Invalid index type: {type(index)}")
-        
         if isinstance(index, slice):
             sub_items = super().__getitem__(index)
+            step = index.step or 1
+            new_fps = self.fps / abs(step) if abs(step) > 1 else self.fps
             return MediaFrames(
                 sub_items,
-                stream=False,
+                stream=self.is_stream,
                 total_frames=len(sub_items),
-                fps=self.fps,
+                fps=new_fps,
                 source_path=self.source_path,
                 width=self.width,
                 height=self.height,
                 source_type=self.source_type,
+                reader=self.reader,
+                cap=self._cap,
             )
         return super().__getitem__(index)
 
     def map(self, func: Callable[[Any], Any]) -> "MediaFrames":
         """
         Áp dụng hàm tiền xử lý (crop, resize, normalize, đổi màu...) lên từng frame.
-        Hỗ trợ cả In-Memory lẫn Stream (Zero-RAM on-the-fly).
         """
-        if self.is_stream:
-            def _map_gen():
-                for item in self:
-                    yield func(item)
-            return MediaFrames(
-                _map_gen(),
-                stream=True,
-                total_frames=self.total_frames,
-                fps=self.fps,
-                source_path=self.source_path,
-                width=self.width,
-                height=self.height,
-                source_type=self.source_type,
-                cap=self._cap,
-            )
         mapped = [func(f) for f in self]
         return MediaFrames(
             mapped,
-            stream=False,
+            stream=self.is_stream,
             total_frames=len(mapped),
             fps=self.fps,
             source_path=self.source_path,
             width=self.width,
             height=self.height,
             source_type=self.source_type,
+            reader=self.reader,
+            cap=self._cap,
         )
 
     def filter(self, func: Callable[[Any], bool]) -> "MediaFrames":
         """
         Lọc loại bỏ các frame không thoả mãn điều kiện func(frame) == True.
-        Hỗ trợ cả In-Memory lẫn Stream.
         """
-        if self.is_stream:
-            def _filter_gen():
-                for item in self:
-                    if func(item):
-                        yield item
-            return MediaFrames(
-                _filter_gen(),
-                stream=True,
-                total_frames=None,  # Filtered stream length cannot be known ahead
-                fps=self.fps,
-                source_path=self.source_path,
-                width=self.width,
-                height=self.height,
-                source_type=self.source_type,
-                cap=self._cap,
-            )
         filtered = [f for f in self if func(f)]
         return MediaFrames(
             filtered,
-            stream=False,
+            stream=self.is_stream,
             total_frames=len(filtered),
             fps=self.fps,
             source_path=self.source_path,
             width=self.width,
             height=self.height,
             source_type=self.source_type,
+            reader=self.reader,
+            cap=self._cap,
         )
 
-    def __setitem__(self, index: Union[int, slice], value: Any) -> None:
-        if self.is_stream:
-            self.to_list()
-        super().__setitem__(index, value)
-
-    def __delitem__(self, index: Union[int, slice]) -> None:
-        if self.is_stream:
-            self.to_list()
-        super().__delitem__(index)
-
     def append(self, item: Any) -> None:
-        if self.is_stream:
-            self.to_list()
         super().append(item)
         self.total_frames = super().__len__()
 
     def extend(self, other: Iterable[Any]) -> None:
-        if self.is_stream:
-            self.to_list()
         super().extend(other)
         self.total_frames = super().__len__()
 
     def insert(self, index: int, item: Any) -> None:
-        if self.is_stream:
-            self.to_list()
         super().insert(index, item)
         self.total_frames = super().__len__()
 
     def pop(self, index: int = -1) -> Any:
-        if self.is_stream:
-            self.to_list()
         res = super().pop(index)
         self.total_frames = super().__len__()
         return res
 
     def to_list(self) -> List[Any]:
-        """Chuyển đổi toàn bộ frame thành list chuẩn trong bộ nhớ."""
-        if self.is_stream:
-            items = list(self)
-            self.clear()
-            self.is_stream = False
-            super().extend(items)
-            self.total_frames = len(items)
-            return items
+        """Chuyển đổi thành standard list."""
         return list(self)
 
     def save_video(self, output_path: Union[str, Path], fps: Optional[float] = None, **kwargs) -> Path:
@@ -615,6 +601,12 @@ class MediaFrames(list):
 
     def close(self) -> None:
         """Giải phóng tài nguyên (OpenCV VideoCapture) nếu có."""
+        if self.reader is not None:
+            try:
+                self.reader.release()
+            except Exception:
+                pass
+            self.reader = None
         if getattr(self, "_cap", None) is not None:
             try:
                 self._cap.release()
@@ -632,10 +624,8 @@ class MediaFrames(list):
         self.close()
 
     def __repr__(self) -> str:
-        if self.is_stream:
-            cnt_str = f"{self.total_frames} frames" if self.total_frames is not None else "streaming"
-            return f"<MediaFrames (Stream): {cnt_str}, type='{self.source_type}', fps={self.fps}>"
         return f"<MediaFrames: {len(self)} frames, type='{self.source_type}', fps={self.fps}>"
+
 
 
 # =========================================================================
@@ -648,58 +638,33 @@ def _read_video_frames(
     backend: str = "pil",
     verbose: bool = False,
 ) -> MediaFrames:
-    cap = cv.VideoCapture(str(path))
-    if not cap.isOpened():
-        raise FileNotFoundError(f"Could not open video file: {path}")
+    reader = VideoReader(path)
+    total_frames = reader.total_frames
+    fps = reader.fps
+    width = reader.width
+    height = reader.height
 
-    total_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
-    fps = float(cap.get(cv.CAP_PROP_FPS) or 30.0)
-    width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH) or 0)
-    height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT) or 0)
-    
-    # CRITICAL FIX: Some OpenCV backends (especially on Linux/Colab) break the stream pointer 
-    # when querying CAP_PROP_FRAME_COUNT, placing it at EOF. We must explicitly reset to frame 0.
-    cap.set(cv.CAP_PROP_POS_FRAMES, 0)
-
-    def _frame_generator():
-        try:
-            with ProgressBar(total=total_frames if total_frames > 0 else None, desc=f"Reading video {path.name}", unit="frame", verbose=verbose, colour="cyan") as pbar:
-                while True:
-                    ret, frame = cap.read()
-                    if not ret:
-                        break
-                    if backend == "pil":
-                        img = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
-                    else:
-                        img = frame
-                    pbar.update(1)
-                    yield img
-        finally:
-            cap.release()
-
-    if stream:
-        return MediaFrames(
-            _frame_generator(),
-            stream=True,
-            total_frames=total_frames,
-            fps=fps,
-            source_path=path,
-            width=width,
-            height=height,
-            source_type="video",
-            cap=cap,
+    lazy_frames = [
+        LazyImage(
+            path,
+            backend=backend,
+            frame_index=i,
+            reader=reader,
         )
-    else:
-        return MediaFrames(
-            list(_frame_generator()),
-            stream=False,
-            total_frames=total_frames,
-            fps=fps,
-            source_path=path,
-            width=width,
-            height=height,
-            source_type="video",
-        )
+        for i in range(total_frames)
+    ]
+
+    return MediaFrames(
+        lazy_frames,
+        stream=stream,
+        total_frames=total_frames,
+        fps=fps,
+        source_path=path,
+        width=width,
+        height=height,
+        source_type="video",
+        reader=reader,
+    )
 
 
 def load(
@@ -712,7 +677,7 @@ def load(
     """
     Tác dụng:
     - Đọc 1 file ảnh, file video, hoặc toàn bộ thư mục chứa ảnh.
-    - Luôn trả về đối tượng `MediaFrames` (kế thừa list) đồng nhất cho cả stream=False và stream=True.
+    - Luôn trả về đối tượng `MediaFrames` (kế thừa list) chuẩn Zero-RAM.
 
     Định dạng tương thích:
     - Ảnh: .png, .jpg, .jpeg, .webp, .bmp, .tif, .tiff
@@ -721,19 +686,19 @@ def load(
     Đầu vào:
     - source [str | Path]: Đường dẫn file ảnh, file video hoặc thư mục chứa ảnh.
     - recursive [bool]: Duyệt đệ quy qua các thư mục con (khi source là thư mục). Mặc định: False.
-    - stream [bool]: Nếu True, trả về MediaFrames đọc đệm từng frame (dùng cho video lớn). Mặc định: False.
+    - stream [bool]: Tham số giữ tương thích ngược (toàn bộ khung hình đã là Zero-RAM LazyImage). Mặc định: False.
     - backend [str]: 'pil' (mặc định) hoặc 'opencv'.
-    - verbose [bool]: Hiển thị thanh tiến trình ProgressBar khi đọc. Mặc định: True.
+    - verbose [bool]: Hiển thị thanh tiến trình khi đọc. Mặc định: False.
 
     Đầu ra:
-    - [MediaFrames]: Danh sách frames kế thừa list, hỗ trợ cả stream chống tràn RAM, lấy [0], len(frames).
+    - [MediaFrames]: Danh sách khung hình kế thừa Python list, Zero-RAM, hỗ trợ indexing [0], [-1], slicing [10:20], len(frames).
 
     Ví dụ:
     >>> import klygo.media as media
     >>> imgs = media.load("image.jpg")
-    >>> frames = media.load("video.mp4", stream=True)
-    >>> len(frames)        # Biết ngay tổng số frame của video!
-    >>> first = frames[0]  # Lấy frame đầu tiên mà không làm hỏng luồng stream!
+    >>> frames = media.load("video.mp4")
+    >>> len(frames)        # Tổng số frame của video tức thì (Zero-RAM)!
+    >>> first = frames[0]  # Lấy frame đầu tiên, f.size, f.crop(...) hoàn toàn Zero-RAM!
     """
     validate_type(source, (str, Path), "source")
     validate_type(recursive, bool, "recursive")
@@ -775,24 +740,9 @@ def load(
     # Zero-RAM Lazy Loading: wrap each path in a LazyImage (URL/Path Proxy)
     lazy_frames = [LazyImage(f, backend=backend) for f in image_paths]
 
-    if stream:
-        def _images_stream_generator():
-            with ProgressBar(total=len(lazy_frames), desc=f"Streaming images from {p.name}", unit="file", verbose=verbose, colour="cyan") as pbar:
-                for lz in lazy_frames:
-                    yield lz
-                    pbar.update(1)
-
-        return MediaFrames(
-            _images_stream_generator(),
-            stream=True,
-            total_frames=len(lazy_frames),
-            source_path=p,
-            source_type="folder" if p.is_dir() else "image",
-        )
-
     return MediaFrames(
         lazy_frames,
-        stream=False,
+        stream=stream,
         total_frames=len(lazy_frames),
         source_path=p,
         source_type="folder" if p.is_dir() else "image",

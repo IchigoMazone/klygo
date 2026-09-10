@@ -322,8 +322,16 @@ class Detector(BaseModel):
     ) -> "Detection":
         """Chuẩn hóa 1 kết quả thô (dict hoặc Detection) thành Detection đầy đủ."""
         from klygo import media
-        img_path = getattr(image, "path", getattr(image, "filename", None))
-        final_image = media.LazyImage(img_path) if img_path is not None else image
+        if isinstance(image, media.LazyImage):
+            final_image = image
+            img_path = str(image.path)
+        else:
+            img_path = getattr(image, "path", getattr(image, "filename", None))
+            final_image = media.LazyImage(img_path) if img_path is not None else image
+
+        actual_frame_index = getattr(final_image, "frame_index", None)
+        if actual_frame_index is None:
+            actual_frame_index = frame_index
 
         if isinstance(det, dict):
             b_list = det.get("boxes", [])
@@ -333,17 +341,21 @@ class Detector(BaseModel):
                 Box(id=i, label=str(l), score=float(s), box=b, parent_image=final_image)
                 for i, (b, s, l) in enumerate(zip(b_list, s_list, l_list))
             ]
-            det = Detection(source_image=final_image, objects=box_objs, image_frame_index=frame_index)
+            det = Detection(source_image=final_image, objects=box_objs, image_frame_index=actual_frame_index)
         else:
             det.source_image = final_image
-            if img_path is not None:
-                det.source_path = str(img_path)
-                det.url = str(img_path)
             for b in det.objects:
                 b.parent_image = final_image
 
-        det.image_frame_index = frame_index
-        det.frame_index = frame_index
+        if hasattr(final_image, "url") and final_image.url:
+            det._source_path = str(getattr(final_image, "path", final_image.url))
+            det._url = final_image.url
+        elif img_path is not None:
+            det._source_path = str(img_path)
+            det._url = str(img_path)
+
+        det.image_frame_index = actual_frame_index
+        det.frame_index = actual_frame_index
         det.speed = {"inference": lat_ms, "fps": fps_val}
         return det
 

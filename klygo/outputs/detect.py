@@ -422,7 +422,18 @@ class Detection:
         self._url = str(new_url)
         self._source_path = self._url
         # Tự động nạp Zero-RAM LazyImage từ URL mới và đồng bộ parent_image
-        self.source_image = media.LazyImage(self._url)
+        if self._source_image is not None and isinstance(self._source_image, media.LazyImage) and self._source_image.frame_index is not None:
+            self._source_image = media.LazyImage(
+                self._url,
+                frame_index=self._source_image.frame_index,
+                reader=self._source_image.reader,
+                backend=self._source_image.backend,
+            )
+        else:
+            self._source_image = media.LazyImage(self._url)
+        if hasattr(self, "objects"):
+            for c in self.objects:
+                c.parent_image = self._source_image
 
     @property
     def source_path(self) -> Optional[str]:
@@ -734,6 +745,16 @@ class Detection:
                 details += ", ..."
             summary += f" [{details}]"
         return summary
+
+    def close(self) -> None:
+        """Giải phóng tài nguyên media proxy nếu có."""
+        img = getattr(self, "_source_image", None)
+        if img is not None and hasattr(img, "reader") and img.reader is not None:
+            try:
+                img.reader.release()
+            except Exception:
+                pass
+            img.reader = None
 
 
 # =============================================================================
@@ -1187,6 +1208,24 @@ class Detections:
             "label_counts": self.label_counts,
             "frames": [f.to_dict() for f in self],
         }
+
+    def close(self) -> None:
+        """Giải phóng toàn bộ tài nguyên VideoReader / OpenCV nếu có."""
+        for f in (self._frames or []):
+            if hasattr(f, "close"):
+                f.close()
+        for f in (getattr(self, "_stream_cache", None) or []):
+            if hasattr(f, "close"):
+                f.close()
+
+    def __enter__(self) -> "Detections":
+        return self
+
+    def __exit__(self, *args) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        self.close()
 
     def __repr__(self) -> str:
         if self.is_stream:

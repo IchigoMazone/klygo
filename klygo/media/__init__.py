@@ -36,6 +36,7 @@ from .operations import (
     to_pil,
     MediaFrames,
     LazyImage,
+    VideoReader,
     IMAGE_SUFFIXES,
     VIDEO_SUFFIXES,
 )

@@ -236,12 +236,15 @@ def resolve_images(
                     break
                 if idx % step == 0:
                     count += 1
-                    pil_img = media.to_pil(item).convert("RGB")
-                    if hasattr(item, "path"):
-                        pil_img.path = item.path
-                    elif isinstance(item, (str, Path)):
-                        pil_img.path = Path(item)
-                    yield pil_img
+                    if isinstance(item, media.LazyImage):
+                        yield item
+                    else:
+                        pil_img = media.to_pil(item).convert("RGB")
+                        if hasattr(item, "path"):
+                            pil_img.path = item.path
+                        elif isinstance(item, (str, Path)):
+                            pil_img.path = Path(item)
+                        yield pil_img
 
         is_single = False
         if isinstance(source, (str, Path)):
@@ -296,6 +299,9 @@ def resolve_images(
 
     cleaned_images = []
     for item in raw_list:
+        if isinstance(item, media.LazyImage):
+            cleaned_images.append(item)
+            continue
         pil_img = media.to_pil(item).convert("RGB")
         if hasattr(item, "path"):
             pil_img.path = item.path
