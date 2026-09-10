@@ -144,6 +144,8 @@ class LazyImage(Image.Image):
         self._im = None
         self._image: Optional[Union[Image.Image, np.ndarray]] = None
         self._cached_size: Optional[Tuple[int, int]] = None
+        self._cached_mode: str = "RGB"
+        self._instructions: List[Tuple[str, tuple, dict]] = []
 
         if isinstance(path, LazyImage):
             self._path = path.path
@@ -151,6 +153,9 @@ class LazyImage(Image.Image):
             self.backend = path.backend
             self.frame_index = path.frame_index if frame_index is None else frame_index
             self.reader = path.reader if reader is None else reader
+            self._instructions = list(path._instructions)
+            self._cached_mode = path._cached_mode
+            self._cached_size = path._cached_size
             if path.crop_box is not None and crop_box is not None:
                 ox1, oy1, _, _ = path.crop_box
                 x1, y1, x2, y2 = crop_box
@@ -197,46 +202,51 @@ class LazyImage(Image.Image):
         self._image = None
         self._cached_size = None
 
-    def load(self) -> Union[Image.Image, np.ndarray]:
+    def load(self, cache: bool = True) -> Union[Image.Image, np.ndarray]:
         """Thực sự nạp ảnh hoặc frame video từ đĩa vào bộ nhớ RAM."""
-        if self._image is None:
-            if self.frame_index is not None:
-                # Video frame decoding via reader
-                if self.reader is None:
-                    self.reader = VideoReader(self.path)
-                frame = self.reader.read_frame(self.frame_index)
-                if frame is None:
-                    raise IndexError(f"Could not read frame {self.frame_index} from video {self.path}")
+        if self._image is not None:
+            return self._image
+        
+        result = None
+        if self.frame_index is not None:
+            # Video frame decoding via reader
+            if self.reader is None:
+                self.reader = VideoReader(self.path)
+            frame = self.reader.read_frame(self.frame_index)
+            if frame is None:
+                raise IndexError(f"Could not read frame {self.frame_index} from video {self.path}")
 
-                if self.crop_box is not None:
-                    x1, y1, x2, y2 = self.crop_box
-                    h_max, w_max = frame.shape[:2]
-                    frame = frame[max(0, y1):min(h_max, y2), max(0, x1):min(w_max, x2)]
+            if self.crop_box is not None:
+                x1, y1, x2, y2 = self.crop_box
+                h_max, w_max = frame.shape[:2]
+                frame = frame[max(0, y1):min(h_max, y2), max(0, x1):min(w_max, x2)]
 
-                if self.backend == "opencv":
-                    self._image = frame
-                    self._cached_size = (frame.shape[1], frame.shape[0])
-                else:
-                    pil_img = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
-                    self._image = pil_img
-                    self._cached_size = self._image.size
-            elif self.backend == "opencv":
-                arr = cv.imread(str(self.path), cv.IMREAD_COLOR)
-                if arr is None:
-                    raise FileNotFoundError(f"Could not read image file: {self.path}")
-                if self.crop_box is not None:
-                    x1, y1, x2, y2 = self.crop_box
-                    arr = arr[max(0, y1):min(arr.shape[0], y2), max(0, x1):min(arr.shape[1], x2)]
-                self._image = arr
-                self._cached_size = (arr.shape[1], arr.shape[0])
+            if self.backend == "opencv":
+                result = frame
             else:
-                with Image.open(self.path) as source_image:
-                    source_image = source_image.convert("RGB")
-                    if self.crop_box is not None:
-                        source_image = source_image.crop(self.crop_box)
-                    self._image = source_image
-                    self._cached_size = self._image.size
-        return self._image
+                result = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
+        elif self.backend == "opencv":
+            arr = cv.imread(str(self.path), cv.IMREAD_COLOR)
+            if arr is None:
+                raise FileNotFoundError(f"Could not read image file: {self.path}")
+            if self.crop_box is not None:
+                x1, y1, x2, y2 = self.crop_box
+                arr = arr[max(0, y1):min(arr.shape[0], y2), max(0, x1):min(arr.shape[1], x2)]
+            result = arr
+        else:
+            with Image.open(self.path) as source_image:
+                source_image = source_image.convert("RGB")
+                if self.crop_box is not None:
+                    source_image = source_image.crop(self.crop_box)
+                result = source_image
+                
+        if cache:
+            self._image = result
+            if isinstance(result, np.ndarray):
+                self._cached_size = (result.shape[1], result.shape[0])
+            else:
+                self._cached_size = result.size
+        return result
 
     def unload(self) -> None:
         """Giải phóng bộ nhớ pixel, đưa đối tượng về trạng thái URL thuần túy."""
@@ -269,11 +279,11 @@ class LazyImage(Image.Image):
         elif isinstance(value, Image.Image):
             self._image = value
             self._cached_size = value.size
-            self.crop_box = None
+            self._crop_box = None
         elif isinstance(value, np.ndarray):
             self._image = value
             self._cached_size = (value.shape[1], value.shape[0])
-            self.crop_box = None
+            self._crop_box = None
         else:
             raise TypeError(f"Expected PIL.Image.Image, np.ndarray, or LazyImage, got {type(value)}")
 
@@ -296,10 +306,10 @@ class LazyImage(Image.Image):
     @property
     def size(self) -> Tuple[int, int]:
         """Kích thước (width, height) theo chuẩn PIL Image (Zero-RAM calculation)."""
-        if self.crop_box is not None:
-            return (max(0, self.crop_box[2] - self.crop_box[0]), max(0, self.crop_box[3] - self.crop_box[1]))
         if self._cached_size is not None:
             return self._cached_size
+        if self.crop_box is not None:
+            return (max(0, self.crop_box[2] - self.crop_box[0]), max(0, self.crop_box[3] - self.crop_box[1]))
         if self._image is not None:
             if isinstance(self._image, Image.Image):
                 self._cached_size = self._image.size
@@ -332,8 +342,12 @@ class LazyImage(Image.Image):
         return self.size[1]
 
     @property
-    def shape(self) -> Tuple[int, int, int]:
+    def shape(self) -> Tuple[int, ...]:
         """Kích thước (height, width, channels) theo chuẩn NumPy ndarray."""
+        if self.mode in ("L", "1", "I", "F"):
+            return (self.height, self.width)
+        elif self.mode == "RGBA":
+            return (self.height, self.width, 4)
         return (self.height, self.width, 3)
 
     @property
@@ -343,18 +357,27 @@ class LazyImage(Image.Image):
 
     @property
     def mode(self) -> str:
-        return "RGB"
+        return self._cached_mode
 
-    def to_pil(self) -> Image.Image:
-        """Chuyển thành PIL Image thật."""
-        loaded = self.load()
+    def to_pil(self, cache: bool = False) -> Image.Image:
+        """Chuyển thành PIL Image thật (thực thi Lazy Pipeline)."""
+        loaded = self.load(cache=cache)
         if isinstance(loaded, Image.Image):
-            return loaded
-        return Image.fromarray(cv.cvtColor(loaded, cv.COLOR_BGR2RGB))
+            img = loaded
+        else:
+            img = Image.fromarray(cv.cvtColor(loaded, cv.COLOR_BGR2RGB))
+            
+        for op, args, kwargs in self._instructions:
+            img = getattr(img, op)(*args, **kwargs)
+            
+        return img
 
-    def to_array(self) -> np.ndarray:
+    def to_array(self, cache: bool = False) -> np.ndarray:
         """Chuyển thành NumPy array thật."""
-        loaded = self.load()
+        if len(self._instructions) > 0:
+            return np.array(self.to_pil(cache=cache))
+            
+        loaded = self.load(cache=cache)
         if isinstance(loaded, np.ndarray):
             return loaded
         return np.array(loaded)
@@ -394,63 +417,16 @@ class LazyImage(Image.Image):
 
         return self.to_pil().crop(*args, **kwargs)
 
-    def convert(self, *args, **kwargs):
-        return self.to_pil().convert(*args, **kwargs)
-
-    def resize(self, *args, **kwargs):
-        return self.to_pil().resize(*args, **kwargs)
-
-    def rotate(self, *args, **kwargs):
-        return self.to_pil().rotate(*args, **kwargs)
-
-    def transpose(self, *args, **kwargs):
-        return self.to_pil().transpose(*args, **kwargs)
-
-    def filter(self, *args, **kwargs):
-        return self.to_pil().filter(*args, **kwargs)
-
-    def copy(self):
-        return self.to_pil().copy()
-
-    def save(self, *args, **kwargs):
-        return self.to_pil().save(*args, **kwargs)
-
-    def show(self, *args, **kwargs):
-        return self.to_pil().show(*args, **kwargs)
-
-    def tobytes(self, *args, **kwargs):
-        return self.to_pil().tobytes(*args, **kwargs)
-
-    def getpixel(self, *args, **kwargs):
-        return self.to_pil().getpixel(*args, **kwargs)
-
-    def putpixel(self, *args, **kwargs):
-        return self.to_pil().putpixel(*args, **kwargs)
-
-    def getdata(self, *args, **kwargs):
-        return self.to_pil().getdata(*args, **kwargs)
-
-    def getbbox(self):
-        return self.to_pil().getbbox()
-
-    def getbands(self):
-        return self.to_pil().getbands()
-
-    def getextrema(self):
-        return self.to_pil().getextrema()
-
-    def split(self):
-        return self.to_pil().split()
-
-    def thumbnail(self, *args, **kwargs):
-        return self.to_pil().thumbnail(*args, **kwargs)
-
     def __array__(self, dtype=None) -> np.ndarray:
         """Hỗ trợ tự động chuyển đổi khi gọi np.array(lazy_img)."""
         arr = self.to_array()
         if dtype is not None:
             return arr.astype(dtype)
         return arr
+
+    @property
+    def __array_interface__(self):
+        return self.to_pil(cache=False).__array_interface__
 
     def __getattr__(self, name: str) -> Any:
         """Chuyển tiếp tất cả các method và attribute của ảnh thật khi được gọi."""
@@ -1384,3 +1360,49 @@ def to_pil(image: Any) -> Image.Image:
             return Image.fromarray(arr.squeeze(2))
 
     raise ValueError(f"Unsupported array shape for to_pil: {arr.shape}")
+
+# =========================================================================
+# Lazy Pipeline Auto-Binding (Dynamic Proxy for PIL.Image.Image)
+# =========================================================================
+LAZY_OPS = {"resize", "convert", "rotate", "transpose", "filter", "point", "quantize", "transform"}
+
+for attr in dir(Image.Image):
+    if attr.startswith("_") or not callable(getattr(Image.Image, attr)): 
+        continue
+    if attr in ["crop", "show", "save", "load", "copy", "thumbnail", "tobytes"]: 
+        continue
+
+    def _make_forwarder(name):
+        def forwarder(self, *args, **kwargs):
+            if name in LAZY_OPS:
+                # Trả về một LazyImage mới, ghi nhận chỉ thị để không tốn RAM
+                new_lazy = LazyImage(self)
+                new_lazy._instructions = list(self._instructions) + [(name, args, kwargs)]
+                
+                # Cập nhật size và mode tức thì
+                if name == "resize":
+                    new_lazy._cached_size = kwargs.get("size", args[0] if args else self._cached_size)
+                elif name == "convert":
+                    new_lazy._cached_mode = kwargs.get("mode", args[0] if args else self._cached_mode)
+                return new_lazy
+            else:
+                # Hàm thực thi cuối (ví dụ: getpixel, histogram), tự động nhả RAM sau khi chạy
+                return getattr(self.to_pil(cache=False), name)(*args, **kwargs)
+        return forwarder
+
+    setattr(LazyImage, attr, _make_forwarder(attr))
+
+# Override specific terminal methods for consistency
+def _lazy_show(self, *args, **kwargs):
+    return self.to_pil(cache=False).show(*args, **kwargs)
+
+def _lazy_save(self, *args, **kwargs):
+    return self.to_pil(cache=False).save(*args, **kwargs)
+    
+def _lazy_copy(self):
+    return LazyImage(self)
+
+setattr(LazyImage, "show", _lazy_show)
+setattr(LazyImage, "save", _lazy_save)
+setattr(LazyImage, "copy", _lazy_copy)
+
