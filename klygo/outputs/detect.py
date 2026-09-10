@@ -807,12 +807,88 @@ class Detections:
                         raise IndexError("Detections stream index out of range")
                 return self._stream_cache[index]
             elif isinstance(index, slice):
-                raise TypeError("Slicing is not supported on streaming Detections. Use list(detections)[slice] or iterate.")
+                start, stop, step = index.start, index.stop, index.step
+                step = 1 if step is None else step
+                if step <= 0:
+                    raise ValueError("Slice step must be positive for streaming Detections")
+
+                if (start is not None and start < 0) or (stop is not None and stop < 0):
+                    raise ValueError("Negative slice indices are not supported on streaming Detections. Use to_list() first.")
+
+                def _slice_gen():
+                    idx = 0
+                    while True:
+                        if start is not None and idx < start:
+                            try:
+                                if idx < len(self._stream_cache):
+                                    _ = self._stream_cache[idx]
+                                else:
+                                    _ = next(self._iterator)
+                                idx += 1
+                                continue
+                            except StopIteration:
+                                break
+
+                        if stop is not None and idx >= stop:
+                            break
+
+                        offset = idx if start is None else (idx - start)
+                        if offset % step == 0:
+                            try:
+                                if idx < len(self._stream_cache):
+                                    det = self._stream_cache[idx]
+                                else:
+                                    det = next(self._iterator)
+                                    self._stream_cache.append(det)
+                                yield det
+                            except StopIteration:
+                                break
+                        else:
+                            try:
+                                if idx < len(self._stream_cache):
+                                    _ = self._stream_cache[idx]
+                                else:
+                                    det = next(self._iterator)
+                                    self._stream_cache.append(det)
+                            except StopIteration:
+                                break
+                        idx += 1
+
+                new_total = None
+                if self.total_frames is not None:
+                    s_start = 0 if start is None else min(start, self.total_frames)
+                    s_stop = self.total_frames if stop is None else min(stop, self.total_frames)
+                    if s_stop > s_start:
+                        new_total = (s_stop - s_start + step - 1) // step
+                    else:
+                        new_total = 0
+
+                return Detections(
+                    _slice_gen(),
+                    self.source_type,
+                    self.fps / step if step > 1 else self.fps,
+                    self.output_path,
+                    stream=True,
+                    total_frames=new_total,
+                )
             raise TypeError(f"Invalid index type: {type(index)}")
 
         if isinstance(index, slice):
             return Detections(self._frames[index], self.source_type, self.fps, self.output_path)
         return self._frames[index]
+
+    def map(self, func: Callable[[Detection], Any]) -> "Detections":
+        """
+        Áp dụng hàm biến đổi func lên từng Detection frame.
+        Hỗ trợ cả In-Memory lẫn Stream.
+        """
+        if self.is_stream:
+            def _map_gen():
+                for f in self:
+                    yield func(f)
+            return Detections(_map_gen(), self.source_type, self.fps, self.output_path, stream=True, total_frames=self.total_frames)
+        mapped = [func(f) for f in self._frames]
+        return Detections(mapped, self.source_type, self.fps, self.output_path)
 
     def __setitem__(self, index: Union[int, slice], value: Any) -> None:
         if self.is_stream:

@@ -1,6 +1,6 @@
 import builtins
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union, Optional, Generator, Iterable
+from typing import Any, Dict, List, Tuple, Union, Optional, Generator, Iterable, Callable
 
 import cv2 as cv
 import numpy as np
@@ -394,9 +394,160 @@ class MediaFrames(list):
                         raise IndexError("MediaFrames stream index out of range")
                 return self._cache[index]
             elif isinstance(index, slice):
-                raise TypeError("Slicing is not supported on streaming MediaFrames. Use list(frames)[slice] instead.")
+                import itertools
+                start, stop, step = index.start, index.stop, index.step
+                step = 1 if step is None else step
+                if step <= 0:
+                    raise ValueError("Slice step must be positive for streaming MediaFrames")
+
+                # If start is negative or stop is negative, require list conversion
+                if (start is not None and start < 0) or (stop is not None and stop < 0):
+                    raise ValueError("Negative slice indices are not supported on streaming MediaFrames. Use to_list() first.")
+
+                # Fast generator-level slicing without loading all to memory
+                def _slice_gen():
+                    # Yield cached items first if index is within cache
+                    idx = 0
+                    while True:
+                        if start is not None and idx < start:
+                            # Skip frames
+                            try:
+                                if idx < len(self._cache):
+                                    _ = self._cache[idx]
+                                else:
+                                    _ = next(self._stream_gen)
+                                idx += 1
+                                continue
+                            except StopIteration:
+                                break
+
+                        if stop is not None and idx >= stop:
+                            break
+
+                        # Check if this frame fits the step
+                        offset = idx if start is None else (idx - start)
+                        if offset % step == 0:
+                            try:
+                                if idx < len(self._cache):
+                                    frame = self._cache[idx]
+                                else:
+                                    frame = next(self._stream_gen)
+                                    self._cache.append(frame)
+                                yield frame
+                            except StopIteration:
+                                break
+                        else:
+                            try:
+                                if idx < len(self._cache):
+                                    _ = self._cache[idx]
+                                else:
+                                    frame = next(self._stream_gen)
+                                    self._cache.append(frame)
+                            except StopIteration:
+                                break
+                        idx += 1
+
+                # Estimate new total frames
+                new_total = None
+                if self.total_frames is not None:
+                    s_start = 0 if start is None else min(start, self.total_frames)
+                    s_stop = self.total_frames if stop is None else min(stop, self.total_frames)
+                    if s_stop > s_start:
+                        new_total = (s_stop - s_start + step - 1) // step
+                    else:
+                        new_total = 0
+
+                return MediaFrames(
+                    _slice_gen(),
+                    stream=True,
+                    total_frames=new_total,
+                    fps=self.fps / step if step > 1 else self.fps,
+                    source_path=self.source_path,
+                    width=self.width,
+                    height=self.height,
+                    source_type=self.source_type,
+                    cap=self._cap,
+                )
             raise TypeError(f"Invalid index type: {type(index)}")
+        
+        if isinstance(index, slice):
+            sub_items = super().__getitem__(index)
+            return MediaFrames(
+                sub_items,
+                stream=False,
+                total_frames=len(sub_items),
+                fps=self.fps,
+                source_path=self.source_path,
+                width=self.width,
+                height=self.height,
+                source_type=self.source_type,
+            )
         return super().__getitem__(index)
+
+    def map(self, func: Callable[[Any], Any]) -> "MediaFrames":
+        """
+        Áp dụng hàm tiền xử lý (crop, resize, normalize, đổi màu...) lên từng frame.
+        Hỗ trợ cả In-Memory lẫn Stream (Zero-RAM on-the-fly).
+        """
+        if self.is_stream:
+            def _map_gen():
+                for item in self:
+                    yield func(item)
+            return MediaFrames(
+                _map_gen(),
+                stream=True,
+                total_frames=self.total_frames,
+                fps=self.fps,
+                source_path=self.source_path,
+                width=self.width,
+                height=self.height,
+                source_type=self.source_type,
+                cap=self._cap,
+            )
+        mapped = [func(f) for f in self]
+        return MediaFrames(
+            mapped,
+            stream=False,
+            total_frames=len(mapped),
+            fps=self.fps,
+            source_path=self.source_path,
+            width=self.width,
+            height=self.height,
+            source_type=self.source_type,
+        )
+
+    def filter(self, func: Callable[[Any], bool]) -> "MediaFrames":
+        """
+        Lọc loại bỏ các frame không thoả mãn điều kiện func(frame) == True.
+        Hỗ trợ cả In-Memory lẫn Stream.
+        """
+        if self.is_stream:
+            def _filter_gen():
+                for item in self:
+                    if func(item):
+                        yield item
+            return MediaFrames(
+                _filter_gen(),
+                stream=True,
+                total_frames=None,  # Filtered stream length cannot be known ahead
+                fps=self.fps,
+                source_path=self.source_path,
+                width=self.width,
+                height=self.height,
+                source_type=self.source_type,
+                cap=self._cap,
+            )
+        filtered = [f for f in self if func(f)]
+        return MediaFrames(
+            filtered,
+            stream=False,
+            total_frames=len(filtered),
+            fps=self.fps,
+            source_path=self.source_path,
+            width=self.width,
+            height=self.height,
+            source_type=self.source_type,
+        )
 
     def to_list(self) -> List[Any]:
         """Chuyển đổi toàn bộ frame thành list chuẩn trong bộ nhớ."""
