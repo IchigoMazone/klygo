@@ -968,13 +968,36 @@ def probe(path: Union[str, Path]) -> Dict[str, Any]:
         width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
         duration = frame_count / fps if fps > 0 else 0.0
+
+        fourcc_int = int(cap.get(cv.CAP_PROP_FOURCC))
+        codec_raw = "".join([chr((fourcc_int >> (8 * i)) & 0xFF) for i in range(4)]).strip().lower()
         cap.release()
+
+        # Map to friendly codec names
+        codec_map = {
+            "avc1": "h264",
+            "h264": "h264",
+            "x264": "h264",
+            "hev1": "h265",
+            "hvc1": "h265",
+            "hevc": "h265",
+            "x265": "h265",
+            "mp4v": "mp4v",
+            "mjpg": "mjpeg",
+            "vp09": "vp9",
+            "vp08": "vp8",
+            "av01": "av1",
+        }
+        codec = codec_map.get(codec_raw, codec_raw if codec_raw else "unknown")
+        web_ready = codec in ("h264", "vp8", "vp9", "av1") and suf in (".mp4", ".webm")
 
         return {
             "name": p.name,
             "path": p,
             "type": "video",
             "format": suf.lstrip("."),
+            "codec": codec,
+            "web_ready": web_ready,
             "width": width,
             "height": height,
             "size": (width, height),
