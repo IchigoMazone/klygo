@@ -948,9 +948,18 @@ class Detections:
 
     def __iter__(self):
         if self.is_stream:
-            while self._stream_cache:
-                yield self._stream_cache.pop(0)
-            yield from self._iterator
+            idx = 0
+            while True:
+                if idx < len(self._stream_cache):
+                    yield self._stream_cache[idx]
+                else:
+                    try:
+                        item = next(self._iterator)
+                        self._stream_cache.append(item)
+                        yield item
+                    except StopIteration:
+                        break
+                idx += 1
         else:
             yield from iter(self._frames)
 

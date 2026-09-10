@@ -371,9 +371,18 @@ class MediaFrames(list):
 
     def __iter__(self):
         if self.is_stream:
-            while self._cache:
-                yield self._cache.pop(0)
-            yield from self._stream_gen
+            idx = 0
+            while True:
+                if idx < len(self._cache):
+                    yield self._cache[idx]
+                else:
+                    try:
+                        item = next(self._stream_gen)
+                        self._cache.append(item)
+                        yield item
+                    except StopIteration:
+                        break
+                idx += 1
         else:
             yield from super().__iter__()
 
