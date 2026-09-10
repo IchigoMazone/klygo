@@ -460,6 +460,10 @@ def _read_video_frames(
     fps = float(cap.get(cv.CAP_PROP_FPS) or 30.0)
     width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH) or 0)
     height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT) or 0)
+    
+    # CRITICAL FIX: Some OpenCV backends (especially on Linux/Colab) break the stream pointer 
+    # when querying CAP_PROP_FRAME_COUNT, placing it at EOF. We must explicitly reset to frame 0.
+    cap.set(cv.CAP_PROP_POS_FRAMES, 0)
 
     def _frame_generator():
         try:
