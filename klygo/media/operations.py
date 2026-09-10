@@ -549,13 +549,49 @@ class MediaFrames(list):
             source_type=self.source_type,
         )
 
+    def __setitem__(self, index: Union[int, slice], value: Any) -> None:
+        if self.is_stream:
+            self.to_list()
+        super().__setitem__(index, value)
+
+    def __delitem__(self, index: Union[int, slice]) -> None:
+        if self.is_stream:
+            self.to_list()
+        super().__delitem__(index)
+
+    def append(self, item: Any) -> None:
+        if self.is_stream:
+            self.to_list()
+        super().append(item)
+        self.total_frames = super().__len__()
+
+    def extend(self, other: Iterable[Any]) -> None:
+        if self.is_stream:
+            self.to_list()
+        super().extend(other)
+        self.total_frames = super().__len__()
+
+    def insert(self, index: int, item: Any) -> None:
+        if self.is_stream:
+            self.to_list()
+        super().insert(index, item)
+        self.total_frames = super().__len__()
+
+    def pop(self, index: int = -1) -> Any:
+        if self.is_stream:
+            self.to_list()
+        res = super().pop(index)
+        self.total_frames = super().__len__()
+        return res
+
     def to_list(self) -> List[Any]:
         """Chuyển đổi toàn bộ frame thành list chuẩn trong bộ nhớ."""
         if self.is_stream:
             items = list(self)
             self.clear()
-            self.extend(items)
             self.is_stream = False
+            super().extend(items)
+            self.total_frames = len(items)
             return items
         return list(self)
 
