@@ -1211,10 +1211,10 @@ class Detections:
 
     def close(self) -> None:
         """Giải phóng toàn bộ tài nguyên VideoReader / OpenCV nếu có."""
-        for f in (self._frames or []):
+        for f in (getattr(self, "_frames", []) or []):
             if hasattr(f, "close"):
                 f.close()
-        for f in (getattr(self, "_stream_cache", None) or []):
+        for f in (getattr(self, "_stream_cache", []) or []):
             if hasattr(f, "close"):
                 f.close()
 
