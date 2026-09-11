@@ -60,6 +60,8 @@ def draw_bboxes(
     is_np = isinstance(image, np.ndarray)
     if is_np:
         pil_img = PIL.Image.fromarray(image if image.ndim == 2 or image.shape[2] == 3 else image[:, :, :3])
+    elif hasattr(image, "to_pil"):
+        pil_img = image.to_pil(cache=False).copy()
     else:
         pil_img = image.copy()
 
