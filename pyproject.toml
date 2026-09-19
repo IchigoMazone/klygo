@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel", "pybind11>=3.0.4"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -22,7 +22,6 @@ dependencies = [
     "tqdm>=4.66",
     "transformers>=4.50,<6.0",
     "matplotlib>=3.5",
-    "pybind11>=3.0.4",
 ]
 
 [tool.setuptools.packages.find]
@@ -30,3 +29,6 @@ where = ["."]
 include = ["klygo*"]
 exclude = ["data*", "docs*", "test*"]
 namespaces = false
+
+[tool.setuptools.package-data]
+klygo = ["models/*.json"]

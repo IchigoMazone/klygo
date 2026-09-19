@@ -65,8 +65,8 @@ def test_media_batch_saving_and_iter(tmp_path):
     saved_vid = media.save_video(vid_p, frames, fps=10, overwrite=True)
     assert saved_vid.exists()
 
-    # 4. info on video
-    v_info = media.info(vid_p)
+    # 4. probe video metadata
+    v_info = media.probe(vid_p)
     assert v_info["type"] == "video"
     assert v_info["width"] == 30
     assert v_info["height"] == 20

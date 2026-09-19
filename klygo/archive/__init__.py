@@ -45,6 +45,7 @@ from klygo.archive.modify import add, remove
 from klygo.archive.transform import merge, split_by_size, convert, recompress, copy
 from klygo.archive.compare import compare
 from klygo.archive.context import open_archive as open, ArchiveFile
+from klygo.archive.human_size import human_size
 from klygo.archive.backend import detect_format, is_archive
 info = get_info
 list = list_files

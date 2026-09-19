@@ -20,24 +20,21 @@
 ## Bước 3: Publish bằng cách push tag
 
 ```bash
-# Bump version trong pyproject.toml, setup.py, __init__.py
+# Bump cùng một version trong pyproject.toml và klygo/__init__.py
 # Rồi:
 git add -A
-git commit -m "chore: release v2.0.3"
-git tag v2.0.3
+git commit -m "chore: release vX.Y.Z"
+git tag vX.Y.Z
 git push origin main --tags
 ```
 
 GitHub Actions sẽ tự động:
-1. Build wheel trên Windows / Linux / macOS cho Python 3.10–3.13
-2. Repair wheel (manylinux tag cho Linux, bundle dylib cho macOS)
-3. Upload tất cả lên PyPI
+1. Build pure-Python wheel và source distribution trên Linux.
+2. Upload các package lên PyPI.
 
 ## Wheel files sẽ có
 
-| OS | File |
-|----|------|
-| Windows | `klygo-x.y.z-cp31x-cp31x-win_amd64.whl` |
-| Linux | `klygo-x.y.z-cp31x-cp31x-manylinux_2_17_x86_64.whl` |
-| macOS Intel | `klygo-x.y.z-cp31x-cp31x-macosx_10_9_x86_64.whl` |
-| macOS Apple Silicon | `klygo-x.y.z-cp31x-cp31x-macosx_11_0_arm64.whl` |
+| Loại | File |
+|------|------|
+| Pure Python wheel | `klygo-x.y.z-py3-none-any.whl` |
+| Source distribution | `klygo-x.y.z.tar.gz` |

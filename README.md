@@ -13,12 +13,13 @@ uv sync
 ## Các package
 
 - `klygo.archive`: nén, giải nén, tìm kiếm, kiểm tra, chỉnh sửa, gộp và chia ZIP.
-- `klygo.config`: quản lý 16 APIs cấu hình thông minh.
+- `klygo.config`: quản lý cấu hình đa định dạng với dot-notation.
 - `klygo.datasets`: partition, repartition, unpartition, merge, split và remap dataset YOLO.
 - `klygo.files`: bộ công cụ 22 hàm thao tác file/thư mục, hỗ trợ 14 định dạng dữ liệu (YAML, JSON, TOML, CSV, INI, ENV, XML, Pickle...).
 - `klygo.media`: xử lý và tải/lưu tập tin hình ảnh và truyền thông.
-- `klygo.models`: nhận diện zero-shot trên ảnh, thư mục ảnh và video.
-- `klygo.visualize`: hiển thị, vẽ bbox, crop, đọc crop và thống kê dataset.
+- `klygo.models`: nạp và chạy mô hình nhận diện trên ảnh, thư mục ảnh và video.
+- `klygo.outputs`: kiểu kết quả chuẩn hóa `Box`, `Detection`, `Detections` và `Crops`.
+- `klygo.visual`: hiển thị ảnh, vẽ bounding box và thống kê dataset.
 
 ## Sử dụng nhanh
 
@@ -62,48 +63,40 @@ files.save("output.env", {"PORT": "8080"}, overwrite=True)
 pil_images = media.load("dataset/images", backend="pil")
 ```
 
-### Model
+### Model và kết quả nhận diện
 
 ```python
-from klygo.models import Model
+from klygo import models
 
-model = Model()
+model = models.load("grounding-dino-tiny")
+results = model.predict("traffic.mp4", prompt="car. person.", stream=True)
 
-predictions = model.predict(
-    source="dataset/images",
+# Xử lý tuần tự để không giữ toàn bộ video trong RAM.
+for frame in results:
+    print(frame.labels, frame.scores)
+
+# Dự đoán lại và lưu video đã vẽ bounding box.
+model.predict(
+    "traffic.mp4",
     prompt="car. person.",
-)
-
-detected_frames = model.detect(
-    source="traffic.mp4",
-    output_path="detected.mp4",
-    annotated_dir="annotated",
-    dataset_dir="generated_dataset",
-    prompt="car. person.",
-)
-
-detection_results = model.detect(
-    source="dataset/images",
-    prompt="car. person.",
-    metadata=True,
-)
-
-crop_results = model.crop(
-    source="traffic.mp4",
-    target="crops",
-    prompt="car. person.",
-)
+    stream=True,
+).save("detected.mp4")
 ```
 
 ### Visualize
 
 ```python
-import klygo.visualize as vis
+from PIL import Image
+from klygo import visual
 
-grid = vis.read_crops("crops")  # lưới 5 x 5 mặc định
-vis.show_image(grid, title="Detected objects")
-
-saved_detections = vis.read_detections("annotated")
+image = Image.open("traffic.jpg")
+annotated = visual.draw_bboxes(
+    image,
+    boxes=[[20, 20, 180, 160]],
+    labels=["car"],
+    scores=[0.95],
+)
+visual.show_image(annotated, title="Detected objects")
 ```
 
 ## Quy ước đường dẫn

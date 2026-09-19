@@ -16,7 +16,7 @@ Danh sách 11 APIs:
   5.  save_video(output_path, frames, ...) - Đóng gói danh sách frames thành file video
   6.  save_images(output_dir, images, ...) - Lưu hàng loạt danh sách ảnh/frames ra thư mục ảnh
   7.  iter_frames(video_path, ...) - Duyệt từng frame video dạng Generator tiết kiệm bộ nhớ RAM
-  8.  info(source) - Lấy thông tin metadata chi tiết của file ảnh hoặc video
+  8.  probe(source) - Lấy thông tin metadata chi tiết của file ảnh hoặc video
   9.  to_array(image) - Chuyển đổi PIL Image / PyTorch Tensor sang NumPy ndarray
   10. to_tensor(image, ...) - Chuyển đổi PIL Image / NumPy ndarray sang PyTorch Tensor
   11. to_pil(image) - Chuyển đổi NumPy ndarray / PyTorch Tensor sang PIL Image

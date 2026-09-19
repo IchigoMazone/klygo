@@ -43,7 +43,7 @@ def test_cross_module_integration(tmp_path):
 
     media_imgs = media.load(img_file, backend="pil")
     assert len(media_imgs) == 1
-    media_info = media.info(img_file)
+    media_info = media.probe(img_file)
     assert media_info["width"] == 30
 
     media.save(tmp_path / "saved_sample.png", media_imgs[0], overwrite=True)
@@ -71,7 +71,7 @@ def test_cross_module_integration(tmp_path):
     assert loaded_cfg.app.port == 9000
 
     assert files.exists(extracted_img)
-    loaded_img_info = media.info(extracted_img)
+    loaded_img_info = media.probe(extracted_img)
     assert loaded_img_info["width"] == 30
 
     print("5. Testing no function/name collisions between top-level klygo modules...")
