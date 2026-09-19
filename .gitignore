@@ -10,6 +10,7 @@ uv.lock
 .agents
 .pytest_cache
 grounding-dino-base/
+grounding-dino-base.rar
 .hf-http-test/
 
 # Build & Binary artifacts
@@ -20,6 +21,17 @@ _cmake_build/
 *.exe
 *.rar
 
-# Virtual environments
+# Temp test folders & scratch artifacts
+temp_*/
+*.ipynb
+*.jpg
+*.png
+*.mp4
+*.bak
+
+# Virtual environments & IDE
 .venv
+typings/
+.vscode/
+.idea/
 

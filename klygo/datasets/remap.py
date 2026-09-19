@@ -5,7 +5,7 @@ from pathlib import Path
 
 from klygo.validators.datasets import RemapClasses as DatasetRemapClasses
 from klygo.archive import extract
-from klygo.io import read_yaml, write_yaml
+from klygo.files import load, save
 from klygo.utils.dataset import (
     _find_dataset_root,
     _read_class_names,
@@ -147,7 +147,7 @@ def remap_classes(
                 _safe_copy(lbl_path, dest_lbl)
 
     # 5. Write new data.yaml
-    yaml_data = read_yaml(src_base / "data.yaml", verbose=False)
+    yaml_data = load(src_base / "data.yaml", verbose=False)
     new_yaml = dict(yaml_data)
     new_yaml["path"] = str(params.target.resolve().as_posix()) if not is_out_zip else "/content/data"
 
@@ -158,7 +158,7 @@ def remap_classes(
 
     new_yaml["nc"] = max(new_names.keys()) + 1 if new_names else 0
     new_yaml["names"] = yaml_names
-    write_yaml(temp_output_dir / "data.yaml", new_yaml, overwrite=True, verbose=False)
+    save(temp_output_dir / "data.yaml", new_yaml, overwrite=True, verbose=False)
 
     if temp_extract_dir and temp_extract_dir.exists():
         shutil.rmtree(temp_extract_dir)

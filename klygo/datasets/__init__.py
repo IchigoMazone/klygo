@@ -3,6 +3,7 @@ from .merge import merge
 from .split import split
 from .remap import remap_classes
 from .info import get_dataset_info
+from . import detect
 
 __all__ = [
     "partition",
@@ -12,4 +13,5 @@ __all__ = [
     "split",
     "remap_classes",
     "get_dataset_info",
+    "detect",
 ]

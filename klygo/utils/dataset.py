@@ -1,7 +1,7 @@
 import shutil
 import time
 from pathlib import Path
-from klygo.io import read_yaml
+from klygo.files import load
 
 
 def _safe_move(src: Path, dst: Path) -> None:
@@ -124,7 +124,7 @@ def _read_class_names(
                     shutil.rmtree(p)
         raise ValueError(f"data.yaml not found under {src_base}")
 
-    yaml_data = read_yaml(yaml_src, verbose=False)
+    yaml_data = load(yaml_src, verbose=False)
     if "names" not in yaml_data:
         if temp_extract_dir and temp_extract_dir.exists():
             shutil.rmtree(temp_extract_dir)
