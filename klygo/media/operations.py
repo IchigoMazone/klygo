@@ -1,6 +1,6 @@
 import builtins
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union, Optional, Generator, Iterable, Callable
+from typing import Any, Dict, List, Tuple, Union, Optional, Generator, Iterable, Callable, Iterator
 
 import cv2 as cv
 import numpy as np
@@ -146,6 +146,9 @@ class LazyImage(Image.Image):
         self._cached_size: Optional[Tuple[int, int]] = None
         self._cached_mode: str = "RGB"
         self._instructions: List[Tuple[str, tuple, dict]] = []
+        self._processing_ops: List[Any] = []
+        self._processing_trace: List[Dict[str, Any]] = []
+        self._processing_original_size: Optional[Tuple[int, int]] = None
 
         if isinstance(path, LazyImage):
             self._path = path.path
@@ -154,6 +157,9 @@ class LazyImage(Image.Image):
             self.frame_index = path.frame_index if frame_index is None else frame_index
             self.reader = path.reader if reader is None else reader
             self._instructions = list(path._instructions)
+            self._processing_ops = list(path._processing_ops)
+            self._processing_trace = [dict(item) for item in path._processing_trace]
+            self._processing_original_size = path._processing_original_size
             self._cached_mode = path._cached_mode
             self._cached_size = path._cached_size
             if path.crop_box is not None and crop_box is not None:
@@ -361,32 +367,74 @@ class LazyImage(Image.Image):
 
     def to_pil(self, cache: bool = False) -> Image.Image:
         """Chuyển thành PIL Image thật (thực thi Lazy Pipeline)."""
-        loaded = self.load(cache=cache)
-        if isinstance(loaded, Image.Image):
-            img = loaded
-        else:
-            img = Image.fromarray(cv.cvtColor(loaded, cv.COLOR_BGR2RGB))
-            
-        for op, args, kwargs in self._instructions:
-            img = getattr(img, op)(*args, **kwargs)
-            
-        return img
+        from klygo.processing.core import _to_pil
+
+        return _to_pil(self._execute_processing(cache=cache))
 
     def to_array(self, cache: bool = False) -> np.ndarray:
         """Chuyển thành NumPy array thật."""
-        if len(self._instructions) > 0:
-            return np.array(self.to_pil(cache=cache))
-            
+        from klygo.processing.core import _to_array
+
+        return _to_array(self._execute_processing(cache=cache))
+
+    def to_tensor(self, cache: bool = False) -> Any:
+        """Materialize LazyImage thành PyTorch Tensor."""
+        try:
+            import torch
+        except ImportError as exc:
+            raise ImportError("PyTorch is required for LazyImage.to_tensor()") from exc
+
+        result = self._execute_processing(cache=cache)
+        if isinstance(result, torch.Tensor):
+            return result
+        from klygo.processing.core import _to_array
+
+        array = np.array(_to_array(result), copy=True, order="C")
+        tensor = torch.from_numpy(array)
+        if tensor.ndim == 3 and tensor.shape[-1] in (1, 3, 4):
+            tensor = tensor.permute(2, 0, 1)
+        return tensor
+
+    def _execute_processing(self, cache: bool = False) -> Any:
+        """Decode nguồn và thực thi toàn bộ instruction theo đúng thứ tự."""
         loaded = self.load(cache=cache)
-        if isinstance(loaded, np.ndarray):
-            return loaded
-        return np.array(loaded)
+        if isinstance(loaded, Image.Image):
+            result: Any = loaded
+        else:
+            result = Image.fromarray(cv.cvtColor(loaded, cv.COLOR_BGR2RGB))
+
+        for op, args, kwargs in self._instructions:
+            result = getattr(result, op)(*args, **kwargs)
+
+        if self._processing_ops:
+            from klygo.processing.core import execute_pipeline
+
+            trace: List[Dict[str, Any]] = []
+            result, trace = execute_pipeline(result, self._processing_ops, trace)
+            self._processing_trace = trace
+        else:
+            self._processing_trace = []
+        return result
+
+    def process(self, operation_or_pipeline: Any) -> "LazyImage":
+        """Gắn một processing operation/pipeline mà không decode pixel."""
+        from klygo.processing import apply
+
+        return apply(self, operation_or_pipeline)
+
+    @property
+    def trace(self) -> List[Dict[str, Any]]:
+        return [dict(item) for item in self._processing_trace]
 
     def lazy_crop(self, box: Tuple[int, int, int, int]) -> "LazyImage":
         """
         Zero-RAM Lazy Cropping: Tạo ảnh con từ vùng cắt mà KHÔNG nạp pixel vào RAM.
         Chỉ lưu tọa độ bounding box và đường dẫn file ảnh gốc/frame index.
         """
+        if self._processing_ops:
+            from klygo.processing import crop
+
+            return crop(box)(self)
         return LazyImage(
             self,
             backend=self.backend,
@@ -413,6 +461,10 @@ class LazyImage(Image.Image):
             box = tuple(int(x) for x in kwargs["box"])
 
         if box is not None and len(box) == 4:
+            if self._processing_ops:
+                from klygo.processing import crop
+
+                return crop(box)(self)
             return self.lazy_crop(box)
 
         return self.to_pil().crop(*args, **kwargs)
@@ -448,44 +500,63 @@ class LazyImage(Image.Image):
 
 
 # =========================================================================
-# 0C. MediaFrames: Unified Zero-RAM List-like Media Container
+# 0C. MediaFrames: Lazy-pixel List-like Media Container
 # =========================================================================
 
 class MediaFrames(list):
     """
-    Tập hợp các khung hình media (ảnh / video frames) trả về từ `klygo.media.load`.
-    Kế thừa trực tiếp từ `list` của Python, hoạt động 100% như danh sách chuẩn:
-    - Zero-RAM: Toàn bộ frames là LazyImage, chi phí RAM = 0 khi load (dù 100 hay 100,000 frames).
-    - Indexing tự do: frames[0], frames[-1], frames[100]...
-    - Slicing mượt mà: frames[10:50], frames[::2] trả về MediaFrames con với Zero-RAM.
-    - List mutations: append, extend, insert, pop, __setitem__, __delitem__...
-    - Fast sequential decoding: Đọc tuần tự với tốc độ tối đa của OpenCV (300-500+ FPS).
+    Tập hợp lazy-pixel trả về từ :func:`klygo.media.load`.
+
+    Container giữ một ``LazyImage`` proxy cho mỗi mục để hỗ trợ truy cập ngẫu
+    nhiên và slicing, nhưng chưa giữ pixel cho tới khi ảnh được materialize.
+    Với nguồn rất lớn cần bộ nhớ giới hạn theo từng frame, dùng ``media.stream``.
     """
 
     def __init__(
         self,
         items: Optional[Iterable] = None,
         *,
-        stream: bool = False,
-        total_frames: Optional[int] = None,
         fps: float = 30.0,
         source_path: Optional[Union[str, Path]] = None,
         width: Optional[int] = None,
         height: Optional[int] = None,
         source_type: str = "video",
         reader: Optional[VideoReader] = None,
-        cap: Optional[Any] = None,
     ) -> None:
         super().__init__(items if items is not None else [])
-        self.is_stream = bool(stream)
         self.fps = float(fps) if fps else 30.0
         self.source_path = str(source_path) if source_path is not None else None
         self.width = width
         self.height = height
         self.source_type = source_type
-        self.total_frames = total_frames if total_frames is not None else super().__len__()
         self.reader = reader
-        self._cap = cap
+
+    @property
+    def total_frames(self) -> int:
+        """Số mục hiện tại; luôn đúng cả sau các thao tác sửa list."""
+        return super().__len__()
+
+    @property
+    def source(self) -> Optional[str]:
+        """Alias ngắn gọn cho ``source_path``."""
+        return self.source_path
+
+    @property
+    def loaded_count(self) -> int:
+        """Số ảnh đang giữ pixel đã decode trong RAM."""
+        return sum(bool(getattr(item, "is_loaded", False)) for item in self)
+
+    def _new(self, items: Iterable[Any], *, fps: Optional[float] = None) -> "MediaFrames":
+        """Tạo collection mới và giữ metadata của nguồn."""
+        return MediaFrames(
+            items,
+            fps=self.fps if fps is None else fps,
+            source_path=self.source_path,
+            width=self.width,
+            height=self.height,
+            source_type=self.source_type,
+            reader=self.reader,
+        )
 
     def __len__(self) -> int:
         return super().__len__()
@@ -495,76 +566,47 @@ class MediaFrames(list):
             sub_items = super().__getitem__(index)
             step = index.step or 1
             new_fps = self.fps / abs(step) if abs(step) > 1 else self.fps
-            return MediaFrames(
-                sub_items,
-                stream=self.is_stream,
-                total_frames=len(sub_items),
-                fps=new_fps,
-                source_path=self.source_path,
-                width=self.width,
-                height=self.height,
-                source_type=self.source_type,
-                reader=self.reader,
-                cap=self._cap,
-            )
+            return self._new(sub_items, fps=new_fps)
         return super().__getitem__(index)
 
     def map(self, func: Callable[[Any], Any]) -> "MediaFrames":
-        """
-        Áp dụng hàm tiền xử lý (crop, resize, normalize, đổi màu...) lên từng frame.
-        """
-        mapped = [func(f) for f in self]
-        return MediaFrames(
-            mapped,
-            stream=self.is_stream,
-            total_frames=len(mapped),
-            fps=self.fps,
-            source_path=self.source_path,
-            width=self.width,
-            height=self.height,
-            source_type=self.source_type,
-            reader=self.reader,
-            cap=self._cap,
-        )
+        """Áp dụng callable lên từng mục và giữ metadata của collection."""
+        if not callable(func):
+            raise TypeError("func must be callable")
+        return self._new(func(frame) for frame in self)
+
+    def transform(self, operation_or_pipeline: Any) -> "MediaFrames":
+        """Gắn một processing operation/pipeline vào mọi ảnh theo cơ chế lazy."""
+        from klygo.processing import Compose, Operation
+
+        if not isinstance(operation_or_pipeline, (Operation, Compose)):
+            raise TypeError("operation_or_pipeline must be a processing Operation or Compose")
+        return self.map(operation_or_pipeline)
 
     def filter(self, func: Callable[[Any], bool]) -> "MediaFrames":
-        """
-        Lọc loại bỏ các frame không thoả mãn điều kiện func(frame) == True.
-        """
-        filtered = [f for f in self if func(f)]
-        return MediaFrames(
-            filtered,
-            stream=self.is_stream,
-            total_frames=len(filtered),
-            fps=self.fps,
-            source_path=self.source_path,
-            width=self.width,
-            height=self.height,
-            source_type=self.source_type,
-            reader=self.reader,
-            cap=self._cap,
-        )
+        """Alias tương thích của :meth:`where`."""
+        return self.where(func)
 
-    def append(self, item: Any) -> None:
-        super().append(item)
-        self.total_frames = super().__len__()
+    def where(self, predicate: Callable[[Any], bool]) -> "MediaFrames":
+        """Giữ lại các mục thỏa ``predicate(item)`` và giữ metadata nguồn."""
+        if not callable(predicate):
+            raise TypeError("predicate must be callable")
+        return self._new(frame for frame in self if predicate(frame))
 
-    def extend(self, other: Iterable[Any]) -> None:
-        super().extend(other)
-        self.total_frames = super().__len__()
-
-    def insert(self, index: int, item: Any) -> None:
-        super().insert(index, item)
-        self.total_frames = super().__len__()
-
-    def pop(self, index: int = -1) -> Any:
-        res = super().pop(index)
-        self.total_frames = super().__len__()
-        return res
+    def copy(self) -> "MediaFrames":
+        """Sao chép collection mà không decode pixel và không làm mất metadata."""
+        return self._new(self)
 
     def to_list(self) -> List[Any]:
         """Chuyển đổi thành standard list."""
         return list(self)
+
+    def unload(self) -> None:
+        """Giải phóng pixel cache của mọi mục nhưng giữ collection để tái sử dụng."""
+        for item in self:
+            unload = getattr(item, "unload", None)
+            if callable(unload):
+                unload()
 
     def save_video(self, output_path: Union[str, Path], fps: Optional[float] = None, **kwargs) -> Path:
         """Đóng gói toàn bộ frames thành file video mp4/avi."""
@@ -576,19 +618,14 @@ class MediaFrames(list):
         return globals()["save_images"](output_dir, self, prefix=prefix, **kwargs)
 
     def close(self) -> None:
-        """Giải phóng tài nguyên (OpenCV VideoCapture) nếu có."""
+        """Giải phóng pixel cache và reader dùng chung, nếu có."""
+        self.unload()
         if self.reader is not None:
             try:
                 self.reader.release()
             except Exception:
                 pass
             self.reader = None
-        if getattr(self, "_cap", None) is not None:
-            try:
-                self._cap.release()
-            except Exception:
-                pass
-            self._cap = None
 
     def __del__(self) -> None:
         self.close()
@@ -600,7 +637,285 @@ class MediaFrames(list):
         self.close()
 
     def __repr__(self) -> str:
-        return f"<MediaFrames: {len(self)} frames, type='{self.source_type}', fps={self.fps}>"
+        return (
+            f"<MediaFrames: {len(self)} frames, loaded={self.loaded_count}, "
+            f"type='{self.source_type}', fps={self.fps}>"
+        )
+
+
+class MediaStream:
+    """
+    Luồng media tuần tự, không tạo danh sách ``LazyImage`` cho toàn bộ nguồn.
+
+    Mỗi lần lặp chỉ tạo proxy cho frame hiện tại. Pixel vẫn chỉ được decode khi
+    ``LazyImage`` được materialize bởi ``load()``, ``to_pil()`` hoặc model.
+    """
+
+    def __init__(
+        self,
+        source: Union[str, Path],
+        *,
+        sample_rate: int = 1,
+        max_frames: Optional[int] = None,
+        recursive: bool = False,
+        backend: str = "pil",
+        verbose: bool = False,
+    ) -> None:
+        validate_type(source, (str, Path), "source")
+        validate_type(sample_rate, int, "sample_rate")
+        validate_type(recursive, bool, "recursive")
+        validate_type(backend, str, "backend")
+        validate_type(verbose, bool, "verbose")
+        if max_frames is not None:
+            validate_type(max_frames, int, "max_frames")
+
+        if sample_rate < 1:
+            raise ValueError("sample_rate must be an integer >= 1")
+        if max_frames is not None and max_frames < 1:
+            raise ValueError("max_frames must be None or an integer >= 1")
+
+        backend = backend.lower()
+        if backend not in ("pil", "opencv"):
+            raise ValueError("backend must be 'pil' or 'opencv'")
+
+        path = Path(source)
+        if not path.exists():
+            raise FileNotFoundError(f"source does not exist: {path}")
+
+        self.source_path = str(path)
+        self.path = path
+        self.sample_rate = sample_rate
+        self.max_frames = max_frames
+        self.recursive = recursive
+        self.backend = backend
+        self.verbose = verbose
+        self.is_stream = True
+        self.width: Optional[int] = None
+        self.height: Optional[int] = None
+        self.fps = 30.0
+        self._active_readers: List[VideoReader] = []
+        self._processing_ops: List[Any] = []
+        self._predicates: List[Callable[[Any], bool]] = []
+        self._motion_threshold: Optional[float] = None
+        self._deduplicate_threshold: Optional[float] = None
+
+        if path.is_file():
+            suffix = path.suffix.lower()
+            if suffix in VIDEO_SUFFIXES:
+                self.source_type = "video"
+                reader = VideoReader(path)
+                try:
+                    source_total = reader.total_frames
+                    self.width = reader.width
+                    self.height = reader.height
+                    self.fps = reader.fps / sample_rate
+                finally:
+                    reader.release()
+            elif suffix in IMAGE_SUFFIXES:
+                self.source_type = "image"
+                source_total = 1
+                try:
+                    with Image.open(path) as image:
+                        self.width, self.height = image.size
+                except Exception:
+                    pass
+            else:
+                raise ValueError(f"source is not a supported image or video file: {path}")
+        elif path.is_dir():
+            self.source_type = "folder"
+            source_total = sum(1 for _ in self._iter_image_paths())
+            if source_total == 0:
+                raise ValueError(f"No supported image files found in directory: {path}")
+        else:
+            raise ValueError(f"source must be a file or directory: {path}")
+
+        if self.source_type == "video" and source_total <= 0:
+            self.total_frames = None
+        else:
+            sampled_total = (source_total + sample_rate - 1) // sample_rate
+            self.total_frames = min(sampled_total, max_frames) if max_frames is not None else sampled_total
+
+    def _iter_image_paths(self) -> Iterator[Path]:
+        iterator = self.path.rglob("*") if self.recursive else self.path.glob("*")
+        paths = (p for p in iterator if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES)
+        yield from sorted(paths, key=lambda p: str(p).lower())
+
+    def _clone(self) -> "MediaStream":
+        cloned = MediaStream(
+            self.path,
+            sample_rate=self.sample_rate,
+            max_frames=self.max_frames,
+            recursive=self.recursive,
+            backend=self.backend,
+            verbose=self.verbose,
+        )
+        cloned._processing_ops = list(self._processing_ops)
+        cloned._predicates = list(self._predicates)
+        cloned._motion_threshold = self._motion_threshold
+        cloned._deduplicate_threshold = self._deduplicate_threshold
+        return cloned
+
+    def transform(self, operation_or_pipeline: Any) -> "MediaStream":
+        """Gắn processing operation/pipeline vào từng frame mà không decode trước."""
+        from klygo.processing import Compose, Operation
+
+        if isinstance(operation_or_pipeline, Operation):
+            operations = [operation_or_pipeline]
+        elif isinstance(operation_or_pipeline, Compose):
+            operations = list(operation_or_pipeline.operations)
+        else:
+            raise TypeError("transform expects processing.Operation or processing.Compose")
+        cloned = self._clone()
+        cloned._processing_ops.extend(operations)
+        return cloned
+
+    def where(self, predicate: Callable[[Any], bool]) -> "MediaStream":
+        """Giữ frame thỏa predicate; predicate được đánh giá tuần tự."""
+        if not callable(predicate):
+            raise TypeError("predicate must be callable")
+        cloned = self._clone()
+        cloned._predicates.append(predicate)
+        cloned.total_frames = None
+        return cloned
+
+    def where_quality(
+        self,
+        *,
+        min_brightness: Optional[float] = None,
+        max_brightness: Optional[float] = None,
+        min_contrast: Optional[float] = None,
+        min_sharpness: Optional[float] = None,
+        max_blur: Optional[float] = None,
+        min_entropy: Optional[float] = None,
+        preview_size: Tuple[int, int] = (160, 160),
+    ) -> "MediaStream":
+        from klygo import processing as p
+
+        conditions = []
+        if min_brightness is not None:
+            conditions.append(p.brightness_score(preview_size) >= min_brightness)
+        if max_brightness is not None:
+            conditions.append(p.brightness_score(preview_size) <= max_brightness)
+        if min_contrast is not None:
+            conditions.append(p.contrast_score(preview_size) >= min_contrast)
+        if min_sharpness is not None:
+            conditions.append(p.sharpness_score(preview_size) >= min_sharpness)
+        if max_blur is not None:
+            conditions.append(p.blur_score(preview_size=preview_size) <= max_blur)
+        if min_entropy is not None:
+            conditions.append(p.entropy_score(preview_size) >= min_entropy)
+        return self.where(p.all_of(*conditions)) if conditions else self._clone()
+
+    def where_motion(self, threshold: float = 0.02) -> "MediaStream":
+        cloned = self._clone()
+        cloned._motion_threshold = float(threshold)
+        cloned.total_frames = None
+        return cloned
+
+    def deduplicate(self, threshold: float = 0.95) -> "MediaStream":
+        cloned = self._clone()
+        cloned._deduplicate_threshold = float(threshold)
+        cloned.total_frames = None
+        return cloned
+
+    def __iter__(self) -> Iterator[LazyImage]:
+        previous_frame: Optional[LazyImage] = None
+
+        def prepare(frame: LazyImage) -> Optional[LazyImage]:
+            nonlocal previous_frame
+            from klygo import processing as p
+
+            if any(not predicate(frame) for predicate in self._predicates):
+                return None
+            if previous_frame is not None and self._motion_threshold is not None:
+                if p.motion_score(previous_frame)(frame) < self._motion_threshold:
+                    return None
+            if previous_frame is not None and self._deduplicate_threshold is not None:
+                if p.similarity_score(previous_frame)(frame) >= self._deduplicate_threshold:
+                    return None
+            previous_frame = frame
+            if self._processing_ops:
+                return p.compose(self._processing_ops)(frame)
+            return frame
+
+        if self.source_type == "video":
+            reader = VideoReader(self.path)
+            self._active_readers.append(reader)
+            emitted = 0
+            frame_index = 0
+            try:
+                while reader.total_frames <= 0 or frame_index < reader.total_frames:
+                    if self.max_frames is not None and emitted >= self.max_frames:
+                        break
+
+                    lazy_image = LazyImage(
+                        self.path,
+                        backend=self.backend,
+                        frame_index=frame_index,
+                        reader=reader,
+                    )
+
+                    # Một số container/stream không khai báo frame count. Khi đó
+                    # phải đọc thử để phát hiện EOF, nhưng chỉ giữ đúng một frame.
+                    if reader.total_frames <= 0:
+                        frame = reader.read_frame(frame_index)
+                        if frame is None:
+                            break
+                        if self.backend == "opencv":
+                            lazy_image._image = frame
+                        else:
+                            lazy_image._image = Image.fromarray(cv.cvtColor(frame, cv.COLOR_BGR2RGB))
+                        lazy_image._cached_size = (frame.shape[1], frame.shape[0])
+
+                    prepared = prepare(lazy_image)
+                    if prepared is not None:
+                        yield prepared
+                        emitted += 1
+                    if reader.total_frames <= 0:
+                        lazy_image.unload()
+                    frame_index += self.sample_rate
+            finally:
+                reader.release()
+                if reader in self._active_readers:
+                    self._active_readers.remove(reader)
+            return
+
+        paths: Iterable[Path]
+        if self.source_type == "image":
+            paths = (self.path,)
+        else:
+            paths = self._iter_image_paths()
+
+        emitted = 0
+        for index, path in enumerate(paths):
+            if index % self.sample_rate != 0:
+                continue
+            if self.max_frames is not None and emitted >= self.max_frames:
+                break
+            prepared = prepare(LazyImage(path, backend=self.backend))
+            if prepared is not None:
+                yield prepared
+                emitted += 1
+
+    def close(self) -> None:
+        for reader in tuple(self._active_readers):
+            reader.release()
+        self._active_readers.clear()
+
+    def __enter__(self) -> "MediaStream":
+        return self
+
+    def __exit__(self, *args) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        self.close()
+
+    def __repr__(self) -> str:
+        return (
+            f"<MediaStream: type='{self.source_type}', total_frames={self.total_frames}, "
+            f"fps={self.fps}>"
+        )
 
 
 
@@ -610,7 +925,6 @@ class MediaFrames(list):
 
 def _read_video_frames(
     path: Path,
-    stream: bool = False,
     backend: str = "pil",
     verbose: bool = False,
 ) -> MediaFrames:
@@ -632,8 +946,6 @@ def _read_video_frames(
 
     return MediaFrames(
         lazy_frames,
-        stream=stream,
-        total_frames=total_frames,
         fps=fps,
         source_path=path,
         width=width,
@@ -646,14 +958,13 @@ def _read_video_frames(
 def load(
     source: Union[str, Path],
     recursive: bool = False,
-    stream: bool = False,
     backend: str = "pil",
     verbose: bool = False,
 ) -> MediaFrames:
     """
     Tác dụng:
     - Đọc 1 file ảnh, file video, hoặc toàn bộ thư mục chứa ảnh.
-    - Luôn trả về đối tượng `MediaFrames` (kế thừa list) chuẩn Zero-RAM.
+    - Luôn trả về `MediaFrames` (kế thừa list), chỉ giữ các proxy lazy-pixel.
 
     Định dạng tương thích:
     - Ảnh: .png, .jpg, .jpeg, .webp, .bmp, .tif, .tiff
@@ -662,23 +973,21 @@ def load(
     Đầu vào:
     - source [str | Path]: Đường dẫn file ảnh, file video hoặc thư mục chứa ảnh.
     - recursive [bool]: Duyệt đệ quy qua các thư mục con (khi source là thư mục). Mặc định: False.
-    - stream [bool]: Tham số giữ tương thích ngược (toàn bộ khung hình đã là Zero-RAM LazyImage). Mặc định: False.
     - backend [str]: 'pil' (mặc định) hoặc 'opencv'.
     - verbose [bool]: Hiển thị thanh tiến trình khi đọc. Mặc định: False.
 
     Đầu ra:
-    - [MediaFrames]: Danh sách khung hình kế thừa Python list, Zero-RAM, hỗ trợ indexing [0], [-1], slicing [10:20], len(frames).
+    - [MediaFrames]: Danh sách lazy-pixel hỗ trợ indexing [0], [-1], slicing [10:20], len(frames).
 
     Ví dụ:
     >>> import klygo.media as media
     >>> imgs = media.load("image.jpg")
     >>> frames = media.load("video.mp4")
-    >>> len(frames)        # Tổng số frame của video tức thì (Zero-RAM)!
-    >>> first = frames[0]  # Lấy frame đầu tiên, f.size, f.crop(...) hoàn toàn Zero-RAM!
+    >>> len(frames)        # Tổng số frame của video tức thì
+    >>> first = frames[0]  # Pixel chỉ được decode khi thực sự materialize ảnh
     """
     validate_type(source, (str, Path), "source")
     validate_type(recursive, bool, "recursive")
-    validate_type(stream, bool, "stream")
     validate_type(backend, str, "backend")
     validate_type(verbose, bool, "verbose")
 
@@ -693,7 +1002,7 @@ def load(
     if p.is_file():
         suf = p.suffix.lower()
         if suf in VIDEO_SUFFIXES:
-            return _read_video_frames(p, stream=stream, backend=backend, verbose=verbose)
+            return _read_video_frames(p, backend=backend, verbose=verbose)
         elif suf in IMAGE_SUFFIXES:
             image_paths = [p]
         else:
@@ -718,10 +1027,27 @@ def load(
 
     return MediaFrames(
         lazy_frames,
-        stream=stream,
-        total_frames=len(lazy_frames),
         source_path=p,
         source_type="folder" if p.is_dir() else "image",
+    )
+
+
+def stream(
+    source: Union[str, Path],
+    sample_rate: int = 1,
+    max_frames: Optional[int] = None,
+    recursive: bool = False,
+    backend: str = "pil",
+    verbose: bool = False,
+) -> MediaStream:
+    """Mở nguồn media dưới dạng iterator tuần tự bounded-memory."""
+    return MediaStream(
+        source,
+        sample_rate=sample_rate,
+        max_frames=max_frames,
+        recursive=recursive,
+        backend=backend,
+        verbose=verbose,
     )
 
 
@@ -746,7 +1072,7 @@ def save(
     p.parent.mkdir(parents=True, exist_ok=True)
 
     if isinstance(image, LazyImage):
-        image = image.load()
+        image = image.to_pil(cache=False)
 
     with ProgressBar(total=1, desc=f"Saving image {p.name}", unit="file", verbose=verbose, colour="cyan") as pbar:
         if isinstance(image, Image.Image):
@@ -919,7 +1245,7 @@ def convert(
                 pass
 
         # 2. Fallback to OpenCV (frame-by-frame)
-        frames = load(src_p, stream=True, verbose=False)
+        frames = stream(src_p, verbose=False)
         v_info = probe(src_p)
         target_fps = fps if fps is not None else v_info.get("fps", 30.0)
         
@@ -1079,9 +1405,9 @@ def save_images(
         extension = f".{extension}"
 
     saved_paths: List[Path] = []
-    img_list = builtins.list(images) if not isinstance(images, (builtins.list, tuple)) else images
-    with ProgressBar(total=len(img_list), desc=f"Saving image batch to {out_p.name}", unit="file", verbose=verbose, colour="cyan") as pbar:
-        for idx, img in enumerate(img_list, start=1):
+    total = len(images) if isinstance(images, (builtins.list, tuple)) else getattr(images, "total_frames", None)
+    with ProgressBar(total=total, desc=f"Saving image batch to {out_p.name}", unit="file", verbose=verbose, colour="cyan") as pbar:
+        for idx, img in enumerate(images, start=1):
             file_path = out_p / f"{prefix}_{idx:06d}{extension}"
             save(file_path, img, overwrite=overwrite, verbose=False)
             saved_paths.append(file_path)
@@ -1150,7 +1476,7 @@ def iter_frames(
         finally:
             cap.release()
     else:
-        imgs = load(source, recursive=recursive, stream=False, backend=backend, verbose=verbose)
+        imgs = load(source, recursive=recursive, backend=backend, verbose=verbose)
         for idx, img in enumerate(imgs):
             if idx % sample_rate == 0:
                 yield img
@@ -1299,11 +1625,14 @@ def to_tensor(image: Any, normalize: bool = True) -> Any:
     >>> import klygo.media as media
     >>> tensor = media.to_tensor(pil_img)
     """
-    if isinstance(image, LazyImage):
-        image = image.to_pil()
-
     if not _HAS_TORCH:
         raise RuntimeError("PyTorch is not installed in current environment.")
+
+    if isinstance(image, LazyImage):
+        tensor = image.to_tensor(cache=False)
+        if normalize and tensor.dtype == torch.uint8:
+            tensor = tensor.to(torch.float32) / 255.0
+        return tensor
 
     if isinstance(image, torch.Tensor):
         tensor = image.detach().clone()
@@ -1377,7 +1706,14 @@ for attr in dir(Image.Image):
             if name in LAZY_OPS:
                 # Trả về một LazyImage mới, ghi nhận chỉ thị để không tốn RAM
                 new_lazy = LazyImage(self)
-                new_lazy._instructions = list(self._instructions) + [(name, args, kwargs)]
+                if self._processing_ops:
+                    from klygo.processing.core import Operation
+
+                    new_lazy._processing_ops = list(self._processing_ops) + [
+                        Operation("pil_method", {"method": name, "args": args, "kwargs": kwargs}, "pil")
+                    ]
+                else:
+                    new_lazy._instructions = list(self._instructions) + [(name, args, kwargs)]
                 
                 # Cập nhật size và mode tức thì
                 if name == "resize":

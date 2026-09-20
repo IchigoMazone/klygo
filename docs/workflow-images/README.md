@@ -111,7 +111,11 @@ Thư mục này mô tả luồng hoạt động của repository `klygo` từ l�
 ![Media pipeline](./07-media-pipeline.png)
 
 - **Chạy ở:** [`klygo/media/operations.py`](../../klygo/media/operations.py).
-- **Entry point:** `media.load(source, recursive=False, stream=False, backend="pil")`.
+- **Collection entry point:** `media.load(source, recursive=False, backend="pil")`.
+- **Streaming entry point:** `media.stream(source, sample_rate=1, max_frames=None, backend="pil")`.
+- **Lazy processing:** `processing.compose([...])` gắn geometry, color, filter, threshold,
+  morphology, model-input và augmentation operations vào `LazyImage`; chỉ
+  `processing.materialize()`, model inference hoặc save mới thực thi pixel.
 - **Đầu vào:** ảnh đơn, thư mục ảnh hoặc video.
 - **Đầu ra:** `MediaFrames` chứa các `LazyImage` và metadata nguồn.
 - **Ứng dụng:** tạo một giao diện input thống nhất trước khi gọi model.

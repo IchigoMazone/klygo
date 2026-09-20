@@ -639,6 +639,76 @@ class Detection:
         """Cắt toàn bộ vật thể kèm đệm viền."""
         return Crops(self.objects, self.source_image, pad=pad)
 
+    def restore(self, target: str = "original", inplace: bool = False) -> "Detection":
+        """Đưa kết quả về ảnh RGB nguồn ở không gian transformed hoặc original.
+
+        ``target="transformed"`` bỏ các phép xử lý màu nhưng phát lại các phép
+        biến đổi hình học, nên box được giữ nguyên. ``target="original"`` dùng
+        ảnh nguồn nguyên bản và phục hồi box về hệ tọa độ ban đầu.
+        """
+        from klygo import processing
+
+        target = str(target).lower()
+        if target not in ("transformed", "original"):
+            raise ValueError("target must be 'transformed' or 'original'")
+
+        current_image = self.source_image
+        source_path = getattr(current_image, "path", None) or self.source_path
+        if source_path is None:
+            raise ValueError("Cannot restore a Detection whose source image has no path")
+
+        # Recreate the source proxy without copying its processing pipeline.
+        source_image = media.LazyImage(
+            source_path,
+            backend=getattr(current_image, "backend", "pil"),
+            frame_index=getattr(current_image, "frame_index", None),
+            reader=getattr(current_image, "reader", None),
+        )
+
+        operations = list(getattr(current_image, "_processing_ops", ()))
+        trace = processing.get_trace(current_image)
+        if operations and not trace and hasattr(current_image, "to_pil"):
+            # Normally inference already materialized the image. This also makes
+            # restore reliable for manually-created Detection objects.
+            current_image.to_pil(cache=False)
+            trace = processing.get_trace(current_image)
+
+        if target == "transformed":
+            geometry = [operation for operation in operations if operation.changes_geometry]
+            restored_image = processing.compose(geometry)(source_image) if geometry else source_image
+            restored_boxes = [list(box) for box in self.boxes]
+        else:
+            restored_image = source_image
+            restored_boxes = processing.restore_boxes(self.boxes, trace) if trace else [list(box) for box in self.boxes]
+
+        if inplace:
+            self.source_image = restored_image
+            for item, coordinates in zip(self.objects, restored_boxes):
+                item.box = [float(value) for value in coordinates]
+                item.parent_image = restored_image
+            return self
+
+        restored_objects = [
+            Box(
+                id=item.id,
+                label=item.label,
+                score=item.score,
+                box=coordinates,
+                parent_image=restored_image,
+                pad=item.pad,
+            )
+            for item, coordinates in zip(self.objects, restored_boxes)
+        ]
+        restored = Detection(
+            source_image=restored_image,
+            objects=restored_objects,
+            speed=dict(self.speed),
+            image_frame_index=self.image_frame_index,
+            config=dict(self.config),
+        )
+        restored.timestamp = self.timestamp
+        return restored
+
     def plot(
         self,
         line_width: Optional[int] = None,
@@ -910,6 +980,10 @@ class Detections:
             return Detections(_map_gen(), self.source_type, self.fps, self.output_path, stream=True, total_frames=self.total_frames)
         mapped = [func(f) for f in self._frames]
         return Detections(mapped, self.source_type, self.fps, self.output_path)
+
+    def restore(self, target: str = "original") -> "Detections":
+        """Phục hồi ảnh và tọa độ cho mọi frame, vẫn lazy với stream."""
+        return self.map(lambda frame: frame.restore(target=target))
 
     def __setitem__(self, index: Union[int, slice], value: Any) -> None:
         if self.is_stream:

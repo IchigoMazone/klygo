@@ -423,10 +423,6 @@ class Detector(BaseModel):
             total_count = None
             if hasattr(images, "total_frames") and images.total_frames is not None:
                 total_count = images.total_frames
-                if vid_stride > 1:
-                    total_count = (total_count + vid_stride - 1) // vid_stride
-                if max_frames is not None:
-                    total_count = min(total_count, max_frames)
             elif hasattr(images, "__len__"):
                 try:
                     total_count = len(images)

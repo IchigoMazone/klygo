@@ -19,7 +19,7 @@ def create_dummy_video(filename, num_frames=300, width=640, height=480, fps=30):
 
 class MockDetector:
     def predict(self, source, stream=False, **kwargs):
-        frames = kg.media.load(source, stream=stream)
+        frames = kg.media.stream(source) if stream else kg.media.load(source)
         def generator():
             for i, frame in enumerate(frames):
                 det = kg.outputs.detect.Detection(
@@ -29,7 +29,13 @@ class MockDetector:
                 yield det
                 
         if stream:
-            return kg.outputs.detect.Detections(generator(), source_type="video", fps=frames.fps, stream=True, total_frames=len(frames))
+            return kg.outputs.detect.Detections(
+                generator(),
+                source_type="video",
+                fps=frames.fps,
+                stream=True,
+                total_frames=frames.total_frames,
+            )
         else:
             return kg.outputs.detect.Detections(list(generator()), source_type="video", fps=frames.fps, stream=False)
 

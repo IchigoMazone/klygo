@@ -218,9 +218,14 @@ def resolve_images(
         total_frames = None
         fps_val = 30.0
         if isinstance(source, (str, Path)):
-            raw_stream = media.load(source, stream=True, verbose=False)
-            total_frames = getattr(raw_stream, "total_frames", None)
-            fps_val = getattr(raw_stream, "fps", 30.0)
+            raw_stream = media.stream(
+                source,
+                sample_rate=step,
+                max_frames=max_frames,
+                verbose=False,
+            )
+            is_single = raw_stream.source_type == "image"
+            return raw_stream, is_single
         elif hasattr(source, "__iter__") and not isinstance(source, (list, tuple)):
             raw_stream = source
             total_frames = getattr(source, "total_frames", None)
@@ -252,18 +257,11 @@ def resolve_images(
         elif isinstance(source, PIL.Image.Image):
             is_single = True
 
-        out_frames = media.MediaFrames(
-            _build_generator(),
-            stream=True,
-            total_frames=total_frames,
-            fps=fps_val,
-            source_path=source if isinstance(source, (str, Path)) else None,
-        )
-        return out_frames, is_single
+        return _build_generator(), is_single
 
     # Xử lý luồng List (RAM tiêu chuẩn) - Giữ nguyên logic cũ
     if isinstance(source, (str, Path)):
-        loaded = media.load(source, stream=False, verbose=False)
+        loaded = media.load(source, verbose=False)
         raw_list = loaded if isinstance(loaded, list) else [loaded]
         is_single = len(raw_list) == 1 and Path(str(source)).suffix.lower() not in media.VIDEO_SUFFIXES
     elif isinstance(source, PIL.Image.Image):

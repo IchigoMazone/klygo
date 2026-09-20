@@ -17,6 +17,7 @@ uv sync
 - `klygo.datasets`: partition, repartition, unpartition, merge, split và remap dataset YOLO.
 - `klygo.files`: bộ công cụ 22 hàm thao tác file/thư mục, hỗ trợ 14 định dạng dữ liệu (YAML, JSON, TOML, CSV, INI, ENV, XML, Pickle...).
 - `klygo.media`: xử lý và tải/lưu tập tin hình ảnh và truyền thông.
+- `klygo.processing`: pipeline xử lý ảnh lazy đa backend, quality filtering và phục hồi tọa độ.
 - `klygo.models`: nạp và chạy mô hình nhận diện trên ảnh, thư mục ảnh và video.
 - `klygo.outputs`: kiểu kết quả chuẩn hóa `Box`, `Detection`, `Detections` và `Crops`.
 - `klygo.visual`: hiển thị ảnh, vẽ bounding box và thống kê dataset.
@@ -61,6 +62,46 @@ cfg = config.load("config.yaml")
 data = files.load("data.json")
 files.save("output.env", {"PORT": "8080"}, overwrite=True)
 pil_images = media.load("dataset/images", backend="pil")
+```
+
+### Lazy processing
+
+```python
+from klygo import media
+from klygo import processing as P
+
+image = media.load("input.jpg")[0]
+
+pipeline = P.compose([
+    P.auto_orient(),
+    P.letterbox((640, 640)),
+    P.clahe(),
+    P.normalize(scale=255),
+])
+
+processed = pipeline(image)  # Chưa decode pixel.
+array = P.materialize(processed, output="array", cache=False)
+```
+
+Áp dụng cùng pipeline cho cả collection mà vẫn giữ lazy loading:
+
+```python
+images = media.load("dataset/images").transform(pipeline)
+selected = images.where(lambda image: image.path.suffix.lower() == ".jpg")
+print(selected.total_frames, selected.loaded_count)
+```
+
+Với video dài, dùng `media.stream()` để không tạo danh sách frame toàn bộ video:
+
+```python
+frames = (
+    media.stream("input.mp4", sample_rate=3)
+    .where_quality(min_sharpness=80)
+    .transform(pipeline)
+)
+
+for frame in frames:
+    result = model.predict(frame)
 ```
 
 ### Model và kết quả nhận diện

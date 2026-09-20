@@ -7,8 +7,73 @@ from pathlib import Path
 from PIL import Image
 import numpy as np
 import torch
+import cv2
 
 import klygo.media as media
+import klygo.processing as processing
+
+
+def test_media_stream_is_separate_from_load(tmp_path):
+    video_path = tmp_path / "stream.mp4"
+    writer = cv2.VideoWriter(
+        str(video_path),
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        12,
+        (24, 16),
+    )
+    for value in range(5):
+        writer.write(np.full((16, 24, 3), value, dtype=np.uint8))
+    writer.release()
+
+    loaded = media.load(video_path)
+    streamed = media.stream(video_path, sample_rate=2, max_frames=2)
+
+    assert isinstance(loaded, media.MediaFrames)
+    assert isinstance(streamed, media.MediaStream)
+    assert not isinstance(streamed, list)
+    assert streamed.is_stream
+    assert streamed.total_frames == 2
+
+    frames = list(streamed)
+    assert [frame.frame_index for frame in frames] == [0, 2]
+    assert all(isinstance(frame, media.LazyImage) for frame in frames)
+    assert all(not frame.is_loaded for frame in frames)
+
+
+def test_mediaframes_collection_api_is_lazy_and_keeps_metadata(tmp_path):
+    image_dir = tmp_path / "collection"
+    image_dir.mkdir()
+    for index, color in enumerate(("red", "green", "blue")):
+        Image.new("RGB", (20, 10), color).save(image_dir / f"{index}.png")
+
+    frames = media.load(image_dir)
+    assert frames.total_frames == 3
+    assert frames.source == str(image_dir)
+    assert frames.loaded_count == 0
+
+    transformed = frames.transform(processing.resize((8, 8)))
+    assert isinstance(transformed, media.MediaFrames)
+    assert transformed.source_path == frames.source_path
+    assert transformed[0].size == (8, 8)
+    assert transformed.loaded_count == 0
+
+    selected = frames.where(lambda image: image.path.name != "1.png")
+    assert [image.path.name for image in selected] == ["0.png", "2.png"]
+    assert selected.source_path == frames.source_path
+
+    copied = frames.copy()
+    assert isinstance(copied, media.MediaFrames)
+    assert copied.source_path == frames.source_path
+
+    frames[0].load()
+    assert frames.loaded_count == 1
+    frames.unload()
+    assert frames.loaded_count == 0
+
+    del frames[0]
+    assert frames.total_frames == 2
+    frames.clear()
+    assert frames.total_frames == 0
 
 
 def test_media_conversions():
