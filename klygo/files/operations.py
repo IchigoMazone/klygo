@@ -13,13 +13,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Generator, Tuple, Union
 
-from ruamel.yaml import YAML
+import yaml
 
 from klygo.archive.human_size import human_size as _human_size
 from klygo.utils.progress import ProgressBar
 from klygo.validators import validate_type
-
-_yaml = YAML()
 
 _DATA_SUFFIXES = {
     ".yaml", ".yml",
@@ -117,7 +115,7 @@ def load(
     if suffix in (".yaml", ".yml"):
         def _parse_yaml():
             with open(p, "r", encoding="utf-8") as f:
-                return _yaml.load(f)
+                return yaml.safe_load(f)
         return _read_with_bar(p, verbose, "Reading YAML", _parse_yaml)
 
     elif suffix == ".json":
@@ -278,7 +276,7 @@ def save(
                 if isinstance(data, str):
                     f.write(data)
                 else:
-                    _yaml.dump(data, f)
+                    yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
         _write_with_bar(p, data, overwrite, verbose, "Writing YAML", _write_yaml)
 
     elif suffix == ".json":
