@@ -1,10 +1,9 @@
 import random
-import shutil
 from pathlib import Path
 
 from klygo.validators.datasets import Merge as DatasetMerge
 from klygo.archive import extract
-from klygo.files import save
+from klygo import files
 from klygo.utils.dataset import (
     _find_dataset_root,
     _read_class_names,
@@ -50,7 +49,7 @@ def merge(
     # 1. Setup temporary workspace directory
     merge_workspace = params.output_path.parent / f".temp_merge_workspace_{random.randint(1000, 9999)}"
     if merge_workspace.exists():
-        shutil.rmtree(merge_workspace)
+        files.remove(merge_workspace)
 
     images_merge_dir = merge_workspace / "images"
     labels_merge_dir = merge_workspace / "labels"
@@ -69,7 +68,7 @@ def merge(
         if is_zip:
             temp_extract_dir = params.output_path.parent / f".temp_merge_extract_{idx}_{random.randint(1000, 9999)}"
             if temp_extract_dir.exists():
-                shutil.rmtree(temp_extract_dir)
+                files.remove(temp_extract_dir)
             extract(
                 archive_path=src,
                 output_dir=temp_extract_dir,
@@ -124,9 +123,9 @@ def merge(
 
         if not images_src.exists():
             if temp_extract_dir and temp_extract_dir.exists():
-                shutil.rmtree(temp_extract_dir)
+                files.remove(temp_extract_dir)
             if merge_workspace.exists():
-                shutil.rmtree(merge_workspace)
+                files.remove(merge_workspace)
             raise FileNotFoundError(f"images directory not found under {src_base}")
 
         pairs = _scan_dataset_files(images_src, labels_src)
@@ -165,7 +164,7 @@ def merge(
                         _safe_copy(lbl_path, lbl_dest)
 
         if temp_extract_dir and temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
+            files.remove(temp_extract_dir)
 
     # 4. Write unified data.yaml
     yaml_data = {
@@ -175,16 +174,16 @@ def merge(
         "nc": len(global_names),
         "names": global_names
     }
-    save(merge_workspace / "data.yaml", yaml_data, overwrite=True, verbose=verbose)
+    files.save(merge_workspace / "data.yaml", yaml_data, overwrite=True, verbose=verbose)
 
     # 5. Compress to the output ZIP file manually to ensure no parent folder in ZIP
     from zipfile import ZipFile, ZIP_DEFLATED
     with ZipFile(params.output_path, mode="w", compression=ZIP_DEFLATED) as zf:
         all_files = sorted(f for f in merge_workspace.rglob("*") if f.is_file())
         for file in all_files:
-            arcname = file.relative_to(merge_workspace)
+            arcname = files.relative(file, merge_workspace)
             zf.write(file, arcname=arcname)
 
     # 6. Cleanup
     if merge_workspace.exists():
-        shutil.rmtree(merge_workspace)
+        files.remove(merge_workspace)

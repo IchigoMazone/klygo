@@ -1,9 +1,9 @@
 import random
-import shutil
 from pathlib import Path
 from typing import Any
 
 from klygo.archive import extract
+from klygo import files
 from klygo.utils.dataset import (
     _find_dataset_root,
     _read_class_names,
@@ -27,7 +27,7 @@ def get_dataset_info(source: str | Path) -> dict[str, Any]:
 
     Nguồn: TrinhNhuNhat_12072026.
     """
-    source = Path(source)
+    source = files.path(source)
     if not source.exists():
         raise FileNotFoundError(f"Source not found: {source}")
 
@@ -37,7 +37,7 @@ def get_dataset_info(source: str | Path) -> dict[str, Any]:
     if is_zip:
         temp_extract_dir = source.parent / f".temp_info_extract_{random.randint(1000, 9999)}"
         if temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
+            files.remove(temp_extract_dir)
         extract(
             archive_path=source,
             output_dir=temp_extract_dir,
@@ -83,6 +83,6 @@ def get_dataset_info(source: str | Path) -> dict[str, Any]:
         }
     finally:
         if temp_extract_dir and temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
+            files.remove(temp_extract_dir)
 
     return info

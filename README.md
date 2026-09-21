@@ -15,9 +15,10 @@ uv sync
 - `klygo.archive`: nén, giải nén, tìm kiếm, kiểm tra, chỉnh sửa, gộp và chia ZIP.
 - `klygo.config`: quản lý cấu hình đa định dạng với dot-notation.
 - `klygo.datasets`: partition, repartition, unpartition, merge, split và remap dataset YOLO.
-- `klygo.files`: bộ công cụ 22 hàm thao tác file/thư mục, hỗ trợ 14 định dạng dữ liệu (YAML, JSON, TOML, CSV, INI, ENV, XML, Pickle...).
+- `klygo.files`: bộ công cụ 39 hàm thao tác file, thư mục và path, hỗ trợ 14 định dạng dữ liệu (YAML, JSON, TOML, CSV, INI, ENV, XML, Pickle...).
 - `klygo.media`: xử lý và tải/lưu tập tin hình ảnh và truyền thông.
 - `klygo.processing`: pipeline xử lý ảnh lazy đa backend, quality filtering và phục hồi tọa độ.
+- `klygo.postprocessing`: lọc, chỉnh nhãn, sửa box, NMS và pipeline xử lý kết quả nhận diện.
 - `klygo.models`: nạp và chạy mô hình nhận diện trên ảnh, thư mục ảnh và video.
 - `klygo.outputs`: kiểu kết quả chuẩn hóa `Box`, `Detection`, `Detections` và `Crops`.
 - `klygo.visual`: hiển thị ảnh, vẽ bounding box và thống kê dataset.
@@ -122,6 +123,33 @@ model.predict(
     prompt="car. person.",
     stream=True,
 ).save("detected.mp4")
+```
+
+### Post-processing kết quả
+
+```python
+from klygo import postprocessing as post
+
+result = results.get_frame(120)
+result = (
+    result
+    .relabel("car", ids=[1, 4, 7])
+    .filter_score(0.4)
+    .clip()
+    .remove_invalid(min_area=16)
+    .nms(iou=0.5)
+    .top(100)
+)
+
+cleanup = post.compose(
+    post.threshold(0.4),
+    post.clip(),
+    post.remove_invalid(min_area=16),
+    post.nms(iou=0.5),
+    post.top(100),
+)
+
+clean_results = cleanup(results)  # Vẫn lazy nếu results là stream.
 ```
 
 ### Visualize

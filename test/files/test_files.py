@@ -116,8 +116,8 @@ def test_files_filesystem_operations(tmp_path):
     files.save(f1, "hello", overwrite=True)
     files.save(f2, {"a": 1}, overwrite=True)
 
-    # list and find
-    items = files.list(sub)
+    # list entries and find
+    items = files.list_entries(sub)
     assert len(items) == 2
     found = files.find(sub, "*.txt")
     assert len(found) == 1
@@ -143,6 +143,66 @@ def test_files_filesystem_operations(tmp_path):
     # remove
     files.remove(renamed)
     assert not files.exists(renamed)
+
+
+def test_files_path_operations(tmp_path):
+    root = tmp_path / "dataset"
+    image = root / "images" / "train" / "sample.tar.gz"
+    label_root = root / "labels"
+
+    assert files.path(root) == root
+    assert files.path("~", expand_user=False) == Path("~")
+    assert files.path("~") == Path.home()
+    assert files.join(root, "images", "train", "sample.jpg") == (
+        root / "images" / "train" / "sample.jpg"
+    )
+    with pytest.raises(ValueError):
+        files.join()
+
+    assert files.normalize(root / "images" / ".." / "labels") == label_root
+    assert files.resolve(root).is_absolute()
+    with pytest.raises(FileNotFoundError):
+        files.resolve(root / "missing", strict=True)
+
+    assert files.relative(image, root) == Path("images/train/sample.tar.gz")
+    assert files.is_within(image, root)
+    assert not files.is_within(root / ".." / "outside.txt", root)
+    assert files.common_path([
+        root / "images" / "train" / "a.jpg",
+        root / "images" / "val" / "b.jpg",
+    ]) == root / "images"
+    with pytest.raises(ValueError):
+        files.common_path([])
+    with pytest.raises(TypeError):
+        files.common_path("dataset/images")
+
+    mapped = files.replace_root(image, root / "images", label_root)
+    assert mapped == label_root / "train" / "sample.tar.gz"
+    with pytest.raises(ValueError):
+        files.replace_root(tmp_path / "outside.jpg", root, label_root)
+
+    assert files.with_name(image, "renamed.tar.gz") == image.parent / "renamed.tar.gz"
+    assert files.with_stem(root / "sample.jpg", "renamed") == root / "renamed.jpg"
+    assert files.with_extension(image, "zip") == image.parent / "sample.zip"
+    assert files.with_extension(root / "sample.jpg", "") == root / "sample"
+    with pytest.raises(ValueError):
+        files.with_extension(image, "bad/ext")
+
+    assert files.extensions(image) == (".tar", ".gz")
+    assert files.compound_extension(image) == ".tar.gz"
+    assert files.parents(image)[0] == image.parent
+    assert files.is_absolute(tmp_path)
+    assert not files.is_absolute(Path("relative/path"))
+
+    existing = tmp_path / "archive.tar.gz"
+    existing.write_bytes(b"data")
+    assert files.unique_path(existing) == tmp_path / "archive_1.tar.gz"
+    (tmp_path / "archive_1.tar.gz").write_bytes(b"data")
+    assert files.unique_path(existing, separator="-", start=2) == tmp_path / "archive-2.tar.gz"
+    with pytest.raises(ValueError):
+        files.unique_path(existing, start=-1)
+
+    assert not hasattr(files, "list")
 
 
 def test_files_info_size_hash_compare(tmp_path):
@@ -203,6 +263,7 @@ if __name__ == "__main__":
         test_files_data_operations(tmp_p)
         test_media_image_loading(tmp_p)
         test_files_filesystem_operations(tmp_p)
+        test_files_path_operations(tmp_p)
         test_files_info_size_hash_compare(tmp_p)
         try:
             test_files_download(tmp_p)
@@ -210,4 +271,3 @@ if __name__ == "__main__":
             print(f"Skipping network download test: {e}")
         test_config_module(tmp_p)
         print("ALL KLYGO.FILES AND KLYGO.CONFIG TESTS PASSED SUCCESSFULLY!")
-

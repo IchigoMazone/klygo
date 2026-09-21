@@ -11,7 +11,7 @@ import urllib.request
 from urllib.parse import urlparse
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Generator, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Generator, Tuple, Union
 
 from ruamel.yaml import YAML
 
@@ -32,6 +32,12 @@ _DATA_SUFFIXES = {
     ".xml",
     ".pkl", ".pickle",
 }
+
+_COMPOUND_SUFFIXES = (
+    ".tar.gz",
+    ".tar.xz",
+    ".tar.bz2",
+)
 
 
 # =========================================================================
@@ -575,7 +581,7 @@ def is_dir(path: Union[str, Path]) -> bool:
 # Traversal & Directory Operations
 # =========================================================================
 
-def list(
+def list_entries(
     path: Union[str, Path] = ".",
     pattern: str = "*",
     recursive: bool = False,
@@ -598,7 +604,7 @@ def list(
 
     Ví dụ:
     >>> import klygo.files as files
-    >>> files.list("dataset/", pattern="*.json")
+    >>> files.list_entries("dataset/", pattern="*.json")
     """
     p = Path(path)
     if not p.exists():
@@ -729,7 +735,7 @@ def copy(
         shutil.copy2(src_p, dst_p)
     else:
         if dst_p.exists() and overwrite:
-            shutil.rmtree(dst_p)
+            remove(dst_p)
         shutil.copytree(src_p, dst_p)
 
     return dst_p
@@ -769,10 +775,7 @@ def move(
     if dst_p.exists():
         if not overwrite:
             raise FileExistsError(f"Target already exists: {dst_p}")
-        if dst_p.is_file():
-            os.remove(dst_p)
-        else:
-            shutil.rmtree(dst_p)
+        remove(dst_p)
 
     dst_p.parent.mkdir(parents=True, exist_ok=True)
     res = shutil.move(str(src_p), str(dst_p))
@@ -818,10 +821,7 @@ def rename(
         raise FileExistsError(f"Target already exists: {dst_p}")
 
     if dst_p.exists() and overwrite:
-        if dst_p.is_file():
-            os.remove(dst_p)
-        else:
-            shutil.rmtree(dst_p)
+        remove(dst_p)
 
     src_p.rename(dst_p)
     return dst_p
@@ -1017,6 +1017,173 @@ def compare(
 # =========================================================================
 # Path Property Helpers
 # =========================================================================
+
+def path(value: Union[str, Path], expand_user: bool = True) -> Path:
+    """Chuẩn hóa ``str`` hoặc ``Path`` thành đối tượng :class:`Path`."""
+    validate_type(value, (str, Path), "value")
+    validate_type(expand_user, bool, "expand_user")
+    result = Path(value)
+    return result.expanduser() if expand_user else result
+
+
+def join(*parts: Union[str, Path]) -> Path:
+    """Ghép các thành phần đường dẫn theo quy tắc của hệ điều hành hiện tại."""
+    if not parts:
+        raise ValueError("join() requires at least one path component")
+    for index, part in enumerate(parts):
+        validate_type(part, (str, Path), f"parts[{index}]")
+    return Path(parts[0]).joinpath(*parts[1:])
+
+
+def normalize(value: Union[str, Path]) -> Path:
+    """Chuẩn hóa separator và các thành phần ``.``/``..`` mà không tạo absolute path."""
+    return Path(os.path.normpath(str(path(value))))
+
+
+def resolve(value: Union[str, Path], strict: bool = False) -> Path:
+    """Trả về đường dẫn tuyệt đối; ``strict=True`` yêu cầu path phải tồn tại."""
+    validate_type(strict, bool, "strict")
+    return path(value).resolve(strict=strict)
+
+
+def relative(value: Union[str, Path], start: Union[str, Path] = ".") -> Path:
+    """Tính đường dẫn của ``value`` tương đối so với ``start``."""
+    return Path(os.path.relpath(str(path(value)), start=str(path(start))))
+
+
+def is_within(
+    value: Union[str, Path],
+    root: Union[str, Path],
+    resolve_paths: bool = True,
+) -> bool:
+    """Kiểm tra ``value`` có nằm trong ``root`` hay không, an toàn với ``..`` và symlink."""
+    validate_type(resolve_paths, bool, "resolve_paths")
+    candidate = path(value)
+    root_path = path(root)
+    if resolve_paths:
+        candidate = candidate.resolve(strict=False)
+        root_path = root_path.resolve(strict=False)
+    else:
+        candidate = normalize(candidate)
+        root_path = normalize(root_path)
+    try:
+        candidate.relative_to(root_path)
+        return True
+    except ValueError:
+        return False
+
+
+def common_path(values: Iterable[Union[str, Path]]) -> Path:
+    """Trả về đường dẫn cha chung dài nhất của một iterable đường dẫn."""
+    if isinstance(values, (str, Path)):
+        raise TypeError("values must be an iterable of paths, not a single path")
+    items = tuple(values)
+    if not items:
+        raise ValueError("common_path() requires at least one path")
+    for index, item in enumerate(items):
+        validate_type(item, (str, Path), f"values[{index}]")
+    return Path(os.path.commonpath([str(path(item)) for item in items]))
+
+
+def replace_root(
+    value: Union[str, Path],
+    old_root: Union[str, Path],
+    new_root: Union[str, Path],
+) -> Path:
+    """Ánh xạ ``value`` từ cây ``old_root`` sang cùng vị trí dưới ``new_root``."""
+    candidate = normalize(value)
+    source_root = normalize(old_root)
+    try:
+        relative_part = candidate.relative_to(source_root)
+    except ValueError:
+        try:
+            relative_part = candidate.resolve(strict=False).relative_to(
+                source_root.resolve(strict=False)
+            )
+        except ValueError as exc:
+            raise ValueError(f"Path {candidate} is not inside root {source_root}") from exc
+    return normalize(path(new_root).joinpath(relative_part))
+
+
+def with_name(value: Union[str, Path], new_name: str) -> Path:
+    """Trả về path mới với tên file/thư mục được thay thế; không đổi file thật."""
+    validate_type(new_name, str, "new_name")
+    return path(value).with_name(new_name)
+
+
+def with_stem(value: Union[str, Path], new_stem: str) -> Path:
+    """Trả về path mới với stem được thay thế và giữ nguyên extension cuối."""
+    validate_type(new_stem, str, "new_stem")
+    return path(value).with_stem(new_stem)
+
+
+def extensions(value: Union[str, Path]) -> Tuple[str, ...]:
+    """Trả về toàn bộ suffix, ví dụ ``dataset.tar.gz`` thành ``('.tar', '.gz')``."""
+    return tuple(path(value).suffixes)
+
+
+def compound_extension(value: Union[str, Path]) -> str:
+    """Trả về chuỗi ghép của toàn bộ suffix, ví dụ ``.tar.gz``."""
+    return "".join(extensions(value))
+
+
+def _effective_extension(value: Union[str, Path]) -> str:
+    candidate = path(value)
+    lowered_name = candidate.name.lower()
+    for suffix in _COMPOUND_SUFFIXES:
+        if lowered_name.endswith(suffix):
+            return candidate.name[-len(suffix):]
+    return candidate.suffix
+
+
+def with_extension(value: Union[str, Path], new_extension: str) -> Path:
+    """Thay extension, bao gồm các extension archive ghép như ``.tar.gz``."""
+    validate_type(new_extension, str, "new_extension")
+    if any(separator in new_extension for separator in ("/", "\\")):
+        raise ValueError("new_extension must not contain path separators")
+    suffix = new_extension.strip()
+    if suffix and not suffix.startswith("."):
+        suffix = f".{suffix}"
+
+    candidate = path(value)
+    current = _effective_extension(candidate)
+    base_name = candidate.name[:-len(current)] if current else candidate.name
+    return candidate.with_name(f"{base_name}{suffix}")
+
+
+def unique_path(
+    value: Union[str, Path],
+    separator: str = "_",
+    start: int = 1,
+) -> Path:
+    """Trả về path chưa tồn tại bằng cách thêm số thứ tự khi cần."""
+    validate_type(separator, str, "separator")
+    validate_type(start, int, "start")
+    if start < 0:
+        raise ValueError("start must be greater than or equal to 0")
+
+    candidate = path(value)
+    if not candidate.exists():
+        return candidate
+
+    suffix = _effective_extension(candidate)
+    base_name = candidate.name[:-len(suffix)] if suffix else candidate.name
+    counter = start
+    while True:
+        numbered = candidate.with_name(f"{base_name}{separator}{counter}{suffix}")
+        if not numbered.exists():
+            return numbered
+        counter += 1
+
+
+def parents(value: Union[str, Path]) -> Tuple[Path, ...]:
+    """Trả về toàn bộ thư mục tổ tiên gần nhất trước."""
+    return tuple(path(value).parents)
+
+
+def is_absolute(value: Union[str, Path]) -> bool:
+    """Kiểm tra đường dẫn có phải absolute path hay không."""
+    return path(value).is_absolute()
 
 def name(path: Union[str, Path]) -> str:
     """

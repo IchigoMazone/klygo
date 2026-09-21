@@ -1,11 +1,10 @@
 import random
-import shutil
 import time
 from pathlib import Path
 
 from klygo.validators.datasets import RemapClasses as DatasetRemapClasses
 from klygo.archive import extract
-from klygo.files import load, save
+from klygo import files
 from klygo.utils.dataset import (
     _find_dataset_root,
     _read_class_names,
@@ -59,7 +58,7 @@ def remap_classes(
     if is_zip:
         temp_extract_dir = params.target.parent / f".temp_remap_extract_{random.randint(1000, 9999)}"
         if temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
+            files.remove(temp_extract_dir)
         extract(
             archive_path=params.source,
             output_dir=temp_extract_dir,
@@ -75,7 +74,7 @@ def remap_classes(
 
     if not images_src.exists():
         if temp_extract_dir and temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
+            files.remove(temp_extract_dir)
         raise FileNotFoundError(f"images directory not found under {src_base}")
 
     source_names = _read_class_names(src_base, temp_extract_dir)
@@ -90,17 +89,17 @@ def remap_classes(
                 old_id = source_names.index(k)
             else:
                 if temp_extract_dir and temp_extract_dir.exists():
-                    shutil.rmtree(temp_extract_dir)
+                    files.remove(temp_extract_dir)
                 raise ValueError(f"Class name '{k}' not found in source dataset.")
         elif isinstance(k, int):
             old_id = k
             if old_id >= len(source_names):
                 if temp_extract_dir and temp_extract_dir.exists():
-                    shutil.rmtree(temp_extract_dir)
+                    files.remove(temp_extract_dir)
                 raise ValueError(f"Class ID {k} out of range of source dataset classes.")
         else:
             if temp_extract_dir and temp_extract_dir.exists():
-                shutil.rmtree(temp_extract_dir)
+                files.remove(temp_extract_dir)
             raise TypeError("class_map keys must be int or str.")
 
         if isinstance(v, str):
@@ -109,7 +108,7 @@ def remap_classes(
             id_to_id[old_id] = v
         else:
             if temp_extract_dir and temp_extract_dir.exists():
-                shutil.rmtree(temp_extract_dir)
+                files.remove(temp_extract_dir)
             raise TypeError("class_map values must be int or str.")
 
     new_names = {new_id: id_to_name[old_id] for old_id, new_id in id_to_id.items()}
@@ -119,7 +118,7 @@ def remap_classes(
     is_out_zip = str(params.target).lower().endswith(".zip")
     temp_output_dir = params.target.parent / f".temp_remap_out_{random.randint(1000, 9999)}"
     if temp_output_dir.exists():
-        shutil.rmtree(temp_output_dir)
+        files.remove(temp_output_dir)
     temp_output_dir.mkdir(parents=True, exist_ok=True)
 
     img_dest_dir = temp_output_dir / "images"
@@ -147,9 +146,9 @@ def remap_classes(
                 _safe_copy(lbl_path, dest_lbl)
 
     # 5. Write new data.yaml
-    yaml_data = load(src_base / "data.yaml", verbose=False)
+    yaml_data = files.load(src_base / "data.yaml", verbose=False)
     new_yaml = dict(yaml_data)
-    new_yaml["path"] = str(params.target.resolve().as_posix()) if not is_out_zip else "/content/data"
+    new_yaml["path"] = files.resolve(params.target).as_posix() if not is_out_zip else "/content/data"
 
     if new_names and set(new_names.keys()) == set(range(len(new_names))):
         yaml_names = [new_names[i] for i in range(len(new_names))]
@@ -158,10 +157,10 @@ def remap_classes(
 
     new_yaml["nc"] = max(new_names.keys()) + 1 if new_names else 0
     new_yaml["names"] = yaml_names
-    save(temp_output_dir / "data.yaml", new_yaml, overwrite=True, verbose=False)
+    files.save(temp_output_dir / "data.yaml", new_yaml, overwrite=True, verbose=False)
 
     if temp_extract_dir and temp_extract_dir.exists():
-        shutil.rmtree(temp_extract_dir)
+        files.remove(temp_extract_dir)
 
     # 6. Output handling
     if is_out_zip:
@@ -169,16 +168,16 @@ def remap_classes(
         with ZipFile(params.target, mode="w", compression=ZIP_DEFLATED) as zf:
             all_files = sorted(f for f in temp_output_dir.rglob("*") if f.is_file())
             for file in all_files:
-                arcname = file.relative_to(temp_output_dir)
+                arcname = files.relative(file, temp_output_dir)
                 zf.write(file, arcname=arcname)
         if temp_output_dir.exists():
-            shutil.rmtree(temp_output_dir)
+            files.remove(temp_output_dir)
     else:
         if params.target.exists():
             for _ in range(10):
                 try:
                     if params.target.is_dir():
-                        shutil.rmtree(params.target)
+                        files.remove(params.target)
                     else:
                         params.target.unlink()
                     break
@@ -186,7 +185,7 @@ def remap_classes(
                     time.sleep(0.05)
             else:
                 if params.target.is_dir():
-                    shutil.rmtree(params.target)
+                    files.remove(params.target)
                 else:
                     params.target.unlink()
 

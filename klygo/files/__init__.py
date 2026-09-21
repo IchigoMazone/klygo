@@ -13,7 +13,7 @@ https://colab.research.google.com/drive/1-Oo8ERqSuxns1OfZAdHY5jVMTrLVpJG-?usp=sh
   - Hỗ trợ TẤT CẢ các định dạng tập tin nhị phân (AI Models: .pt, .onnx, .safetensors;
     File nén: .zip, .tar.gz, .7z; Media: .mp4, .png, .jpg; Data: .parquet, .db, .whl, v.v.)
 
-Danh sách 23 APIs:
+Danh sách API public:
   1.  load(path, ...) - Đọc file dữ liệu tự động theo phần mở rộng đuôi file
   2.  save(path, data, ...) - Ghi dữ liệu ra file dựa theo đuôi mở rộng
   3.  convert(source, target, ...) - Chuyển đổi định dạng file dữ liệu
@@ -21,7 +21,7 @@ Danh sách 23 APIs:
   5.  exists(path) - Kiểm tra sự tồn tại của file hoặc thư mục
   6.  is_file(path) - Kiểm tra đường dẫn có phải là file không
   7.  is_dir(path) - Kiểm tra đường dẫn có phải là thư mục không
-  8.  list(path, ...) - Liệt kê các tập tin/thư mục con
+  8.  list_entries(path, ...) - Liệt kê các tập tin/thư mục con
   9.  find(path, ...) - Tìm kiếm file theo mẫu wildcard
   10. walk(path) - Duyệt cây thư mục dạng generator
   11. mkdir(path, ...) - Tạo thư mục mới trên ổ đĩa
@@ -37,6 +37,22 @@ Danh sách 23 APIs:
   21. stem(path) - Tên file không kèm phần mở rộng
   22. extension(path) - Phần mở rộng đuôi file
   23. parent(path) - Thư mục cha chứa file/thư mục
+  24. path(value, ...) - Chuẩn hóa đầu vào thành pathlib.Path
+  25. join(*parts) - Ghép các thành phần đường dẫn
+  26. normalize(path) - Chuẩn hóa separator và thành phần ./..
+  27. resolve(path, ...) - Chuyển thành đường dẫn tuyệt đối
+  28. relative(path, start) - Tạo đường dẫn tương đối
+  29. is_within(path, root) - Kiểm tra path nằm trong root
+  30. common_path(paths) - Tìm đường dẫn cha chung
+  31. replace_root(path, old_root, new_root) - Ánh xạ sang cây thư mục mới
+  32. with_name(path, name) - Thay tên trên path, không đổi file thật
+  33. with_stem(path, stem) - Thay stem trên path
+  34. with_extension(path, extension) - Thay extension, hỗ trợ .tar.gz
+  35. unique_path(path, ...) - Tạo tên path chưa tồn tại
+  36. extensions(path) - Liệt kê toàn bộ suffix
+  37. compound_extension(path) - Lấy extension ghép
+  38. parents(path) - Liệt kê các thư mục tổ tiên
+  39. is_absolute(path) - Kiểm tra đường dẫn tuyệt đối
 """
 
 from .operations import (
@@ -47,7 +63,7 @@ from .operations import (
     exists,
     is_file,
     is_dir,
-    list,
+    list_entries,
     find,
     walk,
     mkdir,
@@ -63,6 +79,22 @@ from .operations import (
     stem,
     extension,
     parent,
+    path,
+    join,
+    normalize,
+    resolve,
+    relative,
+    is_within,
+    common_path,
+    replace_root,
+    with_name,
+    with_stem,
+    with_extension,
+    unique_path,
+    extensions,
+    compound_extension,
+    parents,
+    is_absolute,
 )
 
 __all__ = [
@@ -73,7 +105,7 @@ __all__ = [
     "exists",
     "is_file",
     "is_dir",
-    "list",
+    "list_entries",
     "find",
     "walk",
     "mkdir",
@@ -89,4 +121,20 @@ __all__ = [
     "stem",
     "extension",
     "parent",
+    "path",
+    "join",
+    "normalize",
+    "resolve",
+    "relative",
+    "is_within",
+    "common_path",
+    "replace_root",
+    "with_name",
+    "with_stem",
+    "with_extension",
+    "unique_path",
+    "extensions",
+    "compound_extension",
+    "parents",
+    "is_absolute",
 ]

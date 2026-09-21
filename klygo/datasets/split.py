@@ -1,10 +1,9 @@
 import random
-import shutil
 from pathlib import Path
 
 from klygo.validators.datasets import Split as DatasetSplit
 from klygo.archive import extract
-from klygo.files import save
+from klygo import files
 from klygo.utils.dataset import (
     _find_dataset_root,
     _read_class_names,
@@ -64,7 +63,7 @@ def split(
     if is_zip:
         temp_extract_dir = params.output_dir / f".temp_split_extract_{random.randint(1000, 9999)}"
         if temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
+            files.remove(temp_extract_dir)
         extract(
             archive_path=params.source,
             output_dir=temp_extract_dir,
@@ -80,7 +79,7 @@ def split(
 
     if not images_src.exists():
         if temp_extract_dir and temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
+            files.remove(temp_extract_dir)
         raise FileNotFoundError(f"images directory not found under {src_base}")
 
     source_names = _read_class_names(src_base, temp_extract_dir)
@@ -106,7 +105,7 @@ def split(
             zip_dest = params.output_dir / zip_name
             if zip_dest.exists() and not params.overwrite:
                 if temp_extract_dir and temp_extract_dir.exists():
-                    shutil.rmtree(temp_extract_dir)
+                    files.remove(temp_extract_dir)
                 raise FileExistsError(f"split file already exists: {zip_dest}")
 
         # Process each class group
@@ -119,7 +118,7 @@ def split(
 
             workspace = params.output_dir / f".temp_split_workspace_{random.randint(1000, 9999)}"
             if workspace.exists():
-                shutil.rmtree(workspace)
+                files.remove(workspace)
             img_dest_dir = workspace / "images"
             lbl_dest_dir = workspace / "labels"
             img_dest_dir.mkdir(parents=True, exist_ok=True)
@@ -158,17 +157,17 @@ def split(
                     "nc": len(group),
                     "names": group
                 }
-                save(workspace / "data.yaml", yaml_data, overwrite=True, verbose=False)
+                files.save(workspace / "data.yaml", yaml_data, overwrite=True, verbose=False)
 
                 from zipfile import ZipFile, ZIP_DEFLATED
                 with ZipFile(zip_dest, mode="w", compression=ZIP_DEFLATED) as zf:
                     all_files = sorted(f for f in workspace.rglob("*") if f.is_file())
                     for file in all_files:
-                        arcname = file.relative_to(workspace)
+                        arcname = files.relative(file, workspace)
                         zf.write(file, arcname=arcname)
 
             if workspace.exists():
-                shutil.rmtree(workspace)
+                files.remove(workspace)
 
             if verbose:
                 print(f"Created class split ZIP: {zip_dest.name} with {copied_count} image(s)")
@@ -181,7 +180,7 @@ def split(
             zip_dest = params.output_dir / zip_name
             if zip_dest.exists() and not params.overwrite:
                 if temp_extract_dir and temp_extract_dir.exists():
-                    shutil.rmtree(temp_extract_dir)
+                    files.remove(temp_extract_dir)
                 raise FileExistsError(f"split file already exists: {zip_dest}")
 
         rng = random.Random(42)
@@ -204,7 +203,7 @@ def split(
 
             workspace = params.output_dir / f".temp_split_workspace_{random.randint(1000, 9999)}"
             if workspace.exists():
-                shutil.rmtree(workspace)
+                files.remove(workspace)
             img_dest_dir = workspace / "images"
             lbl_dest_dir = workspace / "labels"
             img_dest_dir.mkdir(parents=True, exist_ok=True)
@@ -222,20 +221,20 @@ def split(
                 "nc": len(source_names),
                 "names": source_names
             }
-            save(workspace / "data.yaml", yaml_data, overwrite=True, verbose=False)
+            files.save(workspace / "data.yaml", yaml_data, overwrite=True, verbose=False)
 
             from zipfile import ZipFile, ZIP_DEFLATED
             with ZipFile(zip_dest, mode="w", compression=ZIP_DEFLATED) as zf:
                 all_files = sorted(f for f in workspace.rglob("*") if f.is_file())
                 for file in all_files:
-                    arcname = file.relative_to(workspace)
+                    arcname = files.relative(file, workspace)
                     zf.write(file, arcname=arcname)
 
             if workspace.exists():
-                shutil.rmtree(workspace)
+                files.remove(workspace)
 
             if verbose:
                 print(f"Created ratio split ZIP: {zip_name} with {len(split_pairs)} image(s)")
 
     if temp_extract_dir and temp_extract_dir.exists():
-        shutil.rmtree(temp_extract_dir)
+        files.remove(temp_extract_dir)

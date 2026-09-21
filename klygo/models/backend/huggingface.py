@@ -3,7 +3,6 @@ Hugging Face Backend Logic (klygo.models.backend.huggingface).
 Chứa toàn bộ logic xử lý đặc thù cho các mô hình Hugging Face Transformers.
 """
 
-import os
 from typing import Any, Optional
 import torch
 
@@ -112,7 +111,8 @@ def sync_device(tensor: Any, target_device: Any) -> Any:
 
 def save(model: Any, processor: Optional[Any], output_dir: str) -> None:
     """Lưu model và processor theo chuẩn Hugging Face save_pretrained()."""
-    abs_out = os.path.abspath(output_dir)
+    from klygo import files
+    abs_out = files.resolve(output_dir)
     if model is not None and hasattr(model, "save_pretrained"):
         model.save_pretrained(abs_out)
     if processor is not None and hasattr(processor, "save_pretrained"):

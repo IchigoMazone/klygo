@@ -1,5 +1,5 @@
 import klygo
-from klygo import Config, archive, config, files, media, models, visual
+from klygo import Config, archive, config, files, media, models, postprocessing, visual
 
 
 def test_top_level_imports():
@@ -9,7 +9,7 @@ def test_top_level_imports():
 
 
 def test_module_exports_are_present():
-    for module in (archive, config, files, media, models, visual):
+    for module in (archive, config, files, media, models, postprocessing, visual):
         for name in module.__all__:
             assert hasattr(module, name), f"{module.__name__}.{name} is missing"
 
@@ -20,4 +20,6 @@ def test_current_public_entry_points():
     assert callable(media.load)
     assert callable(media.probe)
     assert callable(models.load)
+    assert callable(postprocessing.compose)
+    assert callable(postprocessing.nms)
     assert callable(visual.draw_bboxes)

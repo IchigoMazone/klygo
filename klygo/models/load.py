@@ -39,8 +39,8 @@ def _get_registry() -> Dict[str, Any]:
     """Tải và lưu vào bộ nhớ đệm models.json để truy xuất tức thì O(1)."""
     global _REGISTRY_CACHE
     if _REGISTRY_CACHE is None:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        models_json_path = os.path.join(current_dir, "models.json")
+        current_dir = files.parent(files.resolve(__file__))
+        models_json_path = files.join(current_dir, "models.json")
         _REGISTRY_CACHE = files.load(models_json_path, verbose=False)
     return _REGISTRY_CACHE
 
@@ -52,10 +52,10 @@ def _resolve_class(class_path: str, search_dir: Optional[str] = None) -> Any:
 
     # 1. Nạp từ file model.py cục bộ nếu nằm trong thư mục model custom
     if search_dir and files.is_dir(search_dir):
-        py_files = [os.path.join(search_dir, "model.py")]
+        py_files = [files.join(search_dir, "model.py")]
         if "." in class_path:
             mod_part = class_path.rsplit(".", 1)[0]
-            py_files.append(os.path.join(search_dir, f"{mod_part}.py"))
+            py_files.append(files.join(search_dir, f"{mod_part}.py"))
 
         for py_path in py_files:
             if files.exists(py_path):
@@ -181,14 +181,14 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
 
     # 1. Nạp từ thư mục Offline hoặc Thư mục Export
     if files.is_dir(model):
-        abs_model_path = os.path.abspath(model)
+        abs_model_path = str(files.resolve(model))
         search_dir = abs_model_path
-        klygo_path = os.path.join(abs_model_path, "klygo.json")
-        config_path = os.path.join(abs_model_path, "config.json")
+        klygo_path = files.join(abs_model_path, "klygo.json")
+        config_path = files.join(abs_model_path, "config.json")
 
         if files.exists(klygo_path):
             entry = files.load(klygo_path, verbose=False)
-            if isinstance(entry, dict) and not os.path.isabs(str(entry.get("model_id", ""))):
+            if isinstance(entry, dict) and not files.is_absolute(str(entry.get("model_id", ""))):
                 entry["model_id"] = abs_model_path
         elif files.exists(config_path):
             cfg = files.load(config_path, verbose=False)
@@ -209,7 +209,7 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
     # 2. Nạp từ file config .json trực tiếp
     elif files.is_file(model) and files.extension(model).lower() == ".json":
         entry = files.load(model, verbose=False)
-        search_dir = os.path.dirname(os.path.abspath(model))
+        search_dir = str(files.parent(files.resolve(model)))
 
     # 3. Nạp từ file trọng số YOLO .pt
     elif files.is_file(model) and files.extension(model).lower() == ".pt":
@@ -218,7 +218,7 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
             "task": "Object-Detection",
             "backend": "Ultralytics (Offline)",
             "num_params": "Offline",
-            "model_id": os.path.abspath(model),
+            "model_id": str(files.resolve(model)),
         }
 
     # 4. Tra cứu từ Registry Trực Tuyến

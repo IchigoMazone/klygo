@@ -4,7 +4,6 @@ Chứa toàn bộ logic dùng chung cho việc dò tìm device/dtype, dọn dẹ
 và bộ điều phối (dispatchers) vòng đời cho các backend framework khác nhau.
 """
 
-import os
 import sys
 from typing import Any, Optional, Dict, List, Tuple
 import torch
@@ -143,13 +142,13 @@ def save(
     """
     from klygo import files
 
-    abs_out = os.path.abspath(output_dir)
+    abs_out = files.resolve(output_dir)
     files.mkdir(abs_out)
 
     # 1. Ghi klygo.json
     meta = dict(metadata)
     meta.pop("num_params", None)
-    files.save(os.path.join(abs_out, "klygo.json"), meta, verbose=False)
+    files.save(files.join(abs_out, "klygo.json"), meta, verbose=False)
 
     # 2. Xử lý Custom Class (copy model.py nếu không phải built-in)
     if not class_module.startswith("klygo.models."):
@@ -157,7 +156,7 @@ def save(
         if mod and hasattr(mod, "__file__") and mod.__file__:
             source_file = mod.__file__
             if files.exists(source_file):
-                files.copy(source_file, os.path.join(abs_out, "model.py"), overwrite=True)
+                files.copy(source_file, files.join(abs_out, "model.py"), overwrite=True)
 
     # 3. Trọng số & Artifacts ủy thác theo backend
     if backend == "Hugging Face" or processor is not None:

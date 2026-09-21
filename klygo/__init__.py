@@ -8,6 +8,7 @@ from . import files
 from . import media
 from . import models
 from . import outputs
+from . import postprocessing
 from . import processing
 from . import utils
 from . import validators
@@ -30,6 +31,7 @@ __all__ = [
     "media",
     "models",
     "outputs",
+    "postprocessing",
     "processing",
     "utils",
     "validators",

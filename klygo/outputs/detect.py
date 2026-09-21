@@ -10,6 +10,7 @@ Hệ thống phân cấp 4 tầng:
 
 import os
 import datetime
+import uuid
 from typing import List, Dict, Any, Optional, Union, Callable, Iterable
 import PIL.Image
 import numpy as np
@@ -34,6 +35,8 @@ class Box:
         box: List[float],
         parent_image: Optional[PIL.Image.Image] = None,
         pad: int = 0,
+        uid: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.id = int(id)
         self.label = str(label)
@@ -41,6 +44,22 @@ class Box:
         self.box = [float(x) for x in box]  # [xmin, ymin, xmax, ymax]
         self.parent_image = parent_image
         self.pad = int(pad)
+        self.uid = str(uid or uuid.uuid4().hex)
+        self.metadata = dict(metadata or {})
+
+    def _copy(self, **changes: Any) -> "Box":
+        values = {
+            "id": self.id,
+            "label": self.label,
+            "score": self.score,
+            "box": list(self.box),
+            "parent_image": self.parent_image,
+            "pad": self.pad,
+            "uid": self.uid,
+            "metadata": dict(self.metadata),
+        }
+        values.update(changes)
+        return Box(**values)
 
     @property
     def image(self) -> Optional[PIL.Image.Image]:
@@ -117,15 +136,64 @@ class Box:
 
     def with_label(self, new_label: str) -> "Box":
         """Tạo bản sao mới với nhãn được đổi."""
-        return Box(self.id, str(new_label), self.score, self.box, self.parent_image, self.pad)
+        return self._copy(label=str(new_label))
 
     def with_score(self, new_score: float) -> "Box":
         """Tạo bản sao mới với điểm số được đổi."""
-        return Box(self.id, self.label, float(new_score), self.box, self.parent_image, self.pad)
+        return self._copy(score=float(new_score))
 
     def with_pad(self, pad: int) -> "Box":
         """Tạo bản sao mới với độ dày đệm viền pad mới."""
-        return Box(self.id, self.label, self.score, self.box, self.parent_image, int(pad))
+        return self._copy(pad=int(pad))
+
+    def with_box(self, coordinates: Iterable[float]) -> "Box":
+        """Tạo bản sao mới với tọa độ XYXY khác."""
+        values = [float(value) for value in coordinates]
+        if len(values) != 4:
+            raise ValueError("coordinates must contain exactly four XYXY values")
+        return self._copy(box=values)
+
+    def with_metadata(self, **metadata: Any) -> "Box":
+        """Tạo bản sao mới và hợp nhất metadata."""
+        merged = dict(self.metadata)
+        merged.update(metadata)
+        return self._copy(metadata=merged)
+
+    def translate(self, dx: float = 0, dy: float = 0) -> "Box":
+        """Dịch chuyển box theo số pixel đã cho."""
+        return self.with_box([
+            self.xmin + float(dx),
+            self.ymin + float(dy),
+            self.xmax + float(dx),
+            self.ymax + float(dy),
+        ])
+
+    def scale(self, factor: float) -> "Box":
+        """Co giãn box quanh tâm trong khi giữ nguyên tâm."""
+        value = float(factor)
+        if value < 0:
+            raise ValueError("factor must be greater than or equal to 0")
+        half_width = self.width * value / 2
+        half_height = self.height * value / 2
+        return self.with_box([
+            self.center_x - half_width,
+            self.center_y - half_height,
+            self.center_x + half_width,
+            self.center_y + half_height,
+        ])
+
+    def clip(self, image_size: Optional[tuple] = None) -> "Box":
+        """Giới hạn tọa độ box trong kích thước ảnh ``(width, height)``."""
+        size = image_size or getattr(self.parent_image, "size", None)
+        if size is None:
+            raise ValueError("image_size is required when parent_image has no size")
+        width, height = map(float, size[:2])
+        return self.with_box([
+            min(max(self.xmin, 0.0), width),
+            min(max(self.ymin, 0.0), height),
+            min(max(self.xmax, 0.0), width),
+            min(max(self.ymax, 0.0), height),
+        ])
 
     def crop(self, pad: Optional[int] = None) -> Optional[PIL.Image.Image]:
         """Cắt ảnh con với đệm viền tùy chọn."""
@@ -149,12 +217,14 @@ class Box:
         """Xuất thông tin Box sang JSON Key-Value."""
         return {
             "id": self.id,
+            "uid": self.uid,
             "label": self.label,
             "score": round(self.score, 4),
             "box": [round(x, 2) for x in self.box],
             "width": round(self.width, 2),
             "height": round(self.height, 2),
             "area": round(self.area, 2),
+            "metadata": dict(self.metadata),
         }
 
     def __repr__(self) -> str:
@@ -297,13 +367,13 @@ class Crops:
         mapped = []
         for i, c in enumerate(self.crops):
             if isinstance(fn, dict):
-                mapped.append(Box(i, fn.get(c.label, c.label), c.score, c.box, c.parent_image, c.pad))
+                mapped.append(c._copy(id=i, label=fn.get(c.label, c.label)))
             elif callable(fn):
                 res = fn(c)
                 if isinstance(res, Box):
                     mapped.append(res)
                 elif isinstance(res, str):
-                    mapped.append(Box(i, res, c.score, c.box, c.parent_image, c.pad))
+                    mapped.append(c._copy(id=i, label=res))
         return Crops(mapped, self.source_image, self.pad)
 
     def show(self, limit: Optional[int] = None, cell_size: int = 200) -> None:
@@ -326,17 +396,17 @@ class Crops:
         for crop in self.crops:
             if crop.image:
                 label_clean = str(crop.label).strip().replace(" ", "_") or "unlabeled"
-                class_dir = os.path.join(output_path, label_clean)
+                class_dir = files.join(output_path, label_clean)
                 files.mkdir(class_dir)
                 idx = class_counters.get(label_clean, 0)
-                file_path = os.path.join(class_dir, f"{label_clean}_{idx:05d}.jpg")
+                file_path = files.join(class_dir, f"{label_clean}_{idx:05d}.jpg")
                 media.save(file_path, crop.image, overwrite=True, verbose=False)
                 class_counters[label_clean] = idx + 1
 
     def save(self, output_dir: str, by_class: bool = True) -> List[str]:
         """Lưu toàn bộ ảnh con ra thư mục."""
         self.export(output_dir, format="classification" if by_class else "flat")
-        return [os.path.join(output_dir, str(c.label)) for c in self.crops]
+        return [str(files.join(output_dir, str(c.label))) for c in self.crops]
 
     def to_dict(self) -> Dict[str, Any]:
         """Xuất thông tin tập ảnh con sang JSON Key-Value."""
@@ -623,8 +693,76 @@ class Detection:
 
     def filter(self, fn: Callable[[Box], bool]) -> "Detection":
         """Lọc các box bằng Lambda -> Trả về Detection mới."""
-        filtered = [c for c in self.objects if fn(c)]
-        return Detection(self.source_image, filtered, self.speed, self.image_frame_index, config=self.config)
+        from klygo import postprocessing as post
+        return post.select(self, where=fn)
+
+    def select(
+        self,
+        *,
+        ids: Optional[Iterable[int]] = None,
+        uids: Optional[Iterable[str]] = None,
+        labels: Optional[Iterable[str]] = None,
+        where: Optional[Callable[[Box], bool]] = None,
+    ) -> "Detection":
+        """Chọn box bằng ID, UID, label và/hoặc predicate."""
+        from klygo import postprocessing as post
+        return post.select(self, ids=ids, uids=uids, labels=labels, where=where)
+
+    def map_boxes(self, function: Callable[[Box], Optional[Box]]) -> "Detection":
+        """Biến đổi từng box; trả về ``None`` để loại box."""
+        from klygo import postprocessing as post
+        return post.map_boxes(self, function)
+
+    def relabel(
+        self,
+        label: Any,
+        *,
+        ids: Optional[Iterable[int]] = None,
+        uids: Optional[Iterable[str]] = None,
+        labels: Optional[Iterable[str]] = None,
+        where: Optional[Callable[[Box], bool]] = None,
+    ) -> "Detection":
+        """Đổi nhãn các box phù hợp mà không sửa object hiện tại."""
+        from klygo import postprocessing as post
+        return post.relabel(self, label, ids=ids, uids=uids, labels=labels, where=where)
+
+    def drop(
+        self,
+        *,
+        ids: Optional[Iterable[int]] = None,
+        uids: Optional[Iterable[str]] = None,
+        labels: Optional[Iterable[str]] = None,
+        where: Optional[Callable[[Box], bool]] = None,
+    ) -> "Detection":
+        """Loại các box phù hợp."""
+        from klygo import postprocessing as post
+        return post.drop(self, ids=ids, uids=uids, labels=labels, where=where)
+
+    def filter_score(self, minimum: float) -> "Detection":
+        """Giữ box có score lớn hơn hoặc bằng ``minimum``."""
+        from klygo import postprocessing as post
+        return post.filter_score(self, minimum)
+
+    def clip(self, image_size: Optional[tuple] = None) -> "Detection":
+        from klygo import postprocessing as post
+        return post.clip_boxes(self, image_size)
+
+    def remove_invalid(self, min_area: float = 0) -> "Detection":
+        from klygo import postprocessing as post
+        return post.remove_invalid_boxes(self, min_area)
+
+    def nms(self, iou: float = 0.5, class_agnostic: bool = False) -> "Detection":
+        from klygo import postprocessing as post
+        return post.suppress(self, iou=iou, class_agnostic=class_agnostic)
+
+    def top(self, count: int) -> "Detection":
+        from klygo import postprocessing as post
+        return post.top_boxes(self, count)
+
+    def pipe(self, *operations: Callable[[Any], Any]) -> "Detection":
+        """Áp dụng tuần tự các callable postprocessing."""
+        from klygo import postprocessing as post
+        return post.apply(self, *operations)
 
     def sort(
         self,
@@ -696,6 +834,8 @@ class Detection:
                 box=coordinates,
                 parent_image=restored_image,
                 pad=item.pad,
+                uid=item.uid,
+                metadata=item.metadata,
             )
             for item, coordinates in zip(self.objects, restored_boxes)
         ]
@@ -981,6 +1121,74 @@ class Detections:
         mapped = [func(f) for f in self._frames]
         return Detections(mapped, self.source_type, self.fps, self.output_path)
 
+    def map_boxes(self, function: Callable[[Box], Optional[Box]]) -> "Detections":
+        return self.map(lambda frame: frame.map_boxes(function))
+
+    def relabel(self, label: Any, **selectors: Any) -> "Detections":
+        return self.map(lambda frame: frame.relabel(label, **selectors))
+
+    def drop(self, **selectors: Any) -> "Detections":
+        return self.map(lambda frame: frame.drop(**selectors))
+
+    def filter_score(self, minimum: float) -> "Detections":
+        return self.map(lambda frame: frame.filter_score(minimum))
+
+    def clip(self, image_size: Optional[tuple] = None) -> "Detections":
+        return self.map(lambda frame: frame.clip(image_size))
+
+    def remove_invalid(self, min_area: float = 0) -> "Detections":
+        return self.map(lambda frame: frame.remove_invalid(min_area))
+
+    def nms(self, iou: float = 0.5, class_agnostic: bool = False) -> "Detections":
+        return self.map(lambda frame: frame.nms(iou=iou, class_agnostic=class_agnostic))
+
+    def top(self, count: int) -> "Detections":
+        return self.map(lambda frame: frame.top(count))
+
+    def pipe(self, *operations: Callable[[Any], Any]) -> "Detections":
+        from klygo import postprocessing as post
+        return post.apply(self, *operations)
+
+    def get_frame(self, frame_index: int) -> Detection:
+        """Lấy Detection theo ``frame_index`` gốc thay vì vị trí list."""
+        target = int(frame_index)
+        for frame in self:
+            if frame.frame_index == target:
+                return frame
+        raise KeyError(f"Frame {target} does not exist")
+
+    def replace_frame(self, frame_index: int, result: Detection) -> "Detections":
+        """Trả về collection mới với một frame được thay thế."""
+        if not isinstance(result, Detection):
+            raise TypeError("result must be a Detection")
+        target = int(frame_index)
+        if not self.is_stream and not any(frame.frame_index == target for frame in self._frames):
+            raise KeyError(f"Frame {target} does not exist")
+        return self.map(lambda frame: result if frame.frame_index == target else frame)
+
+    def update_frame(self, frame_index: int, function: Callable[[Detection], Detection]) -> "Detections":
+        """Biến đổi một frame bằng callback, phù hợp cho re-predict."""
+        if not callable(function):
+            raise TypeError("function must be callable")
+        target = int(frame_index)
+        if not self.is_stream and not any(frame.frame_index == target for frame in self._frames):
+            raise KeyError(f"Frame {target} does not exist")
+
+        def update(frame: Detection) -> Detection:
+            if frame.frame_index != target:
+                return frame
+            value = function(frame)
+            if not isinstance(value, Detection):
+                raise TypeError("update_frame function must return Detection")
+            return value
+
+        return self.map(update)
+
+    def remove_frame(self, frame_index: int) -> "Detections":
+        """Trả về collection mới không chứa frame_index đã chỉ định."""
+        target = int(frame_index)
+        return self.filter(lambda frame: frame.frame_index != target)
+
     def restore(self, target: str = "original") -> "Detections":
         """Phục hồi ảnh và tọa độ cho mọi frame, vẫn lazy với stream."""
         return self.map(lambda frame: frame.restore(target=target))
@@ -1168,8 +1376,8 @@ class Detections:
         """Xuất toàn bộ Video thành Flat YOLO Dataset hoặc JSON sử dụng klygo.files và klygo.media."""
         from klygo import files, media
         if format.lower() == "yolo":
-            img_dir = os.path.join(output_path, "images")
-            lbl_dir = os.path.join(output_path, "labels")
+            img_dir = files.join(output_path, "images")
+            lbl_dir = files.join(output_path, "labels")
             files.mkdir(img_dir)
             files.mkdir(lbl_dir)
 
@@ -1177,17 +1385,17 @@ class Detections:
             for idx, res in enumerate(self.frames):
                 img_name = f"frame_{idx:05d}.jpg"
                 lbl_name = f"frame_{idx:05d}.txt"
-                media.save(os.path.join(img_dir, img_name), res.source_image, overwrite=True, verbose=False)
-                res.export(os.path.join(lbl_dir, lbl_name), format="yolo", classes=classes)
+                media.save(files.join(img_dir, img_name), res.source_image, overwrite=True, verbose=False)
+                res.export(files.join(lbl_dir, lbl_name), format="yolo", classes=classes)
 
             # Ghi file data.yaml qua klygo.files.save
             yaml_data = {
-                "path": os.path.abspath(output_path),
+                "path": str(files.resolve(output_path)),
                 "train": "images",
                 "val": "images",
                 "names": {i: name for i, name in enumerate(classes)},
             }
-            files.save(os.path.join(output_path, "data.yaml"), yaml_data, verbose=False)
+            files.save(files.join(output_path, "data.yaml"), yaml_data, verbose=False)
         elif format.lower() == "json":
             files.save(output_path, self.to_dict(), verbose=False)
 
@@ -1198,7 +1406,7 @@ class Detections:
         is_video = p_str.endswith((".mp4", ".avi", ".mov", ".mkv", ".webm"))
 
         if self.source_type == "video" or is_video:
-            final_path = output_path if is_video else os.path.join(output_path, "annotated_video.mp4")
+            final_path = output_path if is_video else str(files.join(output_path, "annotated_video.mp4"))
             # Sử dụng iter_images (Generator) thay vì self.images (List) để chống OOM RAM.
             media.save_video(final_path, self.iter_images(**kwargs), fps=target_fps, overwrite=True, verbose=False)
             self.output_path = final_path
@@ -1206,7 +1414,7 @@ class Detections:
         else:
             files.mkdir(output_path)
             for idx, res in enumerate(self.frames, 1):
-                img_path = os.path.join(output_path, f"annotated_{idx:05d}.jpg")
+                img_path = files.join(output_path, f"annotated_{idx:05d}.jpg")
                 res.save(img_path, **kwargs)
             self.output_path = output_path
             return output_path

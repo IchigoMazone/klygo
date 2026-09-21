@@ -8,7 +8,7 @@ from PIL import Image
 
 from klygo.utils.progress import ProgressBar
 from klygo.validators import validate_type
-from klygo.files import copy as _files_copy
+from klygo import files
 
 try:
     import torch
@@ -52,7 +52,7 @@ class VideoReader:
     """
 
     def __init__(self, path: Union[str, Path]) -> None:
-        self.path = Path(path).resolve()
+        self.path = files.resolve(path)
         if not self.path.exists():
             raise FileNotFoundError(f"Could not find video file: {self.path}")
 
@@ -169,7 +169,7 @@ class LazyImage(Image.Image):
             else:
                 self._crop_box = crop_box or path.crop_box
         else:
-            self._path = Path(path).resolve()
+            self._path = files.resolve(path)
             self._url = str(self._path)
             self.backend = backend.lower()
             self.frame_index = frame_index
@@ -183,7 +183,7 @@ class LazyImage(Image.Image):
 
     @path.setter
     def path(self, new_path: Union[str, Path]) -> None:
-        self._path = Path(new_path).resolve()
+        self._path = files.resolve(new_path)
         self._url = str(self._path)
         self._image = None
         self._cached_size = None
@@ -678,7 +678,7 @@ class MediaStream:
         if backend not in ("pil", "opencv"):
             raise ValueError("backend must be 'pil' or 'opencv'")
 
-        path = Path(source)
+        path = files.path(source)
         if not path.exists():
             raise FileNotFoundError(f"source does not exist: {path}")
 
@@ -995,7 +995,7 @@ def load(
     if backend not in ("pil", "opencv"):
         raise ValueError("backend must be 'pil' or 'opencv'")
 
-    p = Path(source)
+    p = files.path(source)
     if not p.exists():
         raise FileNotFoundError(f"source does not exist: {p}")
 
@@ -1065,7 +1065,7 @@ def save(
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
 
-    p = Path(path)
+    p = files.path(path)
     if p.exists() and not overwrite:
         raise FileExistsError(f"File already exists: {p}. Use overwrite=True to replace it.")
 
@@ -1110,8 +1110,8 @@ def convert(
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
 
-    src_p = Path(source)
-    tgt_p = Path(target)
+    src_p = files.path(source)
+    tgt_p = files.path(target)
 
     if not src_p.exists():
         raise FileNotFoundError(f"source file does not exist: {src_p}")
@@ -1288,11 +1288,11 @@ def copy(
     validate_type(target, (str, Path), "target")
     validate_type(overwrite, bool, "overwrite")
 
-    src_p = Path(source)
+    src_p = files.path(source)
     if not src_p.exists():
         raise FileNotFoundError(f"Media source does not exist: {src_p}")
 
-    return _files_copy(src_p, target, overwrite=overwrite)
+    return files.copy(src_p, target, overwrite=overwrite)
 
 
 def save_video(
@@ -1326,7 +1326,7 @@ def save_video(
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
 
-    p = Path(output_path)
+    p = files.path(output_path)
     if p.exists() and not overwrite:
         raise FileExistsError(f"Video file already exists: {p}. Use overwrite=True to replace it.")
 
@@ -1398,7 +1398,7 @@ def save_images(
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
 
-    out_p = Path(output_dir)
+    out_p = files.path(output_dir)
     out_p.mkdir(parents=True, exist_ok=True)
 
     if not extension.startswith("."):
@@ -1445,7 +1445,7 @@ def iter_frames(
     if sample_rate < 1:
         raise ValueError("sample_rate must be an integer >= 1")
 
-    p = Path(source)
+    p = files.path(source)
     if not p.exists():
         raise FileNotFoundError(f"source does not exist: {p}")
 
@@ -1498,7 +1498,7 @@ def probe(path: Union[str, Path]) -> Dict[str, Any]:
     >>> v_info = media.probe("video.mp4")
     >>> print(v_info['fps'], v_info['frame_count'])
     """
-    p = Path(path)
+    p = files.path(path)
     if not p.exists():
         raise FileNotFoundError(f"Path does not exist: {p}")
     if not p.is_file():

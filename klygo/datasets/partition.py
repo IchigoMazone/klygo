@@ -1,11 +1,10 @@
 import random
-import shutil
 import time
 from pathlib import Path
 
 from klygo.validators.datasets import Partition, Repartition
 from klygo.archive import extract
-from klygo.files import load, save
+from klygo import files
 from klygo.utils.dataset import (
     _find_dataset_root,
     _safe_copy,
@@ -49,7 +48,7 @@ def _execute_partition(params: Partition) -> None:
     if is_zip:
         temp_extract_dir = params.target.parent / f".temp_partition_extract_{random.randint(1000, 9999)}"
         if temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
+            files.remove(temp_extract_dir)
         extract(
             archive_path=params.source,
             output_dir=temp_extract_dir,
@@ -65,7 +64,7 @@ def _execute_partition(params: Partition) -> None:
 
     if not images_src.exists():
         if temp_extract_dir and temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
+            files.remove(temp_extract_dir)
         raise FileNotFoundError(f"images directory not found under {src_base}")
 
     # 3. Scan images and labels
@@ -97,7 +96,7 @@ def _execute_partition(params: Partition) -> None:
     # 5. Setup temporary destination directory
     temp_output_dir = params.target.parent / f".temp_partition_out_{random.randint(1000, 9999)}"
     if temp_output_dir.exists():
-        shutil.rmtree(temp_output_dir)
+        files.remove(temp_output_dir)
     temp_output_dir.mkdir(parents=True, exist_ok=True)
 
     # 6. Copy/Move files to the temporary destination splits
@@ -122,8 +121,8 @@ def _execute_partition(params: Partition) -> None:
     # 7. Handle data.yaml
     yaml_src = src_base / "data.yaml"
     if yaml_src.exists():
-        yaml_data = load(yaml_src, verbose=False)
-        yaml_data["path"] = str(params.target.resolve().as_posix())
+        yaml_data = files.load(yaml_src, verbose=False)
+        yaml_data["path"] = files.resolve(params.target).as_posix()
         yaml_data["train"] = "images/train"
         yaml_data["val"] = "images/val"
         if test_pairs:
@@ -132,18 +131,18 @@ def _execute_partition(params: Partition) -> None:
             del yaml_data["test"]
 
         yaml_dest = temp_output_dir / "data.yaml"
-        save(yaml_dest, yaml_data, overwrite=True, verbose=params.verbose)
+        files.save(yaml_dest, yaml_data, overwrite=True, verbose=params.verbose)
 
     # 8. Clear extraction temp dir if ZIP
     if temp_extract_dir and temp_extract_dir.exists():
-        shutil.rmtree(temp_extract_dir)
+        files.remove(temp_extract_dir)
 
     # 9. Replace target directory atomically
     if params.target.exists():
         for _ in range(10):
             try:
                 if params.target.is_dir():
-                    shutil.rmtree(params.target)
+                    files.remove(params.target)
                 else:
                     params.target.unlink()
                 break
@@ -151,7 +150,7 @@ def _execute_partition(params: Partition) -> None:
                 time.sleep(0.05)
         else:
             if params.target.is_dir():
-                shutil.rmtree(params.target)
+                files.remove(params.target)
             else:
                 params.target.unlink()
 
@@ -255,8 +254,8 @@ def unpartition(
 
     Nguồn: TrinhNhuNhat_12072026.
     """
-    source = Path(source)
-    target = Path(target)
+    source = files.path(source)
+    target = files.path(target)
 
     if target.exists() and not overwrite:
         raise FileExistsError(f"target already exists: {target}")
@@ -267,7 +266,7 @@ def unpartition(
     if is_zip:
         temp_extract_dir = target.parent / f".temp_unpartition_extract_{random.randint(1000, 9999)}"
         if temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
+            files.remove(temp_extract_dir)
         extract(source, temp_extract_dir, overwrite=True, verbose=False)
         src_base = _find_dataset_root(temp_extract_dir)
     else:
@@ -282,7 +281,7 @@ def unpartition(
     # Prepare temp output dir
     temp_out = target.parent / f".temp_unpartition_out_{random.randint(1000, 9999)}"
     if temp_out.exists():
-        shutil.rmtree(temp_out)
+        files.remove(temp_out)
 
     images_dest = temp_out / "images"
     labels_dest = temp_out / "labels"
@@ -303,33 +302,33 @@ def unpartition(
     yaml_src = src_base / "data.yaml"
     names = []
     if yaml_src.exists():
-        yaml_data = load(yaml_src, verbose=False)
+        yaml_data = files.load(yaml_src, verbose=False)
         names = yaml_data.get("names", [])
 
     # Write new data.yaml
     new_yaml = {
-        "path": str(target.resolve()) if not target.name.endswith(".zip") else str(target.parent.resolve()),
+        "path": str(files.resolve(target if not target.name.endswith(".zip") else target.parent)),
         "train": "images",
         "val": "",
         "test": "",
         "nc": len(names),
         "names": names
     }
-    save(temp_out / "data.yaml", new_yaml, overwrite=True, verbose=False)
+    files.save(temp_out / "data.yaml", new_yaml, overwrite=True, verbose=False)
 
     # Clean up temp extract
     if temp_extract_dir and temp_extract_dir.exists():
-        shutil.rmtree(temp_extract_dir)
+        files.remove(temp_extract_dir)
 
     # Put to final output
     if target.name.endswith(".zip"):
         from klygo.archive import compress
         compress(temp_out, target, overwrite=overwrite, verbose=verbose)
-        shutil.rmtree(temp_out)
+        files.remove(temp_out)
     else:
         if target.exists() and overwrite:
             if target.is_dir():
-                shutil.rmtree(target)
+                files.remove(target)
             else:
                 target.unlink()
         temp_out.rename(target)

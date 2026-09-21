@@ -1,7 +1,7 @@
 import shutil
 import time
 from pathlib import Path
-from klygo.files import load
+from klygo import files
 
 
 def _safe_move(src: Path, dst: Path) -> None:
@@ -20,7 +20,7 @@ def _safe_move(src: Path, dst: Path) -> None:
     """
     if not src.exists():
         return
-    if src.resolve() == dst.resolve():
+    if files.resolve(src) == files.resolve(dst):
         return
     dst.parent.mkdir(parents=True, exist_ok=True)
     for _ in range(10):
@@ -55,7 +55,7 @@ def _safe_copy(src: Path, dst: Path) -> None:
     """
     if not src.exists():
         return
-    if src.resolve() == dst.resolve():
+    if files.resolve(src) == files.resolve(dst):
         return
     dst.parent.mkdir(parents=True, exist_ok=True)
     for _ in range(10):
@@ -117,21 +117,21 @@ def _read_class_names(
     yaml_src = src_base / "data.yaml"
     if not yaml_src.exists():
         if temp_extract_dir and temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
+            files.remove(temp_extract_dir)
         if extra_cleanups:
             for p in extra_cleanups:
                 if p.exists():
-                    shutil.rmtree(p)
+                    files.remove(p)
         raise ValueError(f"data.yaml not found under {src_base}")
 
-    yaml_data = load(yaml_src, verbose=False)
+    yaml_data = files.load(yaml_src, verbose=False)
     if "names" not in yaml_data:
         if temp_extract_dir and temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
+            files.remove(temp_extract_dir)
         if extra_cleanups:
             for p in extra_cleanups:
                 if p.exists():
-                    shutil.rmtree(p)
+                    files.remove(p)
         raise ValueError(f"names list not found in data.yaml under {src_base}")
 
     curr_names = yaml_data["names"]
@@ -173,19 +173,18 @@ def _scan_dataset_files(images_src: Path, labels_src: Path) -> list[tuple[Path, 
 
     pairs = []
     for img_path in image_files:
-        try:
-            rel_img = img_path.relative_to(images_src)
-            rel_lbl = rel_img.with_suffix(".txt")
-            lbl_path = labels_src / rel_lbl
-        except ValueError:
-            rel_lbl = Path(img_path.name).with_suffix(".txt")
-            lbl_path = labels_src / rel_lbl
+        if files.is_within(img_path, images_src, resolve_paths=False):
+            rel_img = files.relative(img_path, images_src)
+        else:
+            rel_img = files.path(img_path.name)
+        rel_lbl = files.with_extension(rel_img, ".txt")
+        lbl_path = labels_src / rel_lbl
 
         if not (lbl_path and lbl_path.exists() and lbl_path.is_file()):
             fallback_lbl = labels_src / (img_path.stem + ".txt")
             if fallback_lbl.exists() and fallback_lbl.is_file():
                 lbl_path = fallback_lbl
-                rel_lbl = Path(fallback_lbl.name)
+                rel_lbl = files.path(fallback_lbl.name)
             else:
                 lbl_path = None
 

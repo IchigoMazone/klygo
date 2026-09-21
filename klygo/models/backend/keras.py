@@ -219,7 +219,7 @@ def save(model: Any, output_dir: str) -> None:
     2. Nếu là Keras model chuẩn -> model.save(abs_out / "model.keras")
     """
     from klygo import files
-    abs_out = os.path.abspath(output_dir)
+    abs_out = files.resolve(output_dir)
     files.mkdir(abs_out)
 
     if model is not None:
@@ -234,7 +234,7 @@ def save(model: Any, output_dir: str) -> None:
         # 2. File định dạng chuẩn .keras
         if hasattr(model, "save") and callable(model.save):
             try:
-                keras_file = os.path.join(abs_out, "model.keras")
+                keras_file = files.join(abs_out, "model.keras")
                 model.save(keras_file)
                 return
             except Exception:

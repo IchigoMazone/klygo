@@ -1,4 +1,3 @@
-import os
 from typing import Any, List, Optional, Union
 import PIL.Image
 
@@ -77,9 +76,9 @@ def export(
 
                 for obj_idx, crop_item in enumerate(crop_res, 1):
                     if crop_item.label in label_to_id:
-                        class_dir = os.path.join(output_path, crop_item.label)
+                        class_dir = files.join(output_path, crop_item.label)
                         files.mkdir(class_dir)
-                        save_path = os.path.join(
+                        save_path = files.join(
                             class_dir,
                             f"crop_{img_idx}_{obj_idx}_{crop_item.score:.2f}.jpg",
                         )
@@ -91,18 +90,18 @@ def export(
     # 2. Định dạng DETECTION (hoặc 'detect' / 'yolo'): Dùng model.predict()
     # =====================================================================
     elif format_type in ("detection", "detect", "det", "yolo"):
-        clean_root = os.path.abspath(output_path).replace("\\", "/")
+        clean_root = files.resolve(output_path).as_posix()
         names_block = "\n".join([f"  {idx}: {label}" for idx, label in enumerate(target_prompt)])
         yaml_content = f"path: {clean_root}\ntrain: images\nval: images\n\nnc: {len(target_prompt)}\nnames:\n{names_block}\n"
         files.save(
-            os.path.join(output_path, "data.yaml"),
+            files.join(output_path, "data.yaml"),
             yaml_content,
             overwrite=True,
             verbose=False,
         )
 
-        img_dir = os.path.join(output_path, "images")
-        lbl_dir = os.path.join(output_path, "labels")
+        img_dir = files.join(output_path, "images")
+        lbl_dir = files.join(output_path, "labels")
         files.mkdir(img_dir)
         files.mkdir(lbl_dir)
 
@@ -114,7 +113,7 @@ def export(
         ) as pbar:
             for img_idx, img in enumerate(images, 1):
                 img_name = f"img_{img_idx:05d}"
-                img_file = os.path.join(img_dir, f"{img_name}.jpg")
+                img_file = files.join(img_dir, f"{img_name}.jpg")
                 media.save(img_file, img, overwrite=True, verbose=False)
 
                 results = model.predict(img, text_prompt=target_prompt, threshold=threshold)
@@ -134,7 +133,7 @@ def export(
                         f"{class_id} {x_center:.6f} {y_center:.6f} {w_box:.6f} {h_box:.6f}"
                     )
 
-                lbl_file = os.path.join(lbl_dir, f"{img_name}.txt")
+                lbl_file = files.join(lbl_dir, f"{img_name}.txt")
                 files.save(
                     lbl_file,
                     "\n".join(lbl_lines),

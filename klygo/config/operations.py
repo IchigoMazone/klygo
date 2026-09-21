@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Tuple, Union, Optional
 
 from box import Box
 
-from klygo.files import load as _file_load, save as _file_save
+from klygo import files
 from klygo.validators import validate_type
 from klygo.validators.config import ConfigSource, ExportFile
 
@@ -65,7 +65,7 @@ def _traverse_expand_root(cfg: dict) -> None:
 def load(path: Union[str, Path], verbose: bool = True) -> Box:
     """Đọc file cấu hình và trả về đối tượng Box hỗ trợ dot-notation."""
     params = ConfigSource(config_path=path)
-    cfg_dict = dict(_file_load(params.config_path, verbose=verbose))
+    cfg_dict = dict(files.load(params.config_path, verbose=verbose))
     _traverse_expand_root(cfg_dict)
     return Box(cfg_dict)
 
@@ -77,8 +77,8 @@ def save(
     verbose: bool = True,
 ) -> Path:
     """Ghi dữ liệu cấu hình ra file theo định dạng đuôi file."""
-    p = Path(path)
-    _file_save(p, data, overwrite=overwrite, verbose=verbose)
+    p = files.path(path)
+    files.save(p, data, overwrite=overwrite, verbose=verbose)
     return p
 
 
@@ -444,4 +444,3 @@ def from_env(
         base_dict = update(base_dict, nested_updates, deep=True)
 
     return base_dict
-

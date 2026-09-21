@@ -3,7 +3,6 @@ Ultralytics Backend Logic (klygo.models.backend.ultralytics).
 Chứa toàn bộ logic xử lý đặc thù cho các mô hình Ultralytics YOLO.
 """
 
-import os
 from typing import Any, List, Dict
 
 
@@ -25,7 +24,8 @@ def format_results(ultra_results: Any) -> List[Dict[str, Any]]:
 
 def save(model: Any, output_dir: str) -> None:
     """Lưu trọng số theo chuẩn Ultralytics YOLO."""
-    abs_out = os.path.abspath(output_dir)
+    from klygo import files
+    abs_out = files.resolve(output_dir)
     if model is not None and hasattr(model, "save"):
         model.save(abs_out)
 

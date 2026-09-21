@@ -1,10 +1,10 @@
-import shutil
 import tempfile
 from pathlib import Path
 from typing import Tuple, Union
 
 from klygo.archive import extract
 from klygo.datasets import get_dataset_info
+from klygo import files
 from klygo.utils.dataset import _find_dataset_root, _scan_dataset_files
 
 
@@ -27,11 +27,11 @@ def plot_dataset_stats(
     """
     info = get_dataset_info(source)
     classes = info.get("classes", [])
-    source = Path(source)
+    source = files.path(source)
     temp_dir = None
 
     if source.is_file():
-        temp_dir = Path(tempfile.mkdtemp())
+        temp_dir = files.path(tempfile.mkdtemp())
         extract(source, temp_dir, overwrite=True, verbose=False)
         source_dir = _find_dataset_root(temp_dir)
     else:
@@ -58,7 +58,7 @@ def plot_dataset_stats(
                         class_counts[class_id] += 1
 
     if temp_dir and temp_dir.exists():
-        shutil.rmtree(temp_dir)
+        files.remove(temp_dir)
 
     import matplotlib.pyplot as plt
 

@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any, List, Dict, Union, Tuple, Optional, Sequence, Set
 import PIL.Image
 
+from klygo import files
+
 
 import functools
 
@@ -248,12 +250,12 @@ def resolve_images(
                         if hasattr(item, "path"):
                             pil_img.path = item.path
                         elif isinstance(item, (str, Path)):
-                            pil_img.path = Path(item)
+                            pil_img.path = files.path(item)
                         yield pil_img
 
         is_single = False
         if isinstance(source, (str, Path)):
-            is_single = Path(str(source)).suffix.lower() not in media.VIDEO_SUFFIXES
+            is_single = files.extension(str(source)).lower() not in media.VIDEO_SUFFIXES
         elif isinstance(source, PIL.Image.Image):
             is_single = True
 
@@ -263,7 +265,7 @@ def resolve_images(
     if isinstance(source, (str, Path)):
         loaded = media.load(source, verbose=False)
         raw_list = loaded if isinstance(loaded, list) else [loaded]
-        is_single = len(raw_list) == 1 and Path(str(source)).suffix.lower() not in media.VIDEO_SUFFIXES
+        is_single = len(raw_list) == 1 and files.extension(str(source)).lower() not in media.VIDEO_SUFFIXES
     elif isinstance(source, PIL.Image.Image):
         return [source.convert("RGB")], True
     elif hasattr(source, "shape"):
@@ -304,7 +306,7 @@ def resolve_images(
         if hasattr(item, "path"):
             pil_img.path = item.path
         elif isinstance(item, (str, Path)):
-            pil_img.path = Path(item)
+            pil_img.path = files.path(item)
         cleaned_images.append(pil_img)
 
     return cleaned_images, is_single
