@@ -15,7 +15,7 @@ uv sync
 - `klygo.archive`: nén, giải nén, tìm kiếm, kiểm tra, chỉnh sửa, gộp và chia ZIP.
 - `klygo.config`: quản lý cấu hình đa định dạng với dot-notation.
 - `klygo.datasets`: partition, repartition, unpartition, merge, split và remap dataset YOLO.
-- `klygo.files`: bộ công cụ 39 hàm thao tác file, thư mục và path, hỗ trợ 14 định dạng dữ liệu (YAML, JSON, TOML, CSV, INI, ENV, XML, Pickle...).
+- `klygo.files`: bộ công cụ 39 hàm thao tác file, thư mục và path, hỗ trợ 14 định dạng dữ liệu.
 - `klygo.media`: xử lý và tải/lưu tập tin hình ảnh và truyền thông.
 - `klygo.processing`: pipeline xử lý ảnh lazy đa backend, quality filtering và phục hồi tọa độ.
 - `klygo.postprocessing`: lọc, chỉnh nhãn, sửa box, NMS và pipeline xử lý kết quả nhận diện.
