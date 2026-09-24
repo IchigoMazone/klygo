@@ -1,58 +1,64 @@
-"""
-Bộ công cụ Quản lý File System & I/O Dữ liệu đa định dạng (`klygo.files`).
+"""Filesystem Management & Multi-Format Data I/O Utilities (`klygo.files`).
 
-Hướng dẫn sử dụng (Google Colab):
-https://colab.research.google.com/drive/1-Oo8ERqSuxns1OfZAdHY5jVMTrLVpJG-?usp=sharing
+Interactive Google Colab Tutorial:
+    https://colab.research.google.com/drive/1-Oo8ERqSuxns1OfZAdHY5jVMTrLVpJG-?usp=sharing
 
-Định dạng I/O giải mã dữ liệu hỗ trợ (14 loại):
-  - YAML (.yaml, .yml), JSON (.json), JSON Lines (.jsonl), TOML (.toml)
-  - CSV (.csv), TXT (.txt), LOG (.log), INI (.ini), CFG (.cfg), PROPERTIES (.properties)
-  - ENV (.env), XML (.xml), Pickle (.pkl, .pickle)
+Supported Structured Data I/O Formats:
+    - Structured & Config: YAML (.yaml, .yml), JSON (.json), JSON Lines (.jsonl), TOML (.toml)
+    - Tabular & Text: CSV (.csv), TXT (.txt), LOG (.log), INI (.ini), CFG (.cfg), PROPERTIES (.properties)
+    - Environment & Markup: ENV (.env), XML (.xml), Pickle (.pkl, .pickle)
 
-Định dạng Tải xuống (`files.download`):
-  - Hỗ trợ TẤT CẢ các định dạng tập tin nhị phân (AI Models: .pt, .onnx, .safetensors;
-    File nén: .zip, .tar.gz, .7z; Media: .mp4, .png, .jpg; Data: .parquet, .db, .whl, v.v.)
+Supported File Download Formats (`files.download`):
+    - All binary and arbitrary formats (AI Models: .pt, .onnx, .safetensors; Archives: .zip, .tar.gz, .7z;
+      Media: .mp4, .png, .jpg; Datasets & Binaries: .parquet, .db, .whl, etc.)
 
-Danh sách API public:
-  1.  load(path, ...) - Đọc file dữ liệu tự động theo phần mở rộng đuôi file
-  2.  save(path, data, ...) - Ghi dữ liệu ra file dựa theo đuôi mở rộng
-  3.  convert(source, target, ...) - Chuyển đổi định dạng file dữ liệu
-  4.  download(source, output_dir, ...) - Tải tập tin bất kỳ từ URL/Colab về máy/thư mục có ProgressBar (giữ nguyên tên gốc)
-  5.  exists(path) - Kiểm tra sự tồn tại của file hoặc thư mục
-  6.  is_file(path) - Kiểm tra đường dẫn có phải là file không
-  7.  is_dir(path) - Kiểm tra đường dẫn có phải là thư mục không
-  8.  list_entries(path, ...) - Liệt kê các tập tin/thư mục con
-  9.  find(path, ...) - Tìm kiếm file theo mẫu wildcard
-  10. walk(path) - Duyệt cây thư mục dạng generator
-  11. mkdir(path, ...) - Tạo thư mục mới trên ổ đĩa
-  12. copy(source, target, ...) - Sao chép file hoặc thư mục
-  13. move(source, target, ...) - Di chuyển file hoặc thư mục
-  14. rename(path, new_name, ...) - Đổi tên file hoặc thư mục
-  15. remove(path, ...) - Xóa file hoặc thư mục
-  16. info(path) - Chi tiết thông tin metadata (dung lượng, hash, time...)
-  17. size(path, ...) - Dung lượng file hoặc thư mục (bytes/human)
-  18. hash(path, ...) - Tính mã checksum hash MD5/SHA256
-  19. compare(path1, path2, ...) - So sánh nội dung 2 file
-  20. name(path) - Tên file/thư mục kèm phần mở rộng
-  21. stem(path) - Tên file không kèm phần mở rộng
-  22. extension(path) - Phần mở rộng đuôi file
-  23. parent(path) - Thư mục cha chứa file/thư mục
-  24. path(value, ...) - Chuẩn hóa đầu vào thành pathlib.Path
-  25. join(*parts) - Ghép các thành phần đường dẫn
-  26. normalize(path) - Chuẩn hóa separator và thành phần ./..
-  27. resolve(path, ...) - Chuyển thành đường dẫn tuyệt đối
-  28. relative(path, start) - Tạo đường dẫn tương đối
-  29. is_within(path, root) - Kiểm tra path nằm trong root
-  30. common_path(paths) - Tìm đường dẫn cha chung
-  31. replace_root(path, old_root, new_root) - Ánh xạ sang cây thư mục mới
-  32. with_name(path, name) - Thay tên trên path, không đổi file thật
-  33. with_stem(path, stem) - Thay stem trên path
-  34. with_extension(path, extension) - Thay extension, hỗ trợ .tar.gz
-  35. unique_path(path, ...) - Tạo tên path chưa tồn tại
-  36. extensions(path) - Liệt kê toàn bộ suffix
-  37. compound_extension(path) - Lấy extension ghép
-  38. parents(path) - Liệt kê các thư mục tổ tiên
-  39. is_absolute(path) - Kiểm tra đường dẫn tuyệt đối
+Public APIs (39 Functions):
+    Structured Data I/O:
+        1.  load(path, ...)                  - Automatically load structured data based on file extension.
+        2.  save(path, data, ...)            - Save structured data using the destination file extension.
+        3.  convert(source, target, ...)     - Direct format conversion between structured data files.
+        4.  download(source, output_dir, ...) - Download file from URL/Colab or copy local file with progress bar.
+
+    Filesystem Operations:
+        5.  exists(path)                     - Check whether a file or directory exists.
+        6.  is_file(path)                    - Check if path points to a regular file.
+        7.  is_dir(path)                     - Check if path points to a directory.
+        8.  list_entries(path, ...)          - List matching files and directories in a directory.
+        9.  find(path, ...)                  - Find files matching a wildcard pattern recursively.
+        10. walk(path)                       - Walk directory tree as a generator (os.walk wrapper).
+        11. mkdir(path, ...)                 - Create a new directory and missing parent directories.
+        12. copy(source, target, ...)        - Copy a file or directory recursively.
+        13. move(source, target, ...)        - Move a file or directory to a new target.
+        14. rename(path, new_name, ...)      - Rename or relocate a file or directory.
+        15. remove(path, ...)                - Remove a file or directory recursively.
+
+    File Metadata & Inspection:
+        16. info(path)                       - Detailed metadata dictionary (size, hashes, timestamps, etc.).
+        17. size(path, ...)                  - Total size of a file or directory (bytes or human-readable format).
+        18. hash(path, ...)                  - Compute file checksum digest (MD5, SHA256, etc.).
+        19. compare(path1, path2, ...)       - Compare contents of two files by checksum or binary content.
+
+    Path Manipulation & Inspection:
+        20. name(path)                       - Final path component including file extension.
+        21. stem(path)                       - Final path component without its last extension.
+        22. extension(path)                  - Final filename extension (including leading dot).
+        23. parent(path)                     - Immediate parent directory of a path.
+        24. path(value, ...)                 - Convert input value to a normalized pathlib.Path object.
+        25. join(*parts)                     - Join multiple path components together.
+        26. normalize(path)                  - Lexically normalize path separators and dot components.
+        27. resolve(path, ...)               - Resolve path to an absolute normalized path.
+        28. relative(path, start)            - Compute relative path from a starting directory.
+        29. is_within(path, root)            - Check whether a path is contained within a root directory.
+        30. common_path(paths)               - Find the longest common parent directory of multiple paths.
+        31. replace_root(path, old_root, new_root) - Map a path from one root directory to another.
+        32. with_name(path, name)            - Return path with replaced final component.
+        33. with_stem(path, stem)            - Return path with replaced stem.
+        34. with_extension(path, extension)  - Return path with replaced extension (supports .tar.gz).
+        35. unique_path(path, ...)           - Generate an unused candidate path with numeric suffix.
+        36. extensions(path)                 - Return all filename extensions as a tuple.
+        37. compound_extension(path)         - Return all filename extensions joined together.
+        38. parents(path)                    - Return tuple of ancestor paths from nearest to farthest.
+        39. is_absolute(path)                - Check whether a path is absolute.
 """
 
 from .download import download
