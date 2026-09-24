@@ -55,11 +55,8 @@ Danh sách API public:
   39. is_absolute(path) - Kiểm tra đường dẫn tuyệt đối
 """
 
-from .operations import (
-    load,
-    save,
-    convert,
-    download,
+from .download import download
+from .filesystem import (
     exists,
     is_file,
     is_dir,
@@ -71,10 +68,15 @@ from .operations import (
     move,
     rename,
     remove,
+)
+from .io import load, save, convert
+from .metadata import (
     info,
     size,
     hash,
     compare,
+)
+from .paths import (
     name,
     stem,
     extension,
