@@ -2,7 +2,6 @@
 
 import unittest
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from klygo import files
 
@@ -15,6 +14,13 @@ class TestCommonPath(unittest.TestCase):
             files.common_path([])
         with self.assertRaises(TypeError):
             files.common_path("dataset/images")
+
+    def test_path_iterable_and_invalid_items(self):
+        paths = (Path("dataset") / split / "image.jpg" for split in ("train", "val"))
+        self.assertEqual(files.common_path(paths), Path("dataset"))
+        self.assertEqual(files.common_path([Path("dataset/train/image.jpg")]), Path("dataset/train/image.jpg"))
+        with self.assertRaises(TypeError):
+            files.common_path(["dataset/train", 1])
 
 
 if __name__ == "__main__":
