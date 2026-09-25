@@ -1,0 +1,29 @@
+# klygo
+
+> Python utilities for archive, config, multi-format filesystem operations, lazy image processing, and zero-shot object detection.
+
+Klygo is designed with strict modularity, high performance, and predictable behavior. It offers both functional (pure, immutable) and stateful (object-oriented) interfaces.
+
+## Documentation Modules
+
+- [klygo.archive](docs/archive/README.md): Multi-format archive creation, extraction, in-place mutation, splitting, merging, and format detection (ZIP, TAR, TAR.GZ, TAR.XZ, TAR.BZ2, GZ, 7z, RAR).
+- [klygo.archive.backend](docs/archive/backend/ArchiveBackend.md): Low-level backend contracts, capabilities, and format adapters.
+- [klygo.files](docs/files/README.md): 39 deterministic filesystem operations, streaming downloads, checksums, path inspection, and I/O for 14 structured data formats (JSON, JSONL, YAML, TOML, CSV, TXT, LOG, INI, CFG, PROPERTIES, ENV, XML, PKL).
+- [klygo.config](docs/config/README.md): Hierarchical configuration management, dot-path access, environment variable overlays (`KLYGO_*`), structural comparison, lightweight schema validation, and stateful `Config` class.
+- [klygo.processing](docs/processing.md): Lazy image processing pipelines (`compose`, `letterbox`, `auto_orient`, `clahe`, `normalize`, `materialize`) with coordinate restoration tracking.
+
+## Core Architectural Rules for AI / LLM Coding Assistants
+
+1. **Prefer Public Facades**:
+   - Always import from top-level packages: `from klygo import files`, `from klygo import archive`, `from klygo import config`, `from klygo import Config`.
+   - Never import internal implementation helpers (e.g. `klygo.archive._utils`).
+2. **Immutability First**:
+   - Functional APIs in `klygo.files` and `klygo.config` (e.g. `config.set()`, `config.update()`) do not mutate input structures; they return new independent objects.
+   - Use `Config` or `ArchiveFile` only when continuous stateful in-memory modification is explicitly required.
+3. **Safe Path Handling**:
+   - All file and archive operations accept both `str` and `pathlib.Path`.
+   - Extraction tools enforce path traversal protection (anti-Zip Slip) via `klygo.files.is_within`.
+4. **Error Handling**:
+   - Operations that would overwrite existing files without authorization raise `FileExistsError`. Pass `overwrite=True` to replace.
+   - Missing input targets consistently raise `FileNotFoundError`.
+   - Unsupported archive operations or options raise `UnsupportedOperationError` or `UnsupportedOptionError`.

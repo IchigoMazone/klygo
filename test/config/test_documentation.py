@@ -28,7 +28,7 @@ class TestDocumentation(unittest.TestCase):
             with self.subTest(name=name):
                 value = getattr(config, name)
                 self.assertTrue(inspect.getdoc(value))
-                document = repository / "docs" / "config" / f"{name}.md"
+                document = repository / "docs" / "config" / "api" / f"{name}.md"
                 self.assertTrue(document.is_file())
                 self.assertTrue((repository / "examples" / "config" / f"{name}.py").is_file())
                 text = document.read_text(encoding="utf-8")

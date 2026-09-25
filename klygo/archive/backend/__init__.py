@@ -1,8 +1,22 @@
-"""Archive backend contracts, built-in adapters, and format selection.
+"""Archive backend contracts, built-in adapters, and format selection (``klygo.archive.backend``).
+
+Interactive Google Colab Tutorial:
+    https://colab.research.google.com/drive/1CYtOv1nz-lujPiQA_f50HRwEdN5FVVnE?usp=sharing
 
 Most callers should use :mod:`klygo.archive`. Import this package directly when
 writing a backend, inspecting capabilities, or deliberately selecting a
 specific adapter.
+
+Public APIs (3 Functions, 9 Classes):
+    Core Contracts & Capabilities:
+        1. ArchiveBackend       2. BackendCapabilities
+    Exceptions:
+        3. UnsupportedOperationError   4. UnsupportedOptionError
+    Format Adapters:
+        5. ZipBackend           6. TarBackend           7. GZipBackend
+        8. SevenZipBackend      9. RarBackend
+    Discovery & Format Selection:
+        10. detect_format       11. is_archive          12. get_backend
 
 Examples
 --------

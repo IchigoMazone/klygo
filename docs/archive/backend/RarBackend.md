@@ -1,28 +1,52 @@
-# `RarBackend`
-
-Optional read-only RAR adapter backed by `rarfile`.
-
-```bash
-pip install "klygo[rarfile]"
-uv add "klygo[rarfile]"
-uv pip install "klygo[rarfile]"
-```
-
-Use `uv add` inside a uv-managed project. Use `uv pip install` for a direct
-installation into the active environment without updating project metadata.
+# `backend.RarBackend`
 
 ```python
-from pathlib import Path
 from klygo.archive.backend import RarBackend
 
 backend = RarBackend()
-print(backend.list_files(Path("dataset.rar")))
 ```
 
-Extraction, password-based reading, listing, searching, metadata, and integrity
-tests are supported. Compression and all mutation operations intentionally
-raise `UnsupportedOperationError`.
+Inspect and extract RAR archives (`.rar`) via the optional `rarfile` library.
 
-Depending on the RAR version and host, `rarfile` may also require an external
-extraction program. That requirement belongs to the optional dependency rather
-than the Klygo backend contract.
+## Contract
+
+`RarBackend` is a read-only adapter. It supports listing, metadata inspection, integrity checking, and extraction (with password support where encrypted). Creation and mutating operations are disabled by design. The class can be imported and inspected without `rarfile` installed; operations raise an actionable `ImportError` if `rarfile` is absent.
+
+## Parameters
+
+- `RarBackend()` takes no constructor parameters.
+- Key class attributes:
+  - `format_name`: `"rar"`.
+  - `capabilities`: Read-only (`compress=False`, `add=False`, `remove=False`, `merge=False`, `split=False`), with password extraction support.
+
+## Returns
+
+`RarBackend`
+    A newly constructed read-only backend adapter for RAR archives.
+
+## Errors and edge cases
+
+Attempting `compress`, `add`, `remove`, `merge`, or `split` raises `UnsupportedOperationError`. Raises `ImportError` when `rarfile` is missing during extraction.
+
+## AI usage guidance
+
+Use `RarBackend` solely for unpacking existing RAR archives. For creating new archives, choose ZIP or TAR.GZ.
+
+## Example
+
+See [`RarBackend.py`](../../../examples/archive/backend/RarBackend.py).
+
+## Tests
+
+See [`test_RarBackend.py`](../../../test/archive/backend/test_RarBackend.py).
+
+## Complete executable example
+
+```python
+from klygo.archive.backend import RarBackend
+
+backend = RarBackend()
+assert backend.format_name == "rar"
+assert backend.capabilities.compress is False
+assert "password" in backend.capabilities.extract_options
+```

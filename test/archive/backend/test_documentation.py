@@ -1,6 +1,7 @@
 """Keep source, Markdown, examples, and exported backend symbols synchronized."""
 
 import inspect
+import runpy
 import unittest
 from pathlib import Path
 
@@ -34,13 +35,33 @@ class TestBackendDocumentation(unittest.TestCase):
         docs = repository / "docs" / "archive" / "backend"
         examples = repository / "examples" / "archive" / "backend"
 
+        required_sections = (
+            "## Contract",
+            "## Parameters",
+            "## Returns",
+            "## Errors and edge cases",
+            "## AI usage guidance",
+            "## Example",
+            "## Tests",
+            "## Complete executable example",
+        )
         self.assertEqual(len(backend_api.__all__), 12)
         for name in backend_api.__all__:
             with self.subTest(symbol=name):
                 symbol = getattr(backend_api, name)
                 self.assertTrue(inspect.getdoc(symbol))
-                self.assertTrue((docs / f"{name}.md").is_file())
+                doc_path = docs / f"{name}.md"
+                self.assertTrue(doc_path.is_file())
                 self.assertTrue((examples / f"{name}.py").is_file())
+                text = doc_path.read_text(encoding="utf-8")
+                for section in required_sections:
+                    self.assertIn(section, text)
+
+    def test_every_example_executes(self):
+        examples = Path(__file__).resolve().parents[3] / "examples" / "archive" / "backend"
+        for name in backend_api.__all__:
+            with self.subTest(symbol=name):
+                runpy.run_path(str(examples / f"{name}.py"), run_name="__main__")
 
     def test_every_declared_public_backend_method_has_source_docs(self):
         backend_classes = (
