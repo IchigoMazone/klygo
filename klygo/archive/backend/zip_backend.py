@@ -1,22 +1,21 @@
+"""Built-in ZIP backend with creation, extraction, and mutation support."""
+
 import fnmatch
 import re
 import shutil
-from pathlib import Path
-from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED, ZIP_STORED, ZIP_BZIP2, ZIP_LZMA
+from pathlib import Path, PurePosixPath
+from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED, ZIP_BZIP2, ZIP_LZMA
 from typing import Iterator, Any, Dict, List, Optional, Union, Literal
 
-from klygo.archive.backend.base import ArchiveBackend
-from klygo.archive.human_size import human_size
-from klygo.archive.progress import ArchiveProgress
+import klygo.files as file_utils
+from klygo.archive.backend.base import ArchiveBackend, BackendCapabilities
+from klygo.utils.formatting import human_size
+from klygo.utils.progress import ProgressBar
 
 
 def _is_safe_path(base_dir: Path, target_path: Path) -> bool:
     """Check for Zip Slip vulnerability (Path Traversal)."""
-    try:
-        target_path.resolve().relative_to(base_dir.resolve())
-        return True
-    except ValueError:
-        return False
+    return file_utils.is_within(target_path, base_dir)
 
 
 def _match_pattern(name: str, pattern: str, regex: bool = False, case_sensitive: bool = True) -> bool:
@@ -30,8 +29,26 @@ def _match_pattern(name: str, pattern: str, regex: bool = False, case_sensitive:
 
 
 class ZipBackend(ArchiveBackend):
-    """
-    Zip Archive Backend supporting ZIP format.
+    """Read and write ZIP archives using Python's standard library.
+
+    ZIP is the most feature-complete built-in backend. It supports creation,
+    selective extraction, passwords for reading encrypted members, member
+    mutation, same-format merging, and logical size-based splitting.
+
+    Attributes
+    ----------
+    format_name : str
+        Always ``"zip"``.
+    capabilities : BackendCapabilities
+        Declares every mutating operation plus ZIP-specific compression,
+        extraction, and conflict options.
+    COMPRESSION_METHODS : dict[str, int]
+        Mapping from public method names to :mod:`zipfile` constants.
+
+    Notes
+    -----
+    Direct methods accept :class:`pathlib.Path` objects. Applications normally
+    call :mod:`klygo.archive`, which performs path normalization and dispatch.
     """
 
     COMPRESSION_METHODS = {
@@ -40,6 +57,19 @@ class ZipBackend(ArchiveBackend):
         "bzip2": ZIP_BZIP2,
         "lzma": ZIP_LZMA,
     }
+    format_name = "zip"
+    capabilities = BackendCapabilities(
+        compress=True,
+        add=True,
+        remove=True,
+        merge=True,
+        split=True,
+        compress_options=frozenset(
+            {"compresslevel", "method", "follow_symlinks", "include_root"}
+        ),
+        extract_options=frozenset({"password", "include", "exclude"}),
+        add_options=frozenset({"on_conflict"}),
+    )
 
     def compress(
         self,
@@ -47,17 +77,30 @@ class ZipBackend(ArchiveBackend):
         output_path: Path,
         compresslevel: int = 6,
         method: Optional[str] = None,
-        preserve_timestamp: bool = True,
-        preserve_permissions: bool = True,
         follow_symlinks: bool = False,
+        include_root: bool = True,
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
-        if output_path.exists() and not overwrite:
+        """Create a ZIP archive from one file or directory.
+
+        ``method`` accepts ``deflated``, ``stored``, ``bzip2``, or ``lzma``.
+        Directory members include the source root unless ``include_root`` is
+        false. Existing outputs require ``overwrite=True``.
+        """
+        if file_utils.exists(output_path) and not overwrite:
             raise FileExistsError(f"output_path already exists: {output_path}")
 
-        comp_type = self.COMPRESSION_METHODS.get((method or "deflated").lower(), ZIP_DEFLATED)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        method_name = (method or "deflated").lower()
+        if method_name not in self.COMPRESSION_METHODS:
+            raise ValueError(
+                f"Unsupported ZIP compression method '{method}'. "
+                f"Choose from {sorted(self.COMPRESSION_METHODS)}."
+            )
+        if not 0 <= compresslevel <= 9:
+            raise ValueError("compresslevel must be between 0 and 9")
+        comp_type = self.COMPRESSION_METHODS[method_name]
+        file_utils.mkdir(file_utils.parent(output_path))
 
         # Generator traversal to avoid loading all Paths into RAM
         def _file_generator():
@@ -71,15 +114,15 @@ class ZipBackend(ArchiveBackend):
         files_to_compress = list(_file_generator()) if verbose else None
         total_count = len(files_to_compress) if files_to_compress else 1
 
-        with ArchiveProgress(total=total_count, desc=f"{output_path.name}: compressing", verbose=verbose) as pbar:
+        with ProgressBar(total=total_count, desc=f"{output_path.name}: compressing", verbose=verbose) as pbar:
             with ZipFile(output_path, mode="w", compression=comp_type, compresslevel=compresslevel) as zf:
                 gen = files_to_compress if files_to_compress is not None else _file_generator()
                 for file_path in gen:
-                    arcname = (
-                        file_path.relative_to(source.parent)
-                        if source.is_dir()
-                        else file_path.name
-                    )
+                    if source.is_dir():
+                        base = source.parent if include_root else source
+                        arcname = file_path.relative_to(base)
+                    else:
+                        arcname = file_path.name
                     zf.write(file_path, arcname=str(arcname))
                     pbar.update(1)
 
@@ -90,14 +133,18 @@ class ZipBackend(ArchiveBackend):
         password: Optional[str] = None,
         include: Optional[Union[str, List[str]]] = None,
         exclude: Optional[Union[str, List[str]]] = None,
-        preserve_timestamp: bool = True,
-        preserve_permissions: bool = True,
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
+        """Extract selected ZIP members with overwrite and path-safety checks.
+
+        ``include`` and ``exclude`` accept one glob or a list of globs. Exclude
+        rules are applied after include rules. ``password`` is encoded as UTF-8
+        for encrypted ZIP members.
+        """
         pwd_bytes = password.encode("utf-8") if password else None
         output_dir = output_dir.resolve()
-        output_dir.mkdir(parents=True, exist_ok=True)
+        file_utils.mkdir(output_dir)
 
         includes = [include] if isinstance(include, str) else (include or [])
         excludes = [exclude] if isinstance(exclude, str) else (exclude or [])
@@ -116,13 +163,13 @@ class ZipBackend(ArchiveBackend):
                 filtered_members.append(m)
 
             if not overwrite:
-                existing = [m for m in filtered_members if (output_dir / m.filename).exists()]
+                existing = [m for m in filtered_members if file_utils.exists(output_dir / m.filename)]
                 if existing:
                     names = ", ".join(m.filename for m in existing[:5])
                     suffix = f"… (+{len(existing) - 5} more)" if len(existing) > 5 else ""
                     raise FileExistsError(f"Files already exist in output directory: {names}{suffix}. Use overwrite=True.")
 
-            with ArchiveProgress(total=len(filtered_members), desc=f"{archive_path.name}: extracting", verbose=verbose) as pbar:
+            with ProgressBar(total=len(filtered_members), desc=f"{archive_path.name}: extracting", verbose=verbose) as pbar:
                 for member in filtered_members:
                     target_path = output_dir / member.filename
                     if not _is_safe_path(output_dir, target_path):
@@ -138,27 +185,30 @@ class ZipBackend(ArchiveBackend):
         password: Optional[str] = None,
         overwrite: bool = False,
     ) -> None:
+        """Stream one exact ZIP member to the output directory."""
         pwd_bytes = password.encode("utf-8") if password else None
-        output_dir.mkdir(parents=True, exist_ok=True)
+        file_utils.mkdir(output_dir)
 
         with ZipFile(archive_path, mode="r") as zf:
             try:
                 member = zf.getinfo(filename)
             except KeyError:
-                raise KeyError(f"'{filename}' not found in archive. Use list_files() to see available files.")
+                raise KeyError(f"'{filename}' not found in archive. Use list_files() to see available file_utils.")
 
-            target = output_dir / Path(filename).name
-            if target.exists() and not overwrite:
+            target = output_dir / file_utils.name(filename)
+            if file_utils.exists(target) and not overwrite:
                 raise FileExistsError(f"File already exists: {target}. Use overwrite=True.")
 
             with zf.open(member, pwd=pwd_bytes) as src, open(target, "wb") as dst:
                 shutil.copyfileobj(src, dst)
 
     def list_files(self, archive_path: Path) -> List[str]:
+        """Return ZIP member names in central-directory order."""
         with ZipFile(archive_path, mode="r") as zf:
             return zf.namelist()
 
     def iter_files(self, archive_path: Path) -> Iterator[str]:
+        """Yield ZIP member names while the archive handle is managed internally."""
         with ZipFile(archive_path, mode="r") as zf:
             for info in zf.infolist():
                 yield info.filename
@@ -170,6 +220,7 @@ class ZipBackend(ArchiveBackend):
         regex: bool = False,
         case_sensitive: bool = True,
     ) -> List[str]:
+        """Search ZIP member names using a glob or regular expression."""
         results = []
         for name in self.iter_files(archive_path):
             if _match_pattern(name, pattern, regex=regex, case_sensitive=case_sensitive):
@@ -177,6 +228,7 @@ class ZipBackend(ArchiveBackend):
         return results
 
     def get_info(self, archive_path: Path) -> Dict[str, Any]:
+        """Return normalized ZIP sizes, counts, ratio, encryption, and extrema."""
         with ZipFile(archive_path, mode="r") as zf:
             members = zf.infolist()
             files = [m for m in members if not m.is_dir()]
@@ -219,8 +271,14 @@ class ZipBackend(ArchiveBackend):
             }
 
     def test(self, archive_path: Path, raise_exception: bool = False) -> bool:
-        with ZipFile(archive_path, mode="r") as zf:
-            bad_file = zf.testzip()
+        """Run the ZIP CRC check and optionally raise for the first bad member."""
+        try:
+            with ZipFile(archive_path, mode="r") as zf:
+                bad_file = zf.testzip()
+        except Exception as exc:
+            if raise_exception:
+                raise ValueError(f"ZIP archive is corrupted: {exc}") from exc
+            return False
 
         if bad_file is not None:
             if raise_exception:
@@ -235,12 +293,17 @@ class ZipBackend(ArchiveBackend):
         on_conflict: Literal["rename", "overwrite", "skip"] = "rename",
         verbose: bool = True,
     ) -> None:
+        """Add files with ``rename``, ``overwrite``, or ``skip`` conflict policy.
+
+        Overwrite rebuilds the archive so an older duplicate member cannot
+        remain visible. Rename generates deterministic ``_dupN`` names.
+        """
         all_files: List[tuple[Path, str]] = []
         for fp in files:
             if fp.is_dir():
                 for child in sorted(fp.rglob("*")):
                     if child.is_file():
-                        all_files.append((child, str(child.relative_to(fp.parent))))
+                        all_files.append((child, child.relative_to(fp.parent).as_posix()))
             else:
                 all_files.append((fp, fp.name))
 
@@ -255,12 +318,20 @@ class ZipBackend(ArchiveBackend):
                 if on_conflict == "skip":
                     continue
                 elif on_conflict == "rename":
-                    stem = Path(arcname).stem
-                    suffix = Path(arcname).suffix
-                    arcname = f"{stem}_dup{suffix}"
+                    member_path = PurePosixPath(arcname)
+                    index = 1
+                    while True:
+                        candidate = member_path.with_name(
+                            f"{member_path.stem}_dup{index}{member_path.suffix}"
+                        ).as_posix()
+                        if candidate not in existing:
+                            arcname = candidate
+                            break
+                        index += 1
                 elif on_conflict == "overwrite":
                     to_overwrite.add(arcname)
             resolved.append((abs_path, arcname))
+            existing.add(arcname)
 
         if not resolved:
             return
@@ -276,7 +347,7 @@ class ZipBackend(ArchiveBackend):
                         with src_zf.open(item) as src, dst_zf.open(item, mode="w") as dst:
                             shutil.copyfileobj(src, dst)
                 # Write new/overwritten entries
-                with ArchiveProgress(total=len(resolved), desc=f"{archive_path.name}: adding", verbose=verbose) as pbar:
+                with ProgressBar(total=len(resolved), desc=f"{archive_path.name}: adding", verbose=verbose) as pbar:
                     for abs_path, arcname in resolved:
                         dst_zf.write(abs_path, arcname=arcname)
                         pbar.update(1)
@@ -284,13 +355,14 @@ class ZipBackend(ArchiveBackend):
         else:
             # Simple append — no overwrite needed
             with ZipFile(archive_path, mode="a", compression=ZIP_DEFLATED) as zf:
-                with ArchiveProgress(total=len(resolved), desc=f"{archive_path.name}: adding", verbose=verbose) as pbar:
+                with ProgressBar(total=len(resolved), desc=f"{archive_path.name}: adding", verbose=verbose) as pbar:
                     for abs_path, arcname in resolved:
                         zf.write(abs_path, arcname=arcname)
                         pbar.update(1)
 
 
     def remove(self, archive_path: Path, files: List[str]) -> None:
+        """Rebuild a ZIP archive without the named members."""
         to_remove = set(files)
         with ZipFile(archive_path, mode="r") as zf:
             names = set(zf.namelist())
@@ -314,7 +386,8 @@ class ZipBackend(ArchiveBackend):
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
-        if output_path.exists() and not overwrite:
+        """Merge ZIP archives, keeping the first occurrence of each member name."""
+        if file_utils.exists(output_path) and not overwrite:
             raise FileExistsError(f"output_path already exists: {output_path}")
 
         src_members: Dict[Path, List] = {}
@@ -325,7 +398,7 @@ class ZipBackend(ArchiveBackend):
                 total += len(src_members[src])
 
         written_names = set()
-        with ArchiveProgress(total=total, desc=f"{output_path.name}: merging", verbose=verbose) as pbar:
+        with ProgressBar(total=total, desc=f"{output_path.name}: merging", verbose=verbose) as pbar:
             with ZipFile(output_path, mode="w", compression=ZIP_DEFLATED) as out_zf:
                 for src in archive_paths:
                     with ZipFile(src, mode="r") as src_zf:
@@ -347,7 +420,8 @@ class ZipBackend(ArchiveBackend):
         overwrite: bool = False,
         verbose: bool = True,
     ) -> List[str]:
-        output_dir.mkdir(parents=True, exist_ok=True)
+        """Group ZIP members into independently readable size-limited parts."""
+        file_utils.mkdir(output_dir)
         max_bytes = int(size * 1024 * 1024)
 
         stem = archive_path.stem
@@ -357,14 +431,14 @@ class ZipBackend(ArchiveBackend):
 
         with ZipFile(archive_path, mode="r") as src_zf:
             members = src_zf.infolist()
-            with ArchiveProgress(total=len(members), desc=f"{archive_path.name}: splitting", verbose=verbose) as pbar:
+            with ProgressBar(total=len(members), desc=f"{archive_path.name}: splitting", verbose=verbose) as pbar:
                 current_members: List = []
                 current_size = 0
 
                 def _flush() -> None:
                     nonlocal part_num
                     part_path = output_dir / f"{stem}_part_{part_num:03d}{suffix}"
-                    if part_path.exists() and not overwrite:
+                    if file_utils.exists(part_path) and not overwrite:
                         raise FileExistsError(f"Output already exists: {part_path}. Use overwrite=True.")
                     with ZipFile(part_path, mode="w", compression=ZIP_DEFLATED) as pzf:
                         for m in current_members:

@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Union
 
-from klygo.archive.human_size import human_size as _human_size
+from klygo.utils.formatting import human_size as _human_size
 
 PathInput = Union[str, Path]
 
@@ -207,8 +207,6 @@ def compare(path1: PathInput, path2: PathInput, by: str = "hash") -> bool:
 
 
 __all__ = ["size", "hash", "info", "compare"]
-
-
 
 
 

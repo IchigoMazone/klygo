@@ -1,30 +1,51 @@
-from typing import Optional, Any
+from typing import Any, Optional
+
 from tqdm.auto import tqdm
 
 
 class ProgressBar:
-    """
-    Tác dụng:
-    - Lớp quản lý Progress Bar dùng chung toàn bộ thư viện klygo với giao diện đồng nhất chuẩn Hugging Face (xanh lá, liền mạch, tự động nhận diện Jupyter Notebook / Terminal).
+    """Context-managed progress indicator shared by Klygo modules.
 
-    Đầu vào:
-    - total [int]: Tổng số bước hoặc số lượng phần tử cần xử lý.
-    - desc [str]: Mô tả hiển thị đầu thanh tiến trình (ví dụ: 'dataset.zip: compressing').
-    - unit [str]: Đơn vị đếm ('file', 'byte', 'it', v.v.). Mặc định: 'file'.
-    - verbose [bool]: Trạng thái bật/tắt hiển thị tiến trình. Mặc định: True.
-    - colour [str]: Màu sắc thanh tiến trình trong console. Mặc định: 'green'.
-    - unit_scale [bool]: Tự động quy đổi đơn vị (k, M, G). Mặc định: True.
-    - unit_divisor [int]: Cơ số chia quy đổi đơn vị (1000 cho số lượng/file, 1024 cho byte). Mặc định: 1000.
+    The wrapper provides one configuration surface for terminal and notebook
+    progress output. When ``verbose=False``, no ``tqdm`` object is created and
+    calls to :meth:`update` and :meth:`close` become safe no-ops.
 
-    Đầu ra:
-    - [ProgressBar] Đối tượng quản lý tiến trình.
+    Parameters
+    ----------
+    total : int or None
+        Expected number of updates. ``None`` or ``0`` uses a display total of
+        one because ``tqdm`` requires a usable fallback for this wrapper.
+    desc : str
+        Text displayed before the progress bar.
+    unit : str, default='file'
+        Unit label such as ``file``, ``frame``, or ``byte``.
+    verbose : bool, default=True
+        Create and display the underlying progress bar when enabled.
+    colour : str, default='cyan'
+        Color name forwarded to ``tqdm``.
+    unit_scale : bool, default=True
+        Allow ``tqdm`` to abbreviate large values.
+    unit_divisor : int, default=1000
+        Scaling divisor, commonly 1000 for item counts or 1024 for bytes.
 
-    Nguồn: TrinhNhuNhat_28072026.
+    Attributes
+    ----------
+    verbose : bool
+        Whether progress display is enabled.
+    bar : tqdm or None
+        Active underlying progress object, or ``None`` when disabled or closed.
+
+    Examples
+    --------
+    >>> from klygo import utils
+    >>> with utils.ProgressBar(2, "Loading", verbose=False) as progress:
+    ...     progress.update()
+    ...     progress.update()
     """
 
     def __init__(
         self,
-        total: int,
+        total: Optional[int],
         desc: str,
         unit: str = "file",
         verbose: bool = True,
@@ -33,7 +54,7 @@ class ProgressBar:
         unit_divisor: int = 1000,
     ) -> None:
         self.verbose = verbose
-        self.bar: Optional[tqdm] = None
+        self.bar: Optional[Any] = None
 
         if verbose:
             self.bar = tqdm(
@@ -46,16 +67,13 @@ class ProgressBar:
                 ascii=" █",
                 leave=True,
             )
-
-
-
     def update(self, n: int = 1) -> None:
-        """Cập nhật tiến trình thêm n bước."""
+        """Advance the progress counter by ``n`` units when enabled."""
         if self.bar is not None:
             self.bar.update(n)
 
     def close(self) -> None:
-        """Đóng thanh tiến trình."""
+        """Close and release the underlying progress object when present."""
         if self.bar is not None:
             self.bar.close()
             self.bar = None
@@ -67,12 +85,8 @@ class ProgressBar:
         self.close()
 
 
-# Alias dùng chung cho archive
-ArchiveProgress = ProgressBar
-
-
 def create_progress_bar(
-    total: int,
+    total: Optional[int],
     desc: str,
     unit: str = "file",
     verbose: bool = True,
@@ -80,23 +94,41 @@ def create_progress_bar(
     unit_scale: bool = False,
     unit_divisor: int = 1024,
 ) -> ProgressBar:
-    """
-    Tác dụng:
-    - Hàm khởi tạo nhanh một ProgressBar dùng chung cho toàn dự án klygo.
+    """Create a configured :class:`ProgressBar`.
 
-    Đầu vào:
-    - total [int]: Tổng số phần tử.
-    - desc [str]: Chuỗi mô tả tiến trình.
-    - unit [str]: Đơn vị hiển thị. Mặc định: 'file'.
-    - verbose [bool]: Trạng thái hiển thị. Mặc định: True.
-    - colour [str]: Màu sắc console. Mặc định: 'cyan'.
-    - unit_scale [bool]: Tùy chọn tự động đổi scale đơn vị. Mặc định: False.
-    - unit_divisor [int]: Cơ số chia (1024 hoặc 1000). Mặc định: 1024.
+    This factory is useful when callers prefer function-based construction. Its
+    defaults favor byte-oriented or explicitly controlled scaling, whereas the
+    class constructor enables unit scaling by default.
 
-    Đầu ra:
-    - [ProgressBar] Đối tượng progress bar đã tạo.
+    Parameters
+    ----------
+    total : int or None
+        Expected number of updates.
+    desc : str
+        Text displayed before the progress bar.
+    unit : str, default='file'
+        Unit label displayed beside the counter.
+    verbose : bool, default=True
+        Create and display the underlying progress bar when enabled.
+    colour : str, default='cyan'
+        Color name forwarded to ``tqdm``.
+    unit_scale : bool, default=False
+        Allow ``tqdm`` to abbreviate large values.
+    unit_divisor : int, default=1024
+        Scaling divisor used by ``tqdm``.
 
-    Nguồn: TrinhNhuNhat_28072026.
+    Returns
+    -------
+    ProgressBar
+        Configured progress wrapper. The caller should close it or use it as a
+        context manager.
+
+    Examples
+    --------
+    >>> from klygo import utils
+    >>> progress = utils.create_progress_bar(1, "Saving", verbose=False)
+    >>> progress.update()
+    >>> progress.close()
     """
     return ProgressBar(
         total=total,

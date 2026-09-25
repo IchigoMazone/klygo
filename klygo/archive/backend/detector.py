@@ -1,6 +1,9 @@
-from pathlib import Path
-from typing import Union
+"""Detect archive formats and construct their backend adapters."""
 
+from pathlib import Path
+from typing import Callable, Dict, Union
+
+import klygo.files as file_utils
 from klygo.archive.backend.base import ArchiveBackend
 from klygo.archive.backend.zip_backend import ZipBackend
 from klygo.archive.backend.tar_backend import TarBackend
@@ -23,17 +26,55 @@ SUPPORTED_EXTENSIONS = {
 }
 
 
+BACKEND_FACTORIES: Dict[str, Callable[[], ArchiveBackend]] = {
+    "zip": ZipBackend,
+    "tar": lambda: TarBackend("tar"),
+    "tar.gz": lambda: TarBackend("tar.gz"),
+    "tar.xz": lambda: TarBackend("tar.xz"),
+    "tar.bz2": lambda: TarBackend("tar.bz2"),
+    "gz": GZipBackend,
+    "7z": SevenZipBackend,
+    "rar": RarBackend,
+}
+
+FORMAT_ALIASES = {
+    "tgz": "tar.gz",
+    "txz": "tar.xz",
+    "tbz2": "tar.bz2",
+}
+
+
 def detect_format(path: Union[str, Path]) -> str:
-    """
-    Tác dụng:
-    - Nhận dạng tự động định dạng file lưu trữ dựa vào Magic Bytes đọc từ header file hoặc đuôi mở rộng.
+    """Detect an archive format from its name and magic bytes.
 
-    Định dạng tương thích:
-    - Nhận dạng được: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
+    Known compound extensions are checked first. Existing files are also inspected for ZIP, GZip, XZ, 7Z, RAR, and TAR signatures.
 
-    Nguồn: TrinhNhuNhat_28072026.
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Archive path or candidate filename.
+
+    Returns
+    -------
+    str
+        Canonical format identifier such as ``zip`` or ``tar.gz``.
+
+    Raises
+    ------
+    ValueError
+        If neither the extension nor file signature is supported.
+
+    See Also
+    --------
+    is_archive
+
+    Examples
+    --------
+    >>> import klygo.archive as archive
+    >>> archive.detect_format("dataset.tar.gz")
+    'tar.gz'
     """
-    filepath = Path(path)
+    filepath = file_utils.path(path)
     filename = filepath.name.lower()
 
     # Compound extensions check first
@@ -42,7 +83,7 @@ def detect_format(path: Union[str, Path]) -> str:
             return SUPPORTED_EXTENSIONS[ext]
 
     # File magic bytes check if file exists
-    if filepath.exists() and filepath.is_file():
+    if file_utils.is_file(filepath):
         try:
             with open(filepath, "rb") as f:
                 header = f.read(512)
@@ -73,14 +114,29 @@ def detect_format(path: Union[str, Path]) -> str:
 
 
 def is_archive(path: Union[str, Path]) -> bool:
-    """
-    Tác dụng:
-    - Kiểm tra một đường dẫn file có phải là file archive được hỗ trợ hợp lệ hay không.
+    """Check whether a path appears to be a supported archive.
 
-    Định dạng tương thích:
-    - Kiểm tra được: ZIP, TAR, TAR.GZ, TAR.XZ, GZ, 7Z, RAR.
+    The function is intentionally non-raising and returns ``False`` for missing, unsupported, or unreadable paths.
 
-    Nguồn: TrinhNhuNhat_28072026.
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Archive path or candidate filename.
+
+    Returns
+    -------
+    bool
+        Whether detection succeeds with a supported format.
+
+    See Also
+    --------
+    detect_format
+
+    Examples
+    --------
+    >>> import klygo.archive as archive
+    >>> archive.is_archive("dataset.zip")
+    True
     """
     try:
         fmt = detect_format(path)
@@ -89,21 +145,43 @@ def is_archive(path: Union[str, Path]) -> bool:
         return False
 
 
-def get_backend(path: Union[str, Path], format_hint: str = None) -> ArchiveBackend:
-    """
-    Get the appropriate ArchiveBackend instance for a given path or format hint.
-    """
-    fmt = (format_hint or detect_format(path)).lower()
+def get_backend(
+    path: Union[str, Path],
+    format_hint: str = None,
+) -> ArchiveBackend:
+    """Construct the backend selected by a format hint or archive path.
 
-    if fmt == "zip":
-        return ZipBackend()
-    elif fmt in ("tar", "tar.gz", "tar.xz", "tar.bz2", "tgz", "txz", "tbz2"):
-        return TarBackend(format_name=fmt)
-    elif fmt == "gz":
-        return GZipBackend()
-    elif fmt == "7z":
-        return SevenZipBackend()
-    elif fmt == "rar":
-        return RarBackend()
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Archive path used for detection when ``format_hint`` is omitted. The
+        path need not exist when its extension identifies the format.
+    format_hint : str or None, default=None
+        Explicit format name. Canonical names and the aliases ``tgz``, ``txz``,
+        and ``tbz2`` are accepted. A hint takes precedence over ``path``.
 
-    raise ValueError(f"No backend available for format '{fmt}'.")
+    Returns
+    -------
+    ArchiveBackend
+        A new backend instance.
+
+    Raises
+    ------
+    ValueError
+        If detection fails or the requested format has no registered backend.
+
+    Examples
+    --------
+    >>> from klygo.archive.backend import get_backend
+    >>> type(get_backend("bundle.zip")).__name__
+    'ZipBackend'
+    >>> get_backend("unused", format_hint="tgz").format_name
+    'tar.gz'
+    """
+    requested = (format_hint or detect_format(path)).lower()
+    fmt = FORMAT_ALIASES.get(requested, requested)
+    try:
+        factory = BACKEND_FACTORIES[fmt]
+    except KeyError as exc:
+        raise ValueError(f"No backend available for format '{requested}'.") from exc
+    return factory()

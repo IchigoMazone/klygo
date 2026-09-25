@@ -10,6 +10,28 @@ cd klygo
 uv sync
 ```
 
+Hỗ trợ 7-Zip và RAR là tùy chọn, có thể cài độc lập:
+
+```bash
+# pip
+pip install "klygo[py7zr]"
+pip install "klygo[rarfile]"
+
+# uv: thêm Klygo vào dependencies của project
+uv add "klygo[py7zr]"
+uv add "klygo[rarfile]"
+
+# uv: chỉ cài vào environment hiện tại
+uv pip install "klygo[py7zr]"
+uv pip install "klygo[rarfile]"
+```
+
+Có thể cài cả hai extra cùng lúc bằng `klygo[py7zr,rarfile]` với bất kỳ lệnh
+`pip install`, `uv add` hoặc `uv pip install` nào ở trên.
+
+`py7zr` hỗ trợ đọc và tạo file `.7z`. `rarfile` hiện dùng để đọc và giải nén
+`.rar`; tùy hệ thống có thể cần thêm công cụ giải nén RAR tương thích.
+
 ## Các package
 
 - `klygo.archive`: nén, giải nén, tìm kiếm, kiểm tra, chỉnh sửa, gộp và chia ZIP.

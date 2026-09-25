@@ -1,14 +1,29 @@
-from pathlib import Path
-from typing import Iterator, Any, Dict, List, Optional, Union, Literal
+"""Optional read-only RAR backend powered by :mod:`rarfile`."""
 
-from klygo.archive.backend.base import ArchiveBackend
-from klygo.archive.human_size import human_size
+import fnmatch
+import re
+from pathlib import Path
+from typing import Iterator, Any, Dict, List, Optional, Union
+
+import klygo.files as file_utils
+from klygo.archive.backend.base import ArchiveBackend, BackendCapabilities
+from klygo.utils.formatting import human_size
+from klygo.utils.progress import ProgressBar
 
 
 class RarBackend(ArchiveBackend):
+    """Inspect and extract RAR archives through optional ``rarfile`` support.
+
+    The backend is read-only and advertises no creation or mutation capability.
+    Passwords are accepted for extraction. Importing and inspecting the class
+    does not require ``rarfile``; archive operations provide an actionable
+    :class:`ImportError` if the dependency is unavailable.
     """
-    Rar Archive Backend supporting read/extract operations for .rar format.
-    """
+
+    format_name = "rar"
+    capabilities = BackendCapabilities(
+        extract_options=frozenset({"password"}),
+    )
 
     def _check_rarfile(self):
         try:
@@ -17,22 +32,8 @@ class RarBackend(ArchiveBackend):
         except ImportError:
             raise ImportError(
                 "Support for .rar format requires the 'rarfile' package. "
-                "Please install it using 'pip install rarfile'."
+                "Install it using 'pip install \"klygo[rarfile]\"'."
             )
-
-    def compress(
-        self,
-        source: Path,
-        output_path: Path,
-        compresslevel: int = 6,
-        method: Optional[str] = None,
-        preserve_timestamp: bool = True,
-        preserve_permissions: bool = True,
-        follow_symlinks: bool = False,
-        overwrite: bool = False,
-        verbose: bool = True,
-    ) -> None:
-        raise NotImplementedError("Creating RAR archives is not supported (RAR is a proprietary format). Use .zip or .7z.")
 
     def extract(
         self,
@@ -41,17 +42,31 @@ class RarBackend(ArchiveBackend):
         password: Optional[str] = None,
         include: Optional[Union[str, List[str]]] = None,
         exclude: Optional[Union[str, List[str]]] = None,
-        preserve_timestamp: bool = True,
-        preserve_permissions: bool = True,
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
+        """Extract every RAR member, optionally with a password.
+
+        Changed include or exclude filters are rejected because selective RAR
+        extraction is not yet part of this backend's public contract.
+        """
+        self.validate_option("extract", "include", include, None)
+        self.validate_option("extract", "exclude", exclude, None)
         rarfile = self._check_rarfile()
-        output_dir.mkdir(parents=True, exist_ok=True)
+        file_utils.mkdir(output_dir)
         with rarfile.RarFile(archive_path, mode="r") as rf:
             if password:
                 rf.setpassword(password)
-            rf.extractall(path=output_dir)
+            names = rf.namelist()
+            if not overwrite:
+                existing = [name for name in names if file_utils.exists(output_dir / name)]
+                if existing:
+                    raise FileExistsError(
+                        f"Archive members already exist: {existing[:5]}. Use overwrite=True."
+                    )
+            with ProgressBar(total=1, desc=f"{archive_path.name}: extracting", verbose=verbose) as progress:
+                rf.extractall(path=output_dir)
+                progress.update()
 
     def extract_file(
         self,
@@ -61,19 +76,25 @@ class RarBackend(ArchiveBackend):
         password: Optional[str] = None,
         overwrite: bool = False,
     ) -> None:
+        """Extract one exact RAR member while enforcing overwrite policy."""
         rarfile = self._check_rarfile()
-        output_dir.mkdir(parents=True, exist_ok=True)
+        file_utils.mkdir(output_dir)
+        target = output_dir / file_utils.name(filename)
+        if file_utils.exists(target) and not overwrite:
+            raise FileExistsError(f"File already exists: {target}. Use overwrite=True.")
         with rarfile.RarFile(archive_path, mode="r") as rf:
             if password:
                 rf.setpassword(password)
             rf.extract(filename, path=output_dir)
 
     def list_files(self, archive_path: Path) -> List[str]:
+        """Return member names reported by ``rarfile``."""
         rarfile = self._check_rarfile()
         with rarfile.RarFile(archive_path, mode="r") as rf:
             return rf.namelist()
 
     def iter_files(self, archive_path: Path) -> Iterator[str]:
+        """Yield RAR member names from the managed list result."""
         yield from self.list_files(archive_path)
 
     def search(
@@ -83,7 +104,7 @@ class RarBackend(ArchiveBackend):
         regex: bool = False,
         case_sensitive: bool = True,
     ) -> List[str]:
-        import fnmatch, re
+        """Search RAR member names with glob or regular-expression matching."""
         results = []
         for name in self.iter_files(archive_path):
             n = name if case_sensitive else name.lower()
@@ -95,6 +116,7 @@ class RarBackend(ArchiveBackend):
         return results
 
     def get_info(self, archive_path: Path) -> Dict[str, Any]:
+        """Normalize RAR sizes, counts, encryption state, and archive comment."""
         rarfile = self._check_rarfile()
         with rarfile.RarFile(archive_path, mode="r") as rf:
             infolist = rf.infolist()
@@ -121,6 +143,7 @@ class RarBackend(ArchiveBackend):
             }
 
     def test(self, archive_path: Path, raise_exception: bool = False) -> bool:
+        """Run ``rarfile`` integrity testing and optionally raise on failure."""
         rarfile = self._check_rarfile()
         try:
             with rarfile.RarFile(archive_path, mode="r") as rf:
@@ -129,34 +152,3 @@ class RarBackend(ArchiveBackend):
             if raise_exception:
                 raise ValueError(f"RAR archive corrupted: {e}")
             return False
-
-    def add(
-        self,
-        archive_path: Path,
-        files: List[Path],
-        on_conflict: Literal["rename", "overwrite", "skip"] = "rename",
-        verbose: bool = True,
-    ) -> None:
-        raise NotImplementedError("Modifying RAR archive is not supported.")
-
-    def remove(self, archive_path: Path, files: List[str]) -> None:
-        raise NotImplementedError("Modifying RAR archive is not supported.")
-
-    def merge(
-        self,
-        archive_paths: List[Path],
-        output_path: Path,
-        overwrite: bool = False,
-        verbose: bool = True,
-    ) -> None:
-        raise NotImplementedError("Merging RAR archives is not supported.")
-
-    def split_by_size(
-        self,
-        archive_path: Path,
-        size: float,
-        output_dir: Path,
-        overwrite: bool = False,
-        verbose: bool = True,
-    ) -> List[str]:
-        raise NotImplementedError("Splitting RAR archive is not supported.")

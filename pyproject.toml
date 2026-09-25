@@ -23,6 +23,14 @@ dependencies = [
     "matplotlib>=3.5",
 ]
 
+[project.optional-dependencies]
+py7zr = [
+    "py7zr",
+]
+rarfile = [
+    "rarfile",
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["klygo*"]

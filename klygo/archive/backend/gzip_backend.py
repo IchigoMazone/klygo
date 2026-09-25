@@ -1,16 +1,33 @@
+"""Built-in single-stream GZip backend."""
+
+import fnmatch
 import gzip
+import re
 import shutil
 from pathlib import Path
-from typing import Iterator, Any, Dict, List, Optional, Union, Literal
+from typing import Iterator, Any, Dict, List, Optional, Union
 
-from klygo.archive.backend.base import ArchiveBackend
-from klygo.archive.human_size import human_size
+import klygo.files as file_utils
+from klygo.archive.backend.base import ArchiveBackend, BackendCapabilities
+from klygo.utils.formatting import human_size
+from klygo.utils.progress import ProgressBar
 
 
 class GZipBackend(ArchiveBackend):
+    """Compress and extract one file as a GZip stream.
+
+    GZip is not a multi-member filesystem container in this API. The logical
+    member name is derived from the archive filename by removing ``.gz``.
+    Creation and extraction are supported; add, remove, merge, and split are
+    rejected by the base capability contract. Use :class:`TarBackend` with
+    ``format_name="tar.gz"`` for directories or multiple files.
     """
-    GZip Archive Backend supporting single file .gz compression/decompression.
-    """
+
+    format_name = "gz"
+    capabilities = BackendCapabilities(
+        compress=True,
+        compress_options=frozenset({"compresslevel"}),
+    )
 
     def compress(
         self,
@@ -18,21 +35,32 @@ class GZipBackend(ArchiveBackend):
         output_path: Path,
         compresslevel: int = 6,
         method: Optional[str] = None,
-        preserve_timestamp: bool = True,
-        preserve_permissions: bool = True,
         follow_symlinks: bool = False,
+        include_root: bool = True,
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
-        if output_path.exists() and not overwrite:
+        """Compress one regular file into a GZip stream.
+
+        Levels 0 through 9 are supported. Directories and container-specific
+        options are rejected instead of being silently ignored.
+        """
+        self.validate_option("compress", "method", method, None)
+        self.validate_option("compress", "follow_symlinks", follow_symlinks, False)
+        self.validate_option("compress", "include_root", include_root, True)
+        if not 0 <= compresslevel <= 9:
+            raise ValueError("compresslevel must be between 0 and 9")
+        if file_utils.exists(output_path) and not overwrite:
             raise FileExistsError(f"output_path already exists: {output_path}")
 
         if source.is_dir():
-            raise ValueError("GZip backend only supports single files. For directories use tar.gz format.")
+            raise ValueError("GZip supports one file only. Use tar.gz for directories.")
 
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(source, "rb") as f_in, gzip.open(output_path, "wb", compresslevel=compresslevel) as f_out:
-            shutil.copyfileobj(f_in, f_out)
+        file_utils.mkdir(file_utils.parent(output_path))
+        with ProgressBar(total=1, desc=f"{output_path.name}: compressing", verbose=verbose) as progress:
+            with open(source, "rb") as f_in, gzip.open(output_path, "wb", compresslevel=compresslevel) as f_out:
+                shutil.copyfileobj(f_in, f_out)
+            progress.update()
 
     def extract(
         self,
@@ -41,20 +69,24 @@ class GZipBackend(ArchiveBackend):
         password: Optional[str] = None,
         include: Optional[Union[str, List[str]]] = None,
         exclude: Optional[Union[str, List[str]]] = None,
-        preserve_timestamp: bool = True,
-        preserve_permissions: bool = True,
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
-        output_dir.mkdir(parents=True, exist_ok=True)
+        """Extract the single stream using the archive stem as output name."""
+        self.validate_option("extract", "password", password, None)
+        self.validate_option("extract", "include", include, None)
+        self.validate_option("extract", "exclude", exclude, None)
+        file_utils.mkdir(output_dir)
         out_name = archive_path.stem if archive_path.suffix.lower() == ".gz" else archive_path.name
         target = output_dir / out_name
 
-        if target.exists() and not overwrite:
+        if file_utils.exists(target) and not overwrite:
             raise FileExistsError(f"File already exists: {target}. Use overwrite=True.")
 
-        with gzip.open(archive_path, "rb") as f_in, open(target, "wb") as f_out:
-            shutil.copyfileobj(f_in, f_out)
+        with ProgressBar(total=1, desc=f"{archive_path.name}: extracting", verbose=verbose) as progress:
+            with gzip.open(archive_path, "rb") as f_in, open(target, "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+            progress.update()
 
     def extract_file(
         self,
@@ -64,13 +96,20 @@ class GZipBackend(ArchiveBackend):
         password: Optional[str] = None,
         overwrite: bool = False,
     ) -> None:
+        """Extract the stream only when ``filename`` matches its logical name."""
+        self.validate_option("extract", "password", password, None)
+        expected = self.list_files(archive_path)[0]
+        if filename != expected:
+            raise KeyError(f"'{filename}' not found in archive. Available member: '{expected}'.")
         self.extract(archive_path, output_dir, password=password, overwrite=overwrite, verbose=False)
 
     def list_files(self, archive_path: Path) -> List[str]:
+        """Return the one logical member name derived from ``archive_path``."""
         out_name = archive_path.stem if archive_path.suffix.lower() == ".gz" else archive_path.name
         return [out_name]
 
     def iter_files(self, archive_path: Path) -> Iterator[str]:
+        """Yield the single logical GZip member name."""
         yield from self.list_files(archive_path)
 
     def search(
@@ -80,10 +119,15 @@ class GZipBackend(ArchiveBackend):
         regex: bool = False,
         case_sensitive: bool = True,
     ) -> List[str]:
-        files = self.list_files(archive_path)
-        return files if pattern in ("*", files[0]) else []
+        """Match the logical member name using a glob or regular expression."""
+        names = self.list_files(archive_path)
+        name = names[0] if case_sensitive else names[0].lower()
+        requested = pattern if case_sensitive else pattern.lower()
+        matched = bool(re.search(requested, name)) if regex else fnmatch.fnmatch(name, requested)
+        return names if matched else []
 
     def get_info(self, archive_path: Path) -> Dict[str, Any]:
+        """Return normalized metadata for the single GZip stream."""
         archive_size = archive_path.stat().st_size
         return {
             "path": str(archive_path),
@@ -105,6 +149,7 @@ class GZipBackend(ArchiveBackend):
         }
 
     def test(self, archive_path: Path, raise_exception: bool = False) -> bool:
+        """Decompress the complete stream to verify framing and checksum data."""
         try:
             with gzip.open(archive_path, "rb") as f:
                 while f.read(1024 * 1024):
@@ -114,34 +159,3 @@ class GZipBackend(ArchiveBackend):
             if raise_exception:
                 raise ValueError(f"GZip archive corrupted: {e}")
             return False
-
-    def add(
-        self,
-        archive_path: Path,
-        files: List[Path],
-        on_conflict: Literal["rename", "overwrite", "skip"] = "rename",
-        verbose: bool = True,
-    ) -> None:
-        raise NotImplementedError("GZip backend does not support adding files to an existing .gz file.")
-
-    def remove(self, archive_path: Path, files: List[str]) -> None:
-        raise NotImplementedError("GZip backend does not support removing files from a .gz file.")
-
-    def merge(
-        self,
-        archive_paths: List[Path],
-        output_path: Path,
-        overwrite: bool = False,
-        verbose: bool = True,
-    ) -> None:
-        raise NotImplementedError("GZip backend does not support merging multiple .gz files directly.")
-
-    def split_by_size(
-        self,
-        archive_path: Path,
-        size: float,
-        output_dir: Path,
-        overwrite: bool = False,
-        verbose: bool = True,
-    ) -> List[str]:
-        raise NotImplementedError("GZip backend does not support splitting.")

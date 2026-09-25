@@ -24,8 +24,8 @@ def test_current_model_api_exports():
 
 
 def test_archive_and_media_public_exports():
-    assert archive.human_size(0) == "0.00 B"
-    assert archive.human_size(1024) == "1.00 KB"
+    assert klygo.utils.human_size(0) == "0.00 B"
+    assert klygo.utils.human_size(1024) == "1.00 KB"
     assert callable(media.probe)
     assert callable(media.stream)
     assert "probe" in media.__all__
