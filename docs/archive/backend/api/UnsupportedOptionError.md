@@ -33,11 +33,11 @@ Check whether backend options are supported before passing specialized flags lik
 
 ## Example
 
-See [`UnsupportedOptionError.py`](../../../examples/archive/backend/UnsupportedOptionError.py).
+See [`UnsupportedOptionError.py`](../../../../examples/archive/backend/UnsupportedOptionError.py).
 
 ## Tests
 
-See [`test_UnsupportedOptionError.py`](../../../test/archive/backend/test_UnsupportedOptionError.py).
+See [`test_UnsupportedOptionError.py`](../../../../test/archive/backend/test_UnsupportedOptionError.py).
 
 ## Complete executable example
 

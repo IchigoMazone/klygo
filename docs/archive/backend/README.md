@@ -46,18 +46,18 @@ therefore are not capability flags.
 
 ## Public symbols
 
-- [`ArchiveBackend`](ArchiveBackend.md)
-- [`BackendCapabilities`](BackendCapabilities.md)
-- [`UnsupportedOperationError`](UnsupportedOperationError.md)
-- [`UnsupportedOptionError`](UnsupportedOptionError.md)
-- [`detect_format`](detect_format.md)
-- [`is_archive`](is_archive.md)
-- [`get_backend`](get_backend.md)
-- [`ZipBackend`](ZipBackend.md)
-- [`TarBackend`](TarBackend.md)
-- [`GZipBackend`](GZipBackend.md)
-- [`SevenZipBackend`](SevenZipBackend.md)
-- [`RarBackend`](RarBackend.md)
+- [`ArchiveBackend`](api/ArchiveBackend.md)
+- [`BackendCapabilities`](api/BackendCapabilities.md)
+- [`UnsupportedOperationError`](api/UnsupportedOperationError.md)
+- [`UnsupportedOptionError`](api/UnsupportedOptionError.md)
+- [`detect_format`](api/detect_format.md)
+- [`is_archive`](api/is_archive.md)
+- [`get_backend`](api/get_backend.md)
+- [`ZipBackend`](api/ZipBackend.md)
+- [`TarBackend`](api/TarBackend.md)
+- [`GZipBackend`](api/GZipBackend.md)
+- [`SevenZipBackend`](api/SevenZipBackend.md)
+- [`RarBackend`](api/RarBackend.md)
 
 ## Stability boundary
 

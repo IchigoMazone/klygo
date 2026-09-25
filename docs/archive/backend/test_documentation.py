@@ -50,7 +50,7 @@ class TestBackendDocumentation(unittest.TestCase):
             with self.subTest(symbol=name):
                 symbol = getattr(backend_api, name)
                 self.assertTrue(inspect.getdoc(symbol))
-                doc_path = docs / f"{name}.md"
+                doc_path = docs / "api" / f"{name}.md"
                 self.assertTrue(doc_path.is_file())
                 self.assertTrue((examples / f"{name}.py").is_file())
                 text = doc_path.read_text(encoding="utf-8")

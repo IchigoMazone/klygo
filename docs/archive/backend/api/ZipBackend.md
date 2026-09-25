@@ -35,11 +35,11 @@ Prefer using high-level `klygo.archive` functions. Instantiate `ZipBackend` dire
 
 ## Example
 
-See [`ZipBackend.py`](../../../examples/archive/backend/ZipBackend.py).
+See [`ZipBackend.py`](../../../../examples/archive/backend/ZipBackend.py).
 
 ## Tests
 
-See [`test_ZipBackend.py`](../../../test/archive/backend/test_ZipBackend.py).
+See [`test_ZipBackend.py`](../../../../test/archive/backend/test_ZipBackend.py).
 
 ## Complete executable example
 

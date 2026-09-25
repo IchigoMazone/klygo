@@ -31,11 +31,11 @@ Use `is_archive` in conditional branches or filters when scanning directories co
 
 ## Example
 
-See [`is_archive.py`](../../../examples/archive/backend/is_archive.py).
+See [`is_archive.py`](../../../../examples/archive/backend/is_archive.py).
 
 ## Tests
 
-See [`test_is_archive.py`](../../../test/archive/backend/test_is_archive.py).
+See [`test_is_archive.py`](../../../../test/archive/backend/test_is_archive.py).
 
 ## Complete executable example
 

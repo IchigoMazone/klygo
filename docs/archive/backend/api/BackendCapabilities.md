@@ -47,11 +47,11 @@ Inspect `backend.capabilities` when writing tools, dynamic dispatchers, or tests
 
 ## Example
 
-See [`BackendCapabilities.py`](../../../examples/archive/backend/BackendCapabilities.py).
+See [`BackendCapabilities.py`](../../../../examples/archive/backend/BackendCapabilities.py).
 
 ## Tests
 
-See [`test_BackendCapabilities.py`](../../../test/archive/backend/test_BackendCapabilities.py).
+See [`test_BackendCapabilities.py`](../../../../test/archive/backend/test_BackendCapabilities.py).
 
 ## Complete executable example
 

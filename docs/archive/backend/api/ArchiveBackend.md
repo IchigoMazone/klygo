@@ -34,11 +34,11 @@ Do not use `ArchiveBackend` directly in user application code. Use high-level fu
 
 ## Example
 
-See [`ArchiveBackend.py`](../../../examples/archive/backend/ArchiveBackend.py).
+See [`ArchiveBackend.py`](../../../../examples/archive/backend/ArchiveBackend.py).
 
 ## Tests
 
-See [`test_ArchiveBackend.py`](../../../test/archive/backend/test_ArchiveBackend.py).
+See [`test_ArchiveBackend.py`](../../../../test/archive/backend/test_ArchiveBackend.py).
 
 ## Complete executable example
 

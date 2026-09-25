@@ -34,11 +34,11 @@ Prefer using high-level functions like `archive.compress("data", "data.tar.gz")`
 
 ## Example
 
-See [`TarBackend.py`](../../../examples/archive/backend/TarBackend.py).
+See [`TarBackend.py`](../../../../examples/archive/backend/TarBackend.py).
 
 ## Tests
 
-See [`test_TarBackend.py`](../../../test/archive/backend/test_TarBackend.py).
+See [`test_TarBackend.py`](../../../../test/archive/backend/test_TarBackend.py).
 
 ## Complete executable example
 

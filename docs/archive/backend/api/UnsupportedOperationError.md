@@ -32,11 +32,11 @@ Catch `UnsupportedOperationError` when implementing cross-format fallbacks (for 
 
 ## Example
 
-See [`UnsupportedOperationError.py`](../../../examples/archive/backend/UnsupportedOperationError.py).
+See [`UnsupportedOperationError.py`](../../../../examples/archive/backend/UnsupportedOperationError.py).
 
 ## Tests
 
-See [`test_UnsupportedOperationError.py`](../../../test/archive/backend/test_UnsupportedOperationError.py).
+See [`test_UnsupportedOperationError.py`](../../../../test/archive/backend/test_UnsupportedOperationError.py).
 
 ## Complete executable example
 

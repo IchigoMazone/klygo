@@ -34,11 +34,11 @@ Use `RarBackend` solely for unpacking existing RAR archives. For creating new ar
 
 ## Example
 
-See [`RarBackend.py`](../../../examples/archive/backend/RarBackend.py).
+See [`RarBackend.py`](../../../../examples/archive/backend/RarBackend.py).
 
 ## Tests
 
-See [`test_RarBackend.py`](../../../test/archive/backend/test_RarBackend.py).
+See [`test_RarBackend.py`](../../../../test/archive/backend/test_RarBackend.py).
 
 ## Complete executable example
 

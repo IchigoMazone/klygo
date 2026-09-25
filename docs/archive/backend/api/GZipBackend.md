@@ -34,11 +34,11 @@ Use `GZipBackend` for standalone `.gz` compressed files. For directory archives 
 
 ## Example
 
-See [`GZipBackend.py`](../../../examples/archive/backend/GZipBackend.py).
+See [`GZipBackend.py`](../../../../examples/archive/backend/GZipBackend.py).
 
 ## Tests
 
-See [`test_GZipBackend.py`](../../../test/archive/backend/test_GZipBackend.py).
+See [`test_GZipBackend.py`](../../../../test/archive/backend/test_GZipBackend.py).
 
 ## Complete executable example
 

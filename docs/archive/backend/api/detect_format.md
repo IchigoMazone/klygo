@@ -31,11 +31,11 @@ Use `detect_format` before dispatching to format-specific handlers or when verif
 
 ## Example
 
-See [`detect_format.py`](../../../examples/archive/backend/detect_format.py).
+See [`detect_format.py`](../../../../examples/archive/backend/detect_format.py).
 
 ## Tests
 
-See [`test_detect_format.py`](../../../test/archive/backend/test_detect_format.py).
+See [`test_detect_format.py`](../../../../test/archive/backend/test_detect_format.py).
 
 ## Complete executable example
 

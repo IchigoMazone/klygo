@@ -32,11 +32,11 @@ Use `get_backend` when implementing low-level archive processing pipelines that 
 
 ## Example
 
-See [`get_backend.py`](../../../examples/archive/backend/get_backend.py).
+See [`get_backend.py`](../../../../examples/archive/backend/get_backend.py).
 
 ## Tests
 
-See [`test_get_backend.py`](../../../test/archive/backend/test_get_backend.py).
+See [`test_get_backend.py`](../../../../test/archive/backend/test_get_backend.py).
 
 ## Complete executable example
 

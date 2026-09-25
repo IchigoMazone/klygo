@@ -34,11 +34,11 @@ Install `klygo[py7zr]` when working with `.7z` archives. Use high-level function
 
 ## Example
 
-See [`SevenZipBackend.py`](../../../examples/archive/backend/SevenZipBackend.py).
+See [`SevenZipBackend.py`](../../../../examples/archive/backend/SevenZipBackend.py).
 
 ## Tests
 
-See [`test_SevenZipBackend.py`](../../../test/archive/backend/test_SevenZipBackend.py).
+See [`test_SevenZipBackend.py`](../../../../test/archive/backend/test_SevenZipBackend.py).
 
 ## Complete executable example
 
