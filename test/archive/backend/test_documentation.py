@@ -8,6 +8,27 @@ import klygo.archive.backend as backend_api
 
 
 class TestBackendDocumentation(unittest.TestCase):
+    def test_backend_classes_explain_contract_capabilities_and_usage(self):
+        backend_classes = (
+            backend_api.ArchiveBackend,
+            backend_api.ZipBackend,
+            backend_api.TarBackend,
+            backend_api.GZipBackend,
+            backend_api.SevenZipBackend,
+            backend_api.RarBackend,
+        )
+        required_sections = (
+            "Attributes\n",
+            "Raises\n",
+            "Notes\n",
+            "Examples\n",
+        )
+        for backend_class in backend_classes:
+            doc = inspect.getdoc(backend_class) or ""
+            for section in required_sections:
+                with self.subTest(backend=backend_class.__name__, section=section.strip()):
+                    self.assertIn(section, doc)
+
     def test_every_export_has_source_docs_markdown_and_example(self):
         repository = Path(__file__).resolve().parents[3]
         docs = repository / "docs" / "archive" / "backend"

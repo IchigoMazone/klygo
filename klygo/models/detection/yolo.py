@@ -24,8 +24,11 @@ class YOLODetect(Detector):
             try:
                 from ultralytics import YOLO
                 self.model = YOLO(self.model_id)
-            except Exception:
-                pass
+            except ImportError as exc:
+                raise ImportError(
+                    "YOLO requires the Ultralytics model extra. "
+                    "Install it using 'pip install \"klygo[ultralytics]\"'."
+                ) from exc
 
     def forward(
         self,

@@ -45,11 +45,31 @@ class TarBackend(ArchiveBackend):
         Per-instance declaration. Compressed variants advertise
         ``compresslevel`` while raw TAR does not.
 
+    Raises
+    ------
+    ValueError
+        If ``format_name`` is not a supported TAR variant, extraction detects
+        an unsafe path, or archive integrity validation fails in strict mode.
+    FileExistsError
+        When an operation would replace existing output without permission.
+    KeyError
+        When an exact member requested for extraction or removal is absent.
+
     Notes
     -----
     Adding to compressed TAR archives rebuilds the container atomically because
     compressed streams cannot be appended safely. Extraction uses the standard
     library's data filter and performs an additional containment check.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> from klygo.archive.backend import TarBackend
+    >>> backend = TarBackend("tar.gz")
+    >>> backend.format_name
+    'tar.gz'
+    >>> "compresslevel" in backend.capabilities.compress_options
+    True
     """
 
     def __init__(self, format_name: str = "tar"):

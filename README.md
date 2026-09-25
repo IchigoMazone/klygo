@@ -32,6 +32,35 @@ Có thể cài cả hai extra cùng lúc bằng `klygo[py7zr,rarfile]` với b�
 `py7zr` hỗ trợ đọc và tạo file `.7z`. `rarfile` hiện dùng để đọc và giải nén
 `.rar`; tùy hệ thống có thể cần thêm công cụ giải nén RAR tương thích.
 
+Các framework model cũng là dependency tùy chọn. Chỉ cài stack thực sự dùng:
+
+```bash
+# Hugging Face (PyTorch + Transformers)
+pip install "klygo[transformers]"
+uv add "klygo[transformers]"
+uv pip install "klygo[transformers]"
+
+# Ultralytics
+pip install "klygo[ultralytics]"
+uv add "klygo[ultralytics]"
+uv pip install "klygo[ultralytics]"
+
+# KerasHub
+pip install "klygo[keras-hub]"
+uv add "klygo[keras-hub]"
+uv pip install "klygo[keras-hub]"
+
+# Toàn bộ model stack
+pip install "klygo[models]"
+uv add "klygo[models]"
+uv pip install "klygo[models]"
+```
+
+Nếu chỉ cần PyTorch runtime, dùng `klygo[torch]`. Keras có thể chạy trên
+TensorFlow, JAX hoặc PyTorch thông qua biến môi trường `KERAS_BACKEND`; khi chọn
+Torch cho KerasHub, cài kết hợp `klygo[keras-hub,torch]`. Không cài extra model
+vẫn dùng bình thường các package như `archive`, `files`, `media` và `processing`.
+
 ## Các package
 
 - `klygo.archive`: nén, giải nén, tìm kiếm, kiểm tra, chỉnh sửa, gộp và chia ZIP.

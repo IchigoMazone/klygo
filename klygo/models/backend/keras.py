@@ -5,8 +5,21 @@ Tự động hỗ trợ cả 3 computation engines: PyTorch (torch), JAX (jax), 
 Lazy-import để không gây crash nếu môi trường chưa cài đặt keras / keras_hub.
 """
 
+import importlib
 import os
+from contextlib import nullcontext
 from typing import Any, List, Dict, Optional
+
+
+def _torch_runtime():
+    """Load PyTorch support only when Keras actually uses that engine."""
+    try:
+        return importlib.import_module(".torch_runtime", __package__)
+    except ImportError as exc:
+        raise ImportError(
+            "The Keras Torch engine requires PyTorch. "
+            "Install it using 'pip install \"klygo[torch]\"'."
+        ) from exc
 
 
 def ensure_backend() -> str:
@@ -31,14 +44,22 @@ def ensure_backend() -> str:
     return os.environ.get("KERAS_BACKEND", "torch")
 
 
+def _require_keras():
+    """Import Keras with an actionable message for an omitted model extra."""
+    try:
+        return importlib.import_module("keras")
+    except ImportError as exc:
+        raise ImportError(
+            "KerasHub models require the 'keras-hub' extra. "
+            "Install it using 'pip install \"klygo[keras-hub]\"'."
+        ) from exc
+
+
 def get_active_backend() -> str:
     """Trả về backend tính toán hiện hành của Keras (torch, jax, hoặc tensorflow)."""
     ensure_backend()
-    try:
-        import keras
-        return keras.backend.backend()
-    except Exception:
-        return os.environ.get("KERAS_BACKEND", "torch")
+    keras = _require_keras()
+    return keras.backend.backend()
 
 
 def cast_inputs(inputs: Any, dev: Any = None, dtype: Any = None) -> Any:
@@ -47,40 +68,37 @@ def cast_inputs(inputs: Any, dev: Any = None, dtype: Any = None) -> Any:
     Tự động hỗ trợ đồng bộ theo backend tính toán (PyTorch, JAX, TensorFlow).
     """
     ensure_backend()
-    try:
-        import keras
-        import numpy as np
-        from klygo import media
+    keras = _require_keras()
+    import numpy as np
+    from klygo import media
 
-        # Nếu đã là Keras/Backend tensor
-        if hasattr(inputs, "shape") and hasattr(inputs, "dtype") and not isinstance(inputs, np.ndarray):
-            return inputs
-
-        if isinstance(inputs, (list, tuple)):
-            np_arrs = []
-            for item in inputs:
-                if isinstance(item, np.ndarray):
-                    np_arrs.append(item)
-                else:
-                    try:
-                        np_arrs.append(media.to_array(item))
-                    except Exception:
-                        if hasattr(item, "__array__"):
-                            np_arrs.append(np.array(item))
-                        else:
-                            np_arrs.append(item)
-
-            if np_arrs and isinstance(np_arrs[0], np.ndarray):
-                stacked = np.stack(np_arrs, axis=0)
-                if hasattr(keras, "ops") and hasattr(keras.ops, "convert_to_tensor"):
-                    return keras.ops.convert_to_tensor(stacked, dtype="float32")
-                return stacked
-
-        if hasattr(keras, "ops") and hasattr(keras.ops, "convert_to_tensor"):
-            return keras.ops.convert_to_tensor(inputs, dtype="float32")
+    # Nếu đã là Keras/Backend tensor
+    if hasattr(inputs, "shape") and hasattr(inputs, "dtype") and not isinstance(inputs, np.ndarray):
         return inputs
-    except ImportError:
-        return inputs
+
+    if isinstance(inputs, (list, tuple)):
+        np_arrs = []
+        for item in inputs:
+            if isinstance(item, np.ndarray):
+                np_arrs.append(item)
+            else:
+                try:
+                    np_arrs.append(media.to_array(item))
+                except Exception:
+                    if hasattr(item, "__array__"):
+                        np_arrs.append(np.array(item))
+                    else:
+                        np_arrs.append(item)
+
+        if np_arrs and isinstance(np_arrs[0], np.ndarray):
+            stacked = np.stack(np_arrs, axis=0)
+            if hasattr(keras, "ops") and hasattr(keras.ops, "convert_to_tensor"):
+                return keras.ops.convert_to_tensor(stacked, dtype="float32")
+            return stacked
+
+    if hasattr(keras, "ops") and hasattr(keras.ops, "convert_to_tensor"):
+        return keras.ops.convert_to_tensor(inputs, dtype="float32")
+    return inputs
 
 
 def run_inference(model: Any, inputs: Any, **model_kwargs) -> Any:
@@ -181,22 +199,24 @@ def current_device(model: Any) -> Any:
                     return next(model.parameters()).device
                 except Exception:
                     pass
-            from klygo import cuda
-            return torch.device("cuda:0" if cuda.is_available() else "cpu")
+            return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         except Exception:
             return "cpu"
     elif active_backend == "tensorflow":
         try:
             import tensorflow as tf
             gpus = tf.config.list_physical_devices("GPU")
-            return "cuda:0" if gpus else "cpu"
+            if gpus:
+                return "/GPU:0"
+            tpus = tf.config.list_physical_devices("TPU")
+            return "/TPU:0" if tpus else "/CPU:0"
         except Exception:
             return "cpu"
     elif active_backend == "jax":
         try:
             import jax
             devs = jax.devices()
-            return str(devs[0]) if devs else "cpu"
+            return devs[0] if devs else "cpu"
         except Exception:
             return "cpu"
     return "cpu"
@@ -210,6 +230,122 @@ def current_dtype(model: Any) -> str:
         if hasattr(model, "dtype") and model.dtype is not None:
             return str(getattr(model.dtype, "name", model.dtype))
     return "float32"
+
+
+def inference_context():
+    """Return a safe context for the active Keras execution engine."""
+    if get_active_backend() == "torch":
+        return _torch_runtime().inference_context()
+    return nullcontext()
+
+
+def is_accelerator_available(device: Any = None) -> bool:
+    """Check accelerator availability through the active Keras engine."""
+    active_backend = get_active_backend()
+    if active_backend == "torch":
+        return _torch_runtime().is_accelerator_available(device)
+    if active_backend == "tensorflow":
+        try:
+            import tensorflow as tf
+
+            if device is not None and not any(
+                marker in str(device).lower() for marker in ("gpu", "tpu")
+            ):
+                return False
+            return bool(
+                tf.config.list_physical_devices("GPU")
+                or tf.config.list_physical_devices("TPU")
+            )
+        except Exception:
+            return False
+    if active_backend == "jax":
+        try:
+            import jax
+
+            devices = [device] if device is not None else jax.devices()
+            return any(
+                str(getattr(item, "platform", item)).lower().split(":", 1)[0]
+                in {"gpu", "tpu", "cuda", "rocm"}
+                for item in devices
+            )
+        except Exception:
+            return False
+    return False
+
+
+def _block_until_ready(value: Any) -> bool:
+    """Block on a nested TensorFlow/JAX value when it exposes a sync method."""
+    if isinstance(value, dict):
+        blocked = False
+        for item in value.values():
+            blocked = _block_until_ready(item) or blocked
+        return blocked
+    if isinstance(value, (list, tuple)):
+        blocked = False
+        for item in value:
+            blocked = _block_until_ready(item) or blocked
+        return blocked
+    block = getattr(value, "block_until_ready", None)
+    if callable(block):
+        block()
+        return True
+    to_numpy = getattr(value, "numpy", None)
+    if callable(to_numpy):
+        to_numpy()
+        return True
+    return False
+
+
+def synchronize(device: Any = None, value: Any = None) -> None:
+    """Synchronize work through Torch, TensorFlow, or JAX as configured."""
+    active_backend = get_active_backend()
+    if active_backend == "torch":
+        _torch_runtime().synchronize(device=device, value=value)
+        return
+    if active_backend == "tensorflow":
+        try:
+            if value is not None:
+                _block_until_ready(value)
+        except Exception:
+            pass
+        return
+    if active_backend == "jax":
+        try:
+            import jax
+
+            if value is not None:
+                block = getattr(jax, "block_until_ready", None)
+                if callable(block):
+                    block(value)
+                    return
+                if _block_until_ready(value):
+                    return
+            barrier = getattr(jax, "effects_barrier", None)
+            if callable(barrier):
+                barrier()
+        except Exception:
+            pass
+
+
+def clear_cache() -> None:
+    """Clear safe runtime caches for the active Keras engine.
+
+    TensorFlow has no public equivalent to PyTorch's allocator cache operation,
+    so active models are left untouched. Keras session cleanup remains part of
+    ``reset`` and ``unload`` where invalidating framework state is expected.
+    """
+    active_backend = get_active_backend()
+    if active_backend == "torch":
+        _torch_runtime().clear_cache()
+    elif active_backend == "jax":
+        try:
+            import jax
+
+            clear = getattr(jax, "clear_caches", None)
+            if callable(clear):
+                clear()
+        except Exception:
+            pass
 
 
 def save(model: Any, output_dir: str) -> None:

@@ -13,23 +13,20 @@ from klygo import files
 from .base import BaseModel
 from . import utils
 from .detection.base import Detector
-from .detection.grounding_dino import GroundingDinoDetect
-from .detection.yolo import YOLODetect
-from .detection.locate_anything import LocateAnythingDetect
 
 CLASS_MAPPING = {
     "Detector": Detector,
-    "GroundingDinoDetect": GroundingDinoDetect,
-    "YOLODetect": YOLODetect,
-    "LocateAnythingDetect": LocateAnythingDetect,
+    "GroundingDinoDetect": "klygo.models.detection.grounding_dino.GroundingDinoDetect",
+    "YOLODetect": "klygo.models.detection.yolo.YOLODetect",
+    "LocateAnythingDetect": "klygo.models.detection.locate_anything.LocateAnythingDetect",
     "klygo.models.detection.Detector": Detector,
     "klygo.models.detection.base.Detector": Detector,
-    "klygo.models.detection.GroundingDinoDetect": GroundingDinoDetect,
-    "klygo.models.detection.YOLODetect": YOLODetect,
-    "klygo.models.detection.LocateAnythingDetect": LocateAnythingDetect,
-    "klygo.models.detection.grounding_dino.GroundingDinoDetect": GroundingDinoDetect,
-    "klygo.models.detection.yolo.YOLODetect": YOLODetect,
-    "klygo.models.detection.locate_anything.LocateAnythingDetect": LocateAnythingDetect,
+    "klygo.models.detection.GroundingDinoDetect": "klygo.models.detection.grounding_dino.GroundingDinoDetect",
+    "klygo.models.detection.YOLODetect": "klygo.models.detection.yolo.YOLODetect",
+    "klygo.models.detection.LocateAnythingDetect": "klygo.models.detection.locate_anything.LocateAnythingDetect",
+    "klygo.models.detection.grounding_dino.GroundingDinoDetect": "klygo.models.detection.grounding_dino.GroundingDinoDetect",
+    "klygo.models.detection.yolo.YOLODetect": "klygo.models.detection.yolo.YOLODetect",
+    "klygo.models.detection.locate_anything.LocateAnythingDetect": "klygo.models.detection.locate_anything.LocateAnythingDetect",
 }
 
 _REGISTRY_CACHE: Optional[Dict[str, Any]] = None
@@ -48,7 +45,11 @@ def _get_registry() -> Dict[str, Any]:
 def _resolve_class(class_path: str, search_dir: Optional[str] = None) -> Any:
     """Nạp động lớp mô hình từ đường dẫn module hoặc từ file .py cục bộ."""
     if class_path in CLASS_MAPPING:
-        return CLASS_MAPPING[class_path]
+        target = CLASS_MAPPING[class_path]
+        if not isinstance(target, str):
+            return target
+        module_path, class_name = target.rsplit(".", 1)
+        return getattr(importlib.import_module(module_path), class_name)
 
     # 1. Nạp từ file model.py cục bộ nếu nằm trong thư mục model custom
     if search_dir and files.is_dir(search_dir):

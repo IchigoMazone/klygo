@@ -19,6 +19,37 @@ class SevenZipBackend(ArchiveBackend):
     when the dependency is unavailable. Mutation operations are intentionally
     disabled until they can provide the same conflict and atomicity guarantees
     as ZIP and TAR.
+
+    Attributes
+    ----------
+    format_name : str
+        Always ``"7z"``.
+    capabilities : BackendCapabilities
+        Enables creation, password extraction, and root-layout selection.
+
+    Raises
+    ------
+    ImportError
+        When an operation needs the optional ``py7zr`` dependency. Install it
+        with ``pip install "klygo[py7zr]"``.
+    UnsupportedOptionError
+        When an unimplemented compression or extraction option is changed.
+    FileExistsError
+        When output replacement is not authorized.
+
+    Notes
+    -----
+    The class remains importable without ``py7zr`` so capability discovery and
+    documentation generation do not force optional dependencies to be present.
+
+    Examples
+    --------
+    >>> from klygo.archive.backend import SevenZipBackend
+    >>> backend = SevenZipBackend()
+    >>> backend.capabilities.compress
+    True
+    >>> backend.capabilities.add
+    False
     """
 
     format_name = "7z"

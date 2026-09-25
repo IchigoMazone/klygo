@@ -4,9 +4,31 @@ Chứa toàn bộ logic xử lý đặc thù cho các mô hình Hugging Face Tra
 """
 
 from typing import Any, Optional
-import torch
 
-from klygo.models import utils
+try:
+    import torch
+except ImportError as exc:
+    raise ImportError(
+        "Hugging Face models require the 'transformers' extra. "
+        "Install it using 'pip install \"klygo[transformers]\"'."
+    ) from exc
+
+from . import torch_runtime
+
+
+def current_device(model: Any) -> torch.device:
+    """Return the device owning a Hugging Face PyTorch model."""
+    return torch_runtime.current_device(model)
+
+
+def current_dtype(model: Any) -> torch.dtype:
+    """Return the dtype used by a Hugging Face PyTorch model."""
+    return torch_runtime.current_dtype(model)
+
+
+def inference_context():
+    """Return the PyTorch inference context used by Hugging Face models."""
+    return torch_runtime.inference_context()
 
 
 def cast_inputs(inputs: Any, dev: torch.device, dtype: torch.dtype) -> Any:
@@ -63,7 +85,10 @@ def cast_inputs(inputs: Any, dev: torch.device, dtype: torch.dtype) -> Any:
 
 def run_inference(model: Any, inputs: Any, cur_dtype: torch.dtype, **model_kwargs) -> Any:
     """
-    Thực thi forward của mô hình Hugging Face với AMP autocast và đồng bộ GPU.
+    Thực thi forward của mô hình Hugging Face với PyTorch AMP autocast.
+
+    Đồng bộ accelerator là quyết định của caller (ví dụ benchmark), tránh chặn
+    pipeline CUDA sau mọi lần suy luận thông thường.
     """
     use_half = (cur_dtype == torch.float16)
     if cur_dtype == torch.bfloat16:
@@ -73,7 +98,7 @@ def run_inference(model: Any, inputs: Any, cur_dtype: torch.dtype, **model_kwarg
     else:
         eff_dtype = "float32"
 
-    with utils.amp_autocast_if_needed(use_half=use_half, dtype=eff_dtype):
+    with torch_runtime.autocast(use_half=use_half, dtype=eff_dtype):
         if hasattr(inputs, "items") or isinstance(inputs, dict):
             outputs = model(**inputs, **model_kwargs)
         elif isinstance(inputs, (list, tuple)):
@@ -81,8 +106,22 @@ def run_inference(model: Any, inputs: Any, cur_dtype: torch.dtype, **model_kwarg
         else:
             outputs = model(inputs, **model_kwargs)
 
-    utils.cuda_sync()
     return outputs
+
+
+def is_accelerator_available(device: Any = None) -> bool:
+    """Return whether the Hugging Face model can use its PyTorch CUDA device."""
+    return torch_runtime.is_accelerator_available(device)
+
+
+def synchronize(device: Any = None, value: Any = None) -> None:
+    """Synchronize Hugging Face inference through the PyTorch runtime."""
+    torch_runtime.synchronize(device=device, value=value)
+
+
+def clear_cache() -> None:
+    """Release unused PyTorch CUDA cache blocks."""
+    torch_runtime.clear_cache()
 
 
 def get_output_device(outputs: Any, default_device: Optional[torch.device] = None) -> torch.device:

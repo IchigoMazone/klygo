@@ -135,11 +135,32 @@ class ArchiveBackend(ABC):
     capabilities : BackendCapabilities
         Immutable declaration of supported write operations and options.
 
+    Raises
+    ------
+    UnsupportedOperationError
+        When a subclass inherits an optional mutation method but does not
+        advertise and implement that operation.
+    UnsupportedOptionError
+        When a caller changes an option that the selected format cannot honor.
+
     Notes
     -----
     Direct backend use expects normalized :class:`pathlib.Path` arguments.
     User-facing path conversion, existence checks, format detection, and common
     option validation belong to :mod:`klygo.archive`.
+
+    Examples
+    --------
+    Applications should normally use the public facade:
+
+    >>> from klygo import archive
+    >>> archive.compress("dataset", "dataset.zip", verbose=False)
+
+    Backend authors can inspect the common capability contract directly:
+
+    >>> from klygo.archive.backend import ArchiveBackend
+    >>> ArchiveBackend.capabilities.compress
+    False
     """
 
     format_name = "archive"

@@ -17,13 +17,30 @@ dependencies = [
     "python-box>=7.0",
     "pyyaml>=6.0",
     "tomlkit>=0.13",
-    "torch>=2.7,<3.0",
     "tqdm>=4.66",
-    "transformers>=4.50,<6.0",
     "matplotlib>=3.5",
 ]
 
 [project.optional-dependencies]
+torch = [
+    "torch>=2.7,<3.0",
+]
+transformers = [
+    "torch>=2.7,<3.0",
+    "transformers>=4.50,<6.0",
+]
+ultralytics = [
+    "ultralytics",
+]
+keras-hub = [
+    "keras-hub",
+]
+models = [
+    "torch>=2.7,<3.0",
+    "transformers>=4.50,<6.0",
+    "ultralytics",
+    "keras-hub",
+]
 py7zr = [
     "py7zr",
 ]

@@ -6,7 +6,6 @@ import os
 import time
 import logging
 import warnings
-from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, List, Dict, Union, Tuple, Optional, Sequence, Set
 import PIL.Image
@@ -52,58 +51,26 @@ def suppress_warnings(func=None):
 
 def suppress_ai_warnings() -> None:
     """
-    Tắt toàn bộ các cảnh báo không cần thiết từ Hugging Face Hub, Transformers, PyTorch và Tokenizers.
+    Configure quiet AI-library logging without importing optional frameworks.
+
+    Importing Torch or Transformers merely to change their logger would defeat
+    Klygo's lazy optional-dependency contract. Python logging configuration is
+    name-based, so these levels also apply if a framework is imported later.
     """
     os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
     os.environ["HF_HUB_DISABLE_IMPLICIT_TOKEN_WARNING"] = "1"
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     warnings.filterwarnings("ignore")
 
-    try:
-        import accelerate
-    except Exception:
-        pass
-
-    try:
-        import huggingface_hub.utils.logging as hf_logging
-        hf_logging.set_verbosity_error()
-    except Exception:
-        pass
-
-    try:
-        import transformers.utils.logging as tf_logging
-        tf_logging.set_verbosity_error()
-    except Exception:
-        pass
-
     for logger_name in [
+        "accelerate",
         "huggingface_hub",
         "huggingface_hub.utils._http",
         "transformers",
         "urllib3",
         "torch",
     ]:
-        try:
-            logging.getLogger(logger_name).setLevel(logging.ERROR)
-        except Exception:
-            pass
-
-    # Tự động đồng bộ dtype trong grid_sample (sửa lỗi deformable attention của Transformers trên CPU/Multi-GPU)
-    try:
-        import torch
-        import torch.nn.functional as F
-        if not getattr(F, "_klygo_grid_sample_patched", False):
-            _orig_grid_sample = F.grid_sample
-
-            def _safe_grid_sample(input, grid, *args, **kwargs):
-                if hasattr(grid, "dtype") and hasattr(input, "dtype") and grid.dtype != input.dtype:
-                    grid = grid.to(input.dtype)
-                return _orig_grid_sample(input, grid, *args, **kwargs)
-
-            F.grid_sample = _safe_grid_sample
-            F._klygo_grid_sample_patched = True
-    except Exception:
-        pass
+        logging.getLogger(logger_name).setLevel(logging.ERROR)
 
 
 def resolve_sub_kwargs(
@@ -319,35 +286,3 @@ def normalize_prompt(text_prompt: Union[str, List[str]]) -> List[str]:
     if isinstance(text_prompt, str):
         return [text_prompt.strip()]
     return [str(p).strip() for p in text_prompt if str(p).strip()]
-
-
-def amp_autocast_if_needed(
-    use_half: bool = False,
-    dtype: Optional[str] = None,
-    device_type: Optional[str] = None,
-):
-    """Context manager bọc torch.amp.autocast khi chạy FP16 hoặc BFLOAT16."""
-    from klygo import cuda
-    try:
-        import torch
-        dev_type = device_type or ("cuda" if cuda.is_available() else "cpu")
-        dt = (dtype or "").lower()
-
-        if dt in ("bfloat16", "bf16"):
-            return torch.amp.autocast(device_type=dev_type, dtype=torch.bfloat16)
-        elif (use_half or dt in ("float16", "fp16", "half")) and dev_type == "cuda":
-            return torch.amp.autocast(device_type="cuda", dtype=torch.float16)
-    except Exception:
-        pass
-    return nullcontext()
-
-
-def cuda_sync() -> None:
-    """Đồng bộ dòng tính toán trên GPU để đo đạc thời gian chính xác."""
-    from klygo import cuda
-    if cuda.is_available():
-        try:
-            import torch
-            torch.cuda.synchronize()
-        except Exception:
-            pass

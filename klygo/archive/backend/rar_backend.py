@@ -18,6 +18,39 @@ class RarBackend(ArchiveBackend):
     Passwords are accepted for extraction. Importing and inspecting the class
     does not require ``rarfile``; archive operations provide an actionable
     :class:`ImportError` if the dependency is unavailable.
+
+    Attributes
+    ----------
+    format_name : str
+        Always ``"rar"``.
+    capabilities : BackendCapabilities
+        Read-only declaration with password extraction support.
+
+    Raises
+    ------
+    ImportError
+        When archive access needs the optional ``rarfile`` package. Install it
+        with ``pip install "klygo[rarfile]"``.
+    UnsupportedOperationError
+        For creation and every mutation operation.
+    UnsupportedOptionError
+        When include or exclude filters are requested.
+    FileExistsError
+        When extraction would replace existing members without permission.
+
+    Notes
+    -----
+    Depending on the host and archive variant, ``rarfile`` may also require a
+    compatible external extraction executable.
+
+    Examples
+    --------
+    >>> from klygo.archive.backend import RarBackend
+    >>> backend = RarBackend()
+    >>> backend.capabilities.compress
+    False
+    >>> "password" in backend.capabilities.extract_options
+    True
     """
 
     format_name = "rar"

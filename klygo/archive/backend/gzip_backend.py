@@ -21,6 +21,36 @@ class GZipBackend(ArchiveBackend):
     Creation and extraction are supported; add, remove, merge, and split are
     rejected by the base capability contract. Use :class:`TarBackend` with
     ``format_name="tar.gz"`` for directories or multiple files.
+
+    Attributes
+    ----------
+    format_name : str
+        Always ``"gz"``.
+    capabilities : BackendCapabilities
+        Enables creation and the ``compresslevel`` option; mutation flags are
+        disabled because GZip represents one stream rather than a container.
+
+    Raises
+    ------
+    ValueError
+        For directories, invalid compression levels, corrupt streams in strict
+        testing, or a requested filename that is not the logical member.
+    UnsupportedOptionError
+        If callers change container-only options such as method or filters.
+    FileExistsError
+        When output exists and overwrite is disabled.
+
+    Notes
+    -----
+    Metadata cannot know the original uncompressed size without reading the
+    complete stream, so the normalized report uses conservative size values.
+
+    Examples
+    --------
+    >>> from klygo.archive.backend import GZipBackend
+    >>> backend = GZipBackend()
+    >>> backend.list_files(__import__("pathlib").Path("report.txt.gz"))
+    ['report.txt']
     """
 
     format_name = "gz"

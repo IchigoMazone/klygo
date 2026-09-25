@@ -4,9 +4,16 @@ TANG 3: Cau hinh model & processor ro rang, forward() ngan gon nho cac helper cu
 """
 
 from typing import Any, List, Dict, Union, Sequence
-import torch
 import PIL.Image
-from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
+
+try:
+    import torch
+    from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
+except ImportError as exc:
+    raise ImportError(
+        "Grounding DINO requires the Hugging Face model extra. "
+        "Install it using 'pip install \"klygo[transformers]\"'."
+    ) from exc
 
 from klygo.models.detection.base import Detector
 from klygo.outputs.detect import Detection

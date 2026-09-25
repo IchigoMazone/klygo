@@ -45,10 +45,30 @@ class ZipBackend(ArchiveBackend):
     COMPRESSION_METHODS : dict[str, int]
         Mapping from public method names to :mod:`zipfile` constants.
 
+    Raises
+    ------
+    FileExistsError
+        When creation, extraction, or splitting would replace existing data
+        without explicit overwrite permission.
+    ValueError
+        For invalid compression settings, corrupt archives, or unsafe member
+        paths that could escape the extraction directory.
+    KeyError
+        When an exact requested member does not exist.
+
     Notes
     -----
     Direct methods accept :class:`pathlib.Path` objects. Applications normally
     call :mod:`klygo.archive`, which performs path normalization and dispatch.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> from klygo.archive.backend import ZipBackend
+    >>> backend = ZipBackend()
+    >>> backend.capabilities.add
+    True
+    >>> backend.compress(Path("dataset"), Path("dataset.zip"), verbose=False)
     """
 
     COMPRESSION_METHODS = {

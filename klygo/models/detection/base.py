@@ -5,11 +5,8 @@ phân giải đa nguồn qua media.load, Batching loop, ProgressBar, đo thời 
 quản lý phần cứng, export và benchmark.
 """
 
-import os
 import time
-from abc import abstractmethod
 from typing import Dict, Any, Optional, Union, Sequence, Set, List, Tuple
-import torch
 import PIL.Image
 
 from klygo.models.base import BaseModel
@@ -108,7 +105,7 @@ class Detector(BaseModel):
 
     def run_inference(self, inputs: Any, **model_kwargs) -> Any:
         """
-        Thực thi forward của model với AMP autocast và CUDA sync tự động.
+        Thực thi forward bằng runtime gốc của backend được chọn.
         Ủy thác hoàn toàn cho backend tương ứng.
         """
         return common.run_inference(self.backend, self.model, inputs, cur_dtype=self.current_dtype(), **model_kwargs)
@@ -193,7 +190,7 @@ class Detector(BaseModel):
             pass
 
     def clear_cache(self) -> None:
-        common.clear_cache()
+        common.clear_cache(self.backend)
 
     def save(self, output_dir: str) -> None:
         """
@@ -237,7 +234,6 @@ class Detector(BaseModel):
         **kwargs,
     ) -> Dict[str, Any]:
         """Đo đạc và đánh giá hiệu năng suy luận (Latency ms / FPS) của mô hình."""
-        from klygo import cuda
         img = source if source is not None else PIL.Image.new("RGB", (640, 640), color=(100, 100, 100))
         prompts = utils.normalize_prompt(prompt or ["object"])
 
@@ -247,13 +243,12 @@ class Detector(BaseModel):
         latencies = []
         cur_dev = self.current_device()
         cur_dt = self.current_dtype()
-        is_gpu = cuda.is_available() and (cur_dev.type == "cuda")
+        common.synchronize(self.backend, device=cur_dev)
 
         for _ in range(iterations):
             t_start = time.perf_counter()
-            self.predict(source=img, prompt=prompts, verbose=False, **kwargs)
-            if is_gpu:
-                utils.cuda_sync()
+            result = self.predict(source=img, prompt=prompts, verbose=False, **kwargs)
+            common.synchronize(self.backend, device=cur_dev, value=result)
             t_end = time.perf_counter()
             latencies.append(t_end - t_start)
 
@@ -377,11 +372,6 @@ class Detector(BaseModel):
         - Nếu truyền ảnh/đường dẫn/prompt -> Gọi predict() (Chuẩn Klygo Engine).
         """
         with utils.suppress_warnings():
-            if args and not isinstance(args[0], (PIL.Image.Image, str, list, tuple)):
-                if "torch" in __import__("sys").modules:
-                    if isinstance(args[0], torch.Tensor):
-                        if hasattr(self, "model") and callable(self.model):
-                            return self.model(*args, **kwargs)
             if "prompt" in kwargs or (args and isinstance(args[0], (str, PIL.Image.Image, list))):
                 return self.predict(*args, **kwargs)
             if hasattr(self, "model") and callable(self.model):
@@ -409,10 +399,7 @@ class Detector(BaseModel):
         target_prompt = utils.normalize_prompt(prompt) if prompt is not None else None
         actual_batch = max(1, int(batch))
 
-        try:
-            infer_context = torch.inference_mode()
-        except Exception:
-            infer_context = utils.nullcontext()
+        infer_context = common.inference_context(self.backend)
 
         # ==========================================
         # LUỒNG STREAMING (CHỐNG TRÀN RAM)

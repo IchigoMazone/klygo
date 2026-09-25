@@ -1,4 +1,5 @@
 import builtins
+import importlib
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union, Optional, Generator, Iterable, Callable, Iterator
 
@@ -10,11 +11,18 @@ from klygo.utils.progress import ProgressBar
 from klygo.validators import validate_type
 from klygo import files
 
-try:
-    import torch
-    _HAS_TORCH = True
-except ImportError:
-    _HAS_TORCH = False
+
+def _optional_torch(required: bool = False):
+    """Load PyTorch only for media operations that explicitly need tensors."""
+    try:
+        return importlib.import_module("torch")
+    except ImportError as exc:
+        if required:
+            raise ImportError(
+                "PyTorch tensor conversion requires the 'torch' extra. "
+                "Install it using 'pip install \"klygo[torch]\"'."
+            ) from exc
+        return None
 
 IMAGE_SUFFIXES = {
     ".bmp",
@@ -1132,7 +1140,8 @@ def convert(
         # Tự động nhận diện GPU nếu gpu=None
         use_gpu = gpu
         if use_gpu is None:
-            if _HAS_TORCH and torch.cuda.is_available():
+            torch = _optional_torch()
+            if torch is not None and torch.cuda.is_available():
                 use_gpu = True
             elif shutil.which("nvidia-smi"):
                 use_gpu = True
@@ -1595,7 +1604,8 @@ def to_array(image: Any) -> np.ndarray:
     if isinstance(image, Image.Image):
         return np.array(image)
 
-    if _HAS_TORCH and isinstance(image, torch.Tensor):
+    torch = _optional_torch()
+    if torch is not None and isinstance(image, torch.Tensor):
         t = image.detach().cpu()
         if t.ndim == 4:
             t = t.squeeze(0)
@@ -1625,8 +1635,7 @@ def to_tensor(image: Any, normalize: bool = True) -> Any:
     >>> import klygo.media as media
     >>> tensor = media.to_tensor(pil_img)
     """
-    if not _HAS_TORCH:
-        raise RuntimeError("PyTorch is not installed in current environment.")
+    torch = _optional_torch(required=True)
 
     if isinstance(image, LazyImage):
         tensor = image.to_tensor(cache=False)
