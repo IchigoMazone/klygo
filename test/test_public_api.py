@@ -16,7 +16,12 @@ def test_top_level_public_modules():
 
 def test_current_model_api_exports():
     assert callable(models.load)
-    assert callable(models.init)
+    assert callable(models.configure)
+    assert not hasattr(models, "conf")
+    assert callable(models.details)
+    assert callable(models.flags)
+    assert not hasattr(models, "init")
+    assert not hasattr(models, "profile")
     assert callable(models.set_backend)
     assert callable(models.get_backend)
     assert models.BaseModel is not None

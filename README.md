@@ -176,6 +176,73 @@ model.predict(
 ).save("detected.mp4")
 ```
 
+Metadata của model custom chỉ khai báo schema, không khởi tạo giá trị tham số.
+`flags` khai báo các nhóm và quyền ghi đè lúc `predict`; `priority` khai báo
+những tên được gọi không cần tiền tố. Giá trị thực tế chỉ được tạo bởi
+`models.configure()`:
+
+```python
+flags = models.flags(model=False, processor=True, post=True)
+
+definition = models.metadata(
+    details=models.details(
+        name="My detector",
+        task="Object-Detection",
+        backend="Custom",
+        library="custom",
+    ),
+    flags=flags,
+    priority=models.priority(
+        flags,
+        model=("device",),
+        processor=("size",),
+        post=("threshold",),
+    ),
+)
+
+metadata = models.configure(
+    "weights.pt",
+    metadata=definition,
+    implementation="my_package.detector.MyDetector",
+    device="cuda",          # priority -> metadata["model"]["device"]
+    size=800,                # priority -> metadata["processor"]["size"]
+    threshold=0.4,           # priority -> metadata["post"]["threshold"]
+    processor_do_resize=True,
+)
+
+# Cả ba cách đều trả về cùng form: flags, priority, details.
+flags_only = models.metadata(flags)
+with_priority = models.metadata(flags, priority)
+complete = models.metadata(flags, priority, definition.details)
+
+# Không dùng models.metadata(): khai báo schema nhóm trực tiếp khi configure.
+minimal = models.configure(
+    "weights.pt",
+    flags={"model": False, "post": True},
+    model_device="cuda",
+    post_threshold=0.4,
+)
+
+# Hoặc để configure tự build toàn bộ metadata schema.
+direct = models.configure(
+    "weights.pt",
+    flags={"model": False, "post": True},
+    priority={
+        "model": ("device",),
+        "post": ("threshold",),
+    },
+    details={
+        "name": "My detector",
+        "task": "Object-Detection",
+        "backend": "Custom",
+        "library": "custom",
+    },
+    implementation="my_package.detector.MyDetector",
+    device="cuda",
+    threshold=0.4,
+)
+```
+
 ### Post-processing kết quả
 
 ```python

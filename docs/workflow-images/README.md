@@ -65,7 +65,7 @@ Thư mục này mô tả luồng hoạt động của repository `klygo` từ l�
 
 ![Kiến trúc tầng class model](./03-model-class-hierarchy.png)
 
-- **Tầng 1 – `BaseModel`:** contract chung, metadata, settings, trạng thái và guard unsupported operation.
+- **Tầng 1 – `BaseModel`:** contract chung, metadata, settings và trạng thái vòng đời.
 - **Tầng 2 – `Detector`:** engine dùng chung cho object detection, batching, streaming, benchmark và đóng gói kết quả.
 - **Tầng 3 – concrete detectors:** `GroundingDinoDetect`, `LocateAnythingDetect`, `YOLODetect` chỉ triển khai phần đặc thù model/processor và `forward()`.
 - **Output composition:** một `Detections` chứa nhiều `Detection`; mỗi `Detection` chứa nhiều `Box`; `Crops` cũng quản lý các `Box` đã crop.

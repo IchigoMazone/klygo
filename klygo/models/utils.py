@@ -7,23 +7,19 @@ import time
 import logging
 import warnings
 from pathlib import Path
-from typing import Any, List, Dict, Union, Tuple, Optional, Sequence, Set
+from typing import Any, List, Dict, Union, Tuple, Optional, Mapping, Sequence
+from copy import deepcopy
 import PIL.Image
+from box import Box
 
 from klygo import files
 
 
 import functools
 
-class KlygoKwargWarning(UserWarning):
-    """Cảnh báo khi người dùng truyền tham số lạ không thuộc nhóm cấu hình nào."""
-    pass
-
-
 def suppress_warnings(func=None):
     """
-    Decorator hoặc Context Manager tắt mọi warning (Python warnings + Hugging Face/PyTorch loggers),
-    nhưng vẫn giữ lại cảnh báo KlygoKwargWarning của Klygo.
+    Decorator hoặc Context Manager tắt warning của Python và các AI framework.
     """
     class SuppressContext:
         def __enter__(self):
@@ -31,7 +27,6 @@ def suppress_warnings(func=None):
             self._ctx = warnings.catch_warnings()
             self._ctx.__enter__()
             warnings.filterwarnings("ignore")
-            warnings.filterwarnings("always", category=KlygoKwargWarning)
             return self
 
         def __exit__(self, exc_type, exc_val, exc_tb):
@@ -73,99 +68,256 @@ def suppress_ai_warnings() -> None:
         logging.getLogger(logger_name).setLevel(logging.ERROR)
 
 
-def resolve_sub_kwargs(
-    kwargs: Dict[str, Any],
-    json_config: Optional[Dict[str, Any]] = None,
-    groups: Optional[Sequence[str]] = None,
-    warn_unmatched: bool = True,
-) -> Tuple[Dict[str, Any], ...]:
+RESERVED_METADATA_KEYS = frozenset(
+    {
+        "backend",
+        "class",
+        "config",
+        "details",
+        "flags",
+        "model_id",
+        "implementation",
+        "num_params",
+        "option",
+        "priority",
+        "parameter_groups",
+        "profile",
+        "revision",
+        "task",
+    }
+)
+
+
+def normalize_flags(value: Mapping[str, bool] | Sequence[str]) -> Dict[str, bool]:
+    """Validate parameter groups and their predict-time override permissions.
+
+    Mappings preserve an explicit permission for every group.  A sequence is
+    accepted for compatibility and grants predict-time overrides to every
+    declared group.
     """
-    Phân giải và chia tách 2 tầng tham số:
-    - Tầng 1: Cấu hình mặc định (từ model.json / self.settings)
-    - Tầng 2: Tham số runtime ghi đè (kwargs truyền vào khi gọi hàm)
+    if isinstance(value, (str, bytes)):
+        raise TypeError("flags must be a mapping or a sequence of group names")
 
-    Áp dụng 3 quy tắc:
-    - Quy tắc 1 (Tự động): Key đã có trong default config -> gom vào nhóm đó mà không cần tiền tố.
-    - Quy tắc 2 (Tường minh): Truyền dict {group}={...} hoặc tiền tố {group}_{key} -> thêm vào nhóm đó.
-    - Quy tắc 3 (Tham số ma): Key lạ không qua được 1 và 2 -> phát cảnh báo KlygoKwargWarning và bỏ qua.
+    items = value.items() if isinstance(value, Mapping) else ((name, True) for name in value)
+    normalized: Dict[str, bool] = {}
+    for raw_name, permission in items:
+        name = str(raw_name).strip()
+        if not name:
+            raise ValueError("parameter group names must not be empty")
+        if name in RESERVED_METADATA_KEYS:
+            raise ValueError(f"Reserved metadata key {name!r} cannot be a parameter group")
+        if name in normalized:
+            raise ValueError(f"Duplicate parameter group {name!r}")
+        if not isinstance(permission, bool):
+            raise TypeError(f"Flag permission for {name!r} must be a bool")
+        normalized[name] = permission
+
+    if not normalized:
+        raise ValueError("At least one parameter group is required")
+    return normalized
+
+
+def normalize_implementation(value: Any) -> Optional[str]:
+    """Return an import path for a model class declaration."""
+    if value is None:
+        return None
+    if isinstance(value, type):
+        return f"{value.__module__}.{value.__qualname__}"
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    raise TypeError("implementation must be a class, non-empty import path, or None")
+
+
+def normalize_metadata(value: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Return canonical model metadata with parameter groups at the top level.
+
+    The former ``config={...}`` wrapper is accepted for compatibility and
+    flattened without overwriting explicitly supplied top-level groups.
     """
-    json_cfg = dict(json_config or {})
+    result = deepcopy(dict(value or {}))
+    legacy_profile = result.pop("profile", None)
+    if legacy_profile is not None:
+        if not isinstance(legacy_profile, Mapping):
+            raise TypeError("metadata['profile'] must be a mapping")
+        result.setdefault("details", deepcopy(dict(legacy_profile)))
+    legacy_config = result.pop("config", None)
+    if legacy_config is not None:
+        if not isinstance(legacy_config, Mapping):
+            raise TypeError("metadata['config'] must be a mapping")
+        for group, parameters in legacy_config.items():
+            result.setdefault(group, deepcopy(parameters))
+    legacy_groups = result.pop("parameter_groups", None)
+    if legacy_groups is not None:
+        result.setdefault("flags", legacy_groups)
+    if "flags" in result:
+        result["flags"] = normalize_flags(result["flags"])
+    if "class" in result:
+        result["class"] = normalize_implementation(result["class"])
+    return result
 
-    # Xác định danh sách nhóm theo flags
-    if groups:
-        group_list = tuple(groups)
-    elif any(isinstance(v, dict) for v in json_cfg.values()):
-        group_list = tuple(k for k, v in json_cfg.items() if isinstance(v, dict))
-    else:
-        group_list = ("model", "processor", "post")
 
-    # Tầng 1: Khởi tạo buckets từ default json_config
-    buckets: Dict[str, Dict[str, Any]] = {g: dict(json_cfg.get(g, {})) for g in group_list}
-
-    unmatched_keys = []
-
-    # Tầng 2: Phân giải runtime kwargs
-    for key, value in kwargs.items():
-        # Quy tắc 2A: Dict tường minh theo nhóm — post={"threshold": 0.5, "custom": 1}
-        if key in group_list and isinstance(value, dict):
-            buckets[key].update(value)
+def parameter_groups(metadata: Mapping[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Return parameter mappings in the order declared by ``flags``."""
+    discovered: Dict[str, Dict[str, Any]] = {}
+    for name, parameters in metadata.items():
+        if name in RESERVED_METADATA_KEYS:
             continue
+        if isinstance(parameters, Mapping):
+            discovered[str(name)] = deepcopy(dict(parameters))
 
-        # Quy tắc 2B: Tiền tố nhóm tường minh — post_threshold=0.5, processor_max_length=256
-        matched_prefix = False
-        for g in group_list:
-            if key.startswith(f"{g}_"):
-                clean_key = key[len(g) + 1:]
-                buckets[g][clean_key] = value
-                matched_prefix = True
-                break
-        if matched_prefix:
-            continue
+    declaration = metadata.get("flags")
+    if declaration is None:
+        return discovered
 
-        # Quy tắc 1: Tham số phẳng ĐÃ CÓ trong cấu hình mặc định -> tự động map vào nhóm đó
-        matched_flat = False
-        for g in group_list:
-            if key in json_cfg.get(g, {}):
-                buckets[g][key] = value
-                matched_flat = True
-                break
-        if matched_flat:
-            continue
+    names = normalize_flags(declaration)
+    undeclared = tuple(name for name in discovered if name not in names)
+    if undeclared:
+        raise ValueError(f"Metadata contains undeclared parameter groups: {undeclared}")
+    return {name: discovered.get(name, {}) for name in names}
 
-        # Quy tắc 3: Tham số lạ không thuộc nhóm nào và không có tiền tố -> ghi nhận để cảnh báo
-        unmatched_keys.append(key)
 
-    if warn_unmatched and unmatched_keys:
-        available_groups = ", ".join(repr(g) for g in group_list)
-        for uk in unmatched_keys:
-            warnings.warn(
-                f"[Klygo Warning] Tham số lạ '{uk}' không thuộc bất kỳ nhóm cấu hình mặc định nào ({available_groups}) "
-                f"và không có tiền tố nhóm hợp lệ. Tham số này sẽ bị bỏ qua!",
-                KlygoKwargWarning,
-                stacklevel=3,
+def runtime_groups(metadata: Mapping[str, Any]) -> Tuple[str, ...]:
+    """Return groups whose parameters may be overridden by ``predict``."""
+    declaration = metadata.get("flags")
+    if declaration is None:
+        return tuple(parameter_groups(metadata))
+    permissions = normalize_flags(declaration)
+    return tuple(name for name, allowed in permissions.items() if allowed)
+
+
+def normalize_priority(
+    groups: Mapping[str, Any],
+    value: Optional[Mapping[str, Any]],
+) -> Dict[str, List[str]]:
+    """Validate the original parameter names accepted without group prefixes."""
+    available = tuple(str(name) for name in groups)
+    result: Dict[str, List[str]] = {}
+    owners: Dict[str, str] = {}
+
+    for raw_group, raw_names in dict(value or {}).items():
+        group = str(raw_group)
+        if group not in groups:
+            raise ValueError(
+                f"Priority group {group!r} is not present in metadata. "
+                f"Available groups: {available}."
+            )
+        if isinstance(raw_names, str):
+            names = (raw_names,)
+        else:
+            try:
+                names = tuple(str(name) for name in raw_names)
+            except TypeError as exc:
+                raise TypeError(
+                    f"Priority parameters for group {group!r} must be an iterable of names."
+                ) from exc
+
+        normalized = []
+        for name in names:
+            if not name or name.startswith("_") or name.endswith("_"):
+                raise ValueError(f"Invalid priority parameter name {name!r}.")
+            previous = owners.get(name)
+            if previous is not None and previous != group:
+                raise ValueError(
+                    f"Priority parameter {name!r} belongs to multiple groups: "
+                    f"{previous!r} and {group!r}."
+                )
+            owners[name] = group
+            if name not in normalized:
+                normalized.append(name)
+        result[group] = normalized
+    return result
+
+
+def resolve_metadata(
+    metadata: Mapping[str, Any],
+    kwargs: Optional[Mapping[str, Any]] = None,
+    *,
+    runtime: bool = False,
+) -> Box:
+    """Merge call parameters into a copied metadata object.
+
+    Priority parameters use their original names. Every other parameter must
+    use ``<group>_<name>`` or be supplied as a mapping under the group name.
+    Invalid and duplicate destinations raise ``ValueError`` instead of being
+    discarded.
+    """
+    resolved = normalize_metadata(metadata)
+    groups = parameter_groups(resolved)
+    if not groups:
+        if kwargs:
+            raise ValueError("Model metadata does not define any parameter groups.")
+        return Box(resolved)
+
+    raw_priority = resolved.get("priority")
+    priority = normalize_priority(groups, raw_priority)
+    resolved["priority"] = priority if raw_priority is not None else None
+    priority_owner = {
+        parameter: group
+        for group, parameters in priority.items()
+        for parameter in parameters
+    }
+    destinations: Dict[Tuple[str, str], str] = {}
+    group_names = sorted(groups, key=len, reverse=True)
+    mutable_groups = set(runtime_groups(resolved)) if runtime else set(groups)
+
+    def ensure_mutable(group: str) -> None:
+        if group not in mutable_groups:
+            raise ValueError(
+                f"Parameter group {group!r} is locked at predict time. "
+                f"Runtime-overridable groups: {tuple(runtime_groups(resolved))}."
             )
 
-    if groups:
-        return tuple(buckets.get(g, {}) for g in groups)
-    return tuple(buckets.values())
+    for raw_name, value in dict(kwargs or {}).items():
+        name = str(raw_name)
+        if name in groups:
+            ensure_mutable(name)
+            if not isinstance(value, Mapping):
+                raise TypeError(f"Parameter group {name!r} must be a mapping.")
+            for parameter, parameter_value in value.items():
+                destination = (name, str(parameter))
+                previous = destinations.get(destination)
+                if previous is not None:
+                    raise ValueError(
+                        f"Parameter {name}.{parameter} was provided more than once "
+                        f"using {previous!r} and {name!r}."
+                    )
+                destinations[destination] = name
+                groups[name][str(parameter)] = parameter_value
+            continue
 
+        owner = priority_owner.get(name)
+        parameter = name
+        source = name
+        if owner is None:
+            for group in group_names:
+                prefix = f"{group}_"
+                if name.startswith(prefix) and len(name) > len(prefix):
+                    owner = group
+                    parameter = name[len(prefix):]
+                    break
 
-def resolve_sub_kwargs_dict(
-    kwargs: Dict[str, Any],
-    json_config: Optional[Dict[str, Any]] = None,
-    groups: Optional[Sequence[str]] = None,
-    warn_unmatched: bool = True,
-) -> Dict[str, Dict[str, Any]]:
-    """Phân giải cấu hình và trả về dict các nhóm thay vì tuple."""
-    json_cfg = dict(json_config or {})
-    if groups:
-        group_list = tuple(groups)
-    elif any(isinstance(v, dict) for v in json_cfg.values()):
-        group_list = tuple(k for k, v in json_cfg.items() if isinstance(v, dict))
-    else:
-        group_list = ("model", "processor", "post")
-    result = resolve_sub_kwargs(kwargs=kwargs, json_config=json_config, groups=group_list, warn_unmatched=warn_unmatched)
-    return dict(zip(group_list, result))
+        if owner is None:
+            available = tuple(groups)
+            raise ValueError(
+                f"Parameter {name!r} is neither a priority parameter nor prefixed "
+                f"with an available group. Available groups: {available}."
+            )
+
+        ensure_mutable(owner)
+
+        destination = (owner, parameter)
+        previous = destinations.get(destination)
+        if previous is not None:
+            raise ValueError(
+                f"Parameter {owner}.{parameter} was provided more than once "
+                f"using {previous!r} and {source!r}."
+            )
+        destinations[destination] = source
+        groups[owner][parameter] = value
+
+    for group, parameters in groups.items():
+        resolved[group] = parameters
+    return Box(resolved)
 
 def resolve_images(
     source: Any,

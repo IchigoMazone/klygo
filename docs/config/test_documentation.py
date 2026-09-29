@@ -41,6 +41,27 @@ class TestDocumentation(unittest.TestCase):
             with self.subTest(name=name):
                 runpy.run_path(str(examples / f"{name}.py"), run_name="__main__")
 
+    def test_model_metadata_guide_and_example_stay_executable(self):
+        repository = Path(__file__).resolve().parents[2]
+        guide = repository / "docs" / "config" / "model-metadata.md"
+        example = repository / "examples" / "config" / "model_metadata.py"
+
+        self.assertTrue(guide.is_file())
+        self.assertTrue(example.is_file())
+        text = guide.read_text(encoding="utf-8")
+        for public_api in (
+            "models.flags",
+            "models.metadata",
+            "models.configure",
+            "Config.create_default",
+            "config.save",
+            "config.load",
+        ):
+            with self.subTest(public_api=public_api):
+                self.assertIn(public_api, text)
+
+        runpy.run_path(str(example), run_name="__main__")
+
     def test_config_public_methods_have_docstrings(self):
         methods_with_parameters = {
             "read", "to_json", "get", "set", "has", "delete", "merge",

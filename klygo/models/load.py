@@ -6,8 +6,9 @@ import os
 import fnmatch
 import importlib
 import importlib.util
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional, Union, Mapping, Sequence
 from functools import lru_cache
+from box import Box
 
 from klygo import files
 from .base import BaseModel
@@ -44,6 +45,10 @@ def _get_registry() -> Dict[str, Any]:
 
 def _resolve_class(class_path: str, search_dir: Optional[str] = None) -> Any:
     """Nạp động lớp mô hình từ đường dẫn module hoặc từ file .py cục bộ."""
+    if not isinstance(class_path, str) or not class_path.strip():
+        raise ValueError(
+            "Model metadata must define a non-empty 'class' import path."
+        )
     if class_path in CLASS_MAPPING:
         target = CLASS_MAPPING[class_path]
         if not isinstance(target, str):
@@ -99,55 +104,97 @@ def _resolve(name: str) -> Optional[Dict[str, Any]]:
             option = entry.pop("option", {})
             for key, override_cfg in option.items():
                 if key in name:
-                    entry.update(override_cfg)
+                    override = dict(override_cfg)
+                    if "details" in override:
+                        merged_details = dict(entry.get("details", {}))
+                        merged_details.update(dict(override.pop("details")))
+                        entry["details"] = merged_details
+                    entry.update(override)
                     break
 
-            if entry.get("num_params") is None:
+            num_params = entry.get(
+                "num_params",
+                dict(entry.get("details", {})).get("num_params"),
+            )
+            if num_params is None:
                 return None
 
             return entry
     return None
 
 
+def _instantiate(
+    entry: Mapping[str, Any],
+    *,
+    source_id: Any,
+    overrides: Mapping[str, Any],
+    search_dir: Optional[str] = None,
+) -> BaseModel:
+    """Configure one metadata entry and instantiate its declared class."""
+    model_id = entry.get("model_id") or source_id
+    configured = configure(
+        str(model_id),
+        metadata=entry,
+        **dict(overrides),
+    )
+    cls = _resolve_class(configured.get("class"), search_dir=search_dir)
+    with utils.suppress_warnings():
+        return cls(metadata=configured)
+
+
 def load(model: Union[str, Any], **kwargs) -> BaseModel:
-    """
-    Nạp mô hình AI từ Online Hub Registry, Thư mục / File Offline cục bộ,
-    hoặc nhận trực tiếp một instance mô hình PyTorch (torch.nn.Module).
-    Tự động phân giải cấu hình 3 nhóm (model, processor, post).
+    """Load a model from metadata, a configuration file, or a model source.
+
+    ``model`` may be an existing :class:`BaseModel`, a metadata mapping, a
+    :class:`klygo.config.Config`, a JSON/YAML/TOML metadata file, an offline
+    model directory, a registered model name, a YOLO ``.pt`` file, or an
+    in-memory module exposing ``parameters()``.
+
+    Keyword arguments override parameter groups declared by the resolved
+    metadata. Priority parameters keep their original names; all other
+    parameters use ``<group>_<name>`` or an explicit group mapping.
+
+    Parameters
+    ----------
+    model : object
+        Model source or metadata definition.
+    **kwargs : object
+        Parameter overrides resolved according to the metadata's ``priority``
+        declaration.
+
+    Returns
+    -------
+    BaseModel
+        The loaded model wrapper.
+
+    Raises
+    ------
+    ValueError
+        If the source cannot be resolved, its class is missing, or an override
+        does not map to a declared parameter group.
     """
     # 0. Nhận trực tiếp BaseModel hoặc PyTorch nn.Module instance
     if isinstance(model, BaseModel):
         return model
 
-    # 0.1. Nhận trực tiếp Box / Config object (klygo.config) hoặc dict cấu hình metadata
-    try:
-        from box import Box
-        if isinstance(model, Box):
-            model = dict(model.to_dict()) if hasattr(model, "to_dict") else dict(model)
-    except Exception:
-        pass
+    # 0.1. Nhận trực tiếp Box / Config object hoặc mapping metadata.
+    if isinstance(model, Box):
+        model = model.to_dict()
 
-    try:
-        from klygo.config import Config
-        if isinstance(model, Config):
-            model = dict(model.to_dict()) if hasattr(model, "to_dict") else dict(model)
-    except Exception:
-        pass
+    from klygo.config import Config
 
-    if isinstance(model, dict):
+    if isinstance(model, Config):
+        data = model.to_dict()
+        if not data:
+            data = model.read(verbose=False).to_dict()
+        model = data
+    if isinstance(model, Mapping):
         entry = dict(model)
-        search_dir = None
-        # Bỏ qua các bước phân giải đường dẫn bên dưới
-        final_metadata = dict(entry)
-        resolved_config = utils.resolve_sub_kwargs_dict(
-            kwargs=kwargs,
-            json_config=final_metadata.get("config"),
+        return _instantiate(
+            entry,
+            source_id=entry.get("model_id") or "custom-model",
+            overrides=kwargs,
         )
-        final_metadata["config"] = resolved_config
-        class_path = final_metadata.get("class")
-        cls = _resolve_class(class_path, search_dir=search_dir)
-        with utils.suppress_warnings():
-            return cls(metadata=final_metadata)
 
     try:
         import torch.nn as nn
@@ -166,11 +213,18 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
 
         final_metadata = {
             "class": "klygo.models.detection.Detector",
-            "task": getattr(model, "task", "Object-Detection"),
-            "backend": "PyTorch (In-Memory)",
-            "num_params": num_params,
             "model_id": getattr(model, "name", getattr(model, "__name__", model_cls_name)),
-            "config": kwargs,
+            "details": {
+                "name": model_cls_name,
+                "task": getattr(model, "task", "Object-Detection"),
+                "backend": "PyTorch (In-Memory)",
+                "library": "torch",
+                "num_params": num_params,
+            },
+            "flags": {"model": False, "post": True},
+            "model": dict(kwargs),
+            "post": {},
+            "priority": {},
         }
         inst = Detector(metadata=final_metadata)
         inst.model = model
@@ -201,14 +255,27 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
                 ):
                     entry = {
                         "class": "klygo.models.detection.GroundingDinoDetect",
-                        "task": "Object-Detection",
-                        "backend": "Hugging Face (Offline)",
-                        "num_params": "Offline",
                         "model_id": abs_model_path,
+                        "details": {
+                            "name": "Grounding DINO",
+                            "task": "Object-Detection",
+                            "backend": "Hugging Face (Offline)",
+                            "library": "transformers",
+                            "num_params": "Offline",
+                        },
+                        "flags": {"model": False, "processor": True, "post": True},
+                        "model": {},
+                        "processor": {},
+                        "post": {"threshold": 0.25, "text_threshold": 0.3},
+                        "priority": {
+                            "post": ("threshold", "text_threshold"),
+                        },
                     }
 
     # 2. Nạp từ file config .json trực tiếp
-    elif files.is_file(model) and files.extension(model).lower() == ".json":
+    elif files.is_file(model) and files.extension(model).lower() in {
+        ".json", ".yaml", ".yml", ".toml"
+    }:
         entry = files.load(model, verbose=False)
         search_dir = str(files.parent(files.resolve(model)))
 
@@ -216,10 +283,20 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
     elif files.is_file(model) and files.extension(model).lower() == ".pt":
         entry = {
             "class": "klygo.models.detection.YOLODetect",
-            "task": "Object-Detection",
-            "backend": "Ultralytics (Offline)",
-            "num_params": "Offline",
             "model_id": str(files.resolve(model)),
+            "details": {
+                "name": "YOLO",
+                "task": "Object-Detection",
+                "backend": "Ultralytics (Offline)",
+                "library": "ultralytics",
+                "num_params": "Offline",
+            },
+            "flags": {"model": False, "post": True},
+            "model": {},
+            "post": {"threshold": 0.25, "iou": 0.7},
+            "priority": {
+                "post": ("threshold", "iou"),
+            },
         }
 
     # 4. Tra cứu từ Registry Trực Tuyến
@@ -231,41 +308,111 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
             f"Mô hình '{model}' không tồn tại trong registry và không phải thư mục/file mô hình offline hợp lệ."
         )
 
-    # 5. Phân giải và hợp nhất các nhóm cấu hình
-    resolved_config = utils.resolve_sub_kwargs_dict(
-        kwargs=kwargs,
-        json_config=entry.get("config"),
+    # 5. Mọi nguồn đều đi qua cùng pipeline configure -> instantiate.
+    return _instantiate(
+        entry,
+        source_id=model,
+        overrides=kwargs,
+        search_dir=search_dir,
     )
+def configure(
+    model_id: str,
+    metadata: Optional[Mapping[str, Any]] = None,
+    flags: Optional[Union[Mapping[str, bool], Sequence[str]]] = None,
+    priority: Optional[Mapping[str, Any]] = None,
+    details: Optional[Mapping[str, Any]] = None,
+    implementation: Optional[Union[type, str]] = None,
+    **kwargs,
+) -> Box:
+    """Bind a model identifier and parameter overrides to model metadata.
 
-    final_metadata = dict(entry)
-    final_metadata["config"] = resolved_config
+    Parameters
+    ----------
+    model_id : str
+        Local path, hub identifier, or other identifier consumed by the model
+        implementation.
+    metadata : mapping, optional
+        Definition created by :func:`klygo.models.metadata`. Legacy metadata
+        containing a ``config`` wrapper is normalized automatically.
+    flags : mapping of str to bool or sequence of str, optional
+        Explicit parameter-group schema. Boolean values control predict-time
+        overrides; configuration and loading may initialize every group.
+    priority : mapping, optional
+        Unprefixed parameter names grouped by their destination flag.
+    details : mapping, optional
+        Descriptive model information. The required fields are ``name``,
+        ``task``, ``backend``, and ``library``.
+    implementation : type, str, or None, optional
+        Model implementation class or import path. It is serialized under the
+        ``class`` key so the configured metadata can be passed to
+        :func:`models.load`.
+    **kwargs : object
+        Parameter overrides. Priority names are unprefixed; other names use
+        ``<group>_<parameter>`` or an explicit group mapping.
 
-    class_path = final_metadata.get("class")
-    cls = _resolve_class(class_path, search_dir=search_dir)
-    with utils.suppress_warnings():
-        return cls(metadata=final_metadata)
+    Returns
+    -------
+    box.Box
+        Independent, serializable metadata supporting both attribute and
+        mapping access.
 
-
-def init(model_id: str, **kwargs) -> Dict[str, Any]:
+    Examples
+    --------
+    >>> group_flags = models.flags("model", "post")
+    >>> definition = models.metadata(
+    ...     details=models.details(
+    ...         name="My detector",
+    ...         task="Object-Detection",
+    ...         backend="Custom",
+    ...         library="custom",
+    ...     ),
+    ...     flags=group_flags,
+    ...     priority=models.priority(
+    ...         group_flags,
+    ...         post=("threshold",),
+    ...     ),
+    ... )
+    >>> result = models.configure(
+    ...     "weights.pt", metadata=definition, threshold=0.4
+    ... )
+    >>> result.post.threshold
+    0.4
     """
-    Hàm tiện ích khởi tạo metadata chuẩn cho các mô hình tự custom bằng Class.
-    Tự động chia tách kwargs thành các nhóm cấu hình an toàn (model, processor, post).
-    
-    Sử dụng:
-        metadata = models.init("weights.pt", post={"threshold": 0.4})
-        model = MyYOLO(metadata=metadata)
-    """
-    from klygo.models import utils
-    resolved_config = utils.resolve_sub_kwargs_dict(kwargs=kwargs)
-    
-    return {
-        "model_id": str(model_id),
-        "backend": "Custom",
-        "task": "Object-Detection",
-        "config": resolved_config
-    }
+    base = utils.normalize_metadata(metadata)
+    if flags is not None:
+        base["flags"] = utils.normalize_flags(flags)
+    if not utils.parameter_groups(base):
+        # Backward-compatible default for callers that have not supplied a
+        # metadata definition yet. New code should declare its actual groups.
+        base.update({"model": {}, "processor": {}, "post": {}})
+    if "flags" in base:
+        base["flags"] = utils.normalize_flags(base["flags"])
+    else:
+        base["flags"] = {
+            name: True for name in utils.parameter_groups(base)
+        }
+    base["model_id"] = str(model_id)
+    if priority is not None:
+        base["priority"] = utils.normalize_priority(
+            utils.parameter_groups(base),
+            priority,
+        )
+    if details is not None:
+        from .metadata import metadata as build_metadata
 
-
+        validated = build_metadata(
+            base["flags"],
+            base.get("priority"),
+            details,
+        )
+        base["details"] = validated["details"]
+    if implementation is not None:
+        base["class"] = utils.normalize_implementation(implementation)
+    else:
+        base.setdefault("class", None)
+    base.setdefault("details", None)
+    base.setdefault("priority", None)
+    return utils.resolve_metadata(base, kwargs)
 def set_backend(backend: str, engine: Optional[str] = None) -> None:
     """
     Thiết lập backend mặc định cho Klygo (và engine tính toán cho Keras 3 nếu có).

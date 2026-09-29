@@ -22,7 +22,7 @@ from .access import get as get_value
 from .access import has as has_value
 from .access import set as set_value
 from .creation import create
-from .io import export, load
+from .io import export, load, save
 from .mapping import merge as merge_values
 from .mapping import update as update_values
 
@@ -355,11 +355,16 @@ class Config:
         default_data: Mapping[str, Any] | Box | None = None,
         overwrite: bool = False,
         verbose: bool = True,
+        metadata: Mapping[str, Any] | Box | None = None,
     ) -> "Config":
-        """Create a default configuration file and return its manager.
+        """Create a configuration file and return a loaded manager.
 
-        The returned manager is path-bound but intentionally unread. Call
-        :meth:`read` when in-memory access is required.
+        Normal configuration creation deep-merges ``default_data`` into
+        Klygo's built-in defaults. Supplying ``metadata`` instead writes that
+        mapping exactly, which is suitable for the flat structure produced by
+        :func:`klygo.models.metadata` and :func:`klygo.models.configure`.
+        The returned manager is already populated in both modes; calling
+        :meth:`read` again is optional.
 
         Parameters
         ----------
@@ -371,6 +376,9 @@ class Config:
             Replace an existing destination.
         verbose : bool, default=True
             Enable file progress indicators.
+        metadata : mapping, box.Box, or None
+            Exact model metadata to write without injecting general Klygo
+            configuration defaults. Mutually exclusive with ``default_data``.
 
         Returns
         -------
@@ -381,15 +389,44 @@ class Config:
         ------
         FileExistsError
             If the destination exists and overwrite is disabled.
+        ValueError
+            If both ``default_data`` and ``metadata`` are supplied.
 
         Examples
         --------
         >>> manager = Config.create_default("settings.yaml", overwrite=True)
         >>> manager.config_path.name
         'settings.yaml'
+
+        Persist model metadata without injecting general Klygo defaults:
+
+        >>> from klygo import models
+        >>> flags = models.flags(model=False, processor=True, post=True)
+        >>> schema = models.metadata(flags)
+        >>> manager = Config.create_default(
+        ...     "model.toml", metadata=schema, overwrite=True, verbose=False
+        ... )
+        >>> manager.get("flags.processor")
+        True
         """
-        create(path, default_data=default_data, overwrite=overwrite, verbose=verbose)
-        return cls(path)
+        if default_data is not None and metadata is not None:
+            raise ValueError("default_data and metadata are mutually exclusive")
+
+        if metadata is not None:
+            save(path, metadata, overwrite=overwrite, verbose=verbose)
+            created = load(path, verbose=False)
+        else:
+            created = create(
+                path,
+                default_data=default_data,
+                overwrite=overwrite,
+                verbose=verbose,
+            )
+
+        manager = cls(path)
+        manager._box = Box(created.to_dict())
+        manager._cfg = manager._box.to_dict()
+        return manager
 
     def export_file(
         self,

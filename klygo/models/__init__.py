@@ -12,12 +12,17 @@ from . import errors
 from . import utils
 from .base import BaseModel
 from .detection.base import Detector
-from .load import load, init, set_backend, get_backend
+from .load import load, configure, set_backend, get_backend
+from .metadata import details, flags, metadata, priority
 from .utils import suppress_warnings, suppress_ai_warnings
 
 __all__ = [
     "load",
-    "init",
+    "configure",
+    "metadata",
+    "priority",
+    "details",
+    "flags",
     "set_backend",
     "get_backend",
     "base",

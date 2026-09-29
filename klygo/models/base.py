@@ -1,29 +1,29 @@
 """
 Lop nen tang truu tuong cho MOI mo hinh AI trong Klygo (klygo.models.base).
-TANG 1: High-level API Interface — predict, benchmark, help, settings, flags.
+TANG 1: High-level API Interface — predict, benchmark, help, metadata, settings.
 Khong quan ly phan cung. Hardware -> dung model.model truc tiep.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, Union, Sequence, Set, List, Tuple
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Dict, Any, Optional, List, Mapping
 
-from .errors import UnsupportedOperationError, InvalidStateError
+from box import Box
+
+from .errors import InvalidStateError
 
 
 class BaseModel(ABC):
     """
     TANG 1: High-level API wrapper cho mọi mô hình AI trong Klygo.
-    Chỉ cung cấp: predict, benchmark, help, settings, flags, guard.
+    Chỉ cung cấp: predict, benchmark, help, metadata, settings, guard.
     Mọi thứ phần cứng → dùng model.model trực tiếp.
     """
-
-    __UNSUPPORTED__: Sequence[str] = ()
 
     def __init__(
         self,
         metadata: Optional[Dict[str, Any]] = None,
-        flags: Sequence[str] = (),
-        unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
         backend: Optional[str] = None,
         model_id: Optional[str] = None,
         task: Optional[str] = None,
@@ -34,19 +34,23 @@ class BaseModel(ABC):
         utils.suppress_ai_warnings()
 
         self.state: str = "LOADING"
-        self.metadata: Dict[str, Any] = dict(metadata or {})
+        self._runtime_metadata: ContextVar[Optional[Box]] = ContextVar(
+            f"klygo_runtime_metadata_{id(self)}",
+            default=None,
+        )
+        self._metadata = Box(utils.normalize_metadata(metadata))
+        self.details = Box(self.metadata.get("details") or {})
+        self.flags = tuple(utils.parameter_groups(self.metadata))
         self.model_id: str = str(model_id or self.metadata.get("model_id", "custom-model"))
-        self._backend: Optional[str] = backend or self.metadata.get("backend")
-        self.task: str = str(task or self.metadata.get("task", "Universal"))
+        self._backend: Optional[str] = (
+            backend or self.metadata.get("backend") or self.details.get("backend")
+        )
+        self.task: str = str(
+            task or self.metadata.get("task") or self.details.get("task") or "Universal"
+        )
         self.class_name: str = f"{self.__class__.__module__}.{self.__class__.__qualname__}"
-        self._default_settings: Dict[str, Any] = dict(self.metadata.get("config", {}))
-        self._settings: Dict[str, Any] = dict(self._default_settings)
-
-        # flags và unsupported truyền tường minh qua tham số hàm, không lấy hay lưu vào metadata
-        self._flags: Tuple[str, ...] = tuple(flags)
-        self._unsupported: Set[str] = set(unsupported or ())
-        if hasattr(self, "__UNSUPPORTED__"):
-            self._unsupported.update(getattr(self, "__UNSUPPORTED__"))
+        self._default_settings: Dict[str, Any] = utils.parameter_groups(self.metadata)
+        self._settings: Dict[str, Any] = utils.parameter_groups(self.metadata)
         self.state = "READY"
 
     @property
@@ -83,7 +87,7 @@ class BaseModel(ABC):
         return utils.suppress_warnings()
 
     # =========================================================================
-    # GUARD: Chặn unsupported + UNLOADED state
+    # GUARD: Chặn thao tác khi model đã UNLOADED
     # =========================================================================
     def __getattribute__(self, name: str) -> Any:
         attr = super().__getattribute__(name)
@@ -92,53 +96,31 @@ class BaseModel(ABC):
         try:
             d = object.__getattribute__(self, '__dict__')
             state = d.get('state', 'READY')
-            unsupported = d.get('_unsupported', set())
             model_id = d.get('model_id', 'model')
-            class_name = d.get('class_name', '')
         except AttributeError:
             return attr
         if state == 'UNLOADED' and name not in ('reset', 'unload', 'info', 'help', 'supports', 'methods'):
             raise InvalidStateError(
                 "Mo hinh '{}' da bi UNLOADED. Khong the goi '{}'.".format(model_id, name)
             )
-        if name in unsupported:
-            raise UnsupportedOperationError(
-                "Mo hinh '{}' ({}) khong ho tro thao tac '{}'.".format(model_id, class_name, name)
-            )
         return attr
 
     # =========================================================================
     # INTROSPECTION
     # =========================================================================
-    def unsupport(self, *operations: Union[str, Sequence[str]]) -> "BaseModel":
-        for item in operations:
-            if isinstance(item, (list, tuple, set)):
-                self._unsupported.update(str(x) for x in item)
-            else:
-                self._unsupported.add(str(item))
-        return self
-
     def supports(self, op_name: str) -> bool:
         d = object.__getattribute__(self, '__dict__')
-        unsupported = d.get('_unsupported', set())
-        if op_name in unsupported:
-            return False
-        return hasattr(type(self), op_name) or (op_name in d)
+        class_member = getattr(type(self), op_name, None)
+        instance_member = d.get(op_name)
+        return callable(class_member) or callable(instance_member)
 
-    @property
-    def unsupported(self) -> Set[str]:
-        """Danh sách các phương thức/thao tác bị khóa của mô hình."""
-        return set(getattr(self, "_unsupported", set()))
+    def has_flag(self, name: str) -> bool:
+        """Return whether the model declares a parameter-group flag."""
+        return str(name) in self.flags
 
-    def methods(self) -> Dict[str, List[str]]:
-        d = object.__getattribute__(self, '__dict__')
-        unsupported = d.get('_unsupported', set())
+    def methods(self) -> List[str]:
         cls_attrs = [m for m in dir(type(self)) if not m.startswith('_')]
-        public = [m for m in cls_attrs if callable(getattr(type(self), m, None))]
-        return {
-            "supported": [m for m in public if m not in unsupported],
-            "unsupported": sorted(list(unsupported)),
-        }
+        return sorted(m for m in cls_attrs if callable(getattr(type(self), m, None)))
 
     def info(self) -> None:
         print(self.class_name)
@@ -150,18 +132,30 @@ class BaseModel(ABC):
         print("Settings    : " + str(self.settings))
         if self.params:
             print("Params      : " + ", ".join(f"{k}={v}" for k, v in self.params.items()))
-        print("Unsupported : " + str(sorted(list(self._unsupported))))
         print("=" * 60)
 
     # =========================================================================
-    # PROPERTIES: flags, config, settings, params
+    # PROPERTIES: config, settings, params
     # =========================================================================
     @property
-    def flags(self) -> Tuple[str, ...]:
-        return getattr(self, "_flags", ())
+    def metadata(self) -> Box:
+        """Return call-local runtime metadata or the model defaults."""
+        runtime = self._runtime_metadata.get()
+        return runtime if runtime is not None else self._metadata
 
-    def has_flag(self, flag: str) -> bool:
-        return str(flag) in self.flags
+    @metadata.setter
+    def metadata(self, value: Mapping[str, Any]) -> None:
+        from . import utils
+        self._metadata = Box(utils.normalize_metadata(value))
+
+    @contextmanager
+    def _use_metadata(self, value: Mapping[str, Any]):
+        """Expose runtime metadata through ``self.metadata`` for one call."""
+        token = self._runtime_metadata.set(Box(value))
+        try:
+            yield
+        finally:
+            self._runtime_metadata.reset(token)
 
     @property
     def params(self) -> Dict[str, Any]:

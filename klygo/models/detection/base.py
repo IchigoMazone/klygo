@@ -6,7 +6,7 @@ quản lý phần cứng, export và benchmark.
 """
 
 import time
-from typing import Dict, Any, Optional, Union, Sequence, Set, List, Tuple
+from typing import Dict, Any, Optional, Union, Sequence, List
 import PIL.Image
 
 from klygo.models.base import BaseModel
@@ -26,51 +26,17 @@ class Detector(BaseModel):
     def __init__(
         self,
         metadata: Optional[Dict[str, Any]] = None,
-        flags: Sequence[str] = ("model", "post"),
-        unsupported: Optional[Union[Sequence[str], Set[str]]] = None,
         backend: Optional[str] = None,
         model_id: Optional[str] = None,
         **kwargs,
     ) -> None:
         super().__init__(
             metadata=metadata,
-            flags=flags,
-            unsupported=unsupported,
             backend=backend,
             model_id=model_id,
             **kwargs,
         )
         self.model: Any = None
-
-    def parse_config(self, *groups: str) -> Tuple[Dict[str, Any], ...]:
-        """
-        Bóc tách các nhóm cấu hình từ self.settings (mặc định lấy từ metadata['config']).
-        Sử dụng self.flags hoặc bất kỳ danh sách nhóm nào được truyền vào.
-        """
-        target_groups = groups if groups else self.flags
-        cfg = self.settings
-        return tuple(dict(cfg.get(g, {})) for g in target_groups)
-
-    def split_kwargs(
-        self,
-        kwargs: Optional[Dict[str, Any]] = None,
-        *groups: str,
-        **extra_kwargs,
-    ) -> Tuple[Dict[str, Any], ...]:
-        """
-        Bóc tách và hợp nhất 2 tầng tham số theo self.flags (hoặc groups truyền vào):
-        - Tầng 1: Cấu hình mặc định (từ metadata['config'] / self.settings)
-        - Tầng 2: Runtime kwargs truyền vào khi gọi predict() / forward()
-        """
-        kw = dict(kwargs or {})
-        kw.update(extra_kwargs)
-        target_groups = groups if groups else self.flags
-        return utils.resolve_sub_kwargs(
-            kwargs=kw,
-            json_config=self.settings,
-            groups=target_groups,
-            warn_unmatched=True,
-        )
 
     def filter_kwargs(self, kwargs: Dict[str, Any], *exclude_keys: Union[str, Sequence[str]]) -> Dict[str, Any]:
         """
@@ -198,11 +164,21 @@ class Detector(BaseModel):
         Mô hình xuất ra có thể được nạp lại hoàn chỉnh qua `models.load(folder)`.
         Ủy thác hoàn toàn việc lưu trữ cho backend.common.save().
         """
+        export_metadata = dict(self.metadata)
+        export_metadata["model_id"] = self.model_id
+        export_metadata["flags"] = dict(
+            utils.normalize_flags(export_metadata.get("flags", self.flags))
+        )
+        export_metadata.setdefault("priority", None)
+        export_metadata.setdefault("details", None)
+        if not export_metadata.get("class"):
+            export_metadata["class"] = self.class_name
+
         common.save(
             backend=self.backend,
             model=self.model,
             output_dir=output_dir,
-            metadata=self.metadata,
+            metadata=export_metadata,
             class_module=self.__class__.__module__,
             processor=getattr(self, "processor", None),
         )
@@ -358,27 +334,43 @@ class Detector(BaseModel):
         self,
         images: List[PIL.Image.Image],
         prompt: Union[str, List[str]],
-        **kwargs,
     ) -> List[Detection]:
         """Thực thi forward pass trên mô hình bên dưới."""
-        mod_kw, _, _ = self.split_kwargs(kwargs)
+        mod_kw = dict(self.metadata.get("model", {}))
         if hasattr(self, "model") and callable(self.model):
             return self.model(images, prompt=prompt, **mod_kw)
         return []
 
-    def __call__(self, *args, **kwargs) -> Any:
-        """Cho phép gọi trực tiếp instance mô hình:
-        - Nếu truyền Tensor -> Gọi thẳng nn.Module bên dưới (Chuẩn PyTorch thuần).
-        - Nếu truyền ảnh/đường dẫn/prompt -> Gọi predict() (Chuẩn Klygo Engine).
+    def __call__(self, source: Any, *args, **kwargs) -> Union[Detections, Any]:
+        """Run :meth:`predict` using callable model syntax.
+
+        ``model(source, ...)`` and ``model.predict(source, ...)`` are exactly
+        equivalent. This rule applies to every input type accepted by
+        :meth:`predict`, so callable dispatch never changes according to the
+        type of ``source``. Call ``model.model(...)`` explicitly when direct
+        access to the wrapped framework model is required.
+
+        Parameters
+        ----------
+        source : object
+            Image, path, URL, video, stream, sequence, or other input accepted
+            by :meth:`predict`.
+        *args : object
+            Additional positional arguments forwarded to :meth:`predict`.
+        **kwargs : object
+            Prediction options and permitted runtime parameter overrides.
+
+        Returns
+        -------
+        klygo.outputs.Detections or object
+            The exact value returned by :meth:`predict`.
+
+        Examples
+        --------
+        >>> results = model("image.jpg", threshold=0.4)
+        >>> streamed = model("video.mp4", stream=True)
         """
-        with utils.suppress_warnings():
-            if "prompt" in kwargs or (args and isinstance(args[0], (str, PIL.Image.Image, list))):
-                return self.predict(*args, **kwargs)
-            if hasattr(self, "model") and callable(self.model):
-                return self.model(*args, **kwargs)
-            if hasattr(self, "forward"):
-                return self.forward(*args, **kwargs)
-            raise TypeError(f"'{type(self).__name__}' object is not callable.")
+        return self.predict(source, *args, **kwargs)
 
     def predict(
         self,
@@ -398,6 +390,10 @@ class Detector(BaseModel):
         """
         target_prompt = utils.normalize_prompt(prompt) if prompt is not None else None
         actual_batch = max(1, int(batch))
+
+        base_metadata = dict(self.metadata)
+        base_metadata.update({name: dict(values) for name, values in self.settings.items()})
+        runtime_metadata = utils.resolve_metadata(base_metadata, kwargs, runtime=True)
 
         infer_context = common.inference_context(self.backend)
 
@@ -427,7 +423,11 @@ class Detector(BaseModel):
                             break
                         
                         t_start = time.perf_counter()
-                        dets = self.forward(images=batch_imgs, prompt=target_prompt, **kwargs)
+                        with self._use_metadata(runtime_metadata):
+                            dets = self.forward(
+                                images=batch_imgs,
+                                prompt=target_prompt,
+                            )
                         t_end = time.perf_counter()
                         
                         lat_per_frame = round(((t_end - t_start) * 1000) / len(batch_imgs), 2)
@@ -457,7 +457,11 @@ class Detector(BaseModel):
         with infer_context, utils.suppress_warnings():
             if is_single:
                 t_start = time.perf_counter()
-                dets = self.forward(images=images, prompt=target_prompt, **kwargs)
+                with self._use_metadata(runtime_metadata):
+                    dets = self.forward(
+                        images=images,
+                        prompt=target_prompt,
+                    )
                 t_end = time.perf_counter()
                 lat_ms = round((t_end - t_start) * 1000, 2)
                 fps_val = round(1000.0 / max(0.001, lat_ms), 1)
@@ -469,7 +473,11 @@ class Detector(BaseModel):
                 for i in range(0, len(images), actual_batch):
                     batch_imgs = images[i : i + actual_batch]
                     t_start = time.perf_counter()
-                    dets = self.forward(images=batch_imgs, prompt=target_prompt, **kwargs)
+                    with self._use_metadata(runtime_metadata):
+                        dets = self.forward(
+                            images=batch_imgs,
+                            prompt=target_prompt,
+                        )
                     t_end = time.perf_counter()
                     lat_per_frame = round(((t_end - t_start) * 1000) / len(batch_imgs), 2)
                     fps_val = round(1000.0 / max(0.001, lat_per_frame), 1)

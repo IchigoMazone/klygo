@@ -2,7 +2,7 @@
 Trình bao bọc mô hình nhận diện đối tượng kiến trúc LocateAnything (klygo.models.detection.locate_anything).
 """
 
-from typing import Dict, Any, List, Union, Sequence
+from typing import Dict, Any, List, Union
 import PIL.Image
 
 from klygo.models.detection.base import Detector
@@ -15,8 +15,6 @@ class LocateAnythingDetect(Detector):
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
         super().__init__(
             metadata=metadata,
-            flags=("model", "post"),
-            unsupported=("train", "val"),
             **kwargs,
         )
 
@@ -24,6 +22,5 @@ class LocateAnythingDetect(Detector):
         self,
         images: List[PIL.Image.Image],
         prompt: Union[str, List[str]] = None,
-        **kwargs,
     ) -> List[Detection]:
         return []

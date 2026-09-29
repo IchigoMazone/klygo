@@ -1,67 +1,93 @@
 {
   "yolo11*.pt": {
     "class": "klygo.models.detection.YOLODetect",
-    "task": "Object-Detection",
-    "backend": "Ultralytics",
-    "num_params": "None",
-    "config": {
-      "model": {},
-      "processor": {},
-      "post": {
-        "threshold": 0.25,
-        "iou": 0.7
-      }
+    "details": {
+      "name": "YOLO",
+      "task": "Object-Detection",
+      "backend": "Ultralytics",
+      "library": "ultralytics",
+      "num_params": "Unknown"
+    },
+    "flags": {"model": false, "post": true},
+    "priority": {
+      "model": ["device", "imgsz", "half", "classes", "max_det"],
+      "post": ["threshold", "iou"]
+    },
+    "model": {},
+    "post": {
+      "threshold": 0.25,
+      "iou": 0.7
     }
   },
   "yolo26*.pt": {
     "class": "klygo.models.detection.YOLODetect",
-    "task": "Object-Detection",
-    "backend": "Ultralytics",
-    "num_params": "None",
-    "config": {
-      "model": {},
-      "processor": {},
-      "post": {
-        "threshold": 0.25,
-        "iou": 0.7
-      }
+    "details": {
+      "name": "YOLO",
+      "task": "Object-Detection",
+      "backend": "Ultralytics",
+      "library": "ultralytics",
+      "num_params": "Unknown"
+    },
+    "flags": {"model": false, "post": true},
+    "priority": {
+      "model": ["device", "imgsz", "half", "classes", "max_det"],
+      "post": ["threshold", "iou"]
+    },
+    "model": {},
+    "post": {
+      "threshold": 0.25,
+      "iou": 0.7
     }
   },
   "locate-anything": {
     "class": "klygo.models.detection.LocateAnythingDetect",
-    "task": "Object-Detection",
-    "backend": "Hugging Face",
-    "num_params": "3B",
     "model_id": "",
-    "config": {
-      "model": {},
-      "processor": {},
-      "post": {
-        "threshold": 0.25,
-        "text_threshold": 0.3
-      }
+    "details": {
+      "name": "Locate Anything",
+      "task": "Object-Detection",
+      "backend": "Hugging Face",
+      "library": "transformers",
+      "num_params": "3B"
+    },
+    "flags": {"model": false, "processor": true, "post": true},
+    "priority": {
+      "post": ["threshold", "text_threshold"]
+    },
+    "model": {},
+    "processor": {},
+    "post": {
+      "threshold": 0.25,
+      "text_threshold": 0.3
     }
   },
   "grounding-dino-*": {
     "class": "klygo.models.detection.GroundingDinoDetect",
-    "task": "Object-Detection",
-    "backend": "Hugging Face",
-    "num_params": null,
-    "config": {
-      "model": {},
-      "processor": {},
-      "post": {
-        "threshold": 0.25,
-        "text_threshold": 0.3
-      }
+    "details": {
+      "name": "Grounding DINO",
+      "task": "Object-Detection",
+      "backend": "Hugging Face",
+      "library": "transformers",
+      "num_params": null
+    },
+    "flags": {"model": false, "processor": true, "post": true},
+    "priority": {
+      "model": ["device_map", "torch_dtype", "low_cpu_mem_usage"],
+      "processor": ["size"],
+      "post": ["threshold", "text_threshold"]
+    },
+    "model": {},
+    "processor": {},
+    "post": {
+      "threshold": 0.25,
+      "text_threshold": 0.3
     },
     "option": {
       "base": {
-        "num_params": "232M",
+        "details": {"num_params": "232M"},
         "model_id": "IDEA-Research/grounding-dino-base"
       },
       "tiny": {
-        "num_params": "172M",
+        "details": {"num_params": "172M"},
         "model_id": "IDEA-Research/grounding-dino-tiny"
       }
     }

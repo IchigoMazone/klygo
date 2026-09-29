@@ -23,4 +23,15 @@ class TestConfigIO(unittest.TestCase):
             invalid = root / "list.json"; files.save(invalid, [1, 2], verbose=False)
             with self.assertRaises(TypeError): config.load(invalid, verbose=False)
 
+    def test_toml_preserves_nested_none_and_boolean_values(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "metadata.toml"
+            original = {
+                "flags": {"model": False, "processor": True},
+                "priority": None,
+                "details": {"revision": None},
+            }
+            config.save(path, original, verbose=False)
+            self.assertEqual(config.load(path, verbose=False).to_dict(), original)
+
 if __name__ == "__main__": unittest.main()

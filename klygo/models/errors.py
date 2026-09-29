@@ -8,11 +8,6 @@ class ModelFrameworkError(Exception):
     pass
 
 
-class UnsupportedOperationError(ModelFrameworkError):
-    """Ném ra khi gọi một phương thức/tính năng bị vô hiệu hóa trong __UNSUPPORTED__."""
-    pass
-
-
 class InvalidStateError(ModelFrameworkError):
     """Ném ra khi gọi phương thức ở trạng thái không hợp lệ (ví dụ: gọi predict sau khi model đã unload)."""
     pass

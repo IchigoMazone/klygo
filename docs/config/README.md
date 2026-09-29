@@ -2,6 +2,11 @@
 
 `klygo.config` provides hierarchical configuration management, dot-path nested access, immutable composition, environment variable overlays, structural comparison, schema validation, and a stateful object interface.
 
+It also preserves the complete structures returned by `models.metadata()` and
+`models.configure()`, including boolean runtime permissions and `None` values
+in JSON, YAML, and TOML. See the dedicated
+[model metadata configuration guide](model-metadata.md).
+
 Interactive Google Colab Tutorial:
 [Open in Colab](https://colab.research.google.com/drive/1-aOofq_ZwLi00gRXnBLbJ4raupc6OZKm?usp=sharing)
 
@@ -49,6 +54,8 @@ Interactive Google Colab Tutorial:
 | **Get default built-in configuration template** | [`defaults()`](api/defaults.md) | `tmpl = config.defaults({"model": {"name": "yolov8m"}})` |
 | **Create default config file on disk** | [`create()`](api/create.md) | `cfg = config.create("settings.yaml", overwrite=True)` |
 | **Manage config via stateful class interface** | [`Config`](api/Config.md) | `manager = Config("settings.yaml"); manager.read()` |
+| **Persist a model metadata schema exactly** | [`Config.create_default()`](api/Config.md) | `Config.create_default("model.toml", metadata=schema)` |
+| **Reload configured model metadata** | [`load()`](api/load.md) | `model = models.load(config.load("model.yaml"))` |
 
 </details>
 
@@ -106,3 +113,35 @@ Interactive Google Colab Tutorial:
 - [`Config(config_path)`](api/Config.md): Stateful object-oriented configuration interface.
 
 </details>
+
+---
+
+## 4. Model Metadata Workflow
+
+```python
+from klygo import Config, models
+
+flags = models.flags(model=False, processor=True, post=True)
+schema = models.metadata(
+    flags,
+    models.priority(flags, post=("threshold", "iou")),
+)
+configured = models.configure(
+    "weights.pt",
+    metadata=schema,
+    implementation="my_package.CustomDetector",
+    threshold=0.4,
+)
+
+manager = Config.create_default(
+    "model.toml",
+    metadata=configured,
+    overwrite=True,
+    verbose=False,
+)
+```
+
+`metadata=` selects exact metadata mode, so general Klygo defaults are not
+injected. The returned manager is already loaded. Full behavior, format notes,
+runtime permissions, and examples are documented in
+[Model metadata configuration](model-metadata.md).
