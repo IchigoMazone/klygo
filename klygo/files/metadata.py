@@ -186,6 +186,8 @@ def compare(path1: PathInput, path2: PathInput, by: str = "hash") -> bool:
     """
     first = Path(path1)
     second = Path(path2)
+    if by not in {"hash", "content"}:
+        raise ValueError(f"Invalid compare mode: {by!r}. Expected 'hash' or 'content'.")
     if not first.exists():
         raise FileNotFoundError(f"Path does not exist: {first}")
     if not second.exists():
@@ -203,7 +205,6 @@ def compare(path1: PathInput, path2: PathInput, by: str = "hash") -> bool:
                     return False
                 if not left_chunk:
                     return True
-    raise ValueError(f"Invalid compare mode: {by!r}. Expected 'hash' or 'content'.")
 
 
 __all__ = ["size", "hash", "info", "compare"]

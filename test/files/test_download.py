@@ -24,6 +24,12 @@ class TestDownload(unittest.TestCase):
             with self.assertRaises(ValueError):
                 files.download(directory, Path(directory) / "out", verbose=False)
 
+    def test_missing_local_source_raises_file_not_found(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaises(FileNotFoundError):
+                files.download(root / "missing.bin", root / "out", verbose=False)
+
     def test_remote_download_and_overwrite_policy(self):
         class Response(BytesIO):
             headers = {"content-length": "6"}
@@ -48,6 +54,29 @@ class TestDownload(unittest.TestCase):
                     directory,
                     verbose=False,
                 )
+
+    def test_remote_download_uses_fallback_name_and_can_overwrite(self):
+        class Response(BytesIO):
+            headers = {}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                self.close()
+
+        with TemporaryDirectory() as directory:
+            target = Path(directory) / "downloaded_file"
+            target.write_bytes(b"old")
+            with patch("urllib.request.urlopen", return_value=Response(b"new")):
+                result = files.download(
+                    "https://example.test/",
+                    directory,
+                    overwrite=True,
+                    verbose=False,
+                )
+            self.assertEqual(result, target)
+            self.assertEqual(target.read_bytes(), b"new")
 
 
 if __name__ == "__main__":
