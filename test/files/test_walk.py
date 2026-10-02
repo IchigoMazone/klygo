@@ -12,12 +12,16 @@ class TestWalk(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "nested").mkdir()
+            (root / "root.txt").touch()
             (root / "nested" / "a.txt").touch()
-            result = files.walk(root)
+            result = files.walk(str(root))
             self.assertTrue(hasattr(result, "__next__"))
             rows = list(result)
             self.assertEqual(len(rows), 2)
-            self.assertIn("a.txt", rows[1][2])
+            entries = {Path(current): (directories, filenames) for current, directories, filenames in rows}
+            self.assertEqual(entries[root][0], ["nested"])
+            self.assertEqual(entries[root][1], ["root.txt"])
+            self.assertEqual(entries[root / "nested"][1], ["a.txt"])
 
 
 if __name__ == "__main__":

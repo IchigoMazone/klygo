@@ -13,9 +13,14 @@ class TestSize(unittest.TestCase):
             root = Path(directory)
             (root / "a.bin").write_bytes(b"123")
             (root / "b.bin").write_bytes(b"45")
-            self.assertEqual(files.size(root / "a.bin"), 3)
+            self.assertEqual(files.size(str(root / "a.bin")), 3)
             self.assertEqual(files.size(root), 5)
-            self.assertIsInstance(files.size(root, human=True), str)
+            self.assertEqual(files.size(root, human=True), "5.00 B")
+
+    def test_missing_path_raises_file_not_found_error(self):
+        with TemporaryDirectory() as directory:
+            with self.assertRaises(FileNotFoundError):
+                files.size(Path(directory) / "missing")
 
 
 if __name__ == "__main__":

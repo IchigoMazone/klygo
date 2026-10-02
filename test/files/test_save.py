@@ -11,12 +11,22 @@ class TestSave(unittest.TestCase):
     def test_save_and_overwrite(self):
         with TemporaryDirectory() as directory:
             target = Path(directory) / "nested" / "data.json"
-            files.save(target, {"a": 1}, verbose=False)
+            files.save(str(target), {"a": 1}, verbose=False)
             self.assertEqual(files.load(target, verbose=False), {"a": 1})
             with self.assertRaises(FileExistsError):
                 files.save(target, {"a": 2}, verbose=False)
             files.save(target, {"a": 2}, overwrite=True, verbose=False)
             self.assertEqual(files.load(target, verbose=False), {"a": 2})
+
+    def test_rejects_unsupported_destination_and_invalid_flags(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaises(ValueError):
+                files.save(root / "data.bin", {}, verbose=False)
+            with self.assertRaises(TypeError):
+                files.save(123, {}, verbose=False)
+            with self.assertRaises(TypeError):
+                files.save(root / "data.json", {}, overwrite="yes", verbose=False)
 
     def test_every_supported_extension_round_trips(self):
         structured = {"section": {"value": "1"}}

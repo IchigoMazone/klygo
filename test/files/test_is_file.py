@@ -13,7 +13,7 @@ class TestIsFile(unittest.TestCase):
             root = Path(directory)
             item = root / "file.txt"
             item.touch()
-            self.assertTrue(files.is_file(item))
+            self.assertTrue(files.is_file(str(item)))
             self.assertFalse(files.is_file(root))
             self.assertFalse(files.is_file(root / "missing"))
 

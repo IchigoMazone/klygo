@@ -8,14 +8,22 @@ from klygo import files
 
 
 class TestFind(unittest.TestCase):
-    def test_returns_only_files(self):
+    def test_filters_files_recursively_and_sorts_results(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "nested").mkdir()
-            (root / "a.py").touch()
-            (root / "nested" / "b.py").touch()
-            self.assertEqual(len(files.find(root, "*.py")), 2)
-            self.assertEqual(len(files.find(root, "*.py", recursive=False)), 1)
+            (root / "nested" / "ignored.py").mkdir()
+            first = root / "a.py"
+            second = root / "nested" / "b.py"
+            first.touch()
+            second.touch()
+            self.assertEqual(files.find(root, "*.py"), [first, second])
+            self.assertEqual(files.find(str(root), "*.py", recursive=False), [first])
+
+    def test_missing_root_raises_file_not_found_error(self):
+        with TemporaryDirectory() as directory:
+            with self.assertRaises(FileNotFoundError):
+                files.find(Path(directory) / "missing")
 
 
 if __name__ == "__main__":

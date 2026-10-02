@@ -12,11 +12,24 @@ class TestInfo(unittest.TestCase):
         with TemporaryDirectory() as directory:
             target = Path(directory) / "sample.txt"
             target.write_text("abc", encoding="utf-8")
-            result = files.info(target)
+            result = files.info(str(target))
             self.assertEqual(result["name"], "sample.txt")
+            self.assertEqual(result["stem"], "sample")
+            self.assertEqual(result["extension"], ".txt")
+            self.assertEqual(result["parent"], Path(directory))
             self.assertEqual(result["size"], 3)
             self.assertTrue(result["is_file"])
-            self.assertEqual(len(result["hash"]), 32)
+            self.assertFalse(result["is_dir"])
+            self.assertIsNotNone(result["hash"])
+
+    def test_directory_has_no_hash_and_missing_path_raises(self):
+        with TemporaryDirectory() as directory:
+            result = files.info(directory)
+            self.assertTrue(result["is_dir"])
+            self.assertFalse(result["is_file"])
+            self.assertIsNone(result["hash"])
+            with self.assertRaises(FileNotFoundError):
+                files.info(Path(directory) / "missing")
 
 
 if __name__ == "__main__":

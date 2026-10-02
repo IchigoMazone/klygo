@@ -8,11 +8,19 @@ from klygo import files
 
 
 class TestReplaceRoot(unittest.TestCase):
-    def test_mapping_and_outside_error(self):
+    def test_mapping_preserves_relative_path(self):
         result = files.replace_root("dataset/images/train/a.jpg", "dataset/images", "dataset/labels")
         self.assertEqual(result, Path("dataset/labels/train/a.jpg"))
+        self.assertEqual(
+            files.replace_root(Path("dataset/images"), "dataset/images", "dataset/labels"),
+            Path("dataset/labels"),
+        )
+
+    def test_rejects_path_outside_old_root_and_invalid_types(self):
         with self.assertRaises(ValueError):
             files.replace_root("outside/a.jpg", "dataset/images", "dataset/labels")
+        with self.assertRaises(TypeError):
+            files.replace_root(123, "dataset/images", "dataset/labels")
 
 
 if __name__ == "__main__":

@@ -13,18 +13,23 @@ class TestLoad(unittest.TestCase):
             root = Path(directory)
             files.save(root / "data.json", {"a": 1}, verbose=False)
             files.save(root / "lines.txt", ["a", "b"], verbose=False)
-            self.assertEqual(files.load(root / "data.json", verbose=False), {"a": 1})
+            self.assertEqual(files.load(str(root / "data.json"), verbose=False), {"a": 1})
+            self.assertEqual(files.load(root / "lines.txt", verbose=False), "a\nb\n")
             self.assertEqual(files.load(root / "lines.txt", as_lines=True, verbose=False), ["a", "b"])
 
-    def test_errors(self):
+    def test_rejects_missing_directory_unsupported_and_invalid_paths(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             with self.assertRaises(FileNotFoundError):
                 files.load(root / "missing.json", verbose=False)
+            with self.assertRaises(ValueError):
+                files.load(root, verbose=False)
             unsupported = root / "data.bin"
             unsupported.touch()
             with self.assertRaises(ValueError):
                 files.load(unsupported, verbose=False)
+            with self.assertRaises(TypeError):
+                files.load(123, verbose=False)
 
 
 if __name__ == "__main__":

@@ -12,12 +12,24 @@ class TestRename(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "draft.txt"
-            source.touch()
-            renamed = files.rename(source, "final.txt")
+            source.write_text("draft", encoding="utf-8")
+            renamed = files.rename(str(source), "final.txt")
             self.assertEqual(renamed, root / "final.txt")
-            self.assertTrue(renamed.exists())
+            self.assertEqual(renamed.read_text(encoding="utf-8"), "draft")
+            moved = files.rename(renamed, root / "archive.txt")
+            self.assertEqual(moved, root / "archive.txt")
+
+    def test_rejects_existing_target_and_missing_source(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.txt"
+            source.touch()
+            target = root / "target.txt"
+            target.touch()
             with self.assertRaises(FileExistsError):
-                files.rename(renamed, renamed)
+                files.rename(source, target)
+            with self.assertRaises(FileNotFoundError):
+                files.rename(root / "missing.txt", "new.txt")
 
 
 if __name__ == "__main__":
