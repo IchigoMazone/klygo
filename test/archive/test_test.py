@@ -8,7 +8,7 @@ from zipfile import ZipFile
 import klygo.archive as archive
 import klygo.files as files
 
-from _support import make_archive, make_source, member_ending
+from test.archive._support import make_archive, make_source, member_ending
 
 
 class TestTest(unittest.TestCase):

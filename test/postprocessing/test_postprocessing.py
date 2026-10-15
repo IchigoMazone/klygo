@@ -1,3 +1,4 @@
+import unittest
 from PIL import Image
 
 from klygo import postprocessing as post
@@ -17,89 +18,78 @@ def _detection(frame_index=0):
         image_frame_index=frame_index,
     )
 
+class TestPostprocessing(unittest.TestCase):
+    def test_box_copy_operations(self):
+        box = _detection()[0].with_metadata(reviewed=True)
+        changed = box.with_label("car").with_score(0.9).translate(2, 3).scale(1.2).clip((100, 80))
+        assert changed.uid == box.uid
+        assert changed.metadata["reviewed"] is True
+        assert changed.label == "car"
+        assert changed.score == 0.9
+        assert box.label == "vehicle"
 
-def test_box_copy_operations():
-    box = _detection()[0].with_metadata(reviewed=True)
-    changed = box.with_label("car").with_score(0.9).translate(2, 3).scale(1.2).clip((100, 80))
-    assert changed.uid == box.uid
-    assert changed.metadata["reviewed"] is True
-    assert changed.label == "car"
-    assert changed.score == 0.9
-    assert box.label == "vehicle"
+    def test_detection_pythonic_operations(self):
+        result = _detection()
 
+        selected = result.select(ids=[0, 2])
+        assert [box.id for box in selected] == [0, 2]
 
-def test_detection_pythonic_operations():
-    result = _detection()
+        renamed = result.relabel("car", ids=[0, 1])
+        assert renamed.labels == ["car", "car", "person", "invalid"]
+        assert result.labels[0] == "vehicle"
 
-    selected = result.select(ids=[0, 2])
-    assert [box.id for box in selected] == [0, 2]
+        mapped = result.relabel({0: "truck", 2: "pedestrian"})
+        assert mapped.labels == ["truck", "vehicle", "pedestrian", "invalid"]
 
-    renamed = result.relabel("car", ids=[0, 1])
-    assert renamed.labels == ["car", "car", "person", "invalid"]
-    assert result.labels[0] == "vehicle"
+        dropped = result.drop(where=lambda box: box.score < 0.7)
+        assert dropped.labels == ["vehicle", "vehicle", "invalid"]
 
-    mapped = result.relabel({0: "truck", 2: "pedestrian"})
-    assert mapped.labels == ["truck", "vehicle", "pedestrian", "invalid"]
+        transformed = result.map_boxes(
+            lambda box: box.with_label("human") if box.label == "person" else box
+        )
+        assert "human" in transformed.labels
 
-    dropped = result.drop(where=lambda box: box.score < 0.7)
-    assert dropped.labels == ["vehicle", "vehicle", "invalid"]
+        cleaned = result.clip().remove_invalid(min_area=10).filter_score(0.7).nms(iou=0.5).top(1)
+        assert len(cleaned) == 1
+        assert cleaned[0].id == 0
+        assert cleaned[0].box == [0.0, 0.0, 50.0, 50.0]
 
-    transformed = result.map_boxes(
-        lambda box: box.with_label("human") if box.label == "person" else box
-    )
-    assert "human" in transformed.labels
+    def test_pipeline_and_frame_operations(self):
+        pipeline = post.compose(
+            post.clip(),
+            post.remove_invalid(min_area=10),
+            post.threshold(0.7),
+            post.nms(iou=0.5),
+            post.top(1),
+        )
 
-    cleaned = result.clip().remove_invalid(min_area=10).filter_score(0.7).nms(iou=0.5).top(1)
-    assert len(cleaned) == 1
-    assert cleaned[0].id == 0
-    assert cleaned[0].box == [0.0, 0.0, 50.0, 50.0]
+        first = _detection(frame_index=10)
+        second = _detection(frame_index=20)
+        results = Detections([first, second], source_type="video", fps=25)
+        cleaned = pipeline(results)
+        assert [len(frame) for frame in cleaned] == [1, 1]
+        assert len(post.compose([post.threshold(0.5), post.top(2)])) == 2
 
+        assert results.get_frame(20) is second
+        replacement = second.relabel("car")
+        replaced = results.replace_frame(20, replacement)
+        assert replaced.get_frame(20).labels == ["car"] * 4
+        assert results.get_frame(20).labels[0] == "vehicle"
 
-def test_pipeline_and_frame_operations():
-    pipeline = post.compose(
-        post.clip(),
-        post.remove_invalid(min_area=10),
-        post.threshold(0.7),
-        post.nms(iou=0.5),
-        post.top(1),
-    )
+        updated = results.update_frame(10, lambda frame: frame.drop(labels=["invalid"]))
+        assert "invalid" not in updated.get_frame(10).labels
+        assert [frame.frame_index for frame in results.remove_frame(10)] == [20]
 
-    first = _detection(frame_index=10)
-    second = _detection(frame_index=20)
-    results = Detections([first, second], source_type="video", fps=25)
-    cleaned = pipeline(results)
-    assert [len(frame) for frame in cleaned] == [1, 1]
-    assert len(post.compose([post.threshold(0.5), post.top(2)])) == 2
+    def test_stream_stays_lazy(self):
+        consumed = []
 
-    assert results.get_frame(20) is second
-    replacement = second.relabel("car")
-    replaced = results.replace_frame(20, replacement)
-    assert replaced.get_frame(20).labels == ["car"] * 4
-    assert results.get_frame(20).labels[0] == "vehicle"
+        def source():
+            for index in (0, 1, 2):
+                consumed.append(index)
+                yield _detection(frame_index=index)
 
-    updated = results.update_frame(10, lambda frame: frame.drop(labels=["invalid"]))
-    assert "invalid" not in updated.get_frame(10).labels
-    assert [frame.frame_index for frame in results.remove_frame(10)] == [20]
-
-
-def test_stream_stays_lazy():
-    consumed = []
-
-    def source():
-        for index in (0, 1, 2):
-            consumed.append(index)
-            yield _detection(frame_index=index)
-
-    results = Detections(source(), stream=True, total_frames=3)
-    processed = results.filter_score(0.9).relabel("object")
-    assert consumed == []
-    assert processed[0].labels == ["object", "object"]
-    assert consumed == [0]
-
-
-if __name__ == "__main__":
-    test_box_copy_operations()
-    test_detection_pythonic_operations()
-    test_pipeline_and_frame_operations()
-    test_stream_stays_lazy()
-    print("ALL KLYGO.POSTPROCESSING TESTS PASSED SUCCESSFULLY!")
+        results = Detections(source(), stream=True, total_frames=3)
+        processed = results.filter_score(0.9).relabel("object")
+        assert consumed == []
+        assert processed[0].labels == ["object", "object"]
+        assert consumed == [0]

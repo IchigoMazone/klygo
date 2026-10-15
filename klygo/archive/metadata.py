@@ -219,9 +219,6 @@ def verify(archive_path: Union[str, Path]) -> Dict[str, Any]:
     }
 
 
-# Ngăn pytest thu thập nhầm API này khi được import vào module test.
-test.__test__ = False
-
 def compare(archive1: Union[str, Path], archive2: Union[str, Path]) -> Dict[str, List[str]]:
     """Compare the member-name sets of two archives.
 

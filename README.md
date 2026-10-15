@@ -114,3 +114,11 @@ print(clean_results.labels, clean_results.scores)
 - `*_path` names a file path.
 - `*_dir` names a directory path.
 - `target` may name an output file or directory, depending on the operation.
+
+## Tests
+
+Run the test suite with Python's standard library:
+
+```bash
+python -m unittest discover -s test -t . -p 'test*.py'
+```
