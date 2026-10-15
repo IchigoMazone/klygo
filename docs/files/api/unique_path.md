@@ -8,15 +8,15 @@ Return a currently unused path.
 
 ## Contract
 
-Adds an incrementing numeric suffix while preserving known compound extensions.
+Adds an incrementing numeric suffix while preserving known compound extensions. Broken symlinks occupy names too. Checks the filesystem, but does not create or reserve the returned path; another writer can claim it afterward.
 
-All string paths and `pathlib.Path` values accepted by this API use the current operating system's path rules. Unless explicitly stated, path helpers do not access the filesystem.
+Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
 ## Parameters
 
-- `value`: `str | pathlib.Path` — path-like value to transform.
+- `value`: `str | os.PathLike[str]` — path-like value to transform.
 - `separator`: `str` — separator before the numeric suffix.
-- `start`: `str | int` — starting directory for `relative`, or initial suffix number for `unique_path`.
+- `start`: `int`, default `1` — initial numeric suffix; must be non-negative.
 
 ## Returns
 

@@ -1,5 +1,4 @@
 import importlib
-import sys
 
 from . import archive
 from . import config
@@ -8,15 +7,11 @@ from . import files
 from . import media
 from . import outputs
 from . import postprocessing
-from . import processing
+from . import preprocessing
 from . import utils
 from . import validators
 from . import visual
 from .config import Config
-
-# Alias tương thích ngược
-visualize = visual
-sys.modules["klygo.visualize"] = visual
 
 __version__ = "2.1.0"
 __author__ = "IchigoMazone"
@@ -45,10 +40,9 @@ __all__ = [
     "models",
     "outputs",
     "postprocessing",
-    "processing",
+    "preprocessing",
     "utils",
     "validators",
     "visual",
-    "visualize",
     "Config",
 ]

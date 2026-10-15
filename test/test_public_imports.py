@@ -1,15 +1,15 @@
 import klygo
-from klygo import Config, archive, config, files, media, models, postprocessing, visual
+from klygo import Config, archive, config, files, media, models, postprocessing, preprocessing, visual
 
 
 def test_top_level_imports():
     assert klygo.Config is Config
-    assert klygo.visualize is visual
+    assert klygo.visual is visual
     assert all(hasattr(klygo, name) for name in klygo.__all__)
 
 
 def test_module_exports_are_present():
-    for module in (archive, config, files, media, models, postprocessing, visual):
+    for module in (archive, config, files, media, models, postprocessing, preprocessing, visual):
         for name in module.__all__:
             assert hasattr(module, name), f"{module.__name__}.{name} is missing"
 

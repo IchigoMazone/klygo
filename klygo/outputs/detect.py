@@ -784,7 +784,7 @@ class Detection:
         biến đổi hình học, nên box được giữ nguyên. ``target="original"`` dùng
         ảnh nguồn nguyên bản và phục hồi box về hệ tọa độ ban đầu.
         """
-        from klygo import processing
+        from klygo import preprocessing
 
         target = str(target).lower()
         if target not in ("transformed", "original"):
@@ -795,7 +795,7 @@ class Detection:
         if source_path is None:
             raise ValueError("Cannot restore a Detection whose source image has no path")
 
-        # Recreate the source proxy without copying its processing pipeline.
+        # Recreate the source proxy without copying its preprocessing pipeline.
         source_image = media.LazyImage(
             source_path,
             backend=getattr(current_image, "backend", "pil"),
@@ -803,21 +803,21 @@ class Detection:
             reader=getattr(current_image, "reader", None),
         )
 
-        operations = list(getattr(current_image, "_processing_ops", ()))
-        trace = processing.get_trace(current_image)
+        operations = list(getattr(current_image, "_preprocessing_ops", ()))
+        trace = preprocessing.get_trace(current_image)
         if operations and not trace and hasattr(current_image, "to_pil"):
             # Normally inference already materialized the image. This also makes
             # restore reliable for manually-created Detection objects.
             current_image.to_pil(cache=False)
-            trace = processing.get_trace(current_image)
+            trace = preprocessing.get_trace(current_image)
 
         if target == "transformed":
             geometry = [operation for operation in operations if operation.changes_geometry]
-            restored_image = processing.compose(geometry)(source_image) if geometry else source_image
+            restored_image = preprocessing.compose(geometry)(source_image) if geometry else source_image
             restored_boxes = [list(box) for box in self.boxes]
         else:
             restored_image = source_image
-            restored_boxes = processing.restore_boxes(self.boxes, trace) if trace else [list(box) for box in self.boxes]
+            restored_boxes = preprocessing.restore_boxes(self.boxes, trace) if trace else [list(box) for box in self.boxes]
 
         if inplace:
             self.source_image = restored_image

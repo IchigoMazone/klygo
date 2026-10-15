@@ -9,7 +9,6 @@ utils.suppress_ai_warnings()
 
 from . import base
 from . import errors
-from . import utils
 from .base import BaseModel
 from .detection.base import Detector
 from .load import load, configure, set_backend, get_backend

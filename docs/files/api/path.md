@@ -4,17 +4,23 @@
 files.path(value, expand_user=True)
 ```
 
-Convert a string or Path to pathlib.Path.
+Convert a string or text-returning path-like object to a native `pathlib.Path`.
 
 ## Contract
 
-Expands a leading user home marker when expand_user=True.
+Expands a leading user home marker when `expand_user=True`. Returns a standard
+`Path` (a `WindowsPath` or `PosixPath` on the current platform), so native
+properties and methods are immediately available. Does not create a filesystem
+entry, expand environment variables, make a path absolute, or resolve `..`.
 
-All string paths and `pathlib.Path` values accepted by this API use the current operating system's path rules. Unless explicitly stated, path helpers do not access the filesystem.
+See [Working with pathlib.Path](../pathlib.md) for native methods, symlink
+examples, Python compatibility, and differences from the Klygo helpers.
+
+Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
 ## Parameters
 
-- `value`: `str | pathlib.Path` — path-like value to transform.
+- `value`: `str | os.PathLike[str]` — path-like value to transform.
 - `expand_user`: `bool` — expand a leading `~`.
 
 ## Returns
@@ -23,7 +29,7 @@ A `pathlib.Path` representing the result.
 
 ## Errors and edge cases
 
-Raises `TypeError` when the value is not a string or `pathlib.Path`.
+Raises `TypeError` when the value is not a string or a text-returning `os.PathLike` object.
 
 ## AI usage guidance
 
@@ -52,4 +58,14 @@ print(value, type(value))
 home = files.path("~")
 literal = files.path("~", expand_user=False)
 assert home != literal and literal.name == "~"
+
+# Custom filesystem inputs use __fspath__, not their string representation.
+class DatasetPath:
+    def __fspath__(self):
+        return "dataset/images/cat.jpg"
+
+
+native = files.path(DatasetPath())
+assert native.name == "cat.jpg"
+assert native.parent.as_posix() == "dataset/images"
 ```

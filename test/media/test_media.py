@@ -10,7 +10,7 @@ import torch
 import cv2
 
 import klygo.media as media
-import klygo.processing as processing
+import klygo.preprocessing as preprocessing
 
 
 def test_media_stream_is_separate_from_load(tmp_path):
@@ -51,7 +51,7 @@ def test_mediaframes_collection_api_is_lazy_and_keeps_metadata(tmp_path):
     assert frames.source == str(image_dir)
     assert frames.loaded_count == 0
 
-    transformed = frames.transform(processing.resize((8, 8)))
+    transformed = frames.transform(preprocessing.resize((8, 8)))
     assert isinstance(transformed, media.MediaFrames)
     assert transformed.source_path == frames.source_path
     assert transformed[0].size == (8, 8)

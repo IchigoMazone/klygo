@@ -1,20 +1,21 @@
 # `files.info`
 
 ```python
-files.info(path)
+files.info(path, *, include_hash=True)
 ```
 
 Collect common metadata for a file or directory.
 
 ## Contract
 
-Returns name, stem, extension, parent, size, timestamps, type flags, and a file hash.
+Returns name, stem, extension, parent, size, timestamps, type flags, and a file hash. With `include_hash=False`, the same dictionary keys are returned with `hash=None`, without reading file contents. Computing directory size still traverses its descendants.
 
-All string paths and `pathlib.Path` values accepted by this API use the current operating system's path rules. Unless explicitly stated, path helpers do not access the filesystem.
+Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
 ## Parameters
 
-- `path`: `str | pathlib.Path` — filesystem path to inspect or operate on.
+- `path`: `str | os.PathLike[str]` — filesystem path to inspect or operate on.
+- `include_hash`: `bool`, default `True` — calculate the file checksum; keyword-only.
 
 ## Returns
 
@@ -22,7 +23,7 @@ A metadata dictionary.
 
 ## Errors and edge cases
 
-Raises `FileNotFoundError` when the path does not exist.
+Raises `FileNotFoundError` when the path does not exist and `TypeError` for a non-boolean `include_hash`.
 
 ## AI usage guidance
 
@@ -51,4 +52,9 @@ print(metadata["name"], metadata["human_size"], metadata["hash"])
 assert metadata["is_file"] is True
 assert metadata["size"] > 0
 assert isinstance(metadata["hash"], str)
+
+# Skip content hashing when only metadata is needed.
+lightweight = files.info("README.md", include_hash=False)
+assert lightweight["hash"] is None
+assert lightweight.keys() == metadata.keys()
 ```

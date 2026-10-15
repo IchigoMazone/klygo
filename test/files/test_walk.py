@@ -1,5 +1,6 @@
 """Behavioral contract for klygo.files.walk."""
 
+import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -18,6 +19,12 @@ class TestWalk(unittest.TestCase):
             rows = list(result)
             self.assertEqual(len(rows), 2)
             self.assertIn("a.txt", rows[1][2])
+
+    def test_string_root_spelling_and_empty_root_are_preserved(self):
+        with TemporaryDirectory() as directory:
+            root = directory + os.sep
+            self.assertEqual(next(files.walk(root))[0], root)
+        self.assertEqual(list(files.walk("")), [])
 
 
 if __name__ == "__main__":

@@ -10,13 +10,13 @@ Map a path from one directory tree into another.
 
 Preserves the relative location and raises ValueError when value is outside old_root.
 
-All string paths and `pathlib.Path` values accepted by this API use the current operating system's path rules. Unless explicitly stated, path helpers do not access the filesystem.
+Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
 ## Parameters
 
-- `value`: `str | pathlib.Path` — path-like value to transform.
-- `old_root`: `str | pathlib.Path` — root removed from the source path.
-- `new_root`: `str | pathlib.Path` — replacement root.
+- `value`: `str | os.PathLike[str]` — path-like value to transform.
+- `old_root`: `str | os.PathLike[str]` — root removed from the source path.
+- `new_root`: `str | os.PathLike[str]` — replacement root.
 
 ## Returns
 

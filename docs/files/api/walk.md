@@ -10,11 +10,11 @@ Walk a directory tree lazily.
 
 Returns the generator produced by os.walk, yielding root, directory names, and file names.
 
-All string paths and `pathlib.Path` values accepted by this API use the current operating system's path rules. Unless explicitly stated, path helpers do not access the filesystem.
+Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
 ## Parameters
 
-- `path`: `str | pathlib.Path` — filesystem path to inspect or operate on.
+- `path`: `str | os.PathLike[str]` — filesystem path to inspect or operate on.
 
 ## Returns
 

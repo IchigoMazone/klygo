@@ -10,12 +10,12 @@ Compare two files by checksum or binary content.
 
 Returns early when sizes differ. by must be 'hash' or 'content'.
 
-All string paths and `pathlib.Path` values accepted by this API use the current operating system's path rules. Unless explicitly stated, path helpers do not access the filesystem.
+Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
 ## Parameters
 
-- `path1`: `str | pathlib.Path` — first file to compare.
-- `path2`: `str | pathlib.Path` — second file to compare.
+- `path1`: `str | os.PathLike[str]` — first file to compare.
+- `path2`: `str | os.PathLike[str]` — second file to compare.
 - `by`: `str` — either `hash` or `content`.
 
 ## Returns

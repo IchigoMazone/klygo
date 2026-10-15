@@ -10,11 +10,11 @@ Create a directory and return its Path.
 
 Can create missing parents and optionally tolerate an existing directory.
 
-All string paths and `pathlib.Path` values accepted by this API use the current operating system's path rules. Unless explicitly stated, path helpers do not access the filesystem.
+Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
 ## Parameters
 
-- `path`: `str | pathlib.Path` — filesystem path to inspect or operate on.
+- `path`: `str | os.PathLike[str]` — filesystem path to inspect or operate on.
 - `parents`: `bool` — create missing parent directories.
 - `exist_ok`: `bool` — tolerate an existing directory.
 

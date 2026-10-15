@@ -12,7 +12,7 @@ Supported File Download Formats (`files.download`):
     - All binary and arbitrary formats (AI Models: .pt, .onnx, .safetensors; Archives: .zip, .tar.gz, .7z;
       Media: .mp4, .png, .jpg; Datasets & Binaries: .parquet, .db, .whl, etc.)
 
-Public APIs (39 Functions):
+Public APIs (41 Functions):
     Structured Data I/O:
         1.  load(path, ...)                  - Automatically load structured data based on file extension.
         2.  save(path, data, ...)            - Save structured data using the destination file extension.
@@ -33,7 +33,7 @@ Public APIs (39 Functions):
         15. remove(path, ...)                - Remove a file or directory recursively.
 
     File Metadata & Inspection:
-        16. info(path)                       - Detailed metadata dictionary (size, hashes, timestamps, etc.).
+        16. info(path, ...)                  - Detailed metadata dictionary (size, hashes, timestamps, etc.).
         17. size(path, ...)                  - Total size of a file or directory (bytes or human-readable format).
         18. hash(path, ...)                  - Compute file checksum digest (MD5, SHA256, etc.).
         19. compare(path1, path2, ...)       - Compare contents of two files by checksum or binary content.
@@ -43,7 +43,7 @@ Public APIs (39 Functions):
         21. stem(path)                       - Final path component without its last extension.
         22. extension(path)                  - Final filename extension (including leading dot).
         23. parent(path)                     - Immediate parent directory of a path.
-        24. path(value, ...)                 - Convert input value to a normalized pathlib.Path object.
+        24. path(value, ...)                 - Convert input to a native pathlib.Path, expanding ~ by default.
         25. join(*parts)                     - Join multiple path components together.
         26. normalize(path)                  - Lexically normalize path separators and dot components.
         27. resolve(path, ...)               - Resolve path to an absolute normalized path.
@@ -59,6 +59,10 @@ Public APIs (39 Functions):
         37. compound_extension(path)         - Return all filename extensions joined together.
         38. parents(path)                    - Return tuple of ancestor paths from nearest to farthest.
         39. is_absolute(path)                - Check whether a path is absolute.
+
+    Streaming Data and Discovery:
+        40. iter_load(path)                  - Yield JSONL values or CSV rows one at a time.
+        41. iter_find(path, ...)             - Yield matching files with directory exclusions.
 """
 
 from .download import download
@@ -68,6 +72,7 @@ from .filesystem import (
     is_dir,
     list_entries,
     find,
+    iter_find,
     walk,
     mkdir,
     copy,
@@ -75,7 +80,7 @@ from .filesystem import (
     rename,
     remove,
 )
-from .io import load, save, convert
+from .io import load, iter_load, save, convert
 from .metadata import (
     info,
     size,
@@ -107,6 +112,7 @@ from .paths import (
 
 __all__ = [
     "load",
+    "iter_load",
     "save",
     "convert",
     "download",
@@ -115,6 +121,7 @@ __all__ = [
     "is_dir",
     "list_entries",
     "find",
+    "iter_find",
     "walk",
     "mkdir",
     "copy",

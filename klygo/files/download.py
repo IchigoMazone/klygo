@@ -5,15 +5,13 @@ from __future__ import annotations
 import os
 import urllib.request
 from pathlib import Path
-from typing import Union
 from urllib.parse import urlparse
 
 from klygo.utils.progress import ProgressBar
 from klygo.validators import validate_type
 
+from ._typing import PathInput
 from .filesystem import copy
-
-PathInput = Union[str, Path]
 
 
 def download(
@@ -28,9 +26,9 @@ def download(
 
     Parameters
     ----------
-    source : str or pathlib.Path
+    source : str or os.PathLike[str]
         Source URL or filesystem path.
-    output_dir : str or pathlib.Path, default='.'
+    output_dir : str or os.PathLike[str], default='.'
         Directory in which the output file is created.
     overwrite : bool, default=False
         Allow an existing destination to be replaced.
@@ -61,12 +59,13 @@ def download(
     >>> from klygo import files
     >>> model = files.download(url, output_dir="weights")
     """
-    validate_type(source, (str, Path), "source")
-    validate_type(output_dir, (str, Path), "output_dir")
+    validate_type(source, (str, os.PathLike), "source")
+    validate_type(output_dir, (str, os.PathLike), "output_dir")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
 
-    source_text = str(source)
+    source_text = os.fspath(source)
+    validate_type(source_text, str, "source")
     destination_dir = Path(output_dir)
     destination_dir.mkdir(parents=True, exist_ok=True)
 

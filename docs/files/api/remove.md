@@ -8,13 +8,15 @@ Remove a file, symlink, or directory.
 
 ## Contract
 
+Symbolic links, including broken ones, are unlinked without deleting their targets.
+
 Directories are removed recursively by default. Missing paths may be ignored.
 
-All string paths and `pathlib.Path` values accepted by this API use the current operating system's path rules. Unless explicitly stated, path helpers do not access the filesystem.
+Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
 ## Parameters
 
-- `path`: `str | pathlib.Path` — filesystem path to inspect or operate on.
+- `path`: `str | os.PathLike[str]` — filesystem path to inspect or operate on.
 - `recursive`: `bool` — include descendants or recursively remove a directory.
 - `missing_ok`: `bool` — tolerate an absent target.
 

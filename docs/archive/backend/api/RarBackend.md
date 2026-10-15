@@ -32,6 +32,14 @@ Attempting `compress`, `add`, `remove`, `merge`, or `split` raises `UnsupportedO
 
 Use `RarBackend` solely for unpacking existing RAR archives. For creating new archives, choose ZIP or TAR.GZ.
 
+## Installation
+
+```bash
+pip install "klygo[rarfile]"
+uv add "klygo[rarfile]"
+uv pip install "klygo[rarfile]"
+```
+
 ## Example
 
 See [`RarBackend.py`](../../../../examples/archive/backend/RarBackend.py).

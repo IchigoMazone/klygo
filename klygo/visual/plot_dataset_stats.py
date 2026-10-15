@@ -5,7 +5,7 @@ from typing import Tuple, Union
 from klygo.archive import extract
 from klygo.datasets import get_dataset_info
 from klygo import files
-from klygo.utils.dataset import _find_dataset_root, _scan_dataset_files
+from klygo.datasets._structure import find_dataset_root, scan_dataset_files
 
 
 def plot_dataset_stats(
@@ -33,7 +33,7 @@ def plot_dataset_stats(
     if source.is_file():
         temp_dir = files.path(tempfile.mkdtemp())
         extract(source, temp_dir, overwrite=True, verbose=False)
-        source_dir = _find_dataset_root(temp_dir)
+        source_dir = find_dataset_root(temp_dir)
     else:
         source_dir = source
 
@@ -42,7 +42,7 @@ def plot_dataset_stats(
     labels_dir = source_dir / "labels"
 
     if images_dir.exists() and labels_dir.exists():
-        for _, label_path, _, _ in _scan_dataset_files(images_dir, labels_dir):
+        for _, label_path, _, _ in scan_dataset_files(images_dir, labels_dir):
             if not label_path or not label_path.exists():
                 continue
             with open(label_path, "r", encoding="utf-8") as file:

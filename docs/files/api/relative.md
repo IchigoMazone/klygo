@@ -10,11 +10,11 @@ Compute a path relative to a starting directory.
 
 Uses filesystem path semantics but does not require either path to exist.
 
-All string paths and `pathlib.Path` values accepted by this API use the current operating system's path rules. Unless explicitly stated, path helpers do not access the filesystem.
+Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
 ## Parameters
 
-- `value`: `str | pathlib.Path` — path-like value to transform.
+- `value`: `str | os.PathLike[str]` — path-like value to transform.
 - `start`: `str | int` — starting directory for `relative`, or initial suffix number for `unique_path`.
 
 ## Returns

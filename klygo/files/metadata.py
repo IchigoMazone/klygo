@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import Any, Dict, Union
 
 from klygo.utils.formatting import human_size as _human_size
+from klygo.validators import validate_type
 
-PathInput = Union[str, Path]
+from ._typing import PathInput
 
 
 def size(path: PathInput, human: bool = False) -> Union[int, str]:
@@ -19,7 +20,7 @@ def size(path: PathInput, human: bool = False) -> Union[int, str]:
 
     Parameters
     ----------
-    path : str or pathlib.Path
+    path : str or os.PathLike[str]
         Path to inspect or operate on.
     human : bool, default=False
         Return a human-readable size rather than an integer.
@@ -61,7 +62,7 @@ def hash(path: PathInput, algorithm: str = "md5") -> str:
 
     Parameters
     ----------
-    path : str or pathlib.Path
+    path : str or os.PathLike[str]
         Path to inspect or operate on.
     algorithm : str, default='md5'
         Algorithm accepted by ``hashlib.new``.
@@ -99,23 +100,29 @@ def hash(path: PathInput, algorithm: str = "md5") -> str:
     return hasher.hexdigest()
 
 
-def info(path: PathInput) -> Dict[str, Any]:
+def info(path: PathInput, *, include_hash: bool = True) -> Dict[str, Any]:
     """Collect common metadata for a file or directory.
 
-    The result includes names, type flags, byte and human sizes, timestamps, and a checksum for regular files.
+    The result includes names, type flags, byte and human sizes, timestamps,
+    and an optional checksum for regular files. Disabling the checksum avoids
+    reading file contents; directory size still requires traversal.
 
     Parameters
     ----------
-    path : str or pathlib.Path
+    path : str or os.PathLike[str]
         Path to inspect or operate on.
+    include_hash : bool, default=True
+        Compute the file checksum. If false, the ``hash`` field is ``None``.
 
     Returns
     -------
     dict[str, Any]
-        Filesystem metadata.
+        Filesystem metadata with stable keys, including ``hash``.
 
     Raises
     ------
+    TypeError
+        If ``include_hash`` is not a boolean.
     FileNotFoundError
         If the path does not exist.
 
@@ -129,6 +136,7 @@ def info(path: PathInput) -> Dict[str, Any]:
     >>> from klygo import files
     >>> metadata = files.info("model.onnx")
     """
+    validate_type(include_hash, bool, "include_hash")
     candidate = Path(path)
     if not candidate.exists():
         raise FileNotFoundError(f"Path does not exist: {candidate}")
@@ -145,7 +153,7 @@ def info(path: PathInput) -> Dict[str, Any]:
         "is_dir": candidate.is_dir(),
         "created": datetime.fromtimestamp(stat.st_ctime),
         "modified": datetime.fromtimestamp(stat.st_mtime),
-        "hash": hash(candidate) if candidate.is_file() else None,
+        "hash": hash(candidate) if include_hash and candidate.is_file() else None,
     }
 
 
@@ -156,9 +164,9 @@ def compare(path1: PathInput, path2: PathInput, by: str = "hash") -> bool:
 
     Parameters
     ----------
-    path1 : str or pathlib.Path
+    path1 : str or os.PathLike[str]
         Path to the first file.
-    path2 : str or pathlib.Path
+    path2 : str or os.PathLike[str]
         Path to the second file.
     by : {'hash', 'content'}, default='hash'
         File comparison strategy.

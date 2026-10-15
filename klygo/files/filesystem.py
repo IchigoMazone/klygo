@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import os
 import shutil
+from fnmatch import fnmatch
 from pathlib import Path
-from typing import Generator, List, Tuple, Union
+from typing import Generator, Iterable, List, Tuple
 
-PathInput = Union[str, Path]
+from klygo.validators import validate_type
+
+from ._typing import PathInput
 
 
 def exists(path: PathInput) -> bool:
@@ -15,7 +18,7 @@ def exists(path: PathInput) -> bool:
 
     Parameters
     ----------
-    path : str or pathlib.Path
+    path : str or os.PathLike[str]
         Path to inspect or operate on.
 
     Returns
@@ -42,7 +45,7 @@ def is_file(path: PathInput) -> bool:
 
     Parameters
     ----------
-    path : str or pathlib.Path
+    path : str or os.PathLike[str]
         Path to inspect or operate on.
 
     Returns
@@ -69,7 +72,7 @@ def is_dir(path: PathInput) -> bool:
 
     Parameters
     ----------
-    path : str or pathlib.Path
+    path : str or os.PathLike[str]
         Path to inspect or operate on.
 
     Returns
@@ -98,12 +101,12 @@ def list_entries(path: PathInput = ".", pattern: str = "*", recursive: bool = Fa
 
     Parameters
     ----------
-    path : str or pathlib.Path, default='.'
+    path : str or os.PathLike[str], default='.'
         Path to inspect or operate on.
     pattern : str, default='*'
         Glob expression used to match entries.
     recursive : bool, default=False
-        Include descendants, or recursively remove a directory.
+        Include descendants.
 
     Returns
     -------
@@ -143,12 +146,12 @@ def find(path: PathInput = ".", pattern: str = "*", recursive: bool = True) -> L
 
     Parameters
     ----------
-    path : str or pathlib.Path, default='.'
+    path : str or os.PathLike[str], default='.'
         Path to inspect or operate on.
     pattern : str, default='*'
         Glob expression used to match entries.
     recursive : bool, default=True
-        Include descendants, or recursively remove a directory.
+        Include descendants.
 
     Returns
     -------
@@ -177,6 +180,97 @@ def find(path: PathInput = ".", pattern: str = "*", recursive: bool = True) -> L
     return sorted((item for item in iterator if item.is_file()), key=lambda item: str(item).lower())
 
 
+def iter_find(
+    path: PathInput = ".",
+    pattern: str = "*",
+    recursive: bool = True,
+    *,
+    exclude_dirs: Iterable[str] = (),
+) -> Generator[Path, None, None]:
+    """Yield matching regular files without collecting the whole directory tree.
+
+    Matches basename patterns using the host's case rules. Directory exclusions
+    prune traversal, and nested directory symlinks are never followed. File
+    symlinks are included when their targets are regular files.
+
+    Parameters
+    ----------
+    path : str or os.PathLike[str], default='.'
+        Existing directory at which to start searching.
+    pattern : str, default='*'
+        Filename wildcard (``*``, ``?``, ``[seq]``); no path separators.
+    recursive : bool, default=True
+        Include descendants.
+    exclude_dirs : iterable[str], default=()
+        Directory basename wildcards to omit, such as ``('.git', 'cache*')``.
+
+    Returns
+    -------
+    generator[pathlib.Path, None, None]
+        Matching files in filesystem order. Results are not sorted or reserved.
+
+    Raises
+    ------
+    TypeError
+        If a pattern or option has an invalid type.
+    FileNotFoundError
+        If the search root does not exist.
+    ValueError
+        If the root is not a directory or a pattern is empty or contains separators.
+    OSError
+        If a directory cannot be scanned; raised during iteration.
+
+    Notes
+    -----
+    Root and options are validated immediately. Traversal starts on iteration
+    and retains directory entries for the current traversal, not all results.
+    For root-relative glob patterns or a sorted list, use ``find`` instead.
+
+    See Also
+    --------
+    find
+    walk
+
+    Examples
+    --------
+    >>> from klygo import files
+    >>> for image in files.iter_find("dataset", "*.jpg", exclude_dirs=("cache",)):
+    ...     print(image.name)
+    """
+    validate_type(pattern, str, "pattern")
+    validate_type(recursive, bool, "recursive")
+    if isinstance(exclude_dirs, (str, bytes)):
+        raise TypeError("exclude_dirs must be an iterable of directory patterns")
+    excluded = tuple(exclude_dirs)
+    for item in (pattern, *excluded):
+        validate_type(item, str, "pattern")
+        if not item or "/" in item or "\\" in item:
+            raise ValueError("Patterns must be non-empty basenames without path separators")
+    candidate = Path(path)
+    if not candidate.exists():
+        raise FileNotFoundError(f"Path does not exist: {candidate}")
+    if not candidate.is_dir():
+        raise ValueError(f"Path must be a directory: {candidate}")
+
+    def on_error(error):
+        # os.walk normally suppresses scan failures; expose incomplete searches.
+        raise error
+
+    def generate():
+        for current, directories, filenames in os.walk(candidate, onerror=on_error, followlinks=False):
+            directories[:] = [
+                name for name in directories
+                if recursive and not any(fnmatch(name, rule) for rule in excluded)
+            ]
+            for name in filenames:
+                if fnmatch(name, pattern):
+                    item = Path(current) / name
+                    if item.is_file():
+                        yield item
+
+    return generate()
+
+
 def walk(path: PathInput = ".") -> Generator[Tuple[str, List[str], List[str]], None, None]:
     """Walk a directory tree lazily.
 
@@ -184,7 +278,7 @@ def walk(path: PathInput = ".") -> Generator[Tuple[str, List[str], List[str]], N
 
     Parameters
     ----------
-    path : str or pathlib.Path, default='.'
+    path : str or os.PathLike[str], default='.'
         Path to inspect or operate on.
 
     Returns
@@ -203,7 +297,9 @@ def walk(path: PathInput = ".") -> Generator[Tuple[str, List[str], List[str]], N
     >>> for root, dirs, names in files.walk("dataset"):
     ...     print(root, names)
     """
-    return os.walk(str(path))
+    value = os.fspath(path)
+    validate_type(value, str, "path")
+    return os.walk(value)
 
 
 def mkdir(path: PathInput, parents: bool = True, exist_ok: bool = True) -> Path:
@@ -211,7 +307,7 @@ def mkdir(path: PathInput, parents: bool = True, exist_ok: bool = True) -> Path:
 
     Parameters
     ----------
-    path : str or pathlib.Path
+    path : str or os.PathLike[str]
         Path to inspect or operate on.
     parents : bool, default=True
         Create missing parent directories.
@@ -245,14 +341,16 @@ def mkdir(path: PathInput, parents: bool = True, exist_ok: bool = True) -> Path:
 def remove(path: PathInput, recursive: bool = True, missing_ok: bool = True) -> None:
     """Remove a file, symbolic link, or directory.
 
-    Directory removal is recursive by default. Missing targets are ignored by default.
+    Directory removal is recursive by default. Missing entries are ignored by
+    default. Symbolic links, including broken ones, are unlinked without
+    removing their targets.
 
     Parameters
     ----------
-    path : str or pathlib.Path
+    path : str or os.PathLike[str]
         Path to inspect or operate on.
     recursive : bool, default=True
-        Include descendants, or recursively remove a directory.
+        Remove non-empty directories recursively.
     missing_ok : bool, default=True
         Do not fail when the target is absent.
 
@@ -276,7 +374,7 @@ def remove(path: PathInput, recursive: bool = True, missing_ok: bool = True) -> 
     >>> files.remove("runs/temp", missing_ok=True)
     """
     candidate = Path(path)
-    if not candidate.exists():
+    if not (candidate.exists() or candidate.is_symlink()):
         if missing_ok:
             return
         raise FileNotFoundError(f"Path does not exist: {candidate}")
@@ -295,9 +393,9 @@ def copy(source: PathInput, target: PathInput, overwrite: bool = True) -> Path:
 
     Parameters
     ----------
-    source : str or pathlib.Path
+    source : str or os.PathLike[str]
         Source URL or filesystem path.
-    target : str or pathlib.Path
+    target : str or os.PathLike[str]
         Destination filesystem path.
     overwrite : bool, default=True
         Allow an existing destination to be replaced.
@@ -346,9 +444,9 @@ def move(source: PathInput, target: PathInput, overwrite: bool = True) -> Path:
 
     Parameters
     ----------
-    source : str or pathlib.Path
+    source : str or os.PathLike[str]
         Source URL or filesystem path.
-    target : str or pathlib.Path
+    target : str or os.PathLike[str]
         Destination filesystem path.
     overwrite : bool, default=True
         Allow an existing destination to be replaced.
@@ -394,9 +492,9 @@ def rename(path: PathInput, new_name_or_path: PathInput, overwrite: bool = False
 
     Parameters
     ----------
-    path : str or pathlib.Path
+    path : str or os.PathLike[str]
         Path to inspect or operate on.
-    new_name_or_path : str or pathlib.Path
+    new_name_or_path : str or os.PathLike[str]
         New basename or explicit destination path.
     overwrite : bool, default=False
         Allow an existing destination to be replaced.
@@ -436,7 +534,7 @@ def rename(path: PathInput, new_name_or_path: PathInput, overwrite: bool = False
 
 
 __all__ = [
-    "exists", "is_file", "is_dir", "list_entries", "find", "walk",
+    "exists", "is_file", "is_dir", "list_entries", "find", "iter_find", "walk",
     "mkdir", "copy", "move", "rename", "remove",
 ]
 

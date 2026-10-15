@@ -10,12 +10,12 @@ Convert between supported structured-data formats.
 
 Loads the source then saves the decoded data to the target format and returns the target Path.
 
-All string paths and `pathlib.Path` values accepted by this API use the current operating system's path rules. Unless explicitly stated, path helpers do not access the filesystem.
+Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
 ## Parameters
 
-- `source`: `str | pathlib.Path` — source URL or path.
-- `target`: `str | pathlib.Path` — destination path.
+- `source`: `str | os.PathLike[str]` — source URL or path.
+- `target`: `str | os.PathLike[str]` — destination path.
 - `overwrite`: `bool` — permit replacing an existing target.
 - `verbose`: `bool` — enable the progress indicator.
 

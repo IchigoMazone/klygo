@@ -1,16 +1,32 @@
 # `klygo.files` Documentation
 
-`klygo.files` provides 39 pure, deterministic, and safe filesystem operations, path inspection helpers, streaming download tools, and multi-format structured data I/O.
+`klygo.files` provides 41 filesystem operations, path inspection helpers, streaming download tools, and multi-format structured data I/O.
 
 Interactive Google Colab Tutorial:
 [Open in Colab](https://colab.research.google.com/drive/1-Oo8ERqSuxns1OfZAdHY5jVMTrLVpJG-?usp=sharing)
 
 ---
 
+## Native pathlib and streaming workflows
+
+`files.path()` returns a standard `pathlib.Path`. All APIs accept strings and
+text-returning `os.PathLike` inputs. See [Working with pathlib.Path](pathlib.md)
+for native operations, path semantics, symlinks, and Python compatibility.
+
+- [`iter_find()`](api/iter_find.md): yield files while pruning excluded directories.
+- [`iter_load()`](api/iter_load.md): read JSONL/CSV records incrementally.
+- [`save(..., atomic=True)`](api/save.md): publish completed serialized output.
+- [`info(..., include_hash=False)`](api/info.md): skip reading contents for hashing.
+
+Existing calls retain their defaults and return types. `find()` still returns a
+sorted list; `load()` still returns the complete object. Broken symlinks are
+handled as existing entries by `remove()`, `unique_path()`, and the overwrite
+check in `save()`.
+
 ## 1. Supported Structured Data Formats (14 Formats)
 
 <details open>
-<summary><b>Danh sách 14 định dạng dữ liệu hỗ trợ</b> <i>(Bấm để đóng/mở)</i></summary>
+<summary><b>14 supported data formats</b> <i>(Click to expand or collapse)</i></summary>
 
 | Category | File Extensions | Python Type Returned by `load()` | Notes |
 | :--- | :--- | :--- | :--- |
@@ -32,7 +48,7 @@ Interactive Google Colab Tutorial:
 ## 2. Task-Oriented Cheatsheet (Common AI / User Questions)
 
 <details open>
-<summary><b>Bảng tra cứu nhanh theo tác vụ thường gặp (25 tác vụ)</b> <i>(Bấm để đóng/mở)</i></summary>
+<summary><b>Task-oriented quick reference (25 tasks)</b> <i>(Click to expand or collapse)</i></summary>
 
 | I want to... | Recommended API | Key Parameters / Example |
 | :--- | :--- | :--- |
@@ -52,10 +68,10 @@ Interactive Google Colab Tutorial:
 | **Move file or directory tree** | [`move()`](api/move.md) | `files.move("draft.txt", "output/draft.txt")` |
 | **Rename or relocate file** | [`rename()`](api/rename.md) | `files.rename("old.txt", "new.txt")` |
 | **Get file or folder size (bytes or KB/MB/GB)** | [`size()`](api/size.md) | `files.size("weights.pt", human=True)  # '14.2 MB'` |
-| **Calculate streaming checksum (Zero-RAM)** | [`hash()`](api/hash.md) | `files.hash("model.onnx", algorithm="sha256")` |
+| **Calculate checksum with bounded read buffers** | [`hash()`](api/hash.md) | `files.hash("model.onnx", algorithm="sha256")` |
 | **Get comprehensive file metadata** | [`info()`](api/info.md) | `meta = files.info("model.onnx")` |
 | **Compare contents of two files** | [`compare()`](api/compare.md) | `if files.compare("f1.bin", "f2.bin", by="hash"): ...` |
-| **Prevent Path Traversal (Zip Slip check)** | [`is_within()`](api/is_within.md) | `files.is_within(target_path, root_dir)` |
+| **Check resolved path containment** | [`is_within()`](api/is_within.md) | `files.is_within(target_path, root_dir)` |
 | **Find longest common parent directory** | [`common_path()`](api/common_path.md) | `common = files.common_path(["a/b/c", "a/b/d"])` |
 | **Map path to a new root directory** | [`replace_root()`](api/replace_root.md) | `files.replace_root("data/train/1.jpg", "data", "backup")` |
 | **Handle compound extensions (`.tar.gz`)** | [`compound_extension()`](api/compound_extension.md) | `files.compound_extension("a.tar.gz")  # '.tar.gz'` |
@@ -66,12 +82,13 @@ Interactive Google Colab Tutorial:
 
 ---
 
-## 3. Public APIs Reference (39 Functions)
+## 3. Public APIs Reference (41 Functions)
 
 <details>
-<summary><b>I/O Dữ liệu cấu trúc & Tải tệp (4 hàm)</b> <i>(Bấm để mở rộng)</i></summary>
+<summary><b>Structured data I/O and downloads (5 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`load(path, as_lines=False, ...)`](api/load.md): Automatically load structured data based on file extension.
+- [`iter_load(path)`](api/iter_load.md): Yield JSONL values or CSV row dictionaries incrementally.
 - [`save(path, data, overwrite=False, ...)`](api/save.md): Serialize structured data using destination file extension.
 - [`convert(source, target, ...)`](api/convert.md): Format conversion between structured data files.
 - [`download(source, output_dir, ...)`](api/download.md): Download URL, Colab, or local file with progress bar.
@@ -79,13 +96,14 @@ Interactive Google Colab Tutorial:
 </details>
 
 <details>
-<summary><b>Thao tác Filesystem (11 hàm)</b> <i>(Bấm để mở rộng)</i></summary>
+<summary><b>Filesystem operations (12 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`exists(path)`](api/exists.md): Check whether a file or directory exists.
 - [`is_file(path)`](api/is_file.md): Check if path identifies a regular file.
 - [`is_dir(path)`](api/is_dir.md): Check if path identifies a directory.
 - [`list_entries(path, pattern, recursive)`](api/list_entries.md): Deterministically list matching files and directories.
 - [`find(path, pattern, recursive)`](api/find.md): Find regular files matching wildcard pattern recursively.
+- [`iter_find(path, pattern, recursive, *, exclude_dirs=())`](api/iter_find.md): Yield regular files and prune excluded directory subtrees.
 - [`walk(path)`](api/walk.md): Walk directory tree as a generator (`os.walk` wrapper).
 - [`mkdir(path, parents, exist_ok)`](api/mkdir.md): Create a new directory and missing parent directories.
 - [`copy(source, target, overwrite)`](api/copy.md): Copy a file or directory tree recursively.
@@ -96,9 +114,9 @@ Interactive Google Colab Tutorial:
 </details>
 
 <details>
-<summary><b>Metadata & Kiểm tra Tệp (4 hàm)</b> <i>(Bấm để mở rộng)</i></summary>
+<summary><b>Metadata and file inspection (4 functions)</b> <i>(Click to expand)</i></summary>
 
-- [`info(path)`](api/info.md): Comprehensive metadata dictionary (sizes, timestamps, checksum).
+- [`info(path, *, include_hash=True)`](api/info.md): Comprehensive metadata dictionary (sizes, timestamps, checksum).
 - [`size(path, human=False)`](api/size.md): Size of file or directory tree (bytes or formatted string).
 - [`hash(path, algorithm='md5')`](api/hash.md): Compute streaming checksum digest.
 - [`compare(path1, path2, by='hash')`](api/compare.md): Compare two files by checksum or binary content.
@@ -106,18 +124,18 @@ Interactive Google Colab Tutorial:
 </details>
 
 <details>
-<summary><b>Xử lý Đường dẫn Thuần túy (20 hàm)</b> <i>(Bấm để mở rộng)</i></summary>
+<summary><b>Path operations (20 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`name(path)`](api/name.md): Final path component including extension.
 - [`stem(path)`](api/stem.md): Final path component without its last extension.
 - [`extension(path)`](api/extension.md): Final filename extension (including leading dot).
 - [`parent(path)`](api/parent.md): Immediate parent directory of a path.
-- [`path(value, expand_user=True)`](api/path.md): Convert string or path to normalized `pathlib.Path`.
+- [`path(value, expand_user=True)`](api/path.md): Convert text path inputs to native `Path`, expanding `~` by default.
 - [`join(*parts)`](api/join.md): Join multiple path components together.
 - [`normalize(path)`](api/normalize.md): Lexically normalize path separators and dot components.
 - [`resolve(path, strict=False)`](api/resolve.md): Return an absolute normalized path.
 - [`relative(path, start='.')`](api/relative.md): Compute relative path from a starting directory.
-- [`is_within(path, root)`](api/is_within.md): Check whether a path is safely contained within root.
+- [`is_within(path, root)`](api/is_within.md): Check whether a resolved path is contained within root.
 - [`common_path(paths)`](api/common_path.md): Find the longest common parent directory of multiple paths.
 - [`replace_root(path, old_root, new_root)`](api/replace_root.md): Map a path from one root directory to another.
 - [`with_name(path, name)`](api/with_name.md): Return path with replaced final component.

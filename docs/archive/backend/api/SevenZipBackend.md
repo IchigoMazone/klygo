@@ -32,6 +32,14 @@ Raises `ImportError` if `py7zr` is missing when performing actual archive operat
 
 Install `klygo[py7zr]` when working with `.7z` archives. Use high-level functions like `archive.extract("data.7z")` in user scripts.
 
+## Installation
+
+```bash
+pip install "klygo[py7zr]"
+uv add "klygo[py7zr]"
+uv pip install "klygo[py7zr]"
+```
+
 ## Example
 
 See [`SevenZipBackend.py`](../../../../examples/archive/backend/SevenZipBackend.py).

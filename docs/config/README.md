@@ -15,14 +15,14 @@ Interactive Google Colab Tutorial:
 ## 1. Functional vs Stateful Interface
 
 <details open>
-<summary><b>So sánh 2 trường phái: Functional API vs Stateful Config Class</b> <i>(Bấm để đóng/mở)</i></summary>
+<summary><b>Functional API vs. the stateful Config class</b> <i>(Click to expand or collapse)</i></summary>
 
-`klygo.config` cung cấp hai trường phái bổ trợ cho nhau:
+`klygo.config` provides two complementary interfaces:
 
-1. **Functional API (Stateless & Immutable)**:
-   Các hàm như `load`, `set`, `update`, `merge`, `flatten`, `diff` trả về bản copy độc lập, không sinh side-effect lên object truyền vào, thích hợp cho pipeline biến đổi dữ liệu thuần túy.
-2. **Stateful `Config` Class (Path-Bound & Mutable)**:
-   Dành cho ứng dụng cần giữ instance cấu hình xuyên suốt vòng đời, liên tục đọc/sửa in-memory và xuất ra file.
+1. **Functional API (stateless and immutable)**:
+   Functions such as `load`, `set`, `update`, `merge`, `flatten`, and `diff` return independent values without side effects on their inputs, making them suitable for functional data-transformation pipelines.
+2. **Stateful `Config` class (path-bound and mutable)**:
+   Use this interface when an application needs to retain a configuration instance, read or modify it in memory, and write it back to a file.
 
 </details>
 
@@ -31,7 +31,7 @@ Interactive Google Colab Tutorial:
 ## 2. Task-Oriented Cheatsheet (Common AI / User Questions)
 
 <details open>
-<summary><b>Bảng tra cứu nhanh theo tác vụ thường gặp (19 tác vụ)</b> <i>(Bấm để đóng/mở)</i></summary>
+<summary><b>Task-oriented quick reference (19 tasks)</b> <i>(Click to expand or collapse)</i></summary>
 
 | I want to... | Recommended API | Key Parameters / Example |
 | :--- | :--- | :--- |
@@ -64,7 +64,7 @@ Interactive Google Colab Tutorial:
 ## 3. Public APIs Reference (20 Functions, 1 Class)
 
 <details>
-<summary><b>File I/O & Chuyển đổi Định dạng (4 hàm)</b> <i>(Bấm để mở rộng)</i></summary>
+<summary><b>File I/O and format conversion (4 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`load(path, verbose=True)`](api/load.md): Load configuration file into dot-accessible `Box` with `./` expansion.
 - [`save(path, data, overwrite=False, ...)`](api/save.md): Save configuration mapping or `Box` to destination format.
@@ -74,7 +74,7 @@ Interactive Google Colab Tutorial:
 </details>
 
 <details>
-<summary><b>Khởi tạo & Hợp nhất Cấu hình (4 hàm)</b> <i>(Bấm để mở rộng)</i></summary>
+<summary><b>Configuration creation and merging (4 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`defaults(default_data=None)`](api/defaults.md): Return a fresh copy of Klygo default configuration template.
 - [`create(path, default_data=None, ...)`](api/create.md): Create and reload configuration file from defaults.
@@ -84,7 +84,7 @@ Interactive Google Colab Tutorial:
 </details>
 
 <details>
-<summary><b>Truy cập & Gán Giá trị Lồng nhau bằng Dot-Path (4 hàm)</b> <i>(Bấm để mở rộng)</i></summary>
+<summary><b>Nested value access and assignment with dot paths (4 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`get(config_data, key_path, default=None)`](api/get.md): Retrieve nested value by dot path (e.g. `"model.batch"`).
 - [`set(config_data, key_path, value)`](api/set.md): Return copied configuration with nested value assigned.
@@ -94,7 +94,7 @@ Interactive Google Colab Tutorial:
 </details>
 
 <details>
-<summary><b>Khám phá & Biến đổi Cấu trúc (6 hàm)</b> <i>(Bấm để mở rộng)</i></summary>
+<summary><b>Structure inspection and transformation (6 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`keys(config_data, flat=False)`](api/keys.md): Return top-level or flattened dot-path keys.
 - [`values(config_data, flat=False)`](api/values.md): Return top-level or flattened values.
@@ -106,7 +106,7 @@ Interactive Google Colab Tutorial:
 </details>
 
 <details>
-<summary><b>Môi trường, Xác thực & Giao diện Class (2 hàm, 1 Class)</b> <i>(Bấm để mở rộng)</i></summary>
+<summary><b>Environment, validation, and class interface (2 functions, 1 class)</b> <i>(Click to expand)</i></summary>
 
 - [`from_env(config_data=None, prefix='KLYGO_', ...)`](api/from_env.md): Overlay environment variables onto configuration.
 - [`validate(config_data, required_keys=None)`](api/validate.md): Validate required paths and schema type contracts.

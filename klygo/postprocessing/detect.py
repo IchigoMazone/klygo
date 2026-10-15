@@ -243,13 +243,8 @@ def top(count: int) -> Operation:
     return Operation("top", lambda result: top_boxes(result, count))
 
 
-# Short compatibility aliases for early pipeline drafts.
-valid = remove_invalid
-limit = top
-
-
 __all__ = [
     "select", "map_boxes", "relabel", "drop", "filter_score", "clip_boxes",
     "remove_invalid_boxes", "box_iou", "suppress", "top_boxes", "threshold",
-    "clip", "remove_invalid", "nms", "top", "valid", "limit",
+    "clip", "remove_invalid", "nms", "top",
 ]

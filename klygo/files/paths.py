@@ -1,14 +1,14 @@
-"""Pure path helpers used across Klygo."""
+"""Path conversion, lexical inspection, and filesystem-aware path helpers."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Iterable, Tuple, Union
+from typing import Iterable, Tuple
 
 from klygo.validators import validate_type
 
-PathInput = Union[str, Path]
+from ._typing import PathInput
 
 _COMPOUND_SUFFIXES = (".tar.gz", ".tar.xz", ".tar.bz2")
 
@@ -18,7 +18,7 @@ def path(value: PathInput, expand_user: bool = True) -> Path:
 
     Parameters
     ----------
-    value : str or pathlib.Path
+    value : str or os.PathLike[str]
         Path-like value to transform.
     expand_user : bool, default=True
         Expand a leading ``~`` to the current user's home.
@@ -26,7 +26,7 @@ def path(value: PathInput, expand_user: bool = True) -> Path:
     Returns
     -------
     pathlib.Path
-        Normalized path object.
+        Native path object; expands home markers but does not resolve ``..``.
 
     See Also
     --------
@@ -39,7 +39,7 @@ def path(value: PathInput, expand_user: bool = True) -> Path:
     >>> files.path("~/dataset").name
     'dataset'
     """
-    validate_type(value, (str, Path), "value")
+    validate_type(value, (str, os.PathLike), "value")
     validate_type(expand_user, bool, "expand_user")
     result = Path(value)
     return result.expanduser() if expand_user else result
@@ -50,7 +50,7 @@ def join(*parts: PathInput) -> Path:
 
     Parameters
     ----------
-    parts : str or pathlib.Path
+    parts : str or os.PathLike[str]
         One or more path components.
 
     Returns
@@ -76,7 +76,7 @@ def join(*parts: PathInput) -> Path:
     if not parts:
         raise ValueError("join() requires at least one path component")
     for index, part in enumerate(parts):
-        validate_type(part, (str, Path), f"parts[{index}]")
+        validate_type(part, (str, os.PathLike), f"parts[{index}]")
     return Path(parts[0]).joinpath(*parts[1:])
 
 
@@ -85,7 +85,7 @@ def normalize(value: PathInput) -> Path:
 
     Parameters
     ----------
-    value : str or pathlib.Path
+    value : str or os.PathLike[str]
         Path-like value to transform.
 
     Returns
@@ -110,7 +110,7 @@ def resolve(value: PathInput, strict: bool = False) -> Path:
 
     Parameters
     ----------
-    value : str or pathlib.Path
+    value : str or os.PathLike[str]
         Path-like value to transform.
     strict : bool, default=False
         Require the resolved path to exist.
@@ -144,9 +144,9 @@ def relative(value: PathInput, start: PathInput = ".") -> Path:
 
     Parameters
     ----------
-    value : str or pathlib.Path
+    value : str or os.PathLike[str]
         Path-like value to transform.
-    start : str or pathlib.Path, default='.'
+    start : str or os.PathLike[str], default='.'
         Starting directory used to compute the relative path.
 
     Returns
@@ -173,9 +173,9 @@ def is_within(value: PathInput, root: PathInput, resolve_paths: bool = True) -> 
 
     Parameters
     ----------
-    value : str or pathlib.Path
+    value : str or os.PathLike[str]
         Path-like value to transform.
-    root : str or pathlib.Path
+    root : str or os.PathLike[str]
         Root directory for the containment check.
     resolve_paths : bool, default=True
         Resolve both paths before testing containment.
@@ -217,7 +217,7 @@ def common_path(values: Iterable[PathInput]) -> Path:
 
     Parameters
     ----------
-    values : Iterable[str or pathlib.Path]
+    values : Iterable[str or os.PathLike[str]]
         Non-empty collection of paths.
 
     Returns
@@ -241,13 +241,13 @@ def common_path(values: Iterable[PathInput]) -> Path:
     >>> from klygo import files
     >>> files.common_path(["data/images", "data/labels"])
     """
-    if isinstance(values, (str, Path)):
+    if isinstance(values, (str, os.PathLike)):
         raise TypeError("values must be an iterable of paths, not a single path")
     items = tuple(values)
     if not items:
         raise ValueError("common_path() requires at least one path")
     for index, item in enumerate(items):
-        validate_type(item, (str, Path), f"values[{index}]")
+        validate_type(item, (str, os.PathLike), f"values[{index}]")
     return Path(os.path.commonpath([str(path(item)) for item in items]))
 
 
@@ -258,11 +258,11 @@ def replace_root(value: PathInput, old_root: PathInput, new_root: PathInput) -> 
 
     Parameters
     ----------
-    value : str or pathlib.Path
+    value : str or os.PathLike[str]
         Path-like value to transform.
-    old_root : str or pathlib.Path
+    old_root : str or os.PathLike[str]
         Root removed from the input path.
-    new_root : str or pathlib.Path
+    new_root : str or os.PathLike[str]
         Replacement root.
 
     Returns
@@ -304,7 +304,7 @@ def with_name(value: PathInput, new_name: str) -> Path:
 
     Parameters
     ----------
-    value : str or pathlib.Path
+    value : str or os.PathLike[str]
         Path-like value to transform.
     new_name : str
         Replacement final path component.
@@ -333,7 +333,7 @@ def with_stem(value: PathInput, new_stem: str) -> Path:
 
     Parameters
     ----------
-    value : str or pathlib.Path
+    value : str or os.PathLike[str]
         Path-like value to transform.
     new_stem : str
         Replacement filename stem.
@@ -362,7 +362,7 @@ def extensions(value: PathInput) -> Tuple[str, ...]:
 
     Parameters
     ----------
-    value : str or pathlib.Path
+    value : str or os.PathLike[str]
         Path-like value to transform.
 
     Returns
@@ -389,7 +389,7 @@ def compound_extension(value: PathInput) -> str:
 
     Parameters
     ----------
-    value : str or pathlib.Path
+    value : str or os.PathLike[str]
         Path-like value to transform.
 
     Returns
@@ -427,7 +427,7 @@ def with_extension(value: PathInput, new_extension: str) -> Path:
 
     Parameters
     ----------
-    value : str or pathlib.Path
+    value : str or os.PathLike[str]
         Path-like value to transform.
     new_extension : str
         Replacement extension, with or without a leading dot.
@@ -467,11 +467,13 @@ def with_extension(value: PathInput, new_extension: str) -> Path:
 def unique_path(value: PathInput, separator: str = "_", start: int = 1) -> Path:
     """Return a currently unused path.
 
-    If the requested path exists, an incrementing numeric suffix is inserted before the effective extension.
+    Existing entries, including broken symbolic links, receive an incrementing
+    numeric suffix before the effective extension. The returned path is only a
+    candidate: it is not created or reserved for the caller.
 
     Parameters
     ----------
-    value : str or pathlib.Path
+    value : str or os.PathLike[str]
         Path-like value to transform.
     separator : str, default='_'
         Text inserted before the numeric suffix.
@@ -502,14 +504,14 @@ def unique_path(value: PathInput, separator: str = "_", start: int = 1) -> Path:
     if start < 0:
         raise ValueError("start must be greater than or equal to 0")
     candidate = path(value)
-    if not candidate.exists():
+    if not (candidate.exists() or candidate.is_symlink()):
         return candidate
     suffix = _effective_extension(candidate)
     base_name = candidate.name[:-len(suffix)] if suffix else candidate.name
     counter = start
     while True:
         numbered = candidate.with_name(f"{base_name}{separator}{counter}{suffix}")
-        if not numbered.exists():
+        if not (numbered.exists() or numbered.is_symlink()):
             return numbered
         counter += 1
 
@@ -519,7 +521,7 @@ def parents(value: PathInput) -> Tuple[Path, ...]:
 
     Parameters
     ----------
-    value : str or pathlib.Path
+    value : str or os.PathLike[str]
         Path-like value to transform.
 
     Returns
@@ -544,7 +546,7 @@ def is_absolute(value: PathInput) -> bool:
 
     Parameters
     ----------
-    value : str or pathlib.Path
+    value : str or os.PathLike[str]
         Path-like value to transform.
 
     Returns
@@ -570,7 +572,7 @@ def name(value: PathInput) -> str:
 
     Parameters
     ----------
-    path : str or pathlib.Path
+    path : str or os.PathLike[str]
         Path to inspect or operate on.
 
     Returns
@@ -597,7 +599,7 @@ def stem(value: PathInput) -> str:
 
     Parameters
     ----------
-    path : str or pathlib.Path
+    path : str or os.PathLike[str]
         Path to inspect or operate on.
 
     Returns
@@ -624,7 +626,7 @@ def extension(value: PathInput) -> str:
 
     Parameters
     ----------
-    path : str or pathlib.Path
+    path : str or os.PathLike[str]
         Path to inspect or operate on.
 
     Returns
@@ -651,7 +653,7 @@ def parent(value: PathInput) -> Path:
 
     Parameters
     ----------
-    path : str or pathlib.Path
+    path : str or os.PathLike[str]
         Path to inspect or operate on.
 
     Returns

@@ -20,8 +20,8 @@ class TestOptionalDependencies(unittest.TestCase):
         documents = (
             repository / "README.md",
             repository / "docs" / "archive" / "backend" / "README.md",
-            repository / "docs" / "archive" / "backend" / "SevenZipBackend.md",
-            repository / "docs" / "archive" / "backend" / "RarBackend.md",
+            repository / "docs" / "archive" / "backend" / "api" / "SevenZipBackend.md",
+            repository / "docs" / "archive" / "backend" / "api" / "RarBackend.md",
         )
         for document in documents:
             text = document.read_text(encoding="utf-8")

@@ -10,12 +10,12 @@ Download a URL or copy a local file while preserving its name.
 
 Supports HTTP, HTTPS, FTP, local files, and Google Colab download behavior. Directories are rejected.
 
-All string paths and `pathlib.Path` values accepted by this API use the current operating system's path rules. Unless explicitly stated, path helpers do not access the filesystem.
+Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
 ## Parameters
 
-- `source`: `str | pathlib.Path` — source URL or path.
-- `output_dir`: `str | pathlib.Path` — destination directory.
+- `source`: `str | os.PathLike[str]` — source URL or path.
+- `output_dir`: `str | os.PathLike[str]` — destination directory.
 - `overwrite`: `bool` — permit replacing an existing target.
 - `verbose`: `bool` — enable the progress indicator.
 

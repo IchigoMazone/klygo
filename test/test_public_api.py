@@ -1,16 +1,16 @@
 from PIL import Image
 
 import klygo
-from klygo import archive, config, datasets, files, media, models, outputs, postprocessing, processing, visual
+from klygo import archive, config, datasets, files, media, models, outputs, postprocessing, preprocessing, visual
 from klygo.outputs.detect import Box, Crops, Detection, Detections
 
 
 def test_top_level_public_modules():
-    assert klygo.__version__ == "2.0.20"
-    assert klygo.visualize is visual
+    assert klygo.__version__ == "2.1.0"
+    assert klygo.visual is visual
     assert klygo.Config is config.Config
 
-    for module in (archive, config, datasets, files, media, models, outputs, postprocessing, processing, visual):
+    for module in (archive, config, datasets, files, media, models, outputs, postprocessing, preprocessing, visual):
         assert module is not None
 
 
@@ -35,12 +35,10 @@ def test_archive_and_media_public_exports():
     assert callable(media.stream)
     assert "probe" in media.__all__
     assert "stream" in media.__all__
-    assert callable(processing.compose)
-    assert callable(processing.materialize)
-    assert callable(processing.letterbox)
-    assert callable(processing.restore_boxes)
+    assert callable(preprocessing.compose)
     assert callable(postprocessing.compose)
     assert callable(postprocessing.relabel)
+    assert callable(datasets.export)
 
 
 def test_detection_output_types():

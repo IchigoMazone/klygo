@@ -10,12 +10,12 @@ Check whether a path is contained by a root directory.
 
 Resolution is enabled by default to handle dot components and symlinks safely.
 
-All string paths and `pathlib.Path` values accepted by this API use the current operating system's path rules. Unless explicitly stated, path helpers do not access the filesystem.
+Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
 ## Parameters
 
-- `value`: `str | pathlib.Path` — path-like value to transform.
-- `root`: `str | pathlib.Path` — containment root.
+- `value`: `str | os.PathLike[str]` — path-like value to transform.
+- `root`: `str | os.PathLike[str]` — containment root.
 - `resolve_paths`: `bool` — resolve paths before containment testing.
 
 ## Returns

@@ -1,8 +1,8 @@
-# klygo
+# Klygo
 
-Thư viện Python hỗ trợ xử lý ZIP, quản lý dataset YOLO, đọc/ghi cấu hình và ảnh, nhận diện vật thể zero-shot, crop và trực quan hóa kết quả.
+Python utilities for archives, filesystem operations, configuration, datasets, and object detection.
 
-## Cài đặt
+## Installation
 
 ```bash
 git clone https://github.com/IchigoMazone/klygo.git
@@ -10,285 +10,107 @@ cd klygo
 uv sync
 ```
 
-Hỗ trợ 7-Zip và RAR là tùy chọn, có thể cài độc lập:
+Optional archive backends can be installed separately:
 
 ```bash
-# pip
-pip install "klygo[py7zr]"
-pip install "klygo[rarfile]"
-
-# uv: thêm Klygo vào dependencies của project
+pip install "klygo[py7zr]"       # Read and create 7z archives
+pip install "klygo[rarfile]"     # Read and extract RAR archives
 uv add "klygo[py7zr]"
 uv add "klygo[rarfile]"
-
-# uv: chỉ cài vào environment hiện tại
 uv pip install "klygo[py7zr]"
 uv pip install "klygo[rarfile]"
 ```
 
-Có thể cài cả hai extra cùng lúc bằng `klygo[py7zr,rarfile]` với bất kỳ lệnh
-`pip install`, `uv add` hoặc `uv pip install` nào ở trên.
-
-`py7zr` hỗ trợ đọc và tạo file `.7z`. `rarfile` hiện dùng để đọc và giải nén
-`.rar`; tùy hệ thống có thể cần thêm công cụ giải nén RAR tương thích.
-
-Các framework model cũng là dependency tùy chọn. Chỉ cài stack thực sự dùng:
+Model frameworks are optional. Install only the backend you need:
 
 ```bash
-# Hugging Face (PyTorch + Transformers)
 pip install "klygo[transformers]"
-uv add "klygo[transformers]"
-uv pip install "klygo[transformers]"
-
-# Ultralytics
 pip install "klygo[ultralytics]"
-uv add "klygo[ultralytics]"
-uv pip install "klygo[ultralytics]"
-
-# KerasHub
 pip install "klygo[keras-hub]"
+pip install "klygo[models]"        # All supported model integrations
+uv add "klygo[transformers]"
+uv add "klygo[ultralytics]"
 uv add "klygo[keras-hub]"
-uv pip install "klygo[keras-hub]"
-
-# Toàn bộ model stack
-pip install "klygo[models]"
 uv add "klygo[models]"
+uv pip install "klygo[transformers]"
+uv pip install "klygo[ultralytics]"
+uv pip install "klygo[keras-hub]"
 uv pip install "klygo[models]"
 ```
 
-Nếu chỉ cần PyTorch runtime, dùng `klygo[torch]`. Keras có thể chạy trên
-TensorFlow, JAX hoặc PyTorch thông qua biến môi trường `KERAS_BACKEND`; khi chọn
-Torch cho KerasHub, cài kết hợp `klygo[keras-hub,torch]`. Không cài extra model
-vẫn dùng bình thường các package như `archive`, `files`, `media` và `processing`.
+For a PyTorch runtime without Transformers, install `klygo[torch]`. KerasHub can use TensorFlow, JAX, or PyTorch through `KERAS_BACKEND`; for the PyTorch backend, install `klygo[keras-hub,torch]`.
 
-## Các package
+## Packages
 
-- `klygo.archive`: nén, giải nén, tìm kiếm, kiểm tra, chỉnh sửa, gộp và chia ZIP.
-- `klygo.config`: quản lý cấu hình đa định dạng với dot-notation.
-- `klygo.datasets`: partition, repartition, unpartition, merge, split và remap dataset YOLO.
-- `klygo.files`: bộ công cụ 39 hàm thao tác file, thư mục và path, hỗ trợ 14 định dạng dữ liệu.
-- `klygo.media`: xử lý và tải/lưu tập tin hình ảnh và truyền thông.
-- `klygo.processing`: pipeline xử lý ảnh lazy đa backend, quality filtering và phục hồi tọa độ.
-- `klygo.postprocessing`: lọc, chỉnh nhãn, sửa box, NMS và pipeline xử lý kết quả nhận diện.
-- `klygo.models`: nạp và chạy mô hình nhận diện trên ảnh, thư mục ảnh và video.
-- `klygo.outputs`: kiểu kết quả chuẩn hóa `Box`, `Detection`, `Detections` và `Crops`.
-- `klygo.visual`: hiển thị ảnh, vẽ bounding box và thống kê dataset.
+- `klygo.archive`: Create, extract, search, verify, convert, split, merge, and modify archives.
+- `klygo.config`: Load and manipulate multi-format configuration with dot-path access.
+- `klygo.datasets`: Inspect, partition, repartition, merge, split, remap, and export datasets.
+- `klygo.files`: File, directory, and path operations, plus structured-data I/O.
+- `klygo.media`: Load, stream, and save image and video data.
+- `klygo.models`: Load and run supported detection models on images, directories, and videos.
+- `klygo.postprocessing`: Filter detections, update labels and boxes, apply NMS, and compose result pipelines.
+- `klygo.outputs`: Standardized `Box`, `Detection`, `Detections`, and `Crops` result types.
+- `klygo.visual`: Display images, draw bounding boxes, and plot dataset statistics.
 
-## Sử dụng nhanh
+See the [documentation index](docs/README.md) for module guides and API references.
 
-### Archive
+## Quick start
+
+### Archives
 
 ```python
-import klygo.archive as ar
+import klygo.archive as archive
 
-ar.compress("dataset", "dataset.zip", overwrite=True)
-ar.extract("dataset.zip", output_dir="extracted", overwrite=True)
-files = ar.search("dataset.zip", "images/*.jpg")
+archive.compress("dataset", "dataset.zip", overwrite=True)
+archive.extract("dataset.zip", output_dir="extracted", overwrite=True)
+matching_files = archive.search("dataset.zip", "images/*.jpg")
 ```
 
-### Dataset YOLO
+### Files and configuration
 
 ```python
-import klygo.datasets as ds
+from klygo import config, files
+from klygo.config import Config
 
-ds.partition(
+settings = config.load("settings.yaml")
+config.set(settings, "model.batch", 16)
+data = files.load("data.json")
+files.save("output.env", {"PORT": "8080"}, overwrite=True)
+manager = Config("settings.yaml")
+```
+
+### Dataset operations
+
+```python
+from klygo import datasets
+
+report = datasets.get_dataset_info("dataset")
+datasets.partition(
     source="raw_dataset.zip",
     target="dataset",
     ratios=(0.8, 0.1, 0.1),
     overwrite=True,
 )
-
-info = ds.get_dataset_info("dataset")
-print(info)
 ```
 
-### File, Cấu hình & Truyền thông
+### Detection and post-processing
 
 ```python
-import klygo.files as files
-import klygo.media as media
-import klygo.config as config
-from klygo.config import Config
-
-cfg = config.load("config.yaml")
-data = files.load("data.json")
-files.save("output.env", {"PORT": "8080"}, overwrite=True)
-pil_images = media.load("dataset/images", backend="pil")
-```
-
-### Lazy processing
-
-```python
-from klygo import media
-from klygo import processing as P
-
-image = media.load("input.jpg")[0]
-
-pipeline = P.compose([
-    P.auto_orient(),
-    P.letterbox((640, 640)),
-    P.clahe(),
-    P.normalize(scale=255),
-])
-
-processed = pipeline(image)  # Chưa decode pixel.
-array = P.materialize(processed, output="array", cache=False)
-```
-
-Áp dụng cùng pipeline cho cả collection mà vẫn giữ lazy loading:
-
-```python
-images = media.load("dataset/images").transform(pipeline)
-selected = images.where(lambda image: image.path.suffix.lower() == ".jpg")
-print(selected.total_frames, selected.loaded_count)
-```
-
-Với video dài, dùng `media.stream()` để không tạo danh sách frame toàn bộ video:
-
-```python
-frames = (
-    media.stream("input.mp4", sample_rate=3)
-    .where_quality(min_sharpness=80)
-    .transform(pipeline)
-)
-
-for frame in frames:
-    result = model.predict(frame)
-```
-
-### Model và kết quả nhận diện
-
-```python
-from klygo import models
+from klygo import models, postprocessing
 
 model = models.load("grounding-dino-tiny")
-results = model.predict("traffic.mp4", prompt="car. person.", stream=True)
-
-# Xử lý tuần tự để không giữ toàn bộ video trong RAM.
-for frame in results:
-    print(frame.labels, frame.scores)
-
-# Dự đoán lại và lưu video đã vẽ bounding box.
-model.predict(
-    "traffic.mp4",
-    prompt="car. person.",
-    stream=True,
-).save("detected.mp4")
+results = model.predict("traffic.jpg", prompt="car. person.")
+clean_results = postprocessing.compose(
+    postprocessing.threshold(0.4),
+    postprocessing.clip(),
+    postprocessing.nms(iou=0.5),
+)(results)
+print(clean_results.labels, clean_results.scores)
 ```
 
-Metadata của model custom chỉ khai báo schema, không khởi tạo giá trị tham số.
-`flags` khai báo các nhóm và quyền ghi đè lúc `predict`; `priority` khai báo
-những tên được gọi không cần tiền tố. Giá trị thực tế chỉ được tạo bởi
-`models.configure()`:
+## Path conventions
 
-```python
-flags = models.flags(model=False, processor=True, post=True)
-
-definition = models.metadata(
-    details=models.details(
-        name="My detector",
-        task="Object-Detection",
-        backend="Custom",
-        library="custom",
-    ),
-    flags=flags,
-    priority=models.priority(
-        flags,
-        model=("device",),
-        processor=("size",),
-        post=("threshold",),
-    ),
-)
-
-metadata = models.configure(
-    "weights.pt",
-    metadata=definition,
-    implementation="my_package.detector.MyDetector",
-    device="cuda",          # priority -> metadata["model"]["device"]
-    size=800,                # priority -> metadata["processor"]["size"]
-    threshold=0.4,           # priority -> metadata["post"]["threshold"]
-    processor_do_resize=True,
-)
-
-# Cả ba cách đều trả về cùng form: flags, priority, details.
-flags_only = models.metadata(flags)
-with_priority = models.metadata(flags, priority)
-complete = models.metadata(flags, priority, definition.details)
-
-# Không dùng models.metadata(): khai báo schema nhóm trực tiếp khi configure.
-minimal = models.configure(
-    "weights.pt",
-    flags={"model": False, "post": True},
-    model_device="cuda",
-    post_threshold=0.4,
-)
-
-# Hoặc để configure tự build toàn bộ metadata schema.
-direct = models.configure(
-    "weights.pt",
-    flags={"model": False, "post": True},
-    priority={
-        "model": ("device",),
-        "post": ("threshold",),
-    },
-    details={
-        "name": "My detector",
-        "task": "Object-Detection",
-        "backend": "Custom",
-        "library": "custom",
-    },
-    implementation="my_package.detector.MyDetector",
-    device="cuda",
-    threshold=0.4,
-)
-```
-
-### Post-processing kết quả
-
-```python
-from klygo import postprocessing as post
-
-result = results.get_frame(120)
-result = (
-    result
-    .relabel("car", ids=[1, 4, 7])
-    .filter_score(0.4)
-    .clip()
-    .remove_invalid(min_area=16)
-    .nms(iou=0.5)
-    .top(100)
-)
-
-cleanup = post.compose(
-    post.threshold(0.4),
-    post.clip(),
-    post.remove_invalid(min_area=16),
-    post.nms(iou=0.5),
-    post.top(100),
-)
-
-clean_results = cleanup(results)  # Vẫn lazy nếu results là stream.
-```
-
-### Visualize
-
-```python
-from PIL import Image
-from klygo import visual
-
-image = Image.open("traffic.jpg")
-annotated = visual.draw_bboxes(
-    image,
-    boxes=[[20, 20, 180, 160]],
-    labels=["car"],
-    scores=[0.95],
-)
-visual.show_image(annotated, title="Detected objects")
-```
-
-## Quy ước đường dẫn
-
-- `source`: file hoặc thư mục đầu vào.
-- `*_path`: đường dẫn file.
-- `*_dir`: đường dẫn thư mục.
-- `target`: file hoặc thư mục đầu ra linh hoạt.
+- `source` names an input file or directory.
+- `*_path` names a file path.
+- `*_dir` names a directory path.
+- `target` may name an output file or directory, depending on the operation.

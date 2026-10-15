@@ -154,9 +154,9 @@ class LazyImage(Image.Image):
         self._cached_size: Optional[Tuple[int, int]] = None
         self._cached_mode: str = "RGB"
         self._instructions: List[Tuple[str, tuple, dict]] = []
-        self._processing_ops: List[Any] = []
-        self._processing_trace: List[Dict[str, Any]] = []
-        self._processing_original_size: Optional[Tuple[int, int]] = None
+        self._preprocessing_ops: List[Any] = []
+        self._preprocessing_trace: List[Dict[str, Any]] = []
+        self._preprocessing_original_size: Optional[Tuple[int, int]] = None
 
         if isinstance(path, LazyImage):
             self._path = path.path
@@ -165,9 +165,9 @@ class LazyImage(Image.Image):
             self.frame_index = path.frame_index if frame_index is None else frame_index
             self.reader = path.reader if reader is None else reader
             self._instructions = list(path._instructions)
-            self._processing_ops = list(path._processing_ops)
-            self._processing_trace = [dict(item) for item in path._processing_trace]
-            self._processing_original_size = path._processing_original_size
+            self._preprocessing_ops = list(path._preprocessing_ops)
+            self._preprocessing_trace = [dict(item) for item in path._preprocessing_trace]
+            self._preprocessing_original_size = path._preprocessing_original_size
             self._cached_mode = path._cached_mode
             self._cached_size = path._cached_size
             if path.crop_box is not None and crop_box is not None:
@@ -375,15 +375,15 @@ class LazyImage(Image.Image):
 
     def to_pil(self, cache: bool = False) -> Image.Image:
         """Chuyển thành PIL Image thật (thực thi Lazy Pipeline)."""
-        from klygo.processing.core import _to_pil
+        from klygo.preprocessing.core import _to_pil
 
-        return _to_pil(self._execute_processing(cache=cache))
+        return _to_pil(self._execute_preprocessing(cache=cache))
 
     def to_array(self, cache: bool = False) -> np.ndarray:
         """Chuyển thành NumPy array thật."""
-        from klygo.processing.core import _to_array
+        from klygo.preprocessing.core import _to_array
 
-        return _to_array(self._execute_processing(cache=cache))
+        return _to_array(self._execute_preprocessing(cache=cache))
 
     def to_tensor(self, cache: bool = False) -> Any:
         """Materialize LazyImage thành PyTorch Tensor."""
@@ -392,10 +392,10 @@ class LazyImage(Image.Image):
         except ImportError as exc:
             raise ImportError("PyTorch is required for LazyImage.to_tensor()") from exc
 
-        result = self._execute_processing(cache=cache)
+        result = self._execute_preprocessing(cache=cache)
         if isinstance(result, torch.Tensor):
             return result
-        from klygo.processing.core import _to_array
+        from klygo.preprocessing.core import _to_array
 
         array = np.array(_to_array(result), copy=True, order="C")
         tensor = torch.from_numpy(array)
@@ -403,7 +403,7 @@ class LazyImage(Image.Image):
             tensor = tensor.permute(2, 0, 1)
         return tensor
 
-    def _execute_processing(self, cache: bool = False) -> Any:
+    def _execute_preprocessing(self, cache: bool = False) -> Any:
         """Decode nguồn và thực thi toàn bộ instruction theo đúng thứ tự."""
         loaded = self.load(cache=cache)
         if isinstance(loaded, Image.Image):
@@ -414,33 +414,33 @@ class LazyImage(Image.Image):
         for op, args, kwargs in self._instructions:
             result = getattr(result, op)(*args, **kwargs)
 
-        if self._processing_ops:
-            from klygo.processing.core import execute_pipeline
+        if self._preprocessing_ops:
+            from klygo.preprocessing.core import execute_pipeline
 
             trace: List[Dict[str, Any]] = []
-            result, trace = execute_pipeline(result, self._processing_ops, trace)
-            self._processing_trace = trace
+            result, trace = execute_pipeline(result, self._preprocessing_ops, trace)
+            self._preprocessing_trace = trace
         else:
-            self._processing_trace = []
+            self._preprocessing_trace = []
         return result
 
     def process(self, operation_or_pipeline: Any) -> "LazyImage":
-        """Gắn một processing operation/pipeline mà không decode pixel."""
-        from klygo.processing import apply
+        """Gắn một preprocessing operation/pipeline mà không decode pixel."""
+        from klygo.preprocessing import apply
 
         return apply(self, operation_or_pipeline)
 
     @property
     def trace(self) -> List[Dict[str, Any]]:
-        return [dict(item) for item in self._processing_trace]
+        return [dict(item) for item in self._preprocessing_trace]
 
     def lazy_crop(self, box: Tuple[int, int, int, int]) -> "LazyImage":
         """
         Zero-RAM Lazy Cropping: Tạo ảnh con từ vùng cắt mà KHÔNG nạp pixel vào RAM.
         Chỉ lưu tọa độ bounding box và đường dẫn file ảnh gốc/frame index.
         """
-        if self._processing_ops:
-            from klygo.processing import crop
+        if self._preprocessing_ops:
+            from klygo.preprocessing import crop
 
             return crop(box)(self)
         return LazyImage(
@@ -469,8 +469,8 @@ class LazyImage(Image.Image):
             box = tuple(int(x) for x in kwargs["box"])
 
         if box is not None and len(box) == 4:
-            if self._processing_ops:
-                from klygo.processing import crop
+            if self._preprocessing_ops:
+                from klygo.preprocessing import crop
 
                 return crop(box)(self)
             return self.lazy_crop(box)
@@ -584,11 +584,11 @@ class MediaFrames(list):
         return self._new(func(frame) for frame in self)
 
     def transform(self, operation_or_pipeline: Any) -> "MediaFrames":
-        """Gắn một processing operation/pipeline vào mọi ảnh theo cơ chế lazy."""
-        from klygo.processing import Compose, Operation
+        """Gắn một preprocessing operation/pipeline vào mọi ảnh theo cơ chế lazy."""
+        from klygo.preprocessing import Compose, Operation
 
         if not isinstance(operation_or_pipeline, (Operation, Compose)):
-            raise TypeError("operation_or_pipeline must be a processing Operation or Compose")
+            raise TypeError("operation_or_pipeline must be a prepreprocessing Operation or Compose")
         return self.map(operation_or_pipeline)
 
     def filter(self, func: Callable[[Any], bool]) -> "MediaFrames":
@@ -702,7 +702,7 @@ class MediaStream:
         self.height: Optional[int] = None
         self.fps = 30.0
         self._active_readers: List[VideoReader] = []
-        self._processing_ops: List[Any] = []
+        self._preprocessing_ops: List[Any] = []
         self._predicates: List[Callable[[Any], bool]] = []
         self._motion_threshold: Optional[float] = None
         self._deduplicate_threshold: Optional[float] = None
@@ -757,24 +757,24 @@ class MediaStream:
             backend=self.backend,
             verbose=self.verbose,
         )
-        cloned._processing_ops = list(self._processing_ops)
+        cloned._preprocessing_ops = list(self._preprocessing_ops)
         cloned._predicates = list(self._predicates)
         cloned._motion_threshold = self._motion_threshold
         cloned._deduplicate_threshold = self._deduplicate_threshold
         return cloned
 
     def transform(self, operation_or_pipeline: Any) -> "MediaStream":
-        """Gắn processing operation/pipeline vào từng frame mà không decode trước."""
-        from klygo.processing import Compose, Operation
+        """Gắn preprocessing operation/pipeline vào từng frame mà không decode trước."""
+        from klygo.preprocessing import Compose, Operation
 
         if isinstance(operation_or_pipeline, Operation):
             operations = [operation_or_pipeline]
         elif isinstance(operation_or_pipeline, Compose):
             operations = list(operation_or_pipeline.operations)
         else:
-            raise TypeError("transform expects processing.Operation or processing.Compose")
+            raise TypeError("transform expects preprocessing.Operation or preprocessing.Compose")
         cloned = self._clone()
-        cloned._processing_ops.extend(operations)
+        cloned._preprocessing_ops.extend(operations)
         return cloned
 
     def where(self, predicate: Callable[[Any], bool]) -> "MediaStream":
@@ -797,7 +797,7 @@ class MediaStream:
         min_entropy: Optional[float] = None,
         preview_size: Tuple[int, int] = (160, 160),
     ) -> "MediaStream":
-        from klygo import processing as p
+        from klygo import preprocessing as p
 
         conditions = []
         if min_brightness is not None:
@@ -831,7 +831,7 @@ class MediaStream:
 
         def prepare(frame: LazyImage) -> Optional[LazyImage]:
             nonlocal previous_frame
-            from klygo import processing as p
+            from klygo import preprocessing as p
 
             if any(not predicate(frame) for predicate in self._predicates):
                 return None
@@ -842,8 +842,8 @@ class MediaStream:
                 if p.similarity_score(previous_frame)(frame) >= self._deduplicate_threshold:
                     return None
             previous_frame = frame
-            if self._processing_ops:
-                return p.compose(self._processing_ops)(frame)
+            if self._preprocessing_ops:
+                return p.compose(self._preprocessing_ops)(frame)
             return frame
 
         if self.source_type == "video":
@@ -1715,10 +1715,10 @@ for attr in dir(Image.Image):
             if name in LAZY_OPS:
                 # Trả về một LazyImage mới, ghi nhận chỉ thị để không tốn RAM
                 new_lazy = LazyImage(self)
-                if self._processing_ops:
-                    from klygo.processing.core import Operation
+                if self._preprocessing_ops:
+                    from klygo.preprocessing.core import Operation
 
-                    new_lazy._processing_ops = list(self._processing_ops) + [
+                    new_lazy._preprocessing_ops = list(self._preprocessing_ops) + [
                         Operation("pil_method", {"method": name, "args": args, "kwargs": kwargs}, "pil")
                     ]
                 else:

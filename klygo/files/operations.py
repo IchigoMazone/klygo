@@ -9,6 +9,7 @@ from .filesystem import (
     copy,
     exists,
     find,
+    iter_find,
     is_dir,
     is_file,
     list_entries,
@@ -18,7 +19,7 @@ from .filesystem import (
     rename,
     walk,
 )
-from .io import convert, load, save
+from .io import convert, iter_load, load, save
 from .metadata import compare, hash, info, size
 from .paths import (
     common_path,
@@ -44,8 +45,8 @@ from .paths import (
 )
 
 __all__ = [
-    "load", "save", "convert", "download", "exists", "is_file", "is_dir",
-    "list_entries", "find", "walk", "mkdir", "copy", "move", "rename",
+    "load", "iter_load", "save", "convert", "download", "exists", "is_file", "is_dir",
+    "list_entries", "find", "iter_find", "walk", "mkdir", "copy", "move", "rename",
     "remove", "info", "size", "hash", "compare", "name", "stem",
     "extension", "parent", "path", "join", "normalize", "resolve",
     "relative", "is_within", "common_path", "replace_root", "with_name",

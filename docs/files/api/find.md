@@ -8,15 +8,17 @@ Find files matching a glob pattern.
 
 ## Contract
 
+For unsorted, incremental discovery with directory pruning, use [`iter_find()`](iter_find.md). Its pattern matches a filename, while this API accepts pathlib glob patterns.
+
 Only files are returned; matching directories are excluded. Results are sorted case-insensitively.
 
-All string paths and `pathlib.Path` values accepted by this API use the current operating system's path rules. Unless explicitly stated, path helpers do not access the filesystem.
+Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
 ## Parameters
 
-- `path`: `str | pathlib.Path` — filesystem path to inspect or operate on.
+- `path`: `str | os.PathLike[str]` — filesystem path to inspect or operate on.
 - `pattern`: `str` — glob expression.
-- `recursive`: `bool` — include descendants or recursively remove a directory.
+- `recursive`: `bool` — include descendants.
 
 ## Returns
 

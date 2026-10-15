@@ -10,7 +10,7 @@ Interactive Google Colab Tutorial:
 ## 1. Supported Formats & Capabilities
 
 <details open>
-<summary><b>Bảng so sánh 8 định dạng archive và khả năng hỗ trợ</b> <i>(Bấm để đóng/mở)</i></summary>
+<summary><b>Comparison of supported archive formats and capabilities</b> <i>(Click to expand or collapse)</i></summary>
 
 | Format | Extensions | Read / Extract | Create / Compress | Mutate (`add`/`remove`) | Fast Merge | Split | Dependencies |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
@@ -30,7 +30,7 @@ Interactive Google Colab Tutorial:
 ## 2. Task-Oriented Cheatsheet (Common AI / User Questions)
 
 <details open>
-<summary><b>Bảng tra cứu nhanh theo tác vụ thường gặp (22 tác vụ)</b> <i>(Bấm để đóng/mở)</i></summary>
+<summary><b>Task-oriented quick reference (22 tasks)</b> <i>(Click to expand or collapse)</i></summary>
 
 | I want to... | Recommended API | Key Parameters / Example |
 | :--- | :--- | :--- |
@@ -64,7 +64,7 @@ Interactive Google Colab Tutorial:
 ## 3. Public APIs Reference (21 Functions, 1 Class)
 
 <details>
-<summary><b>Tạo & Giải nén Archive (4 hàm)</b> <i>(Bấm để mở rộng)</i></summary>
+<summary><b>Archive creation and extraction (4 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`compress(source, output_path, ...)`](api/compress.md): Create an archive from a file or directory.
 - [`extract(archive_path, output_dir, ...)`](api/extract.md): Extract all or filtered members safely.
@@ -74,7 +74,7 @@ Interactive Google Colab Tutorial:
 </details>
 
 <details>
-<summary><b>Khám phá, Metadata & Kiểm tra Hợp lệ (9 hàm)</b> <i>(Bấm để mở rộng)</i></summary>
+<summary><b>Archive discovery, metadata, and validation (9 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`list_files(archive_path)`](api/list_files.md): Return all stored member names as a list.
 - [`iter_files(archive_path)`](api/iter_files.md): Lazily yield stored member names without loading the whole list.
@@ -89,7 +89,7 @@ Interactive Google Colab Tutorial:
 </details>
 
 <details>
-<summary><b>Biến đổi & Thay đổi Archive In-Place (7 hàm)</b> <i>(Bấm để mở rộng)</i></summary>
+<summary><b>Archive transformation and in-place modification (7 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`add(archive_path, files, ...)`](api/add.md): Add files or directories to an existing archive.
 - [`remove(archive_path, files)`](api/remove.md): Remove named members from an existing archive.
@@ -102,14 +102,14 @@ Interactive Google Colab Tutorial:
 </details>
 
 <details>
-<summary><b>Giao diện Hướng đối tượng & Backend Subsystem (1 Class, 1 Subpackage)</b> <i>(Bấm để mở rộng)</i></summary>
+<summary><b>Object-oriented interface and backend subsystem (1 class, 1 subpackage)</b> <i>(Click to expand)</i></summary>
 
 - [`ArchiveFile(archive_path)`](api/ArchiveFile.md): Stateful wrapper binding an archive to its backend.
 - [`open(archive_path)`](api/open.md): Convenience context manager returning an `ArchiveFile` instance.
 - **Backend Subsystem (`klygo.archive.backend`)**:
-  - [`ArchiveBackend`](backend/ArchiveBackend.md), [`BackendCapabilities`](backend/BackendCapabilities.md)
-  - [`ZipBackend`](backend/ZipBackend.md), [`TarBackend`](backend/TarBackend.md), [`GZipBackend`](backend/GZipBackend.md)
-  - [`SevenZipBackend`](backend/SevenZipBackend.md), [`RarBackend`](backend/RarBackend.md)
-  - [`UnsupportedOperationError`](backend/UnsupportedOperationError.md), [`UnsupportedOptionError`](backend/UnsupportedOptionError.md)
+  - [`ArchiveBackend`](backend/api/ArchiveBackend.md), [`BackendCapabilities`](backend/api/BackendCapabilities.md)
+  - [`ZipBackend`](backend/api/ZipBackend.md), [`TarBackend`](backend/api/TarBackend.md), [`GZipBackend`](backend/api/GZipBackend.md)
+  - [`SevenZipBackend`](backend/api/SevenZipBackend.md), [`RarBackend`](backend/api/RarBackend.md)
+  - [`UnsupportedOperationError`](backend/api/UnsupportedOperationError.md), [`UnsupportedOptionError`](backend/api/UnsupportedOptionError.md)
 
 </details>
