@@ -11,6 +11,7 @@ from .filesystem import (
     find,
     iter_find,
     is_dir,
+    is_symlink,
     is_file,
     list_entries,
     mkdir,
@@ -29,6 +30,7 @@ from .paths import (
     is_absolute,
     is_within,
     join,
+    as_posix,
     name,
     normalize,
     parent,
@@ -45,9 +47,9 @@ from .paths import (
 )
 
 __all__ = [
-    "load", "iter_load", "save", "convert", "download", "exists", "is_file", "is_dir",
+    "load", "iter_load", "save", "convert", "download", "exists", "is_file", "is_dir", "is_symlink",
     "list_entries", "find", "iter_find", "walk", "mkdir", "copy", "move", "rename",
-    "remove", "info", "size", "hash", "compare", "name", "stem",
+    "remove", "info", "size", "hash", "compare", "as_posix", "name", "stem",
     "extension", "parent", "path", "join", "normalize", "resolve",
     "relative", "is_within", "common_path", "replace_root", "with_name",
     "with_stem", "with_extension", "unique_path", "extensions",

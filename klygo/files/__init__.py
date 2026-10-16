@@ -1,68 +1,64 @@
-"""Filesystem Management & Multi-Format Data I/O Utilities (`klygo.files`).
+"""Work with paths, filesystems, metadata, and structured data.
 
-Interactive Google Colab Tutorial:
+Colab tutorial:
     https://colab.research.google.com/drive/1-Oo8ERqSuxns1OfZAdHY5jVMTrLVpJG-?usp=sharing
 
-Supported Structured Data I/O Formats:
-    - Structured & Config: YAML (.yaml, .yml), JSON (.json), JSON Lines (.jsonl), TOML (.toml)
-    - Tabular & Text: CSV (.csv), TXT (.txt), LOG (.log), INI (.ini), CFG (.cfg), PROPERTIES (.properties)
-    - Environment & Markup: ENV (.env), XML (.xml), Pickle (.pkl, .pickle)
+Public API (43 functions):
+    Structured data and downloads:
+         1. load(...)                 Read a file using its extension.
+         2. iter_load(...)            Stream JSONL or CSV records.
+         3. save(...)                 Write structured data using its extension.
+         4. convert(...)              Convert between structured-data formats.
+         5. download(...)             Download a URL or copy a local file.
 
-Supported File Download Formats (`files.download`):
-    - All binary and arbitrary formats (AI Models: .pt, .onnx, .safetensors; Archives: .zip, .tar.gz, .7z;
-      Media: .mp4, .png, .jpg; Datasets & Binaries: .parquet, .db, .whl, etc.)
+    Filesystem inspection and traversal:
+         6. exists(...)               Check whether a path exists.
+         7. is_file(...)              Check for a regular file.
+         8. is_dir(...)               Check for a directory.
+         9. is_symlink(...)           Check for a symbolic link, including a broken one.
+        10. list_entries(...)         List files and directories by pattern.
+        11. find(...)                 Find matching regular files.
+        12. iter_find(...)            Stream matching files with directory exclusions.
+        13. walk(...)                 Walk a directory tree.
 
-Public APIs (41 Functions):
-    Structured Data I/O:
-        1.  load(path, ...)                  - Automatically load structured data based on file extension.
-        2.  save(path, data, ...)            - Save structured data using the destination file extension.
-        3.  convert(source, target, ...)     - Direct format conversion between structured data files.
-        4.  download(source, output_dir, ...) - Download file from URL/Colab or copy local file with progress bar.
+    Filesystem changes:
+        14. mkdir(...)                Create a directory and optional parents.
+        15. copy(...)                 Copy a file or directory.
+        16. move(...)                 Move a file or directory.
+        17. rename(...)               Rename or relocate a path.
+        18. remove(...)               Remove a file or directory.
 
-    Filesystem Operations:
-        5.  exists(path)                     - Check whether a file or directory exists.
-        6.  is_file(path)                    - Check if path points to a regular file.
-        7.  is_dir(path)                     - Check if path points to a directory.
-        8.  list_entries(path, ...)          - List matching files and directories in a directory.
-        9.  find(path, ...)                  - Find files matching a wildcard pattern recursively.
-        10. walk(path)                       - Walk directory tree as a generator (os.walk wrapper).
-        11. mkdir(path, ...)                 - Create a new directory and missing parent directories.
-        12. copy(source, target, ...)        - Copy a file or directory recursively.
-        13. move(source, target, ...)        - Move a file or directory to a new target.
-        14. rename(path, new_name, ...)      - Rename or relocate a file or directory.
-        15. remove(path, ...)                - Remove a file or directory recursively.
+    Metadata:
+        19. info(...)                 Return detailed metadata.
+        20. size(...)                 Calculate file or directory size.
+        21. hash(...)                 Calculate a file checksum.
+        22. compare(...)              Compare two files by hash or content.
 
-    File Metadata & Inspection:
-        16. info(path, ...)                  - Detailed metadata dictionary (size, hashes, timestamps, etc.).
-        17. size(path, ...)                  - Total size of a file or directory (bytes or human-readable format).
-        18. hash(path, ...)                  - Compute file checksum digest (MD5, SHA256, etc.).
-        19. compare(path1, path2, ...)       - Compare contents of two files by checksum or binary content.
+    Path conversion and inspection:
+        23. path(...)                 Convert an input to pathlib.Path.
+        24. join(...)                 Join path components.
+        25. normalize(...)            Normalize a path lexically.
+        26. resolve(...)              Resolve to an absolute path.
+        27. relative(...)             Compute a relative path.
+        28. as_posix(...)             Represent a path with forward slashes.
+        29. name(...)                 Return the final path component.
+        30. stem(...)                 Return the filename without its last suffix.
+        31. extension(...)            Return the last filename suffix.
+        32. extensions(...)           Return all filename suffixes.
+        33. compound_extension(...)   Return all suffixes joined.
+        34. parent(...)               Return the immediate parent.
+        35. parents(...)              Return all ancestor paths.
+        36. is_absolute(...)          Check whether a path is absolute.
+        37. is_within(...)            Check resolved path containment.
+        38. common_path(...)          Find the longest common parent.
+        39. replace_root(...)         Map a path to another root.
+        40. with_name(...)            Replace the final path component.
+        41. with_stem(...)            Replace the filename stem.
+        42. with_extension(...)       Replace the filename extension.
+        43. unique_path(...)          Find an unused numbered path.
 
-    Path Manipulation & Inspection:
-        20. name(path)                       - Final path component including file extension.
-        21. stem(path)                       - Final path component without its last extension.
-        22. extension(path)                  - Final filename extension (including leading dot).
-        23. parent(path)                     - Immediate parent directory of a path.
-        24. path(value, ...)                 - Convert input to a native pathlib.Path, expanding ~ by default.
-        25. join(*parts)                     - Join multiple path components together.
-        26. normalize(path)                  - Lexically normalize path separators and dot components.
-        27. resolve(path, ...)               - Resolve path to an absolute normalized path.
-        28. relative(path, start)            - Compute relative path from a starting directory.
-        29. is_within(path, root)            - Check whether a path is contained within a root directory.
-        30. common_path(paths)               - Find the longest common parent directory of multiple paths.
-        31. replace_root(path, old_root, new_root) - Map a path from one root directory to another.
-        32. with_name(path, name)            - Return path with replaced final component.
-        33. with_stem(path, stem)            - Return path with replaced stem.
-        34. with_extension(path, extension)  - Return path with replaced extension (supports .tar.gz).
-        35. unique_path(path, ...)           - Generate an unused candidate path with numeric suffix.
-        36. extensions(path)                 - Return all filename extensions as a tuple.
-        37. compound_extension(path)         - Return all filename extensions joined together.
-        38. parents(path)                    - Return tuple of ancestor paths from nearest to farthest.
-        39. is_absolute(path)                - Check whether a path is absolute.
-
-    Streaming Data and Discovery:
-        40. iter_load(path)                  - Yield JSONL values or CSV rows one at a time.
-        41. iter_find(path, ...)             - Yield matching files with directory exclusions.
+Inputs accept strings and text-returning os.PathLike[str] objects.
+Structured I/O covers JSON, JSONL, YAML, TOML, CSV, text, and more.
 """
 
 from .download import download
@@ -70,6 +66,7 @@ from .filesystem import (
     exists,
     is_file,
     is_dir,
+    is_symlink,
     list_entries,
     find,
     iter_find,
@@ -88,6 +85,7 @@ from .metadata import (
     compare,
 )
 from .paths import (
+    as_posix,
     name,
     stem,
     extension,
@@ -119,6 +117,7 @@ __all__ = [
     "exists",
     "is_file",
     "is_dir",
+    "is_symlink",
     "list_entries",
     "find",
     "iter_find",
@@ -132,6 +131,7 @@ __all__ = [
     "size",
     "hash",
     "compare",
+    "as_posix",
     "name",
     "stem",
     "extension",

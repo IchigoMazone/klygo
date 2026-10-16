@@ -63,7 +63,6 @@ class TarBackend(ArchiveBackend):
 
     Examples
     --------
-    >>> from pathlib import Path
     >>> from klygo.archive.backend import TarBackend
     >>> backend = TarBackend("tar.gz")
     >>> backend.format_name
@@ -127,9 +126,9 @@ class TarBackend(ArchiveBackend):
         file_utils.mkdir(file_utils.parent(output_path))
 
         def _file_generator():
-            if source.is_dir():
-                for p in source.rglob("*"):
-                    if p.is_file() or (not follow_symlinks and p.is_symlink()):
+            if file_utils.is_dir(source):
+                for p in file_utils.list_entries(source, recursive=True):
+                    if file_utils.is_file(p) or (not follow_symlinks and file_utils.is_symlink(p)):
                         yield p
             else:
                 yield source
@@ -137,7 +136,7 @@ class TarBackend(ArchiveBackend):
         files_to_compress = list(_file_generator()) if verbose else None
         total_count = len(files_to_compress) if files_to_compress else 1
 
-        with ProgressBar(total=total_count, desc=f"{output_path.name}: compressing", verbose=verbose) as pbar:
+        with ProgressBar(total=total_count, desc=f"{file_utils.name(output_path)}: compressing", verbose=verbose) as pbar:
             open_options: Dict[str, Any] = {}
             if self.format_name in {"tar.gz", "tgz", "tar.bz2", "tbz2"}:
                 open_options["compresslevel"] = compresslevel
@@ -146,11 +145,11 @@ class TarBackend(ArchiveBackend):
             with tarfile.open(output_path, mode=mode, **open_options) as tar:
                 gen = files_to_compress if files_to_compress is not None else _file_generator()
                 for file_path in gen:
-                    if source.is_dir():
-                        base = source.parent if include_root else source
-                        arcname = file_path.relative_to(base)
+                    if file_utils.is_dir(source):
+                        base = file_utils.parent(source) if include_root else source
+                        arcname = file_utils.relative(file_path, base)
                     else:
-                        arcname = file_path.name
+                        arcname = file_utils.name(file_path)
                     tar.add(file_path, arcname=str(arcname), recursive=False)
                     pbar.update(1)
 
@@ -170,7 +169,7 @@ class TarBackend(ArchiveBackend):
         support, so a changed password is rejected through capability checks.
         """
         self.validate_option("extract", "password", password, None)
-        output_dir = output_dir.resolve()
+        output_dir = file_utils.resolve(output_dir)
         file_utils.mkdir(output_dir)
 
         includes = [include] if isinstance(include, str) else (include or [])
@@ -190,15 +189,15 @@ class TarBackend(ArchiveBackend):
                 filtered_members.append(m)
 
             if not overwrite:
-                existing = [m for m in filtered_members if file_utils.exists(output_dir / m.name)]
+                existing = [m for m in filtered_members if file_utils.exists(file_utils.join(output_dir, m.name))]
                 if existing:
                     names = ", ".join(m.name for m in existing[:5])
                     suffix = f"… (+{len(existing) - 5} more)" if len(existing) > 5 else ""
                     raise FileExistsError(f"Files already exist in output directory: {names}{suffix}. Use overwrite=True.")
 
-            with ProgressBar(total=len(filtered_members), desc=f"{archive_path.name}: extracting", verbose=verbose) as pbar:
+            with ProgressBar(total=len(filtered_members), desc=f"{file_utils.name(archive_path)}: extracting", verbose=verbose) as pbar:
                 for member in filtered_members:
-                    target_path = output_dir / member.name
+                    target_path = file_utils.join(output_dir, member.name)
                     if not _is_safe_path(output_dir, target_path):
                         raise ValueError(f"Unsafe path detected in archive (Zip Slip): '{member.name}'")
                     tar.extract(member, path=output_dir, filter="data")
@@ -223,7 +222,7 @@ class TarBackend(ArchiveBackend):
             except KeyError:
                 raise KeyError(f"'{filename}' not found in archive. Use list_files() to see available file_utils.")
 
-            target = output_dir / file_utils.name(filename)
+            target = file_utils.join(output_dir, file_utils.name(filename))
             if file_utils.exists(target) and not overwrite:
                 raise FileExistsError(f"File already exists: {target}. Use overwrite=True.")
 
@@ -272,7 +271,7 @@ class TarBackend(ArchiveBackend):
             dirs = [m for m in members if m.isdir()]
 
             total_uncompressed = sum(m.size for m in members)
-            archive_size = archive_path.stat().st_size
+            archive_size = file_utils.size(archive_path)
 
             largest = max(files, key=lambda x: x.size).name if files else None
             smallest = min(files, key=lambda x: x.size).name if files else None
@@ -330,7 +329,7 @@ class TarBackend(ArchiveBackend):
         mode_read = _get_tar_mode(self.format_name, write=False)
         mode_write = _get_tar_mode(self.format_name, write=True)
         tmp_path = file_utils.unique_path(
-            archive_path.with_name(f"{archive_path.name}.tmp")
+            file_utils.with_name(archive_path, f"{file_utils.name(archive_path)}.tmp")
         )
 
         try:
@@ -341,7 +340,7 @@ class TarBackend(ArchiveBackend):
                 reserved = set(existing)
 
                 for item in files:
-                    root_name = item.name
+                    root_name = file_utils.name(item)
                     collision = root_name in reserved or any(
                         name.startswith(f"{root_name}/") for name in reserved
                     )
@@ -380,13 +379,20 @@ class TarBackend(ArchiveBackend):
 
                     with ProgressBar(
                         total=len(additions),
-                        desc=f"{archive_path.name}: adding",
+                        desc=f"{file_utils.name(archive_path)}: adding",
                         verbose=verbose,
                     ) as pbar:
                         for item, arcname in additions:
                             destination.add(item, arcname=arcname)
                             pbar.update(1)
-            tmp_path.replace(archive_path)
+            file_utils.rename(
+                tmp_path,
+                file_utils.join(
+                    file_utils.resolve(file_utils.parent(archive_path)),
+                    file_utils.name(archive_path),
+                ),
+                overwrite=True,
+            )
         finally:
             file_utils.remove(tmp_path, missing_ok=True)
 
@@ -396,14 +402,21 @@ class TarBackend(ArchiveBackend):
         mode_read = _get_tar_mode(self.format_name, write=False)
         mode_write = _get_tar_mode(self.format_name, write=True)
 
-        tmp_path = archive_path.with_suffix(".tmp.tar")
+        tmp_path = file_utils.with_name(archive_path, f"{file_utils.stem(archive_path)}.tmp.tar")
         with tarfile.open(archive_path, mode=mode_read) as src_tar, tarfile.open(tmp_path, mode=mode_write) as dst_tar:
             for member in src_tar.getmembers():
                 if member.name not in to_remove:
                     fobj = src_tar.extractfile(member) if member.isfile() else None
                     dst_tar.addfile(member, fobj)
 
-        tmp_path.replace(archive_path)
+        file_utils.rename(
+            tmp_path,
+            file_utils.join(
+                file_utils.resolve(file_utils.parent(archive_path)),
+                file_utils.name(archive_path),
+            ),
+            overwrite=True,
+        )
 
     def merge(
         self,
@@ -419,9 +432,9 @@ class TarBackend(ArchiveBackend):
         written_names = set()
         mode_write = _get_tar_mode(self.format_name, write=True)
         with tarfile.open(output_path, mode=mode_write) as dst_tar:
-            with ProgressBar(total=len(archive_paths), desc=f"{output_path.name}: merging", verbose=verbose) as pbar:
+            with ProgressBar(total=len(archive_paths), desc=f"{file_utils.name(output_path)}: merging", verbose=verbose) as pbar:
                 for src in archive_paths:
-                    mode_read = _get_tar_mode(src.suffix.lstrip("."), write=False)
+                    mode_read = _get_tar_mode(file_utils.extension(src).lstrip("."), write=False)
                     with tarfile.open(src, mode=mode_read) as src_tar:
                         for member in src_tar.getmembers():
                             if member.name in written_names:
@@ -444,8 +457,8 @@ class TarBackend(ArchiveBackend):
         file_utils.mkdir(output_dir)
         max_bytes = int(size * 1024 * 1024)
 
-        stem = archive_path.stem
-        suffix = archive_path.suffix
+        stem = file_utils.stem(archive_path)
+        suffix = file_utils.extension(archive_path)
         parts: List[str] = []
         part_num = 1
 
@@ -454,13 +467,13 @@ class TarBackend(ArchiveBackend):
 
         with tarfile.open(archive_path, mode=mode_read) as src_tar:
             members = src_tar.getmembers()
-            with ProgressBar(total=len(members), desc=f"{archive_path.name}: splitting", verbose=verbose) as pbar:
+            with ProgressBar(total=len(members), desc=f"{file_utils.name(archive_path)}: splitting", verbose=verbose) as pbar:
                 current_members: List = []
                 current_size = 0
 
                 def _flush() -> None:
                     nonlocal part_num
-                    part_path = output_dir / f"{stem}_part_{part_num:03d}{suffix}"
+                    part_path = file_utils.join(output_dir, f"{stem}_part_{part_num:03d}{suffix}")
                     if file_utils.exists(part_path) and not overwrite:
                         raise FileExistsError(f"Output already exists: {part_path}. Use overwrite=True.")
                     with tarfile.open(part_path, mode=mode_write) as ptar:

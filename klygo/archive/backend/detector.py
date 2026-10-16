@@ -75,7 +75,7 @@ def detect_format(path: Union[str, Path]) -> str:
     'tar.gz'
     """
     filepath = file_utils.path(path)
-    filename = filepath.name.lower()
+    filename = file_utils.name(filepath).lower()
 
     # Compound extensions check first
     for ext in (".tar.gz", ".tgz", ".tar.xz", ".txz", ".tar.bz2", ".tbz2"):
@@ -103,7 +103,7 @@ def detect_format(path: Union[str, Path]) -> str:
             pass
 
     # Suffix fallback
-    suffix = filepath.suffix.lower()
+    suffix = file_utils.extension(filepath).lower()
     if suffix in SUPPORTED_EXTENSIONS:
         return SUPPORTED_EXTENSIONS[suffix]
 
@@ -127,6 +127,11 @@ def is_archive(path: Union[str, Path]) -> bool:
     -------
     bool
         Whether detection succeeds with a supported format.
+
+    Raises
+    ------
+    None
+        Detection failures are returned as ``False``.
 
     See Also
     --------

@@ -8,7 +8,7 @@ from pathlib import Path
 from klygo import config, files
 
 from ._structure import copy_entry, flattened_name, scan_dataset_files
-from ._workspace import dataset_workspace, open_dataset, write_output
+from ._workspace import dataset_workspace, open_dataset, set_output_metadata_path, write_output
 
 
 def normalized_ratios(ratios: tuple[float, ...]) -> tuple[float, float, float]:
@@ -65,11 +65,11 @@ def execute_partition(
         metadata = config.load(yaml_path, verbose=False).to_dict() if files.is_file(yaml_path) else {}
         metadata.update(
             {
-                "path": files.resolve(destination).as_posix(),
                 "train": "images/train",
                 "val": "images/val",
             }
         )
+        set_output_metadata_path(metadata, destination)
         if groups["test"]:
             metadata["test"] = "images/test"
         else:

@@ -1,5 +1,6 @@
 """In-place archive mutation and archive transformation operations."""
 
+import os
 import tempfile
 from pathlib import Path
 from typing import List, Literal, Union
@@ -52,7 +53,7 @@ def add(
     if on_conflict not in {"rename", "overwrite", "skip"}:
         raise ValueError("on_conflict must be 'rename', 'overwrite', or 'skip'.")
 
-    if isinstance(files, (str, Path)):
+    if isinstance(files, (str, os.PathLike)):
         files_list = [fs.path(files)]
     else:
         files_list = [fs.path(item) for item in files]

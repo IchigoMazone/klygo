@@ -16,7 +16,11 @@ The created `pathlib.Path`.
 
 ## Errors and edge cases
 
-Unknown names, out-of-range IDs, negative destination IDs, and invalid key/value types are rejected. Sparse IDs produce a mapping under `names` and set `nc` to highest ID plus one.
+Unknown names, out-of-range IDs, negative destination IDs, and invalid key/value
+types are rejected. Mapping different class names to the same destination ID is
+also rejected rather than silently dropping a name. Sparse IDs produce a mapping
+under `names` and set `nc` to highest ID plus one. ZIP metadata has no
+machine-specific path.
 
 ## AI usage guidance
 

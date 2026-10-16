@@ -28,6 +28,11 @@ def get(config_data: dict[str, Any] | Box, key_path: str, default: Any = None) -
     Any
         Stored value or ``default`` when any path component is missing.
 
+    Raises
+    ------
+    ValueError
+        If ``key_path`` is empty or invalid.
+
     Examples
     --------
     >>> from klygo import config
@@ -65,6 +70,13 @@ def set(config_data: dict[str, Any] | Box, key_path: str, value: Any) -> Box:
     box.Box
         Updated independent configuration.
 
+    Raises
+    ------
+    TypeError
+        If ``config_data`` is not a mapping or Box.
+    ValueError
+        If ``key_path`` is empty or invalid.
+
     Examples
     --------
     >>> from klygo import config
@@ -89,6 +101,23 @@ def has(config_data: dict[str, Any] | Box, key_path: str) -> bool:
 
     Unlike checking the result of :func:`get`, this distinguishes a missing
     key from a key explicitly storing ``None``.
+
+    Parameters
+    ----------
+    config_data : dict or Box
+        Configuration to inspect.
+    key_path : str
+        Dot-separated nested key path.
+
+    Returns
+    -------
+    bool
+        Whether the complete nested key path exists.
+
+    Raises
+    ------
+    ValueError
+        If ``key_path`` is empty or invalid.
 
     Examples
     --------

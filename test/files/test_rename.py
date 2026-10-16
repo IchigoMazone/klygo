@@ -20,6 +20,18 @@ class TestRename(unittest.TestCase):
                 files.rename(renamed, renamed)
 
 
+    def test_overwrite_replaces_existing_file(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "new.txt"
+            target = root / "old.txt"
+            source.write_text("new", encoding="utf-8")
+            target.write_text("old", encoding="utf-8")
+            self.assertEqual(files.rename(source, target, overwrite=True), target)
+            self.assertEqual(target.read_text(encoding="utf-8"), "new")
+            self.assertFalse(source.exists())
+
+
 if __name__ == "__main__":
     unittest.main()
 

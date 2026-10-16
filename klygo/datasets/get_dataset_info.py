@@ -1,28 +1,29 @@
 """Inspect YOLO dataset structure and annotation coverage."""
 
+from os import PathLike
 from pathlib import Path
 from typing import Any
 
 from klygo import files
 
-from ._structure import read_class_names, scan_dataset_files
+from ._structure import read_class_map, scan_dataset_files
 from ._workspace import open_dataset
 
 
-def get_dataset_info(source: str | Path) -> dict[str, Any]:
+def get_dataset_info(source: str | PathLike[str]) -> dict[str, Any]:
     """Return structural statistics for a YOLO dataset.
 
     Parameters
     ----------
-    source : str or pathlib.Path
+    source : str or os.PathLike[str]
         Dataset directory or supported archive.
 
     Returns
     -------
     dict
-        Ordered class names, class count, image/label totals, unlabeled image
-        count, and image counts grouped by ``train``, ``val``, ``test``, or
-        ``raw``.
+        Ordered class names and their numeric IDs, class count, image/label
+        totals, unlabeled image count, and counts grouped by ``train``,
+        ``val``, ``test``, or ``raw``.
 
     Raises
     ------
@@ -39,7 +40,7 @@ def get_dataset_info(source: str | Path) -> dict[str, Any]:
     True
     """
     with open_dataset(source, verbose=False) as root:
-        classes = read_class_names(root)
+        class_map = read_class_map(root)
         pairs = scan_dataset_files(files.join(root, "images"), files.join(root, "labels"))
         split_counts: dict[str, int] = {}
         for _, _, relative_image, _ in pairs:
@@ -50,8 +51,9 @@ def get_dataset_info(source: str | Path) -> dict[str, Any]:
 
         total_labels = sum(label is not None for _, label, _, _ in pairs)
         return {
-            "classes": classes,
-            "nc": len(classes),
+            "classes": list(class_map.values()),
+            "class_ids": list(class_map),
+            "nc": max(class_map, default=-1) + 1,
             "total_images": len(pairs),
             "total_labels": total_labels,
             "unlabeled_images": len(pairs) - total_labels,

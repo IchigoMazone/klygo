@@ -8,7 +8,6 @@ wheels/
 uv.lock
 .pypirc
 .agents
-.pytest_cache
 grounding-dino-base/
 grounding-dino-base.rar
 .hf-http-test/

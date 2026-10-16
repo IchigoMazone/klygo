@@ -16,4 +16,5 @@ Klygo provides Python utilities for archive operations, filesystem access, confi
 - Import public APIs from their package facade, for example `from klygo import files, archive, config`.
 - Functional configuration operations return independent values unless an API explicitly documents mutation.
 - File and archive paths accept strings and text-returning `os.PathLike[str]` objects.
+- In archive, config, datasets, and media source code, use `klygo.files` for runtime path conversion, inspection, traversal, and filesystem changes; reserve `pathlib.Path` for type annotations. Codec backends use their format libraries to read and write archive contents.
 - Pass `overwrite=True` when replacing existing output files where supported.

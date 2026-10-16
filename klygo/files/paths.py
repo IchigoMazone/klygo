@@ -28,6 +28,11 @@ def path(value: PathInput, expand_user: bool = True) -> Path:
     pathlib.Path
         Native path object; expands home markers but does not resolve ``..``.
 
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
+
     See Also
     --------
     resolve
@@ -93,6 +98,11 @@ def normalize(value: PathInput) -> Path:
     pathlib.Path
         Lexically normalized path.
 
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
+
     See Also
     --------
     resolve
@@ -154,6 +164,13 @@ def relative(value: PathInput, start: PathInput = ".") -> Path:
     pathlib.Path
         Path relative to ``start``.
 
+    Raises
+    ------
+    TypeError
+        If either path has an unsupported type.
+    ValueError
+        If the paths are on different drives.
+
     See Also
     --------
     resolve
@@ -184,6 +201,11 @@ def is_within(value: PathInput, root: PathInput, resolve_paths: bool = True) -> 
     -------
     bool
         Whether ``value`` is contained by ``root``.
+
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
 
     See Also
     --------
@@ -314,6 +336,13 @@ def with_name(value: PathInput, new_name: str) -> Path:
     pathlib.Path
         Path with the new final component.
 
+    Raises
+    ------
+    TypeError
+        If a path or replacement name has an unsupported type.
+    ValueError
+        If the replacement is not a valid filename.
+
     See Also
     --------
     with_stem
@@ -343,6 +372,13 @@ def with_stem(value: PathInput, new_stem: str) -> Path:
     pathlib.Path
         Path with the new stem.
 
+    Raises
+    ------
+    TypeError
+        If a path or replacement stem has an unsupported type.
+    ValueError
+        If the replacement is not a valid stem.
+
     See Also
     --------
     with_name
@@ -370,6 +406,11 @@ def extensions(value: PathInput) -> Tuple[str, ...]:
     tuple[str, ...]
         All suffixes in filename order.
 
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
+
     See Also
     --------
     extension
@@ -396,6 +437,11 @@ def compound_extension(value: PathInput) -> str:
     -------
     str
         All suffixes joined together.
+
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
 
     See Also
     --------
@@ -529,6 +575,11 @@ def parents(value: PathInput) -> Tuple[Path, ...]:
     tuple[pathlib.Path, ...]
         Ancestors from nearest to farthest.
 
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
+
     See Also
     --------
     parent
@@ -554,6 +605,11 @@ def is_absolute(value: PathInput) -> bool:
     bool
         Whether the value is absolute.
 
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
+
     See Also
     --------
     resolve
@@ -567,18 +623,50 @@ def is_absolute(value: PathInput) -> bool:
     return path(value).is_absolute()
 
 
+def as_posix(value: PathInput) -> str:
+    """Return a path string with forward-slash separators.
+
+    Parameters
+    ----------
+    value : str or os.PathLike[str]
+        Path to represent.
+
+    Returns
+    -------
+    str
+        Path in POSIX separator form without resolving it.
+
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
+
+    Examples
+    --------
+    >>> from klygo import files
+    >>> files.as_posix("dataset/images")
+    'dataset/images'
+    """
+    return path(value).as_posix()
+
+
 def name(value: PathInput) -> str:
     """Return the final path component including its extension.
 
     Parameters
     ----------
-    path : str or os.PathLike[str]
+    value : str or os.PathLike[str]
         Path to inspect or operate on.
 
     Returns
     -------
     str
         Final path component.
+
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
 
     See Also
     --------
@@ -599,13 +687,18 @@ def stem(value: PathInput) -> str:
 
     Parameters
     ----------
-    path : str or os.PathLike[str]
+    value : str or os.PathLike[str]
         Path to inspect or operate on.
 
     Returns
     -------
     str
         Final component without its last suffix.
+
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
 
     See Also
     --------
@@ -626,13 +719,18 @@ def extension(value: PathInput) -> str:
 
     Parameters
     ----------
-    path : str or os.PathLike[str]
+    value : str or os.PathLike[str]
         Path to inspect or operate on.
 
     Returns
     -------
     str
         Final suffix, including the leading dot.
+
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
 
     See Also
     --------
@@ -653,13 +751,18 @@ def parent(value: PathInput) -> Path:
 
     Parameters
     ----------
-    path : str or os.PathLike[str]
+    value : str or os.PathLike[str]
         Path to inspect or operate on.
 
     Returns
     -------
     pathlib.Path
         Immediate parent path.
+
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
 
     See Also
     --------

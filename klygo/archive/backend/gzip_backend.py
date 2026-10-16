@@ -49,7 +49,8 @@ class GZipBackend(ArchiveBackend):
     --------
     >>> from klygo.archive.backend import GZipBackend
     >>> backend = GZipBackend()
-    >>> backend.list_files(__import__("pathlib").Path("report.txt.gz"))
+    >>> from klygo import files
+    >>> backend.list_files(files.path("report.txt.gz"))
     ['report.txt']
     """
 
@@ -83,11 +84,11 @@ class GZipBackend(ArchiveBackend):
         if file_utils.exists(output_path) and not overwrite:
             raise FileExistsError(f"output_path already exists: {output_path}")
 
-        if source.is_dir():
+        if file_utils.is_dir(source):
             raise ValueError("GZip supports one file only. Use tar.gz for directories.")
 
         file_utils.mkdir(file_utils.parent(output_path))
-        with ProgressBar(total=1, desc=f"{output_path.name}: compressing", verbose=verbose) as progress:
+        with ProgressBar(total=1, desc=f"{file_utils.name(output_path)}: compressing", verbose=verbose) as progress:
             with open(source, "rb") as f_in, gzip.open(output_path, "wb", compresslevel=compresslevel) as f_out:
                 shutil.copyfileobj(f_in, f_out)
             progress.update()
@@ -107,13 +108,13 @@ class GZipBackend(ArchiveBackend):
         self.validate_option("extract", "include", include, None)
         self.validate_option("extract", "exclude", exclude, None)
         file_utils.mkdir(output_dir)
-        out_name = archive_path.stem if archive_path.suffix.lower() == ".gz" else archive_path.name
-        target = output_dir / out_name
+        out_name = file_utils.stem(archive_path) if file_utils.extension(archive_path).lower() == ".gz" else file_utils.name(archive_path)
+        target = file_utils.join(output_dir, out_name)
 
         if file_utils.exists(target) and not overwrite:
             raise FileExistsError(f"File already exists: {target}. Use overwrite=True.")
 
-        with ProgressBar(total=1, desc=f"{archive_path.name}: extracting", verbose=verbose) as progress:
+        with ProgressBar(total=1, desc=f"{file_utils.name(archive_path)}: extracting", verbose=verbose) as progress:
             with gzip.open(archive_path, "rb") as f_in, open(target, "wb") as f_out:
                 shutil.copyfileobj(f_in, f_out)
             progress.update()
@@ -135,7 +136,7 @@ class GZipBackend(ArchiveBackend):
 
     def list_files(self, archive_path: Path) -> List[str]:
         """Return the one logical member name derived from ``archive_path``."""
-        out_name = archive_path.stem if archive_path.suffix.lower() == ".gz" else archive_path.name
+        out_name = file_utils.stem(archive_path) if file_utils.extension(archive_path).lower() == ".gz" else file_utils.name(archive_path)
         return [out_name]
 
     def iter_files(self, archive_path: Path) -> Iterator[str]:
@@ -158,7 +159,7 @@ class GZipBackend(ArchiveBackend):
 
     def get_info(self, archive_path: Path) -> Dict[str, Any]:
         """Return normalized metadata for the single GZip stream."""
-        archive_size = archive_path.stat().st_size
+        archive_size = file_utils.size(archive_path)
         return {
             "path": str(archive_path),
             "format": "gz",
@@ -174,8 +175,8 @@ class GZipBackend(ArchiveBackend):
             "compress_ratio": 0.0,
             "archive_size": archive_size,
             "human_archive_size": human_size(archive_size),
-            "largest_file": archive_path.stem,
-            "smallest_file": archive_path.stem,
+            "largest_file": file_utils.stem(archive_path),
+            "smallest_file": file_utils.stem(archive_path),
         }
 
     def test(self, archive_path: Path, raise_exception: bool = False) -> bool:

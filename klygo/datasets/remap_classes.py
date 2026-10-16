@@ -1,17 +1,18 @@
 """Rename classes or change their numeric IDs."""
 
+from os import PathLike
 from pathlib import Path
 
 from klygo import config, files
 from klygo.validators.datasets import RemapClasses
 
-from ._structure import copy_entry, read_class_names, remap_label_file, scan_dataset_files
-from ._workspace import dataset_workspace, open_dataset, write_output
+from ._structure import copy_entry, read_class_map, remap_label_file, scan_dataset_files
+from ._workspace import dataset_workspace, open_dataset, set_output_metadata_path, write_output
 
 
 def remap_classes(
-    source: str | Path,
-    target: str | Path,
+    source: str | PathLike[str],
+    target: str | PathLike[str],
     class_map: dict[int | str, int | str],
     overwrite: bool = False,
     verbose: bool = True,
@@ -24,9 +25,9 @@ def remap_classes(
 
     Parameters
     ----------
-    source : str or pathlib.Path
+    source : str or os.PathLike[str]
         Dataset directory or supported archive.
-    target : str or pathlib.Path
+    target : str or os.PathLike[str]
         Destination directory or ``.zip`` archive.
     class_map : dict[int or str, int or str]
         Class-name and class-ID transformations.
@@ -58,17 +59,17 @@ def remap_classes(
     destination = files.path(params.target)
 
     with open_dataset(params.source, verbose=False) as root, dataset_workspace("remap") as workspace:
-        names = read_class_names(root)
-        id_map = {index: index for index in range(len(names))}
-        renamed = {index: name for index, name in enumerate(names)}
+        names = read_class_map(root)
+        id_map = {index: index for index in names}
+        renamed = dict(names)
 
         for key, value in params.class_map.items():
             if isinstance(key, str):
-                if key not in names:
+                if key not in names.values():
                     raise ValueError(f"Class name {key!r} not found in source dataset.")
-                old_id = names.index(key)
+                old_id = next(index for index, name in names.items() if name == key)
             elif isinstance(key, int) and not isinstance(key, bool):
-                if key < 0 or key >= len(names):
+                if key not in names:
                     raise ValueError(f"Class ID {key} out of range of source dataset classes.")
                 old_id = key
             else:
@@ -83,6 +84,12 @@ def remap_classes(
             else:
                 raise TypeError("class_map values must be int or str")
 
+        output_names: dict[int, str] = {}
+        for old_id, new_id in id_map.items():
+            if new_id in output_names and output_names[new_id] != renamed[old_id]:
+                raise ValueError(f"multiple class names map to destination ID {new_id}")
+            output_names[new_id] = renamed[old_id]
+
         for image_path, label_path, relative_image, relative_label in scan_dataset_files(
             files.join(root, "images"), files.join(root, "labels")
         ):
@@ -90,17 +97,16 @@ def remap_classes(
             if label_path is not None:
                 remap_label_file(label_path, files.join(workspace, "labels", relative_label), id_map)
 
-        output_names = {id_map[old_id]: renamed[old_id] for old_id in range(len(names))}
         contiguous = set(output_names) == set(range(len(output_names)))
         yaml_names = [output_names[index] for index in range(len(output_names))] if contiguous else output_names
         source_config = config.load(files.join(root, "data.yaml"), verbose=False).to_dict()
         source_config.update(
             {
-                "path": "/content/data" if files.extension(destination).lower() == ".zip" else files.resolve(destination).as_posix(),
                 "nc": max(output_names, default=-1) + 1,
                 "names": yaml_names,
             }
         )
+        set_output_metadata_path(source_config, destination)
         config.save(files.join(workspace, "data.yaml"), source_config, overwrite=True, verbose=False)
         return write_output(workspace, destination, overwrite=params.overwrite, verbose=params.verbose)
 

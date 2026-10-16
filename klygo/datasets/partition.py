@@ -1,5 +1,6 @@
 """Create train, validation, and test partitions."""
 
+from os import PathLike
 from pathlib import Path
 
 from klygo.validators.datasets import Partition
@@ -8,8 +9,8 @@ from ._partitioning import execute_partition
 
 
 def partition(
-    source: str | Path,
-    target: str | Path,
+    source: str | PathLike[str],
+    target: str | PathLike[str],
     ratios: tuple[float, ...],
     overwrite: bool = False,
     verbose: bool = True,
@@ -18,9 +19,9 @@ def partition(
 
     Parameters
     ----------
-    source : str or pathlib.Path
+    source : str or os.PathLike[str]
         Dataset directory or supported archive.
-    target : str or pathlib.Path
+    target : str or os.PathLike[str]
         Destination directory or ``.zip`` archive.
     ratios : tuple of float
         One value selects the train ratio and divides the remainder equally.

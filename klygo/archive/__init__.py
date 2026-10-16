@@ -1,44 +1,42 @@
-"""Archive Creation, Extraction & Transformation Utilities (`klygo.archive`).
+"""Create, extract, inspect, and transform archives.
 
-Interactive Google Colab Tutorial:
+Colab tutorial:
     https://colab.research.google.com/drive/1CYtOv1nz-lujPiQA_f50HRwEdN5FVVnE?usp=sharing
 
-Supported Archive Formats:
-    - Read & Write: ZIP (.zip), TAR (.tar), TAR.GZ (.tar.gz, .tgz), TAR.XZ (.tar.xz, .txz),
-      TAR.BZ2 (.tar.bz2, .tbz2), and single-file GZip (.gz).
-    - Optional Read & Write: 7-Zip (.7z), provided by the optional `py7zr` package.
-    - Optional Read-Only: RAR (.rar), provided by the optional `rarfile` package.
+Public API (21 functions, 1 class):
+    Create and extract:
+         1. compress(...)             Create an archive from a file or directory.
+         2. extract(...)              Extract all or selected archive members.
+         3. extract_file(...)         Extract one member by exact name.
+         4. extract_matching(...)     Extract members matching a pattern.
 
-Public APIs (21 Functions, 1 Class):
-    Archive Creation & Extraction:
-        1.  compress(source, output_path, ...)       - Create an archive from a file or directory.
-        2.  extract(archive_path, output_dir, ...)   - Extract all or selected archive members.
-        3.  extract_file(archive_path, filename, ...) - Extract one exact archive member.
-        4.  extract_matching(archive_path, pattern, ...) - Extract members matching a wildcard.
+    Inspect and validate:
+         5. list_files(...)           Return all stored member names.
+         6. iter_files(...)           Yield stored member names lazily.
+         7. search(...)               Find members by glob or regular expression.
+         8. get_info(...)             Report format, size, and member metadata.
+         9. test(...)                 Check archive integrity.
+        10. verify(...)               Build a detailed validation report.
+        11. compare(...)              Compare member names in two archives.
+        12. detect_format(...)        Identify an archive by name or content.
+        13. is_archive(...)           Check whether a file is a supported archive.
 
-    Member Discovery, Metadata & Validation:
-        5.  list_files(archive_path)                 - Return all stored member names.
-        6.  iter_files(archive_path)                 - Lazily iterate over stored member names.
-        7.  search(archive_path, pattern, ...)       - Search member names by glob or regex.
-        8.  get_info(archive_path)                   - Return format, size, ratio, and member metadata.
-        9.  test(archive_path, ...)                  - Test archive integrity.
-        10. verify(archive_path)                     - Build a high-level verification report.
-        11. compare(archive1, archive2)              - Compare archive member-name sets.
-        12. detect_format(path)                      - Detect format from extension or magic bytes.
-        13. is_archive(path)                         - Check whether a path is a supported archive.
+    Modify and transform:
+        14. add(...)                  Add files or directories to an archive.
+        15. remove(...)               Remove named members from an archive.
+        16. merge(...)                Combine multiple archives.
+        17. split_by_size(...)        Create size-limited archive parts.
+        18. convert(...)              Convert to another archive format.
+        19. recompress(...)           Rebuild with a new format or compression level.
+        20. copy(...)                 Copy an archive without extracting it.
 
-    Archive Modification & Transformation:
-        14. add(archive_path, files, ...)            - Add files or directories to an archive.
-        15. remove(archive_path, files)              - Remove named members from an archive.
-        16. merge(archive_paths, output_path, ...)   - Merge multiple archives.
-        17. split_by_size(archive_path, size, ...)   - Split an archive into size-limited parts.
-        18. convert(source_path, target_path, ...)   - Convert an archive to another format.
-        19. recompress(source_path, target_path, ...) - Rebuild with another level or format.
-        20. copy(source_path, target_path, ...)      - Copy an archive without extracting it.
+    Object interface:
+        21. open(...)                 Open an ArchiveFile context wrapper.
+        22. ArchiveFile               Class for repeated archive operations.
 
-    Object Interface:
-        21. open(archive_path)                       - Create an `ArchiveFile` context wrapper.
-        22. ArchiveFile(archive_path)                - Object-oriented archive interface (class).
+Formats: ZIP, TAR, compressed TAR, and single-file GZip.
+Optional: 7-Zip via py7zr; read-only RAR via rarfile.
+Filesystem work uses klygo.files; backends handle archive contents.
 """
 
 from .io import compress, extract, extract_file, extract_matching

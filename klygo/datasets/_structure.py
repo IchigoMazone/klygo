@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Iterable
+from urllib.parse import quote
 
 from klygo import config, files
 
@@ -28,8 +29,8 @@ def find_dataset_root(path: str | Path) -> Path:
     return root
 
 
-def read_class_names(dataset_root: str | Path) -> list[str]:
-    """Read ordered class names from a YOLO ``data.yaml`` file."""
+def read_class_map(dataset_root: str | Path) -> dict[int, str]:
+    """Read class names while preserving numeric IDs from ``data.yaml``."""
     root = files.path(dataset_root)
     yaml_path = files.join(root, "data.yaml")
     if not files.is_file(yaml_path):
@@ -40,10 +41,24 @@ def read_class_names(dataset_root: str | Path) -> list[str]:
         raise ValueError(f"names list not found in data.yaml under {root}")
     names = data["names"]
     if isinstance(names, dict):
-        return [str(value) for _, value in sorted(names.items(), key=lambda item: int(item[0]))]
-    if isinstance(names, (list, tuple)):
-        return [str(value) for value in names]
-    return [str(names)]
+        try:
+            class_map = {int(key): str(value) for key, value in names.items()}
+        except (TypeError, ValueError) as error:
+            raise ValueError("class IDs in data.yaml must be integers") from error
+        if len(class_map) != len(names) or any(index < 0 for index in class_map):
+            raise ValueError("class IDs in data.yaml must be unique non-negative integers")
+    elif isinstance(names, (list, tuple)):
+        class_map = {index: str(value) for index, value in enumerate(names)}
+    else:
+        class_map = {0: str(names)}
+    if len(set(class_map.values())) != len(class_map):
+        raise ValueError("class names in data.yaml must be unique")
+    return dict(sorted(class_map.items()))
+
+
+def read_class_names(dataset_root: str | Path) -> list[str]:
+    """Read class names in numeric ID order."""
+    return list(read_class_map(dataset_root).values())
 
 
 def scan_dataset_files(
@@ -62,7 +77,7 @@ def scan_dataset_files(
         if files.is_file(path) and files.extension(path).lower() in IMAGE_EXTENSIONS
     ]
     pairs: list[DatasetPair] = []
-    for image_path in sorted(set(image_paths), key=lambda value: value.as_posix()):
+    for image_path in sorted(set(image_paths), key=lambda value: files.as_posix(value)):
         relative_image = files.relative(image_path, images_root)
         relative_label = files.with_extension(relative_image, ".txt")
         label_path = files.join(labels_root, relative_label)
@@ -105,6 +120,7 @@ def remap_label_file(
     """Rewrite YOLO class IDs and return the number of retained annotations."""
     allowed = set(allowed_ids) if allowed_ids is not None else None
     output: list[str] = []
+    retained = 0
     for line in files.load(source, as_lines=True, verbose=False):
         parts = str(line).strip().split()
         if not parts:
@@ -119,13 +135,14 @@ def remap_label_file(
             continue
         parts[0] = str(class_map.get(old_id, old_id))
         output.append(" ".join(parts))
+        retained += 1
     files.save(target, output, overwrite=True, verbose=False)
-    return len(output)
+    return retained
 
 
 def flattened_name(relative_path: Path) -> str:
-    """Return a collision-resistant flat name from a relative dataset path."""
-    return "_".join(relative_path.parts)
+    """Encode a relative path as one filename without losing separators."""
+    return quote(files.as_posix(relative_path), safe="")
 
 
 __all__ = [
@@ -135,6 +152,7 @@ __all__ = [
     "find_dataset_root",
     "flattened_name",
     "move_entry",
+    "read_class_map",
     "read_class_names",
     "remap_label_file",
     "scan_dataset_files",

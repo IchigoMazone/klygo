@@ -3,6 +3,9 @@
 `klygo.datasets` provides eight focused APIs for inspecting, restructuring,
 combining, relabeling, splitting, and generating YOLO-style datasets.
 
+Colab tutorial placeholder (replace with a Klygo datasets notebook):
+[Open sample Colab](https://colab.research.google.com/notebooks/intro.ipynb)
+
 The implementation shares the established Klygo infrastructure:
 
 - `klygo.files` owns all filesystem operations.
@@ -14,6 +17,9 @@ The implementation shares the established Klygo infrastructure:
 No dataset operation calls `shutil`, `zipfile`, or format parsers directly.
 Temporary extraction and workspace directories are isolated and removed on
 success or failure.
+Outputs are prepared in a temporary location and replace existing destinations
+only after successful completion. ZIP metadata omits machine-specific absolute
+paths, so archives remain usable after moving or extracting them.
 
 ## API overview
 
@@ -45,6 +51,11 @@ dataset/
 
 The root may be supplied directly or inside a supported archive. Nested roots
 are discovered by locating `data.yaml` beside an `images` directory.
+Paths accept strings, `pathlib.Path`, and other text-returning `os.PathLike`
+objects. When nested image paths are flattened, directory separators are
+encoded in filenames to prevent collisions.
+Sparse numeric class IDs in `data.yaml` are preserved across inspection, merge,
+split, remap, and unpartition operations.
 
 ## Typical workflow
 

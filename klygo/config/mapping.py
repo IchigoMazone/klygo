@@ -33,6 +33,11 @@ def update(
     box.Box
         Independent updated configuration.
 
+    Raises
+    ------
+    TypeError
+        If either configuration is not a mapping or Box, or ``deep`` is not a bool.
+
     Examples
     --------
     >>> from klygo import config
@@ -67,6 +72,11 @@ def merge(*configs: Mapping[str, Any] | Box, deep: bool = True) -> Box:
     -------
     box.Box
         Merged configuration. With no inputs, an empty ``Box`` is returned.
+
+    Raises
+    ------
+    TypeError
+        If a configuration is not a mapping or Box.
 
     Examples
     --------

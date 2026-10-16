@@ -26,6 +26,11 @@ def exists(path: PathInput) -> bool:
     bool
         Whether the path exists.
 
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
+
     See Also
     --------
     is_file
@@ -52,6 +57,11 @@ def is_file(path: PathInput) -> bool:
     -------
     bool
         Whether the path is a regular file.
+
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
 
     See Also
     --------
@@ -80,6 +90,11 @@ def is_dir(path: PathInput) -> bool:
     bool
         Whether the path is a directory.
 
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
+
     See Also
     --------
     exists
@@ -92,6 +107,33 @@ def is_dir(path: PathInput) -> bool:
     True
     """
     return Path(path).is_dir()
+
+
+def is_symlink(path: PathInput) -> bool:
+    """Return whether a path is a symbolic link, including a broken link.
+
+    Parameters
+    ----------
+    path : str or os.PathLike[str]
+        Path to inspect.
+
+    Returns
+    -------
+    bool
+        True when the directory entry itself is a symbolic link.
+
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
+
+    Examples
+    --------
+    >>> from klygo import files
+    >>> files.is_symlink("missing-link")
+    False
+    """
+    return Path(path).is_symlink()
 
 
 def list_entries(path: PathInput = ".", pattern: str = "*", recursive: bool = False) -> List[Path]:
@@ -285,6 +327,11 @@ def walk(path: PathInput = ".") -> Generator[Tuple[str, List[str], List[str]], N
     -------
     iterator
         Tuples of root path, directory names, and file names.
+
+    Raises
+    ------
+    TypeError
+        If a path or option has an unsupported type.
 
     See Also
     --------
@@ -528,13 +575,16 @@ def rename(path: PathInput, new_name_or_path: PathInput, overwrite: bool = False
     if target_path.exists():
         if not overwrite:
             raise FileExistsError(f"Target already exists: {target_path}")
+        if source_path.is_file() and target_path.is_file():
+            source_path.replace(target_path)
+            return target_path
         remove(target_path)
     source_path.rename(target_path)
     return target_path
 
 
 __all__ = [
-    "exists", "is_file", "is_dir", "list_entries", "find", "iter_find", "walk",
+    "exists", "is_file", "is_dir", "is_symlink", "list_entries", "find", "iter_find", "walk",
     "mkdir", "copy", "move", "rename", "remove",
 ]
 

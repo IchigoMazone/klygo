@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import random
 import re
+from os import PathLike
 from pathlib import Path
 
 from klygo import config, files
 from klygo.validators.datasets import Split
 
-from ._structure import copy_entry, read_class_names, remap_label_file, scan_dataset_files
+from ._structure import copy_entry, flattened_name, read_class_map, remap_label_file, scan_dataset_files
 from ._workspace import dataset_workspace, open_dataset, write_output
 
 
@@ -20,13 +21,13 @@ def _archive_name(group: list[str], index: int) -> str:
     return f"split_{safe_name}.zip"
 
 
-def _write_split_metadata(workspace: Path, names: list[str]) -> None:
+def _write_split_metadata(workspace: Path, names: list[str] | dict[int, str]) -> None:
+    class_count = max(names, default=-1) + 1 if isinstance(names, dict) else len(names)
     config.save(
         files.join(workspace, "data.yaml"),
         {
-            "path": "/content/data",
             "train": "images",
-            "nc": len(names),
+            "nc": class_count,
             "names": names,
         },
         overwrite=True,
@@ -35,8 +36,8 @@ def _write_split_metadata(workspace: Path, names: list[str]) -> None:
 
 
 def split(
-    source: str | Path,
-    output_dir: str | Path,
+    source: str | PathLike[str],
+    output_dir: str | PathLike[str],
     by_class: bool = False,
     class_groups: list[list[str]] | None = None,
     ratios: tuple[float, ...] | None = None,
@@ -51,9 +52,9 @@ def split(
 
     Parameters
     ----------
-    source : str or pathlib.Path
+    source : str or os.PathLike[str]
         Dataset directory or supported archive.
-    output_dir : str or pathlib.Path
+    output_dir : str or os.PathLike[str]
         Directory receiving split archives.
     by_class : bool, default=False
         Create one archive for every class.
@@ -71,6 +72,15 @@ def split(
     list[pathlib.Path]
         Archives created in deterministic order.
 
+    Raises
+    ------
+    FileNotFoundError
+        If the source dataset or its images directory is missing.
+    FileExistsError
+        If a split archive exists and ``overwrite`` is false.
+    ValueError
+        If the split strategy, class groups, or ratios are invalid.
+
     Examples
     --------
     >>> from klygo import datasets
@@ -81,7 +91,8 @@ def split(
     created: list[Path] = []
 
     with open_dataset(params.source, verbose=False) as root:
-        names = read_class_names(root)
+        class_map = read_class_map(root)
+        names = list(class_map.values())
         pairs = scan_dataset_files(files.join(root, "images"), files.join(root, "labels"))
 
         if params.class_groups is not None or params.by_class:
@@ -90,19 +101,29 @@ def split(
             if unknown:
                 raise ValueError(f"Unknown classes in class_groups: {tuple(unknown)}")
 
+            archive_names: list[str] = []
+            used_names: set[str] = set()
             for index, group in enumerate(groups):
-                destination = files.join(params.output_dir, _archive_name(group, index))
+                name = _archive_name(group, index)
+                if name.casefold() in used_names:
+                    name = f"{files.stem(name)}_{index}.zip"
+                archive_names.append(name)
+                used_names.add(name.casefold())
+
+            for index, (group, archive_name) in enumerate(zip(groups, archive_names)):
+                destination = files.join(params.output_dir, archive_name)
                 if files.exists(destination) and not params.overwrite:
                     raise FileExistsError(f"split file already exists: {destination}")
-                selected_ids = {names.index(name) for name in group}
-                id_map = {old_id: group.index(names[old_id]) for old_id in selected_ids}
+                selected_ids = {old_id for old_id, name in class_map.items() if name in group}
+                id_map = {old_id: group.index(class_map[old_id]) for old_id in selected_ids}
 
                 with dataset_workspace("split-class") as workspace:
                     copied = 0
-                    for image_path, label_path, _, _ in pairs:
+                    for image_path, label_path, relative_image, _ in pairs:
                         if label_path is None:
                             continue
-                        output_label = files.join(workspace, "labels", files.with_extension(files.name(image_path), ".txt"))
+                        image_name = flattened_name(relative_image)
+                        output_label = files.join(workspace, "labels", files.with_extension(image_name, ".txt"))
                         kept = remap_label_file(
                             label_path,
                             output_label,
@@ -112,7 +133,7 @@ def split(
                         if kept == 0:
                             files.remove(output_label, missing_ok=True)
                             continue
-                        copy_entry(image_path, files.join(workspace, "images", files.name(image_path)))
+                        copy_entry(image_path, files.join(workspace, "images", image_name))
                         copied += 1
 
                     if copied:
@@ -139,11 +160,11 @@ def split(
 
                 with dataset_workspace("split-ratio") as workspace:
                     for image_path, label_path, relative_image, _ in selected:
-                        image_name = files.name(relative_image)
+                        image_name = flattened_name(relative_image)
                         copy_entry(image_path, files.join(workspace, "images", image_name))
                         if label_path is not None:
                             copy_entry(label_path, files.join(workspace, "labels", files.with_extension(image_name, ".txt")))
-                    _write_split_metadata(workspace, names)
+                    _write_split_metadata(workspace, class_map)
                     created.append(
                         write_output(
                             workspace,

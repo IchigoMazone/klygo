@@ -17,7 +17,10 @@ The created `pathlib.Path`.
 
 ## Errors and edge cases
 
-Validation rejects missing sources, existing targets without overwrite, and invalid ratios. The fixed random seed makes repeated results reproducible.
+Validation rejects missing sources, existing targets without overwrite, and
+non-finite or out-of-range ratios. The fixed random seed makes repeated results
+reproducible. Relative image paths remain distinct after flattening; ZIP
+metadata omits machine-specific absolute paths.
 
 ## AI usage guidance
 

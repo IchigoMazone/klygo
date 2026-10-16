@@ -37,6 +37,11 @@ def defaults(default_data: Mapping[str, Any] | Box | None = None) -> dict[str, A
     dict
         Independent dictionary safe for caller mutation.
 
+    Raises
+    ------
+    TypeError
+        If ``default_data`` is not a mapping or Box.
+
     Examples
     --------
     >>> from klygo import config
@@ -72,6 +77,13 @@ def create(
     -------
     box.Box
         Configuration reloaded from the created file.
+
+    Raises
+    ------
+    TypeError
+        If ``default_data`` is not a mapping or Box.
+    FileExistsError
+        If the destination exists and ``overwrite`` is false.
 
     Examples
     --------

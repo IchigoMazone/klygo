@@ -1,6 +1,6 @@
 # `klygo.files` Documentation
 
-`klygo.files` provides 41 filesystem operations, path inspection helpers, streaming download tools, and multi-format structured data I/O.
+`klygo.files` provides 43 filesystem operations, path inspection helpers, streaming download tools, and multi-format structured data I/O.
 
 Interactive Google Colab Tutorial:
 [Open in Colab](https://colab.research.google.com/drive/1-Oo8ERqSuxns1OfZAdHY5jVMTrLVpJG-?usp=sharing)
@@ -66,6 +66,8 @@ check in `save()`.
 | **Remove file or folder recursively** | [`remove()`](api/remove.md) | `files.remove("runs/temp", missing_ok=True)` |
 | **Copy file or directory tree** | [`copy()`](api/copy.md) | `files.copy("source.txt", "backup/source.txt")` |
 | **Move file or directory tree** | [`move()`](api/move.md) | `files.move("draft.txt", "output/draft.txt")` |
+| **Format portable path text** | [`as_posix()`](api/as_posix.md) | `files.as_posix(path)` |
+| **Check for symbolic link** | [`is_symlink()`](api/is_symlink.md) | `files.is_symlink(path)` |
 | **Rename or relocate file** | [`rename()`](api/rename.md) | `files.rename("old.txt", "new.txt")` |
 | **Get file or folder size (bytes or KB/MB/GB)** | [`size()`](api/size.md) | `files.size("weights.pt", human=True)  # '14.2 MB'` |
 | **Calculate checksum with bounded read buffers** | [`hash()`](api/hash.md) | `files.hash("model.onnx", algorithm="sha256")` |
@@ -82,7 +84,7 @@ check in `save()`.
 
 ---
 
-## 3. Public APIs Reference (41 Functions)
+## 3. Public APIs Reference (43 Functions)
 
 <details>
 <summary><b>Structured data I/O and downloads (5 functions)</b> <i>(Click to expand)</i></summary>
@@ -96,7 +98,7 @@ check in `save()`.
 </details>
 
 <details>
-<summary><b>Filesystem operations (12 functions)</b> <i>(Click to expand)</i></summary>
+<summary><b>Filesystem operations (13 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`exists(path)`](api/exists.md): Check whether a file or directory exists.
 - [`is_file(path)`](api/is_file.md): Check if path identifies a regular file.
@@ -108,6 +110,8 @@ check in `save()`.
 - [`mkdir(path, parents, exist_ok)`](api/mkdir.md): Create a new directory and missing parent directories.
 - [`copy(source, target, overwrite)`](api/copy.md): Copy a file or directory tree recursively.
 - [`move(source, target, overwrite)`](api/move.md): Move a file or directory to a new target.
+- [`as_posix(path)`](api/as_posix.md): Represent a path with forward slashes.
+- [`is_symlink(path)`](api/is_symlink.md): Check whether a path is a symbolic link.
 - [`rename(path, new_name_or_path, overwrite)`](api/rename.md): Rename or relocate a file or directory.
 - [`remove(path, recursive, missing_ok)`](api/remove.md): Remove a file or directory recursively.
 

@@ -15,6 +15,7 @@ from typing import Any
 
 from box import Box
 
+from klygo import files
 from klygo.validators.config import ConfigSource, ExportFile
 
 from .access import delete as delete_value
@@ -38,6 +39,16 @@ class Config:
     ----------
     config_path : str or pathlib.Path
         Path to the configuration file managed by this instance.
+
+    Returns
+    -------
+    Config
+        Instance bound to the configuration path.
+
+    Raises
+    ------
+    TypeError
+        If ``config_path`` is not a string or path-like object.
 
     Examples
     --------
@@ -109,11 +120,21 @@ class Config:
     def to_dict(self) -> dict[str, Any]:
         """Return an independent dictionary representation of current state.
 
+        Parameters
+        ----------
+        None
+            Uses the configuration held by this instance.
+
         Returns
         -------
         dict[str, Any]
             Deep plain-dictionary conversion of the internal ``Box``. Mutating
             the returned dictionary does not mutate this manager.
+
+        Raises
+        ------
+        None
+            Conversion of the in-memory configuration does not raise.
 
         Notes
         -----
@@ -498,11 +519,11 @@ class Config:
             verbose=verbose,
         )
         if output_dir is not None:
-            destination_dir = Path(output_dir)
+            destination_dir = files.path(output_dir)
         elif isinstance(self._cfg.get("default"), dict) and "root" in self._cfg["default"]:
-            destination_dir = Path(self._cfg["default"]["root"])
+            destination_dir = files.path(self._cfg["default"]["root"])
         else:
-            destination_dir = Path(".")
-        destination = destination_dir / f"{params.name}{params.suffix}"
+            destination_dir = files.path(".")
+        destination = files.join(destination_dir, f"{params.name}{params.suffix}")
         data = self._cfg or load(self.config_path, verbose=False)
         return export(data, destination, overwrite=params.overwrite, verbose=params.verbose)

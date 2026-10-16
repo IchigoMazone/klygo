@@ -18,3 +18,10 @@ with TemporaryDirectory() as directory:
     )
     metadata = config.load(output / "data.yaml", verbose=False)
     assert metadata.names == {0: "fruit", 3: "banana"}
+    assert datasets.get_dataset_info(output)["nc"] == 4
+    try:
+        datasets.remap_classes(source, root / "collision", {1: 0}, verbose=False)
+    except ValueError as error:
+        assert "multiple class names" in str(error)
+    else:
+        raise AssertionError("Conflicting class IDs must be rejected")

@@ -92,12 +92,12 @@ class RarBackend(ArchiveBackend):
                 rf.setpassword(password)
             names = rf.namelist()
             if not overwrite:
-                existing = [name for name in names if file_utils.exists(output_dir / name)]
+                existing = [name for name in names if file_utils.exists(file_utils.join(output_dir, name))]
                 if existing:
                     raise FileExistsError(
                         f"Archive members already exist: {existing[:5]}. Use overwrite=True."
                     )
-            with ProgressBar(total=1, desc=f"{archive_path.name}: extracting", verbose=verbose) as progress:
+            with ProgressBar(total=1, desc=f"{file_utils.name(archive_path)}: extracting", verbose=verbose) as progress:
                 rf.extractall(path=output_dir)
                 progress.update()
 
@@ -112,7 +112,7 @@ class RarBackend(ArchiveBackend):
         """Extract one exact RAR member while enforcing overwrite policy."""
         rarfile = self._check_rarfile()
         file_utils.mkdir(output_dir)
-        target = output_dir / file_utils.name(filename)
+        target = file_utils.join(output_dir, file_utils.name(filename))
         if file_utils.exists(target) and not overwrite:
             raise FileExistsError(f"File already exists: {target}. Use overwrite=True.")
         with rarfile.RarFile(archive_path, mode="r") as rf:
@@ -155,7 +155,7 @@ class RarBackend(ArchiveBackend):
             infolist = rf.infolist()
             total_uncompressed = sum(info.file_size for info in infolist)
             total_compressed = sum(info.compress_size for info in infolist)
-            size = archive_path.stat().st_size
+            size = file_utils.size(archive_path)
             return {
                 "path": str(archive_path),
                 "format": "rar",

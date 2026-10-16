@@ -1,12 +1,27 @@
-"""Dataset inspection, transformation, partitioning, and model export.
+"""Inspect, restructure, relabel, and generate datasets.
 
-Public APIs (8 functions):
-    1. get_dataset_info  2. partition  3. repartition  4. unpartition
-    5. merge             6. split      7. remap_classes 8. export
+Colab tutorial placeholder (replace with a Klygo datasets notebook):
+    https://colab.research.google.com/notebooks/intro.ipynb
 
-Dataset filesystem work is delegated to :mod:`klygo.files`, structured
-metadata to :mod:`klygo.config`, archives to :mod:`klygo.archive`, and image
-input/output to :mod:`klygo.media`.
+Public API (8 functions):
+    Inspection:
+         1. get_dataset_info(...)     Report classes, files, and split statistics.
+
+    Partitioning:
+         2. partition(...)            Create train, validation, and test folders.
+         3. repartition(...)          Rebuild an existing dataset with new ratios.
+         4. unpartition(...)          Flatten partitioned data into one dataset.
+
+    Combination and splitting:
+         5. merge(...)                Combine datasets and reconcile class IDs.
+         6. split(...)                Create class-based or ratio-based ZIP archives.
+
+    Relabeling and generation:
+         7. remap_classes(...)        Rename classes or remap numeric IDs.
+         8. export(...)               Build a dataset from model predictions.
+
+Uses klygo.files, klygo.config, klygo.archive, and klygo.media
+for filesystem, metadata, archive, and image operations.
 """
 
 from .export import export

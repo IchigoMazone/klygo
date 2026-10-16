@@ -24,7 +24,7 @@ A `pathlib.Path` representing the result.
 
 ## Errors and edge cases
 
-Raises `FileNotFoundError` for a missing source and `FileExistsError` when replacement is disabled.
+Raises `FileNotFoundError` for a missing source and `FileExistsError` when replacement is disabled. Replacing an existing regular file uses the operating system's atomic file replacement.
 
 ## AI usage guidance
 

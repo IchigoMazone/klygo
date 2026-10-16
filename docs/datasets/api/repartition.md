@@ -16,7 +16,9 @@ The created `pathlib.Path`.
 
 ## Errors and edge cases
 
-The target must be distinct unless overwrite is enabled. Duplicate basenames from old splits are flattened with their relative paths.
+Existing targets require `overwrite=True`. Duplicate basenames from old splits
+remain distinct because relative paths are encoded into flat filenames. ZIP
+metadata omits machine-specific absolute paths.
 
 ## AI usage guidance
 

@@ -16,7 +16,10 @@ The created `pathlib.Path`.
 
 ## Errors and edge cases
 
-Relative path components are joined with underscores so equal basenames from separate splits do not overwrite each other.
+Relative paths are encoded into flat filenames without conflating an underscore
+in a filename with a directory separator. Equal basenames from different
+splits remain distinct. ZIP metadata contains no machine-specific path.
+Sparse class IDs are preserved in `data.yaml`.
 
 ## AI usage guidance
 

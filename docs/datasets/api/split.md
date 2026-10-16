@@ -19,7 +19,13 @@ An ordered `list[pathlib.Path]` containing archives that were created.
 
 ## Errors and edge cases
 
-One split strategy is required. Unknown class-group names and pre-existing outputs are rejected. Class-based archives omit images without matching annotations.
+Exactly one split strategy is required. Ratios must be finite values between
+zero and one that sum to one. Unknown or empty class groups and pre-existing
+outputs are rejected. Class-based archives omit images without matching
+annotations. Relative image paths are encoded into unique flat filenames,
+and ZIP metadata contains no machine-specific absolute path.
+Ratio splits preserve sparse class IDs; class splits remap selected IDs to a
+compact range starting at zero.
 
 ## AI usage guidance
 

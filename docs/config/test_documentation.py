@@ -12,6 +12,15 @@ FUNCTIONS = [name for name in config.__all__ if name != "Config"]
 
 
 class TestDocumentation(unittest.TestCase):
+    def test_config_methods_use_public_docstring_form(self):
+        for name, method in inspect.getmembers(config.Config, inspect.isfunction):
+            if name.startswith("_"):
+                continue
+            with self.subTest(name=name):
+                source_doc = inspect.getdoc(method)
+                for heading in ("Parameters", "Returns", "Raises", "Examples"):
+                    self.assertIn(f"{heading}\n{'-' * len(heading)}", source_doc)
+
     def test_every_export_has_source_docs_markdown_and_example(self):
         repository = Path(__file__).resolve().parents[2]
         required_sections = (
@@ -27,7 +36,10 @@ class TestDocumentation(unittest.TestCase):
         for name in config.__all__:
             with self.subTest(name=name):
                 value = getattr(config, name)
-                self.assertTrue(inspect.getdoc(value))
+                source_doc = inspect.getdoc(value)
+                self.assertTrue(source_doc)
+                for heading in ("Parameters", "Returns", "Raises", "Examples"):
+                    self.assertIn(f"{heading}\n{'-' * len(heading)}", source_doc)
                 document = repository / "docs" / "config" / "api" / f"{name}.md"
                 self.assertTrue(document.is_file())
                 self.assertTrue((repository / "examples" / "config" / f"{name}.py").is_file())

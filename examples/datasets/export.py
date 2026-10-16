@@ -20,3 +20,16 @@ with TemporaryDirectory() as directory:
     )
     assert files.is_file(output / "images" / "img_00001.jpg")
     assert files.is_file(output / "labels" / "img_00001.txt")
+
+    marker = output / "keep.txt"
+    marker.write_text("previous output", encoding="utf-8")
+    try:
+        datasets.export(
+            ExampleDetector(), output, "unknown", [Image.new("RGB", (32, 24))],
+            classes=["object"], overwrite=True, verbose=False,
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Unknown formats must be rejected")
+    assert marker.read_text(encoding="utf-8") == "previous output"

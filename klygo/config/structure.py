@@ -28,6 +28,13 @@ def flatten(config_data: Mapping[str, Any] | Box, sep: str = ".") -> dict[str, A
     dict
         Flat mapping of paths to leaf values.
 
+    Raises
+    ------
+    TypeError
+        If the input is not a mapping or Box.
+    ValueError
+        If the separator is invalid.
+
     Examples
     --------
     >>> from klygo import config
@@ -56,6 +63,13 @@ def unflatten(flat_dict: Mapping[str, Any], sep: str = ".") -> dict[str, Any]:
     -------
     dict
         Nested configuration.
+
+    Raises
+    ------
+    TypeError
+        If the input is not a mapping.
+    ValueError
+        If the separator or flattened keys are invalid.
 
     Examples
     --------

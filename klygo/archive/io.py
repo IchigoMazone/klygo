@@ -249,6 +249,13 @@ def extract_matching(
     None
         Matching members are extracted as a side effect.
 
+    Raises
+    ------
+    FileNotFoundError
+        If the archive file does not exist.
+    ValueError
+        If its format is unsupported.
+
     See Also
     --------
     extract

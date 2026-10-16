@@ -93,19 +93,19 @@ class SevenZipBackend(ArchiveBackend):
             raise FileExistsError(f"output_path already exists: {output_path}")
 
         file_utils.mkdir(file_utils.parent(output_path))
-        with ProgressBar(total=1, desc=f"{output_path.name}: compressing", verbose=verbose) as progress:
+        with ProgressBar(total=1, desc=f"{file_utils.name(output_path)}: compressing", verbose=verbose) as progress:
             with py7zr.SevenZipFile(output_path, mode="w") as archive:
-                if source.is_dir():
+                if file_utils.is_dir(source):
                     if include_root:
-                        archive.writeall(source, arcname=source.name)
+                        archive.writeall(source, arcname=file_utils.name(source))
                     else:
-                        for child in sorted(source.iterdir()):
-                            if child.is_dir():
-                                archive.writeall(child, arcname=child.name)
+                        for child in sorted(file_utils.list_entries(source)):
+                            if file_utils.is_dir(child):
+                                archive.writeall(child, arcname=file_utils.name(child))
                             else:
-                                archive.write(child, arcname=child.name)
+                                archive.write(child, arcname=file_utils.name(child))
                 else:
-                    archive.write(source, arcname=source.name)
+                    archive.write(source, arcname=file_utils.name(source))
             progress.update()
 
     def extract(
@@ -131,12 +131,12 @@ class SevenZipBackend(ArchiveBackend):
         with py7zr.SevenZipFile(archive_path, mode="r", password=password) as archive:
             names = archive.getnames()
             if not overwrite:
-                existing = [name for name in names if file_utils.exists(output_dir / name)]
+                existing = [name for name in names if file_utils.exists(file_utils.join(output_dir, name))]
                 if existing:
                     raise FileExistsError(
                         f"Archive members already exist: {existing[:5]}. Use overwrite=True."
                     )
-            with ProgressBar(total=1, desc=f"{archive_path.name}: extracting", verbose=verbose) as progress:
+            with ProgressBar(total=1, desc=f"{file_utils.name(archive_path)}: extracting", verbose=verbose) as progress:
                 archive.extractall(path=output_dir)
                 progress.update()
 
@@ -151,7 +151,7 @@ class SevenZipBackend(ArchiveBackend):
         """Extract one exact 7-Zip member through ``py7zr``."""
         py7zr = self._check_py7zr()
         file_utils.mkdir(output_dir)
-        target = output_dir / file_utils.name(filename)
+        target = file_utils.join(output_dir, file_utils.name(filename))
         if file_utils.exists(target) and not overwrite:
             raise FileExistsError(f"File already exists: {target}. Use overwrite=True.")
 
@@ -192,7 +192,7 @@ class SevenZipBackend(ArchiveBackend):
         with py7zr.SevenZipFile(archive_path, mode="r") as archive:
             info = archive.archiveinfo()
             files = archive.getnames()
-            size = archive_path.stat().st_size
+            size = file_utils.size(archive_path)
             return {
                 "path": str(archive_path),
                 "format": "7z",

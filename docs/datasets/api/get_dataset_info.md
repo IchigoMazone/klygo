@@ -10,11 +10,15 @@ Inspect a directory or archive without modifying it. Counts images, available la
 
 ## Returns
 
-A dictionary containing `classes`, `nc`, `total_images`, `total_labels`, `unlabeled_images`, and `splits`.
+A dictionary containing `classes`, `class_ids`, `nc`, `total_images`,
+`total_labels`, `unlabeled_images`, and `splits`. `classes` and `class_ids` are
+parallel lists in ID order. For sparse IDs, `nc` is the highest ID plus one
+rather than the length of `classes`.
 
 ## Errors and edge cases
 
-Raises `FileNotFoundError` for missing sources/images and `ValueError` when `data.yaml` has no class names.
+Raises `FileNotFoundError` for missing sources/images and `ValueError` when
+`data.yaml` has missing, duplicate, or invalid class names/IDs.
 
 ## AI usage guidance
 

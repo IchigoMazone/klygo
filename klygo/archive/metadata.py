@@ -52,6 +52,13 @@ def iter_files(archive_path: Union[str, Path]) -> Iterator[str]:
     Iterator[str]
         Lazy stream of stored member names.
 
+    Raises
+    ------
+    FileNotFoundError
+        If the archive file does not exist.
+    ValueError
+        If its format is unsupported.
+
     See Also
     --------
     list_files
@@ -91,6 +98,13 @@ def search(
     -------
     list[str]
         Member names matching the requested pattern.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the archive file does not exist.
+    ValueError
+        If its format is unsupported.
 
     See Also
     --------
@@ -194,6 +208,13 @@ def verify(archive_path: Union[str, Path]) -> Dict[str, Any]:
     dict[str, Any]
         Summary containing validity and archive metadata.
 
+    Raises
+    ------
+    FileNotFoundError
+        If the archive file does not exist.
+    ValueError
+        If its format is unsupported.
+
     See Also
     --------
     test
@@ -235,6 +256,13 @@ def compare(archive1: Union[str, Path], archive2: Union[str, Path]) -> Dict[str,
     -------
     dict[str, list[str]]
         Added, removed, and common member names.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the archive file does not exist.
+    ValueError
+        If its format is unsupported.
 
     See Also
     --------

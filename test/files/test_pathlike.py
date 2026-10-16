@@ -30,7 +30,7 @@ class TestPathLike(unittest.TestCase):
         expected = Path("dataset/archive.tar.gz")
         self.assertEqual(files.path(value), expected)
         self.assertIsInstance(files.path(value), Path)
-        for name in ("name", "stem", "extension", "extensions", "compound_extension", "parent", "parents", "normalize", "resolve", "is_absolute"):
+        for name in ("as_posix", "name", "stem", "extension", "extensions", "compound_extension", "parent", "parents", "normalize", "resolve", "is_absolute"):
             with self.subTest(name=name):
                 self.assertEqual(getattr(files, name)(value), getattr(files, name)(expected))
         self.assertEqual(files.join(TextPath("dataset"), TextPath("a.txt")), Path("dataset/a.txt"))
@@ -58,6 +58,7 @@ class TestPathLike(unittest.TestCase):
                 with self.subTest(name=name):
                     self.assertEqual(getattr(files, name)(wrapped), getattr(files, name)(source))
             self.assertTrue(files.is_dir(TextPath(root)))
+            self.assertFalse(files.is_symlink(TextPath(root)))
             self.assertEqual(files.list_entries(TextPath(root)), [source])
             self.assertEqual(files.find(TextPath(root)), [source])
             self.assertEqual(list(files.iter_find(TextPath(root))), [source])

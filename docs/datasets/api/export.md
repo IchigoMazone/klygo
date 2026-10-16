@@ -20,7 +20,11 @@ The created directory `pathlib.Path`.
 
 ## Errors and edge cases
 
-Classes and at least one image are required. Existing output is protected unless overwrite is enabled. Unknown formats and invalid thresholds/batch sizes are rejected.
+Classes must be unique, and at least one image is required. Unknown formats,
+invalid thresholds/batch sizes, and a different number of predictions than
+input images are rejected. With `overwrite=True`, the existing output remains
+intact if validation, prediction, or writing fails. Classification folder names
+are sanitized for filesystem safety.
 
 ## AI usage guidance
 

@@ -1,5 +1,6 @@
 import builtins
 import importlib
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union, Optional, Generator, Iterable, Callable, Iterator
 
@@ -61,7 +62,7 @@ class VideoReader:
 
     def __init__(self, path: Union[str, Path]) -> None:
         self.path = files.resolve(path)
-        if not self.path.exists():
+        if not files.exists(self.path):
             raise FileNotFoundError(f"Could not find video file: {self.path}")
 
         # Thăm dò nhanh metadata của video 1 lần duy nhất lúc mở
@@ -504,7 +505,7 @@ class LazyImage(Image.Image):
         w, h = self.size
         crop_info = f" crop={self.crop_box}" if self.crop_box is not None else ""
         frame_info = f" frame={self.frame_index}" if self.frame_index is not None else ""
-        return f"<LazyImage [{status}] url='{self.path.name}'{frame_info}{crop_info} size=({w}, {h})>"
+        return f"<LazyImage [{status}] url='{files.name(self.path)}'{frame_info}{crop_info} size=({w}, {h})>"
 
 
 # =========================================================================
@@ -669,7 +670,7 @@ class MediaStream:
         backend: str = "pil",
         verbose: bool = False,
     ) -> None:
-        validate_type(source, (str, Path), "source")
+        validate_type(source, (str, os.PathLike), "source")
         validate_type(sample_rate, int, "sample_rate")
         validate_type(recursive, bool, "recursive")
         validate_type(backend, str, "backend")
@@ -687,7 +688,7 @@ class MediaStream:
             raise ValueError("backend must be 'pil' or 'opencv'")
 
         path = files.path(source)
-        if not path.exists():
+        if not files.exists(path):
             raise FileNotFoundError(f"source does not exist: {path}")
 
         self.source_path = str(path)
@@ -707,8 +708,8 @@ class MediaStream:
         self._motion_threshold: Optional[float] = None
         self._deduplicate_threshold: Optional[float] = None
 
-        if path.is_file():
-            suffix = path.suffix.lower()
+        if files.is_file(path):
+            suffix = files.extension(path).lower()
             if suffix in VIDEO_SUFFIXES:
                 self.source_type = "video"
                 reader = VideoReader(path)
@@ -729,7 +730,7 @@ class MediaStream:
                     pass
             else:
                 raise ValueError(f"source is not a supported image or video file: {path}")
-        elif path.is_dir():
+        elif files.is_dir(path):
             self.source_type = "folder"
             source_total = sum(1 for _ in self._iter_image_paths())
             if source_total == 0:
@@ -744,8 +745,8 @@ class MediaStream:
             self.total_frames = min(sampled_total, max_frames) if max_frames is not None else sampled_total
 
     def _iter_image_paths(self) -> Iterator[Path]:
-        iterator = self.path.rglob("*") if self.recursive else self.path.glob("*")
-        paths = (p for p in iterator if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES)
+        iterator = files.iter_find(self.path, recursive=self.recursive)
+        paths = (p for p in iterator if files.is_file(p) and files.extension(p).lower() in IMAGE_SUFFIXES)
         yield from sorted(paths, key=lambda p: str(p).lower())
 
     def _clone(self) -> "MediaStream":
@@ -994,7 +995,7 @@ def load(
     >>> len(frames)        # Tổng số frame của video tức thì
     >>> first = frames[0]  # Pixel chỉ được decode khi thực sự materialize ảnh
     """
-    validate_type(source, (str, Path), "source")
+    validate_type(source, (str, os.PathLike), "source")
     validate_type(recursive, bool, "recursive")
     validate_type(backend, str, "backend")
     validate_type(verbose, bool, "verbose")
@@ -1004,24 +1005,24 @@ def load(
         raise ValueError("backend must be 'pil' or 'opencv'")
 
     p = files.path(source)
-    if not p.exists():
+    if not files.exists(p):
         raise FileNotFoundError(f"source does not exist: {p}")
 
-    if p.is_file():
-        suf = p.suffix.lower()
+    if files.is_file(p):
+        suf = files.extension(p).lower()
         if suf in VIDEO_SUFFIXES:
             return _read_video_frames(p, backend=backend, verbose=verbose)
         elif suf in IMAGE_SUFFIXES:
             image_paths = [p]
         else:
             raise ValueError(f"source is not a supported image or video file: {p}")
-    elif p.is_dir():
-        iterator = p.rglob("*") if recursive else p.glob("*")
+    elif files.is_dir(p):
+        iterator = files.iter_find(p, recursive=recursive)
         image_paths = sorted(
             (
                 f
                 for f in iterator
-                if f.is_file() and f.suffix.lower() in IMAGE_SUFFIXES
+                if files.is_file(f) and files.extension(f).lower() in IMAGE_SUFFIXES
             ),
             key=lambda f: str(f).lower(),
         )
@@ -1036,7 +1037,7 @@ def load(
     return MediaFrames(
         lazy_frames,
         source_path=p,
-        source_type="folder" if p.is_dir() else "image",
+        source_type="folder" if files.is_dir(p) else "image",
     )
 
 
@@ -1069,20 +1070,20 @@ def save(
     Tác dụng:
     - Lưu một đối tượng ảnh (PIL Image, NumPy array, PyTorch Tensor) ra tập tin đĩa.
     """
-    validate_type(path, (str, Path), "path")
+    validate_type(path, (str, os.PathLike), "path")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
 
     p = files.path(path)
-    if p.exists() and not overwrite:
+    if files.exists(p) and not overwrite:
         raise FileExistsError(f"File already exists: {p}. Use overwrite=True to replace it.")
 
-    p.parent.mkdir(parents=True, exist_ok=True)
+    files.mkdir(files.parent(p))
 
     if isinstance(image, LazyImage):
         image = image.to_pil(cache=False)
 
-    with ProgressBar(total=1, desc=f"Saving image {p.name}", unit="file", verbose=verbose, colour="cyan") as pbar:
+    with ProgressBar(total=1, desc=f"Saving image {files.name(p)}", unit="file", verbose=verbose, colour="cyan") as pbar:
         if isinstance(image, Image.Image):
             image.save(p)
         elif isinstance(image, np.ndarray):
@@ -1113,22 +1114,22 @@ def convert(
     - Tự động nhận diện nhóm chuyển đổi Web-ready, Storage, Modern Web, hoặc Demo.
     - Tự động phát hiện và tận dụng GPU (NVIDIA NVENC) nếu máy/Colab có sẵn (`gpu=None`), hoặc chỉ định rõ `gpu=True`/`gpu=False`.
     """
-    validate_type(source, (str, Path), "source")
-    validate_type(target, (str, Path), "target")
+    validate_type(source, (str, os.PathLike), "source")
+    validate_type(target, (str, os.PathLike), "target")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
 
     src_p = files.path(source)
     tgt_p = files.path(target)
 
-    if not src_p.exists():
+    if not files.exists(src_p):
         raise FileNotFoundError(f"source file does not exist: {src_p}")
 
-    src_suf = src_p.suffix.lower()
-    tgt_suf = tgt_p.suffix.lower()
+    src_suf = files.extension(src_p).lower()
+    tgt_suf = files.extension(tgt_p).lower()
 
     if src_suf in IMAGE_SUFFIXES and tgt_suf in IMAGE_SUFFIXES:
-        with ProgressBar(total=1, desc=f"Converting image {src_p.name} -> {tgt_p.name}", unit="file", verbose=verbose, colour="cyan") as pbar:
+        with ProgressBar(total=1, desc=f"Converting image {files.name(src_p)} -> {files.name(tgt_p)}", unit="file", verbose=verbose, colour="cyan") as pbar:
             imgs = load(src_p, verbose=False)
             res = save(tgt_p, imgs[0], overwrite=overwrite, verbose=False)
             pbar.update(1)
@@ -1205,7 +1206,7 @@ def convert(
             try:
                 v_info = probe(src_p)
                 total_frames = v_info.get("frame_count") or 1
-                with ProgressBar(total=total_frames, desc=f"Converting {src_p.name} (FFmpeg)", unit="frame", verbose=verbose, colour="cyan") as pbar:
+                with ProgressBar(total=total_frames, desc=f"Converting {files.name(src_p)} (FFmpeg)", unit="frame", verbose=verbose, colour="cyan") as pbar:
                     # Run FFmpeg with progress monitoring if verbose, or silent if not
                     if not verbose:
                         result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -1293,12 +1294,12 @@ def copy(
     >>> import klygo.media as media
     >>> media.copy("image.jpg", "backup/image.jpg", overwrite=True)
     """
-    validate_type(source, (str, Path), "source")
-    validate_type(target, (str, Path), "target")
+    validate_type(source, (str, os.PathLike), "source")
+    validate_type(target, (str, os.PathLike), "target")
     validate_type(overwrite, bool, "overwrite")
 
     src_p = files.path(source)
-    if not src_p.exists():
+    if not files.exists(src_p):
         raise FileNotFoundError(f"Media source does not exist: {src_p}")
 
     return files.copy(src_p, target, overwrite=overwrite)
@@ -1331,15 +1332,15 @@ def save_video(
     >>> import klygo.media as media
     >>> media.save_video("output.mp4", frames_list, fps=30, overwrite=True)
     """
-    validate_type(output_path, (str, Path), "output_path")
+    validate_type(output_path, (str, os.PathLike), "output_path")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
 
     p = files.path(output_path)
-    if p.exists() and not overwrite:
+    if files.exists(p) and not overwrite:
         raise FileExistsError(f"Video file already exists: {p}. Use overwrite=True to replace it.")
 
-    p.parent.mkdir(parents=True, exist_ok=True)
+    files.mkdir(files.parent(p))
 
     frame_iter = iter(frames)
     try:
@@ -1364,7 +1365,7 @@ def save_video(
         writer.write(f_bgr)
 
     try:
-        with ProgressBar(total=None, desc=f"Encoding video {p.name}", unit="frame", verbose=verbose, colour="cyan") as pbar:
+        with ProgressBar(total=None, desc=f"Encoding video {files.name(p)}", unit="frame", verbose=verbose, colour="cyan") as pbar:
             _write_frame(first_frame)
             pbar.update(1)
             for frame in frame_iter:
@@ -1403,21 +1404,21 @@ def save_images(
     >>> import klygo.media as media
     >>> media.save_images("extracted_frames", frames_list, extension=".jpg")
     """
-    validate_type(output_dir, (str, Path), "output_dir")
+    validate_type(output_dir, (str, os.PathLike), "output_dir")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
 
     out_p = files.path(output_dir)
-    out_p.mkdir(parents=True, exist_ok=True)
+    files.mkdir(out_p)
 
     if not extension.startswith("."):
         extension = f".{extension}"
 
     saved_paths: List[Path] = []
     total = len(images) if isinstance(images, (builtins.list, tuple)) else getattr(images, "total_frames", None)
-    with ProgressBar(total=total, desc=f"Saving image batch to {out_p.name}", unit="file", verbose=verbose, colour="cyan") as pbar:
+    with ProgressBar(total=total, desc=f"Saving image batch to {files.name(out_p)}", unit="file", verbose=verbose, colour="cyan") as pbar:
         for idx, img in enumerate(images, start=1):
-            file_path = out_p / f"{prefix}_{idx:06d}{extension}"
+            file_path = files.join(out_p, f"{prefix}_{idx:06d}{extension}")
             save(file_path, img, overwrite=overwrite, verbose=False)
             saved_paths.append(file_path)
             pbar.update(1)
@@ -1455,21 +1456,21 @@ def iter_frames(
         raise ValueError("sample_rate must be an integer >= 1")
 
     p = files.path(source)
-    if not p.exists():
+    if not files.exists(p):
         raise FileNotFoundError(f"source does not exist: {p}")
 
     backend = backend.lower()
     if backend not in ("pil", "opencv"):
         raise ValueError("backend must be 'pil' or 'opencv'")
 
-    if p.is_file() and p.suffix.lower() in VIDEO_SUFFIXES:
+    if files.is_file(p) and files.extension(p).lower() in VIDEO_SUFFIXES:
         cap = cv.VideoCapture(str(p))
         if not cap.isOpened():
             raise FileNotFoundError(f"Could not open video file: {p}")
 
         total_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
         try:
-            with ProgressBar(total=total_frames if total_frames > 0 else None, desc=f"Iterating video {p.name}", unit="frame", verbose=verbose, colour="cyan") as pbar:
+            with ProgressBar(total=total_frames if total_frames > 0 else None, desc=f"Iterating video {files.name(p)}", unit="frame", verbose=verbose, colour="cyan") as pbar:
                 frame_idx = 0
                 while True:
                     ret, frame = cap.read()
@@ -1508,12 +1509,12 @@ def probe(path: Union[str, Path]) -> Dict[str, Any]:
     >>> print(v_info['fps'], v_info['frame_count'])
     """
     p = files.path(path)
-    if not p.exists():
+    if not files.exists(p):
         raise FileNotFoundError(f"Path does not exist: {p}")
-    if not p.is_file():
+    if not files.is_file(p):
         raise ValueError(f"Path must be a file: {p}")
 
-    suf = p.suffix.lower()
+    suf = files.extension(p).lower()
 
     if suf in VIDEO_SUFFIXES:
         cap = cv.VideoCapture(str(p))
@@ -1548,7 +1549,7 @@ def probe(path: Union[str, Path]) -> Dict[str, Any]:
         web_ready = codec in ("h264", "vp8", "vp9", "av1") and suf in (".mp4", ".webm")
 
         return {
-            "name": p.name,
+            "name": files.name(p),
             "path": p,
             "type": "video",
             "format": suf.lstrip("."),
@@ -1565,7 +1566,7 @@ def probe(path: Union[str, Path]) -> Dict[str, Any]:
     with Image.open(p) as img:
         width, height = img.size
         return {
-            "name": p.name,
+            "name": files.name(p),
             "path": p,
             "type": "image",
             "format": img.format,

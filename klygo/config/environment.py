@@ -51,6 +51,13 @@ def from_env(
     dict
         New configuration with environment overrides.
 
+    Raises
+    ------
+    TypeError
+        If the input, prefix, or options have invalid types.
+    ValueError
+        If the separator or resulting nested keys are invalid.
+
     Examples
     --------
     >>> import os

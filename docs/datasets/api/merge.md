@@ -16,7 +16,10 @@ The created ZIP `pathlib.Path`.
 
 ## Errors and edge cases
 
-At least two sources are required. Source-index prefixes prevent filename collisions. The output must end in `.zip`.
+At least two sources are required. Source-index prefixes and encoded relative
+paths prevent filename collisions. The output must end in `.zip`; its metadata
+does not contain a machine-specific absolute path. Source datasets with sparse
+class IDs are mapped by their actual IDs, not by list position.
 
 ## AI usage guidance
 

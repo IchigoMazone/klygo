@@ -26,7 +26,10 @@ class TestArchiveDocumentation(unittest.TestCase):
         for name in archive.__all__:
             with self.subTest(name=name):
                 value = getattr(archive, name)
-                self.assertTrue(inspect.getdoc(value))
+                source_doc = inspect.getdoc(value)
+                self.assertTrue(source_doc)
+                for heading in ("Parameters", "Returns", "Raises", "Examples"):
+                    self.assertIn(f"{heading}\n{'-' * len(heading)}", source_doc)
                 document = docs / f"{name}.md"
                 self.assertTrue(document.is_file(), f"Missing doc file: {document}")
                 self.assertTrue((examples / f"{name}.py").is_file(), f"Missing example file: {examples / f'{name}.py'}")
@@ -39,6 +42,15 @@ class TestArchiveDocumentation(unittest.TestCase):
         for name in archive.__all__:
             with self.subTest(name=name):
                 runpy.run_path(str(examples / f"{name}.py"), run_name="__main__")
+
+    def test_archive_file_methods_use_public_docstring_form(self):
+        for name, method in inspect.getmembers(archive.ArchiveFile, inspect.isfunction):
+            if name.startswith("_"):
+                continue
+            with self.subTest(name=name):
+                source_doc = inspect.getdoc(method)
+                for heading in ("Parameters", "Returns", "Raises", "Examples"):
+                    self.assertIn(f"{heading}\n{'-' * len(heading)}", source_doc)
 
 
 if __name__ == "__main__":

@@ -17,6 +17,16 @@ class ArchiveFile:
     archive_path : str or pathlib.Path
         Existing archive to open.
 
+    Returns
+    -------
+    ArchiveFile
+        Initialized archive wrapper.
+
+    Raises
+    ------
+    ValueError
+        If the archive format is unsupported.
+
     Attributes
     ----------
     archive_path : pathlib.Path
@@ -41,11 +51,53 @@ class ArchiveFile:
         _, self.backend = resolve_backend(self.archive_path, format_hint=self.format)
 
     def list_files(self) -> List[str]:
-        """Return all stored member names."""
+        """Return all stored member names.
+
+        Parameters
+        ----------
+        None
+            Uses the archive bound to this instance.
+
+        Returns
+        -------
+        list[str]
+            Stored member names.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the archive file is missing.
+
+        Examples
+        --------
+        >>> opened = ArchiveFile("dataset.zip")
+        >>> names = opened.list_files()
+        """
         return self.backend.list_files(self.archive_path)
 
     def iter_files(self) -> Iterator[str]:
-        """Yield stored member names lazily."""
+        """Yield stored member names lazily.
+
+        Parameters
+        ----------
+        None
+            Uses the archive bound to this instance.
+
+        Returns
+        -------
+        Iterator[str]
+            Lazy stream of stored member names.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the archive file is missing when iterated.
+
+        Examples
+        --------
+        >>> opened = ArchiveFile("dataset.zip")
+        >>> names = list(opened.iter_files())
+        """
         yield from self.backend.iter_files(self.archive_path)
 
     def search(
@@ -54,7 +106,32 @@ class ArchiveFile:
         regex: bool = False,
         case_sensitive: bool = True,
     ) -> List[str]:
-        """Search member names using a glob or regular expression."""
+        """Search member names using a glob or regular expression.
+
+        Parameters
+        ----------
+        pattern : str
+            Glob pattern or regular expression.
+        regex : bool, default=False
+            Interpret ``pattern`` as a regular expression.
+        case_sensitive : bool, default=True
+            Match letter case exactly.
+
+        Returns
+        -------
+        list[str]
+            Matching member names.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the archive file is missing.
+
+        Examples
+        --------
+        >>> opened = ArchiveFile("dataset.zip")
+        >>> names = opened.search("images/*.jpg")
+        """
         return self.backend.search(
             self.archive_path, pattern, regex=regex, case_sensitive=case_sensitive
         )
@@ -66,7 +143,36 @@ class ArchiveFile:
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
-        """Extract all archive members into ``output_dir``."""
+        """Extract all archive members into ``output_dir``.
+
+        Parameters
+        ----------
+        output_dir : str or pathlib.Path, default='.'
+            Destination directory.
+        password : str or None, default=None
+            Password for supported encrypted archives.
+        overwrite : bool, default=False
+            Replace existing output files.
+        verbose : bool, default=True
+            Display extraction progress.
+
+        Returns
+        -------
+        None
+            Files are extracted as a side effect.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the archive file is missing.
+        FileExistsError
+            If an output file exists and ``overwrite`` is false.
+
+        Examples
+        --------
+        >>> opened = ArchiveFile("dataset.zip")
+        >>> opened.extract("output")
+        """
         self.backend.validate_option("extract", "password", password, None)
         self.backend.extract(
             self.archive_path,
@@ -83,7 +189,36 @@ class ArchiveFile:
         password: Optional[str] = None,
         overwrite: bool = False,
     ) -> None:
-        """Extract one member into ``output_dir`` using streaming I/O."""
+        """Extract one member into ``output_dir`` using streaming I/O.
+
+        Parameters
+        ----------
+        filename : str
+            Name of the member to extract.
+        output_dir : str or pathlib.Path, default='.'
+            Destination directory.
+        password : str or None, default=None
+            Password for supported encrypted archives.
+        overwrite : bool, default=False
+            Replace an existing output file.
+
+        Returns
+        -------
+        None
+            The member is extracted as a side effect.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the archive or requested member is missing.
+        FileExistsError
+            If the output exists and ``overwrite`` is false.
+
+        Examples
+        --------
+        >>> opened = ArchiveFile("dataset.zip")
+        >>> opened.extract_file("images/cat.jpg", "output")
+        """
         self.backend.validate_option("extract", "password", password, None)
         self.backend.extract_file(
             self.archive_path,
@@ -94,11 +229,54 @@ class ArchiveFile:
         )
 
     def get_info(self) -> Dict[str, Any]:
-        """Return archive metadata and compression statistics."""
+        """Return archive metadata and compression statistics.
+
+        Parameters
+        ----------
+        None
+            Uses the archive bound to this instance.
+
+        Returns
+        -------
+        dict[str, Any]
+            Archive format, size, member count, and compression details.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the archive file is missing.
+
+        Examples
+        --------
+        >>> opened = ArchiveFile("dataset.zip")
+        >>> info = opened.get_info()
+        """
         return self.backend.get_info(self.archive_path)
 
     def test(self, raise_exception: bool = False) -> bool:
-        """Run the backend integrity check."""
+        """Run the backend integrity check.
+
+        Parameters
+        ----------
+        raise_exception : bool, default=False
+            Raise on integrity failure instead of returning false.
+
+        Returns
+        -------
+        bool
+            Whether the archive passes its integrity check.
+
+        Raises
+        ------
+        Exception
+            If integrity validation fails and ``raise_exception`` is true;
+            the exception type depends on the archive backend.
+
+        Examples
+        --------
+        >>> opened = ArchiveFile("dataset.zip")
+        >>> valid = opened.test()
+        """
         return self.backend.test(self.archive_path, raise_exception=raise_exception)
 
     def __enter__(self) -> "ArchiveFile":
@@ -120,6 +298,11 @@ def open_archive(archive_path: Union[str, Path]) -> ArchiveFile:
     -------
     ArchiveFile
         Context-manager wrapper for the archive.
+
+    Raises
+    ------
+    ValueError
+        If the archive format is unsupported.
 
     See Also
     --------

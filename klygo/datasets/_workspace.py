@@ -39,6 +39,28 @@ def dataset_workspace(prefix: str) -> Iterator[Path]:
         yield workspace
 
 
+def set_output_metadata_path(metadata: dict, destination: str | Path) -> None:
+    """Use a local path for directories and no machine-specific path for ZIPs."""
+    output = files.path(destination)
+    if files.extension(output).lower() == ".zip":
+        metadata.pop("path", None)
+    else:
+        metadata["path"] = files.as_posix(files.resolve(output))
+
+
+def publish_output(staging: Path, destination: Path, temporary_root: Path) -> None:
+    """Install a finished output, restoring the previous one on rename failure."""
+    backup = files.join(temporary_root, "previous")
+    if files.exists(destination):
+        files.rename(destination, files.resolve(backup))
+    try:
+        files.rename(staging, files.join(files.resolve(files.parent(destination)), files.name(destination)))
+    except BaseException:
+        if files.exists(backup):
+            files.rename(backup, files.join(files.resolve(files.parent(destination)), files.name(destination)))
+        raise
+
+
 def write_output(
     workspace: str | Path,
     target: str | Path,
@@ -49,16 +71,25 @@ def write_output(
     """Write a workspace to a directory or archive destination."""
     source = files.path(workspace)
     destination = files.path(target)
-    if files.extension(destination).lower() == ".zip":
-        archive.compress(
-            source,
-            destination,
-            include_root=False,
-            overwrite=overwrite,
-            verbose=verbose,
-        )
-        return destination
-    return files.copy(source, destination, overwrite=overwrite)
+    if files.exists(destination) and not overwrite:
+        raise FileExistsError(f"target already exists: {destination}")
+    files.mkdir(files.parent(destination))
+    with TemporaryDirectory(prefix=f".{files.name(destination)}-", dir=files.parent(destination)) as directory:
+        temporary_root = files.path(directory)
+        if files.extension(destination).lower() == ".zip":
+            staging = files.join(temporary_root, "dataset.zip")
+            archive.compress(
+                source,
+                staging,
+                include_root=False,
+                overwrite=True,
+                verbose=verbose,
+            )
+        else:
+            staging = files.join(temporary_root, "dataset")
+            files.copy(source, staging)
+        publish_output(staging, destination, temporary_root)
+    return destination
 
 
-__all__ = ["dataset_workspace", "open_dataset", "write_output"]
+__all__ = ["dataset_workspace", "open_dataset", "publish_output", "set_output_metadata_path", "write_output"]

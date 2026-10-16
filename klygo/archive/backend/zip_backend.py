@@ -63,12 +63,12 @@ class ZipBackend(ArchiveBackend):
 
     Examples
     --------
-    >>> from pathlib import Path
+    >>> from klygo import files
     >>> from klygo.archive.backend import ZipBackend
     >>> backend = ZipBackend()
     >>> backend.capabilities.add
     True
-    >>> backend.compress(Path("dataset"), Path("dataset.zip"), verbose=False)
+    >>> backend.compress(files.path("dataset"), files.path("dataset.zip"), verbose=False)
     """
 
     COMPRESSION_METHODS = {
@@ -124,9 +124,9 @@ class ZipBackend(ArchiveBackend):
 
         # Generator traversal to avoid loading all Paths into RAM
         def _file_generator():
-            if source.is_dir():
-                for p in source.rglob("*"):
-                    if p.is_file() or (not follow_symlinks and p.is_symlink()):
+            if file_utils.is_dir(source):
+                for p in file_utils.list_entries(source, recursive=True):
+                    if file_utils.is_file(p) or (not follow_symlinks and file_utils.is_symlink(p)):
                         yield p
             else:
                 yield source
@@ -134,15 +134,15 @@ class ZipBackend(ArchiveBackend):
         files_to_compress = list(_file_generator()) if verbose else None
         total_count = len(files_to_compress) if files_to_compress else 1
 
-        with ProgressBar(total=total_count, desc=f"{output_path.name}: compressing", verbose=verbose) as pbar:
+        with ProgressBar(total=total_count, desc=f"{file_utils.name(output_path)}: compressing", verbose=verbose) as pbar:
             with ZipFile(output_path, mode="w", compression=comp_type, compresslevel=compresslevel) as zf:
                 gen = files_to_compress if files_to_compress is not None else _file_generator()
                 for file_path in gen:
-                    if source.is_dir():
-                        base = source.parent if include_root else source
-                        arcname = file_path.relative_to(base)
+                    if file_utils.is_dir(source):
+                        base = file_utils.parent(source) if include_root else source
+                        arcname = file_utils.relative(file_path, base)
                     else:
-                        arcname = file_path.name
+                        arcname = file_utils.name(file_path)
                     zf.write(file_path, arcname=str(arcname))
                     pbar.update(1)
 
@@ -163,7 +163,7 @@ class ZipBackend(ArchiveBackend):
         for encrypted ZIP members.
         """
         pwd_bytes = password.encode("utf-8") if password else None
-        output_dir = output_dir.resolve()
+        output_dir = file_utils.resolve(output_dir)
         file_utils.mkdir(output_dir)
 
         includes = [include] if isinstance(include, str) else (include or [])
@@ -183,15 +183,15 @@ class ZipBackend(ArchiveBackend):
                 filtered_members.append(m)
 
             if not overwrite:
-                existing = [m for m in filtered_members if file_utils.exists(output_dir / m.filename)]
+                existing = [m for m in filtered_members if file_utils.exists(file_utils.join(output_dir, m.filename))]
                 if existing:
                     names = ", ".join(m.filename for m in existing[:5])
                     suffix = f"… (+{len(existing) - 5} more)" if len(existing) > 5 else ""
                     raise FileExistsError(f"Files already exist in output directory: {names}{suffix}. Use overwrite=True.")
 
-            with ProgressBar(total=len(filtered_members), desc=f"{archive_path.name}: extracting", verbose=verbose) as pbar:
+            with ProgressBar(total=len(filtered_members), desc=f"{file_utils.name(archive_path)}: extracting", verbose=verbose) as pbar:
                 for member in filtered_members:
-                    target_path = output_dir / member.filename
+                    target_path = file_utils.join(output_dir, member.filename)
                     if not _is_safe_path(output_dir, target_path):
                         raise ValueError(f"Unsafe path detected in archive (Zip Slip): '{member.filename}'")
                     zf.extract(member, path=output_dir, pwd=pwd_bytes)
@@ -215,7 +215,7 @@ class ZipBackend(ArchiveBackend):
             except KeyError:
                 raise KeyError(f"'{filename}' not found in archive. Use list_files() to see available file_utils.")
 
-            target = output_dir / file_utils.name(filename)
+            target = file_utils.join(output_dir, file_utils.name(filename))
             if file_utils.exists(target) and not overwrite:
                 raise FileExistsError(f"File already exists: {target}. Use overwrite=True.")
 
@@ -256,7 +256,7 @@ class ZipBackend(ArchiveBackend):
 
             total_uncompressed = sum(m.file_size for m in members)
             total_compressed = sum(m.compress_size for m in members)
-            archive_size = archive_path.stat().st_size
+            archive_size = file_utils.size(archive_path)
 
             ratio = (
                 round((1 - total_compressed / total_uncompressed) * 100, 2)
@@ -320,12 +320,12 @@ class ZipBackend(ArchiveBackend):
         """
         all_files: List[tuple[Path, str]] = []
         for fp in files:
-            if fp.is_dir():
-                for child in sorted(fp.rglob("*")):
-                    if child.is_file():
-                        all_files.append((child, child.relative_to(fp.parent).as_posix()))
+            if file_utils.is_dir(fp):
+                for child in sorted(file_utils.list_entries(fp, recursive=True)):
+                    if file_utils.is_file(child):
+                        all_files.append((child, file_utils.as_posix(file_utils.relative(child, file_utils.parent(fp)))))
             else:
-                all_files.append((fp, fp.name))
+                all_files.append((fp, file_utils.name(fp)))
 
         # Build final list of (abs_path, arcname) resolving conflicts
         with ZipFile(archive_path, mode="r") as zf:
@@ -358,7 +358,7 @@ class ZipBackend(ArchiveBackend):
 
         # If overwriting entries, must rebuild archive
         if to_overwrite:
-            tmp_path = archive_path.with_suffix(".tmp.zip")
+            tmp_path = file_utils.with_name(archive_path, f"{file_utils.stem(archive_path)}.tmp.zip")
             with ZipFile(archive_path, mode="r") as src_zf, \
                  ZipFile(tmp_path, mode="w", compression=ZIP_DEFLATED) as dst_zf:
                 # Copy existing entries not being overwritten
@@ -367,15 +367,22 @@ class ZipBackend(ArchiveBackend):
                         with src_zf.open(item) as src, dst_zf.open(item, mode="w") as dst:
                             shutil.copyfileobj(src, dst)
                 # Write new/overwritten entries
-                with ProgressBar(total=len(resolved), desc=f"{archive_path.name}: adding", verbose=verbose) as pbar:
+                with ProgressBar(total=len(resolved), desc=f"{file_utils.name(archive_path)}: adding", verbose=verbose) as pbar:
                     for abs_path, arcname in resolved:
                         dst_zf.write(abs_path, arcname=arcname)
                         pbar.update(1)
-            tmp_path.replace(archive_path)
+            file_utils.rename(
+                tmp_path,
+                file_utils.join(
+                    file_utils.resolve(file_utils.parent(archive_path)),
+                    file_utils.name(archive_path),
+                ),
+                overwrite=True,
+            )
         else:
             # Simple append — no overwrite needed
             with ZipFile(archive_path, mode="a", compression=ZIP_DEFLATED) as zf:
-                with ProgressBar(total=len(resolved), desc=f"{archive_path.name}: adding", verbose=verbose) as pbar:
+                with ProgressBar(total=len(resolved), desc=f"{file_utils.name(archive_path)}: adding", verbose=verbose) as pbar:
                     for abs_path, arcname in resolved:
                         zf.write(abs_path, arcname=arcname)
                         pbar.update(1)
@@ -390,14 +397,21 @@ class ZipBackend(ArchiveBackend):
             if missing:
                 raise KeyError(f"Files not found in archive: {sorted(missing)}.")
 
-            tmp_path = archive_path.with_suffix(".tmp.zip")
+            tmp_path = file_utils.with_name(archive_path, f"{file_utils.stem(archive_path)}.tmp.zip")
             with ZipFile(tmp_path, mode="w", compression=ZIP_DEFLATED) as tmp_zf:
                 for item in zf.infolist():
                     if item.filename not in to_remove:
                         with zf.open(item) as src, tmp_zf.open(item, mode="w") as dst:
                             shutil.copyfileobj(src, dst)
 
-        tmp_path.replace(archive_path)
+        file_utils.rename(
+            tmp_path,
+            file_utils.join(
+                file_utils.resolve(file_utils.parent(archive_path)),
+                file_utils.name(archive_path),
+            ),
+            overwrite=True,
+        )
 
     def merge(
         self,
@@ -418,7 +432,7 @@ class ZipBackend(ArchiveBackend):
                 total += len(src_members[src])
 
         written_names = set()
-        with ProgressBar(total=total, desc=f"{output_path.name}: merging", verbose=verbose) as pbar:
+        with ProgressBar(total=total, desc=f"{file_utils.name(output_path)}: merging", verbose=verbose) as pbar:
             with ZipFile(output_path, mode="w", compression=ZIP_DEFLATED) as out_zf:
                 for src in archive_paths:
                     with ZipFile(src, mode="r") as src_zf:
@@ -444,20 +458,20 @@ class ZipBackend(ArchiveBackend):
         file_utils.mkdir(output_dir)
         max_bytes = int(size * 1024 * 1024)
 
-        stem = archive_path.stem
-        suffix = archive_path.suffix
+        stem = file_utils.stem(archive_path)
+        suffix = file_utils.extension(archive_path)
         parts: List[str] = []
         part_num = 1
 
         with ZipFile(archive_path, mode="r") as src_zf:
             members = src_zf.infolist()
-            with ProgressBar(total=len(members), desc=f"{archive_path.name}: splitting", verbose=verbose) as pbar:
+            with ProgressBar(total=len(members), desc=f"{file_utils.name(archive_path)}: splitting", verbose=verbose) as pbar:
                 current_members: List = []
                 current_size = 0
 
                 def _flush() -> None:
                     nonlocal part_num
-                    part_path = output_dir / f"{stem}_part_{part_num:03d}{suffix}"
+                    part_path = file_utils.join(output_dir, f"{stem}_part_{part_num:03d}{suffix}")
                     if file_utils.exists(part_path) and not overwrite:
                         raise FileExistsError(f"Output already exists: {part_path}. Use overwrite=True.")
                     with ZipFile(part_path, mode="w", compression=ZIP_DEFLATED) as pzf:

@@ -24,7 +24,10 @@ class TestDocumentation(unittest.TestCase):
         )
         for name in datasets.__all__:
             with self.subTest(name=name):
-                self.assertTrue(inspect.getdoc(getattr(datasets, name)))
+                source_doc = inspect.getdoc(getattr(datasets, name))
+                self.assertTrue(source_doc)
+                for heading in ("Parameters", "Returns", "Raises", "Examples"):
+                    self.assertIn(f"{heading}\n{'-' * len(heading)}", source_doc)
                 document = repository / "docs" / "datasets" / "api" / f"{name}.md"
                 example = repository / "examples" / "datasets" / f"{name}.py"
                 self.assertTrue(document.is_file())

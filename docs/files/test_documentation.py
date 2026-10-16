@@ -30,7 +30,10 @@ class TestFilesDocumentation(unittest.TestCase):
         for name in files.__all__:
             with self.subTest(name=name):
                 value = getattr(files, name)
-                self.assertTrue(inspect.getdoc(value))
+                source_doc = inspect.getdoc(value)
+                self.assertTrue(source_doc)
+                for heading in ("Parameters", "Returns", "Raises", "Examples"):
+                    self.assertIn(f"{heading}\n{'-' * len(heading)}", source_doc)
                 document = docs / f"{name}.md"
                 self.assertTrue(document.is_file(), f"Missing doc file: {document}")
                 self.assertTrue((examples / f"{name}.py").is_file(), f"Missing example file: {examples / f'{name}.py'}")

@@ -1,16 +1,17 @@
 """Flatten a partitioned YOLO dataset."""
 
+from os import PathLike
 from pathlib import Path
 
 from klygo import config, files
 
-from ._structure import copy_entry, flattened_name, read_class_names, scan_dataset_files
-from ._workspace import dataset_workspace, open_dataset, write_output
+from ._structure import copy_entry, flattened_name, read_class_map, scan_dataset_files
+from ._workspace import dataset_workspace, open_dataset, set_output_metadata_path, write_output
 
 
 def unpartition(
-    source: str | Path,
-    target: str | Path,
+    source: str | PathLike[str],
+    target: str | PathLike[str],
     overwrite: bool = False,
     verbose: bool = True,
 ) -> Path:
@@ -21,9 +22,9 @@ def unpartition(
 
     Parameters
     ----------
-    source : str or pathlib.Path
+    source : str or os.PathLike[str]
         Partitioned dataset directory or archive.
-    target : str or pathlib.Path
+    target : str or os.PathLike[str]
         Destination directory or ``.zip`` archive.
     overwrite : bool, default=False
         Replace an existing target.
@@ -34,6 +35,13 @@ def unpartition(
     -------
     pathlib.Path
         Created flat dataset path.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the source dataset or its images directory is missing.
+    FileExistsError
+        If the target exists and ``overwrite`` is false.
 
     Examples
     --------
@@ -53,13 +61,14 @@ def unpartition(
             if label_path is not None:
                 copy_entry(label_path, files.join(workspace, "labels", label_name))
 
-        names = read_class_names(root)
+        class_map = read_class_map(root)
+        dense = set(class_map) == set(range(len(class_map)))
         metadata = {
-            "path": files.resolve(destination).as_posix(),
             "train": "images",
-            "nc": len(names),
-            "names": names,
+            "nc": max(class_map, default=-1) + 1,
+            "names": list(class_map.values()) if dense else class_map,
         }
+        set_output_metadata_path(metadata, destination)
         config.save(files.join(workspace, "data.yaml"), metadata, overwrite=True, verbose=False)
         return write_output(workspace, destination, overwrite=overwrite, verbose=verbose)
 

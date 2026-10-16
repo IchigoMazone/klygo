@@ -1,18 +1,19 @@
 """Merge YOLO datasets while reconciling class IDs."""
 
 from contextlib import ExitStack
+from os import PathLike
 from pathlib import Path
 
 from klygo import config, files
 from klygo.validators.datasets import Merge
 
-from ._structure import copy_entry, flattened_name, read_class_names, remap_label_file, scan_dataset_files
-from ._workspace import dataset_workspace, open_dataset, write_output
+from ._structure import copy_entry, flattened_name, read_class_map, remap_label_file, scan_dataset_files
+from ._workspace import dataset_workspace, open_dataset, set_output_metadata_path, write_output
 
 
 def merge(
-    sources: list[str | Path],
-    output_path: str | Path,
+    sources: list[str | PathLike[str]],
+    output_path: str | PathLike[str],
     overwrite: bool = False,
     verbose: bool = True,
 ) -> Path:
@@ -24,9 +25,9 @@ def merge(
 
     Parameters
     ----------
-    sources : list[str or pathlib.Path]
+    sources : list[str or os.PathLike[str]]
         Two or more dataset directories or supported archives.
-    output_path : str or pathlib.Path
+    output_path : str or os.PathLike[str]
         Destination ``.zip`` archive.
     overwrite : bool, default=False
         Replace an existing archive.
@@ -61,17 +62,16 @@ def merge(
             stack.enter_context(open_dataset(source, verbose=False))
             for source in params.sources
         ]
-        local_names = [read_class_names(root) for root in roots]
+        local_maps = [read_class_map(root) for root in roots]
         global_names: list[str] = []
-        for names in local_names:
-            for name in names:
+        for class_map in local_maps:
+            for name in class_map.values():
                 if name not in global_names:
                     global_names.append(name)
 
-        for source_index, (root, names) in enumerate(zip(roots, local_names)):
+        for source_index, (root, names) in enumerate(zip(roots, local_maps)):
             class_map = {
-                local_id: global_names.index(name)
-                for local_id, name in enumerate(names)
+                local_id: global_names.index(name) for local_id, name in names.items()
             }
             pairs = scan_dataset_files(files.join(root, "images"), files.join(root, "labels"))
             for image_path, label_path, relative_image, relative_label in pairs:
@@ -86,11 +86,11 @@ def merge(
                     )
 
         metadata = {
-            "path": "/content/data",
             "train": "images",
             "nc": len(global_names),
             "names": global_names,
         }
+        set_output_metadata_path(metadata, params.output_path)
         config.save(files.join(workspace, "data.yaml"), metadata, overwrite=True, verbose=False)
         return write_output(
             workspace,

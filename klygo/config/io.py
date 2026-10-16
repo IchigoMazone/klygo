@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -43,7 +44,7 @@ def _expand_root_paths(data: dict[str, Any]) -> None:
     default = data.get("default")
     if not isinstance(default, Mapping) or "root" not in default:
         return
-    root = Path(str(default["root"]))
+    root = files.path(str(default["root"]))
 
     def visit(value: dict[str, Any], *, inside_default: bool = False) -> None:
         for key, child in value.items():
@@ -52,7 +53,7 @@ def _expand_root_paths(data: dict[str, Any]) -> None:
             if isinstance(child, dict):
                 visit(child, inside_default=inside_default)
             elif isinstance(child, str) and child.startswith("./"):
-                value[key] = str(root / child[2:])
+                value[key] = str(files.join(root, child[2:]))
 
     visit(data)
 
@@ -140,6 +141,13 @@ def save(
     pathlib.Path
         Destination path.
 
+    Raises
+    ------
+    TypeError
+        If ``data`` is not a mapping or Box.
+    FileExistsError
+        If the destination exists and ``overwrite`` is false.
+
     Examples
     --------
     >>> from klygo import config
@@ -184,6 +192,13 @@ def convert(
     pathlib.Path
         Destination path.
 
+    Raises
+    ------
+    FileNotFoundError
+        If the source file is missing.
+    FileExistsError
+        If the destination exists and ``overwrite`` is false.
+
     Examples
     --------
     >>> from klygo import config
@@ -204,12 +219,35 @@ def export(
     File inputs are converted through :func:`convert`; mapping and ``Box``
     inputs are serialized directly through :func:`save`.
 
+    Parameters
+    ----------
+    source : str, os.PathLike[str], Mapping, or Box
+        Configuration file or in-memory data to export.
+    target : str or os.PathLike[str]
+        Destination configuration file.
+    overwrite : bool, default=False
+        Replace an existing destination.
+    verbose : bool, default=True
+        Display file operation progress.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the exported configuration file.
+
+    Raises
+    ------
+    TypeError
+        If ``source`` is neither a file path nor a mapping.
+    FileExistsError
+        If the destination exists and ``overwrite`` is false.
+
     Examples
     --------
     >>> from klygo import config
     >>> config.export({"model": "yolo"}, "settings.yaml", overwrite=True)
     """
-    if isinstance(source, (str, Path)):
+    if isinstance(source, (str, os.PathLike)):
         return convert(source, target, overwrite=overwrite, verbose=verbose)
     if isinstance(source, (Mapping, Box)):
         return save(target, source, overwrite=overwrite, verbose=verbose)
