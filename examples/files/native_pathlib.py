@@ -32,7 +32,7 @@ with TemporaryDirectory() as directory:
     config = root / "config.json"
     files.save(config, {"epochs": 10}, atomic=True, verbose=False)
     assert files.load(config, verbose=False) == {"epochs": 10}
-    assert files.info(config, include_hash=False)["hash"] is None
+    assert files.info(config)["size"] > 0
     assert files.is_within(config, root)
     assert not files.is_within(root / ".." / "outside.txt", root)
 

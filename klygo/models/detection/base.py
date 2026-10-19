@@ -16,6 +16,20 @@ from klygo.outputs.detect import Detections, Detection, Box
 from klygo.utils.progress import ProgressBar
 
 
+def _materialize_model_images(images: Sequence[Any]) -> List[PIL.Image.Image]:
+    """Give model backends real RGB images without replacing lazy source proxies."""
+    from klygo import media
+
+    prepared = []
+    for image in images:
+        if isinstance(image, media.LazyImage):
+            image = image.to_pil(cache=False)
+            if image.mode != "RGB":
+                image = image.convert("RGB")
+        prepared.append(image)
+    return prepared
+
+
 class Detector(BaseModel):
     """
     TẦNG 2: Động cơ thực thi toàn diện cho bài toán Object Detection.
@@ -402,7 +416,7 @@ class Detector(BaseModel):
         # ==========================================
         if stream:
             images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames, stream=True)
-            
+
             total_count = None
             if hasattr(images, "total_frames") and images.total_frames is not None:
                 total_count = images.total_frames
@@ -421,22 +435,22 @@ class Detector(BaseModel):
                         batch_imgs = list(itertools.islice(iterator, actual_batch))
                         if not batch_imgs:
                             break
-                        
+
                         t_start = time.perf_counter()
                         with self._use_metadata(runtime_metadata):
                             dets = self.forward(
-                                images=batch_imgs,
+                                images=_materialize_model_images(batch_imgs),
                                 prompt=target_prompt,
                             )
                         t_end = time.perf_counter()
-                        
+
                         lat_per_frame = round(((t_end - t_start) * 1000) / len(batch_imgs), 2)
                         fps_val = round(1000.0 / max(0.001, lat_per_frame), 1)
-                        
+
                         for idx, det in enumerate(dets):
                             img = batch_imgs[idx] if idx < len(batch_imgs) else batch_imgs[0]
                             yield self._pack_detection(det, img, idx_offset + idx, lat_per_frame, fps_val)
-                            
+
                         idx_offset += len(batch_imgs)
 
             return Detections(
@@ -459,7 +473,7 @@ class Detector(BaseModel):
                 t_start = time.perf_counter()
                 with self._use_metadata(runtime_metadata):
                     dets = self.forward(
-                        images=images,
+                        images=_materialize_model_images(images),
                         prompt=target_prompt,
                     )
                 t_end = time.perf_counter()
@@ -475,7 +489,7 @@ class Detector(BaseModel):
                     t_start = time.perf_counter()
                     with self._use_metadata(runtime_metadata):
                         dets = self.forward(
-                            images=batch_imgs,
+                            images=_materialize_model_images(batch_imgs),
                             prompt=target_prompt,
                         )
                     t_end = time.perf_counter()

@@ -75,6 +75,29 @@ class TestPreprocessing(unittest.TestCase):
         assert [item["name"] for item in p.inspect(first)] == ["grayscale", "threshold"]
         assert p.inspect(first) == p.inspect(second)
 
+    def test_materialized_pipeline_cache_reuses_result_until_unload(self):
+        image = media.load(_image_path(self.tmp_path))[0]
+        calls = []
+
+        def record(value):
+            calls.append(value.size)
+            return value
+
+        processed = p.compose(p.resize((40, 20)), p.custom(record))(image)
+
+        first = processed.to_pil(cache=True)
+        second = processed.to_pil(cache=True)
+        assert first is second
+        assert calls == [(40, 20)]
+        assert processed.size == (40, 20)
+
+        processed.to_pil(cache=False)
+        assert len(calls) == 2
+
+        processed.unload()
+        processed.to_pil(cache=True)
+        assert len(calls) == 3
+
     def test_restore_boxes_after_letterbox(self):
         image = media.load(_image_path(self.tmp_path, size=(100, 50)))[0]
         processed = p.letterbox((100, 100))(image)
@@ -137,7 +160,7 @@ class TestPreprocessing(unittest.TestCase):
         for index in range(3):
             Image.new("RGB", (20, 10), (index * 20, 50, 100)).save(directory / f"{index}.png")
 
-        stream = media.stream(directory).transform(p.compose([p.resize((8, 8)), p.grayscale()]))
+        stream = media.load(directory, stream=True).transform(p.compose([p.resize((8, 8)), p.grayscale()]))
         frames = list(stream)
 
         assert len(frames) == 3

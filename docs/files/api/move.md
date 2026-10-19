@@ -1,14 +1,14 @@
 # `files.move`
 
 ```python
-files.move(source, target, overwrite=True)
+files.move(source, target, overwrite=False)
 ```
 
 Move a file or directory.
 
 ## Contract
 
-Creates the destination parent and optionally replaces an existing target.
+Copies and publishes the destination before removing the source. It refuses overlapping source and destination paths and replaces an existing target only with `overwrite=True`. If removing the source fails, both copies may remain so the data is still recoverable.
 
 Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
@@ -24,7 +24,7 @@ A `pathlib.Path` representing the result.
 
 ## Errors and edge cases
 
-Raises `FileNotFoundError` for a missing source and `FileExistsError` when replacement is disabled.
+Raises `FileNotFoundError` for a missing source, `FileExistsError` when replacement is disabled, and `ValueError` for overlapping paths.
 
 ## AI usage guidance
 

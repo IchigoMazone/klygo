@@ -12,8 +12,8 @@ class TestHash(unittest.TestCase):
         with TemporaryDirectory() as directory:
             target = Path(directory) / "data.bin"
             target.write_bytes(b"abc")
-            self.assertEqual(files.hash(target), "900150983cd24fb0d6963f7d28e17f72")
-            self.assertEqual(len(files.hash(target, "sha256")), 64)
+            self.assertEqual(files.hash(target), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+            self.assertEqual(files.hash(target, "md5"), "900150983cd24fb0d6963f7d28e17f72")
             with self.assertRaises(ValueError):
                 files.hash(directory)
 

@@ -63,6 +63,15 @@ class TestSave(unittest.TestCase):
                 files.save(target, {"bad": object()}, verbose=False, atomic=True)
             self.assertEqual(list(root.iterdir()), [])
 
+    def test_default_save_preserves_existing_file_on_serialization_failure(self):
+        with TemporaryDirectory() as directory:
+            target = Path(directory) / "data.json"
+            target.write_text('{"old": true}', encoding="utf-8")
+            with self.assertRaises(TypeError):
+                files.save(target, {"bad": object()}, overwrite=True, verbose=False)
+            self.assertEqual(target.read_text(encoding="utf-8"), '{"old": true}')
+            self.assertEqual(list(Path(directory).iterdir()), [target])
+
     def test_atomic_overwrite_and_commit_failure(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

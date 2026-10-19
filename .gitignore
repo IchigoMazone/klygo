@@ -23,6 +23,7 @@ _cmake_build/
 # Temp test folders & scratch artifacts
 temp_*/
 *.ipynb
+!tutorials/files/*.ipynb
 *.jpg
 *.png
 *.mp4

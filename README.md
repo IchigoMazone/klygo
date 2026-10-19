@@ -46,13 +46,18 @@ For a PyTorch runtime without Transformers, install `klygo[torch]`. KerasHub can
 - `klygo.config`: Load and manipulate multi-format configuration with dot-path access.
 - `klygo.datasets`: Inspect, partition, repartition, merge, split, remap, and export datasets.
 - `klygo.files`: File, directory, and path operations, plus structured-data I/O.
-- `klygo.media`: Load, stream, and save image and video data.
+- `klygo.media`: Load and save image and video data; use `load(..., stream=True)` for bounded-memory iteration.
 - `klygo.models`: Load and run supported detection models on images, directories, and videos.
 - `klygo.postprocessing`: Filter detections, update labels and boxes, apply NMS, and compose result pipelines.
 - `klygo.outputs`: Standardized `Box`, `Detection`, `Detections`, and `Crops` result types.
 - `klygo.visual`: Display images, draw bounding boxes, and plot dataset statistics.
 
 See the [documentation index](docs/README.md) for module guides and API references.
+
+Preprocessing is lazy: building a pipeline does not decode pixels. If the same
+processed image is needed more than once, use `image.to_pil(cache=True)` or
+`image.to_array(cache=True)` to reuse the processed result. Call `image.unload()`
+to release the cached pixels.
 
 ## Quick start
 
@@ -106,6 +111,18 @@ clean_results = postprocessing.compose(
     postprocessing.nms(iou=0.5),
 )(results)
 print(clean_results.labels, clean_results.scores)
+```
+
+Preprocessed lazy images can be passed directly to `predict`; the model receives
+materialized RGB pixels while the result retains the original preprocessing
+trace for coordinate restoration:
+
+```python
+from klygo import media, preprocessing
+
+cropped = preprocessing.crop((50, 50, 350, 250))(media.load("traffic.jpg")[0])
+result = model.predict(cropped, prompt="car. person.")
+result[0].restore(target="original").show()
 ```
 
 ## Path conventions

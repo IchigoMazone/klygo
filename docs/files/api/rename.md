@@ -8,7 +8,7 @@ Rename a filesystem entry or move it to an explicit path.
 
 ## Contract
 
-A single path component is interpreted relative to the source parent.
+A single path component is interpreted relative to the source parent. The default no-overwrite path refuses a concurrently created destination. Overwriting moves the old destination to a backup before renaming and restores it if renaming fails. Relocating a relative symlink to another directory is rejected because it would change its referent; use `move()` for that case.
 
 Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
@@ -24,7 +24,7 @@ A `pathlib.Path` representing the result.
 
 ## Errors and edge cases
 
-Raises `FileNotFoundError` for a missing source and `FileExistsError` when replacement is disabled. Replacing an existing regular file uses the operating system's atomic file replacement.
+Raises `FileNotFoundError` for a missing source, `FileExistsError` when replacement is disabled, and `ValueError` for overlapping paths. If rollback fails, the error names the retained backup path.
 
 ## AI usage guidance
 

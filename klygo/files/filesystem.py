@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import tempfile
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Generator, Iterable, List, Tuple
@@ -11,6 +12,58 @@ from typing import Generator, Iterable, List, Tuple
 from klygo.validators import validate_type
 
 from ._typing import PathInput
+
+
+def _entry_exists(candidate: Path) -> bool:
+    return candidate.exists() or candidate.is_symlink()
+
+
+def _validate_transfer(source: Path, target: Path) -> None:
+    if not _entry_exists(source):
+        raise FileNotFoundError(f"Source does not exist: {source}")
+    source_resolved = source.resolve(strict=False)
+    target_resolved = target.resolve(strict=False)
+    if source_resolved == target_resolved:
+        raise ValueError("Source and destination must be different paths")
+    if target_resolved in source_resolved.parents or (
+        source.is_dir() and source_resolved in target_resolved.parents
+    ):
+        raise ValueError("Source and destination cannot contain each other")
+
+
+def _publish_staged(staged: Path, target: Path, overwrite: bool) -> None:
+    if not overwrite:
+        if staged.is_symlink():
+            target.symlink_to(os.readlink(staged), target_is_directory=staged.is_dir())
+        elif staged.is_file():
+            os.link(staged, target)
+        else:
+            if _entry_exists(target):
+                raise FileExistsError(f"Target already exists: {target}")
+            if os.name == "nt":
+                os.rename(staged, target)
+            else:
+                target.mkdir()
+                try:
+                    os.replace(staged, target)
+                except BaseException:
+                    target.rmdir()
+                    raise
+        return
+    backup = staged.parent / "previous"
+    if _entry_exists(target):
+        os.replace(target, backup)
+    try:
+        os.replace(staged, target)
+    except BaseException:
+        if _entry_exists(backup):
+            try:
+                os.replace(backup, target)
+            except OSError as rollback_error:
+                raise OSError(
+                    f"Could not restore the previous destination; backup retained at {backup}"
+                ) from rollback_error
+        raise
 
 
 def exists(path: PathInput) -> bool:
@@ -433,10 +486,11 @@ def remove(path: PathInput, recursive: bool = True, missing_ok: bool = True) -> 
         candidate.rmdir()
 
 
-def copy(source: PathInput, target: PathInput, overwrite: bool = True) -> Path:
+def copy(source: PathInput, target: PathInput, overwrite: bool = False) -> Path:
     """Copy a file or directory.
 
-    File metadata is preserved. Copying a directory replaces the destination tree when overwrite is enabled.
+    File metadata is preserved. The source is copied to a sibling staging path
+    before the destination is replaced, so a failed copy leaves it intact.
 
     Parameters
     ----------
@@ -444,7 +498,7 @@ def copy(source: PathInput, target: PathInput, overwrite: bool = True) -> Path:
         Source URL or filesystem path.
     target : str or os.PathLike[str]
         Destination filesystem path.
-    overwrite : bool, default=True
+    overwrite : bool, default=False
         Allow an existing destination to be replaced.
 
     Returns
@@ -458,6 +512,8 @@ def copy(source: PathInput, target: PathInput, overwrite: bool = True) -> Path:
         If the source does not exist.
     FileExistsError
         If the target exists and overwrite is disabled.
+    ValueError
+        If source and target are the same or overlap as directories.
 
     See Also
     --------
@@ -470,24 +526,36 @@ def copy(source: PathInput, target: PathInput, overwrite: bool = True) -> Path:
     """
     source_path = Path(source)
     target_path = Path(target)
-    if not source_path.exists():
-        raise FileNotFoundError(f"Source does not exist: {source_path}")
-    if target_path.exists() and not overwrite:
+    validate_type(overwrite, bool, "overwrite")
+    _validate_transfer(source_path, target_path)
+    if _entry_exists(target_path) and not overwrite:
         raise FileExistsError(f"Target already exists: {target_path}")
-    if source_path.is_file():
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, target_path)
-    else:
-        if target_path.exists():
-            remove(target_path)
-        shutil.copytree(source_path, target_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f".{target_path.name}.", dir=target_path.parent))
+    staged = staging / "payload"
+    published = False
+    try:
+        if source_path.is_symlink():
+            staged.symlink_to(source_path.resolve(strict=False), target_is_directory=source_path.is_dir())
+        elif source_path.is_dir():
+            shutil.copytree(source_path, staged, symlinks=True)
+        elif source_path.is_file():
+            shutil.copy2(source_path, staged)
+        else:
+            raise ValueError(f"Source must be a file or directory: {source_path}")
+        _publish_staged(staged, target_path, overwrite)
+        published = True
+    finally:
+        if published or not _entry_exists(staging / "previous"):
+            shutil.rmtree(staging)
     return target_path
 
 
-def move(source: PathInput, target: PathInput, overwrite: bool = True) -> Path:
+def move(source: PathInput, target: PathInput, overwrite: bool = False) -> Path:
     """Move a file or directory.
 
-    The destination parent is created automatically. An existing destination can be replaced explicitly.
+    The destination is prepared before the source is removed. A failed copy or
+    publication leaves the source intact.
 
     Parameters
     ----------
@@ -495,7 +563,7 @@ def move(source: PathInput, target: PathInput, overwrite: bool = True) -> Path:
         Source URL or filesystem path.
     target : str or os.PathLike[str]
         Destination filesystem path.
-    overwrite : bool, default=True
+    overwrite : bool, default=False
         Allow an existing destination to be replaced.
 
     Returns
@@ -509,6 +577,8 @@ def move(source: PathInput, target: PathInput, overwrite: bool = True) -> Path:
         If the source does not exist.
     FileExistsError
         If the target exists and overwrite is disabled.
+    ValueError
+        If source and target are the same or overlap as directories.
 
     See Also
     --------
@@ -522,14 +592,11 @@ def move(source: PathInput, target: PathInput, overwrite: bool = True) -> Path:
     """
     source_path = Path(source)
     target_path = Path(target)
-    if not source_path.exists():
-        raise FileNotFoundError(f"Source does not exist: {source_path}")
-    if target_path.exists():
-        if not overwrite:
-            raise FileExistsError(f"Target already exists: {target_path}")
-        remove(target_path)
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    return Path(shutil.move(str(source_path), str(target_path)))
+    validate_type(overwrite, bool, "overwrite")
+    _validate_transfer(source_path, target_path)
+    copy(source_path, target_path, overwrite=overwrite)
+    remove(source_path, missing_ok=False)
+    return target_path
 
 
 def rename(path: PathInput, new_name_or_path: PathInput, overwrite: bool = False) -> Path:
@@ -557,6 +624,8 @@ def rename(path: PathInput, new_name_or_path: PathInput, overwrite: bool = False
         If the source does not exist.
     FileExistsError
         If the target exists and overwrite is disabled.
+    ValueError
+        If source and target are the same or overlap as directories.
 
     See Also
     --------
@@ -568,18 +637,59 @@ def rename(path: PathInput, new_name_or_path: PathInput, overwrite: bool = False
     >>> result = files.rename("draft.txt", "final.txt")
     """
     source_path = Path(path)
-    if not source_path.exists():
-        raise FileNotFoundError(f"Path does not exist: {source_path}")
+    validate_type(overwrite, bool, "overwrite")
     requested = Path(new_name_or_path)
     target_path = source_path.parent / requested if len(requested.parts) == 1 else requested
-    if target_path.exists():
-        if not overwrite:
-            raise FileExistsError(f"Target already exists: {target_path}")
-        if source_path.is_file() and target_path.is_file():
-            source_path.replace(target_path)
-            return target_path
-        remove(target_path)
-    source_path.rename(target_path)
+    _validate_transfer(source_path, target_path)
+    if (
+        source_path.is_symlink()
+        and not Path(os.readlink(source_path)).is_absolute()
+        and source_path.parent.resolve() != target_path.parent.resolve()
+    ):
+        raise ValueError("Renaming a relative symlink into another directory would change its target")
+    if _entry_exists(target_path) and not overwrite:
+        raise FileExistsError(f"Target already exists: {target_path}")
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    if not overwrite:
+        if os.name == "nt":
+            os.rename(source_path, target_path)
+        elif source_path.is_symlink():
+            target_path.symlink_to(
+                os.readlink(source_path), target_is_directory=source_path.is_dir()
+            )
+            source_path.unlink()
+        elif source_path.is_file():
+            os.link(source_path, target_path)
+            source_path.unlink()
+        else:
+            target_path.mkdir()
+            try:
+                os.replace(source_path, target_path)
+            except BaseException:
+                target_path.rmdir()
+                raise
+        return target_path
+    staging = Path(tempfile.mkdtemp(prefix=f".{target_path.name}.", dir=target_path.parent))
+    backup = staging / "previous"
+    published = False
+    try:
+        if _entry_exists(target_path):
+            os.replace(target_path, backup)
+        try:
+            os.replace(source_path, target_path)
+        except BaseException:
+            if _entry_exists(backup):
+                try:
+                    os.replace(backup, target_path)
+                except OSError as rollback_error:
+                    raise OSError(
+                        f"Could not restore the previous destination; backup retained at {backup}"
+                    ) from rollback_error
+            raise
+        published = True
+    finally:
+        if published or not _entry_exists(backup):
+            shutil.rmtree(staging)
     return target_path
 
 

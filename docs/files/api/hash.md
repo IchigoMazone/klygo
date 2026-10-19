@@ -1,14 +1,14 @@
 # `files.hash`
 
 ```python
-files.hash(path, algorithm='md5')
+files.hash(path, algorithm='sha256')
 ```
 
 Calculate a streaming checksum for a file.
 
 ## Contract
 
-Accepts algorithms supported by hashlib, such as md5, sha1, and sha256.
+Uses SHA-256 by default. Other algorithms supported by hashlib, including MD5 for compatibility, can be requested explicitly.
 
 Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
@@ -49,7 +49,7 @@ print(files.hash("README.md", algorithm="sha256"))
 
 # Additional cases
 # Select any algorithm supported by hashlib.
-md5 = files.hash("README.md")
-sha256 = files.hash("README.md", algorithm="sha256")
+md5 = files.hash("README.md", algorithm="md5")
+sha256 = files.hash("README.md")
 assert len(md5) == 32 and len(sha256) == 64
 ```

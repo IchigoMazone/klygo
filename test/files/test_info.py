@@ -1,6 +1,8 @@
 """Behavioral contract for klygo.files.info."""
 
+import io
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -18,20 +20,36 @@ class TestInfo(unittest.TestCase):
             self.assertEqual(result["name"], "sample.txt")
             self.assertEqual(result["size"], 3)
             self.assertTrue(result["is_file"])
-            self.assertEqual(len(result["hash"]), 32)
+            self.assertNotIn("hash", result)
 
-    def test_optional_hash_skips_content_reads_and_preserves_keys(self):
+    def test_info_skips_content_reads_and_verbose_prints_table(self):
         with TemporaryDirectory() as directory:
             source = Path(directory) / "data.bin"
             source.write_bytes(b"content")
-            regular = files.info(source)
             with patch("klygo.files.metadata.hash", side_effect=AssertionError("unexpected hash")):
-                metadata = files.info(source, include_hash=False)
-            self.assertIsNone(metadata["hash"])
-            self.assertEqual(metadata.keys(), regular.keys())
+                quiet_output = io.StringIO()
+                with redirect_stdout(quiet_output):
+                    metadata = files.info(source)
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    displayed = files.info(source, verbose=True)
+            self.assertEqual(metadata, displayed)
+            self.assertEqual(quiet_output.getvalue(), "")
             self.assertEqual(metadata["size"], 7)
+            self.assertIn("File information", output.getvalue())
+            self.assertIn("data.bin", output.getvalue())
+            self.assertIn("size", output.getvalue())
             with self.assertRaises(TypeError):
-                files.info(source, include_hash=0)
+                files.info(source, verbose=0)
+
+    def test_directory_metadata(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "data.bin").write_bytes(b"content")
+            metadata = files.info(root)
+            self.assertTrue(metadata["is_dir"])
+            self.assertEqual(metadata["size"], 7)
+            self.assertNotIn("hash", metadata)
 
 
 if __name__ == "__main__":

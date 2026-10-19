@@ -3,6 +3,7 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from klygo import files
 
@@ -14,12 +15,16 @@ class TestCompare(unittest.TestCase):
             first, second = root / "a", root / "b"
             first.write_bytes(b"same")
             second.write_bytes(b"same")
-            self.assertTrue(files.compare(first, second))
+            with patch("klygo.files.metadata.hash", side_effect=AssertionError("unexpected hash")):
+                self.assertTrue(files.compare(first, second))
             self.assertTrue(files.compare(first, second, by="content"))
+            self.assertTrue(files.compare(first, second, by="hash"))
             second.write_bytes(b"different")
             self.assertFalse(files.compare(first, second))
             with self.assertRaises(ValueError):
                 files.compare(first, first, by="unknown")
+            with self.assertRaises(ValueError):
+                files.compare(first, second, by="unknown")
 
 
 if __name__ == "__main__":

@@ -31,9 +31,10 @@ class TestPublicApi(unittest.TestCase):
         assert klygo.utils.human_size(0) == "0.00 B"
         assert klygo.utils.human_size(1024) == "1.00 KB"
         assert callable(media.probe)
-        assert callable(media.stream)
+        assert callable(media.load)
         assert "probe" in media.__all__
-        assert "stream" in media.__all__
+        assert "stream" not in media.__all__
+        assert not hasattr(media, "stream")
         assert callable(preprocessing.compose)
         assert callable(postprocessing.compose)
         assert callable(postprocessing.relabel)

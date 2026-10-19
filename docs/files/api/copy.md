@@ -1,14 +1,14 @@
 # `files.copy`
 
 ```python
-files.copy(source, target, overwrite=True)
+files.copy(source, target, overwrite=False)
 ```
 
 Copy a file or directory.
 
 ## Contract
 
-Preserves file metadata. Directory targets are replaced when overwrite=True.
+Preserves file metadata. The copy is staged before publication, and an existing target is replaced only with `overwrite=True`. Source and target cannot be the same path or contain each other when a directory is involved. A directly copied symlink keeps its referent even when the destination directory changes; nested symlinks in a copied tree retain their link text.
 
 Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
@@ -24,7 +24,7 @@ A `pathlib.Path` representing the result.
 
 ## Errors and edge cases
 
-Raises `FileNotFoundError` for a missing source and `FileExistsError` when replacement is disabled.
+Raises `FileNotFoundError` for a missing source, `FileExistsError` when replacement is disabled, and `ValueError` for overlapping source and target paths. If rollback fails, the error names the retained backup path.
 
 ## AI usage guidance
 

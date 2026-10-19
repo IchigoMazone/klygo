@@ -5,6 +5,14 @@
 Interactive Google Colab Tutorial:
 [Open in Colab](https://colab.research.google.com/drive/1-Oo8ERqSuxns1OfZAdHY5jVMTrLVpJG-?usp=sharing)
 
+The local, source-verified tutorial collection starts with
+[`tutorials/files/overview.ipynb`](../../tutorials/files/overview.ipynb) and
+continues with independent guides for [paths](../../tutorials/files/paths.ipynb),
+[filesystem](../../tutorials/files/filesystem.ipynb),
+[metadata](../../tutorials/files/metadata.ipynb),
+[structured data I/O](../../tutorials/files/io.ipynb), and
+[downloads](../../tutorials/files/download.ipynb).
+
 ---
 
 ## Native pathlib and streaming workflows
@@ -15,10 +23,11 @@ for native operations, path semantics, symlinks, and Python compatibility.
 
 - [`iter_find()`](api/iter_find.md): yield files while pruning excluded directories.
 - [`iter_load()`](api/iter_load.md): read JSONL/CSV records incrementally.
-- [`save(..., atomic=True)`](api/save.md): publish completed serialized output.
-- [`info(..., include_hash=False)`](api/info.md): skip reading contents for hashing.
+- [`save()`](api/save.md): publish completed serialized output by default.
+- [`info(..., verbose=True)`](api/info.md): print file metadata as a Rich table.
 
-Existing calls retain their defaults and return types. `find()` still returns a
+`copy()` and `move()` now default to `overwrite=False`; `save()` now defaults to
+`atomic=True`. `find()` still returns a
 sorted list; `load()` still returns the complete object. Broken symlinks are
 handled as existing entries by `remove()`, `unique_path()`, and the overwrite
 check in `save()`.
@@ -108,8 +117,8 @@ check in `save()`.
 - [`iter_find(path, pattern, recursive, *, exclude_dirs=())`](api/iter_find.md): Yield regular files and prune excluded directory subtrees.
 - [`walk(path)`](api/walk.md): Walk directory tree as a generator (`os.walk` wrapper).
 - [`mkdir(path, parents, exist_ok)`](api/mkdir.md): Create a new directory and missing parent directories.
-- [`copy(source, target, overwrite)`](api/copy.md): Copy a file or directory tree recursively.
-- [`move(source, target, overwrite)`](api/move.md): Move a file or directory to a new target.
+- [`copy(source, target, overwrite=False)`](api/copy.md): Copy a file or directory tree recursively with staged publication.
+- [`move(source, target, overwrite=False)`](api/move.md): Move a file or directory after publishing a complete destination.
 - [`as_posix(path)`](api/as_posix.md): Represent a path with forward slashes.
 - [`is_symlink(path)`](api/is_symlink.md): Check whether a path is a symbolic link.
 - [`rename(path, new_name_or_path, overwrite)`](api/rename.md): Rename or relocate a file or directory.
@@ -120,10 +129,10 @@ check in `save()`.
 <details>
 <summary><b>Metadata and file inspection (4 functions)</b> <i>(Click to expand)</i></summary>
 
-- [`info(path, *, include_hash=True)`](api/info.md): Comprehensive metadata dictionary (sizes, timestamps, checksum).
+- [`info(path, *, verbose=False)`](api/info.md): Metadata dictionary (sizes, timestamps, type flags) with optional Rich table output.
 - [`size(path, human=False)`](api/size.md): Size of file or directory tree (bytes or formatted string).
-- [`hash(path, algorithm='md5')`](api/hash.md): Compute streaming checksum digest.
-- [`compare(path1, path2, by='hash')`](api/compare.md): Compare two files by checksum or binary content.
+- [`hash(path, algorithm='sha256')`](api/hash.md): Compute streaming checksum digest.
+- [`compare(path1, path2, by='content')`](api/compare.md): Compare two files by binary content or SHA-256 checksum.
 
 </details>
 

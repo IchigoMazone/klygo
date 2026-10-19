@@ -53,7 +53,7 @@ inspection do not require the represented file to exist.
 | `p.exists()`, `p.is_file()`, `p.is_dir()` | Inspect the target | `exists()`, `is_file()`, `is_dir()` |
 | `p.is_symlink()` | Inspect the link itself, including a broken link | Use the native method |
 | `p / "child"`, `p.joinpath("child")` | Combine path components | `join()` |
-| `p.stat()`, `p.lstat()` | Target metadata or link metadata | `info()` additionally computes size and optionally a hash |
+| `p.stat()`, `p.lstat()` | Target metadata or link metadata | `info()` additionally computes file or directory size; use `hash()` separately for a checksum |
 
 For Python 3.14+, status predicates such as `exists()` suppress all `OSError`
 exceptions and return `False`. Earlier versions propagate some errors. Use
@@ -114,8 +114,8 @@ not guaranteed unless explicitly sorted.
 
 `files.save(..., atomic=True)` writes a complete temporary file before
 publication; see its [contract](api/save.md) for overwrite, hard-link,
-symlink, and metadata behavior. `files.info(..., include_hash=False)` avoids
-reading file contents to calculate a checksum.
+symlink, and metadata behavior. `files.info()` returns metadata without
+reading file contents; use `files.hash()` when a checksum is needed.
 
 Keep `files.copy()` and `files.move()` when targeting Python 3.10: native
 `Path.copy()` and `Path.move()` were added in Python 3.14 and have their own
@@ -179,7 +179,7 @@ with TemporaryDirectory() as directory:
     config = root / "config.json"
     files.save(config, {"epochs": 10}, atomic=True, verbose=False)
     assert files.load(config, verbose=False) == {"epochs": 10}
-    assert files.info(config, include_hash=False)["hash"] is None
+    assert files.info(config)["size"] > 0
     assert files.is_within(config, root)
     assert not files.is_within(root / ".." / "outside.txt", root)
 

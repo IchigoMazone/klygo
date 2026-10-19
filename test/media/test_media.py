@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 from PIL import Image
 import numpy as np
 import torch
@@ -19,7 +20,7 @@ class TestMedia(unittest.TestCase):
         self.addCleanup(temporary_directory.cleanup)
         self.tmp_path = Path(temporary_directory.name)
 
-    def test_media_stream_is_separate_from_load(self):
+    def test_load_stream_option_preserves_lazy_iteration(self):
         video_path = self.tmp_path / "stream.mp4"
         writer = cv2.VideoWriter(
             str(video_path),
@@ -32,7 +33,7 @@ class TestMedia(unittest.TestCase):
         writer.release()
 
         loaded = media.load(video_path)
-        streamed = media.stream(video_path, sample_rate=2, max_frames=2)
+        streamed = media.load(video_path, stream=True, sample_rate=2, max_frames=2)
 
         assert isinstance(loaded, media.MediaFrames)
         assert isinstance(streamed, media.MediaStream)
@@ -44,6 +45,11 @@ class TestMedia(unittest.TestCase):
         assert [frame.frame_index for frame in frames] == [0, 2]
         assert all(isinstance(frame, media.LazyImage) for frame in frames)
         assert all(not frame.is_loaded for frame in frames)
+
+        with self.assertRaisesRegex(ValueError, "require stream=True"):
+            media.load(video_path, sample_rate=2)
+        with self.assertRaisesRegex(ValueError, "require stream=True"):
+            media.load(video_path, max_frames=2)
 
     def test_mediaframes_collection_api_is_lazy_and_keeps_metadata(self):
         image_dir = self.tmp_path / "collection"
@@ -79,6 +85,31 @@ class TestMedia(unittest.TestCase):
         assert frames.total_frames == 2
         frames.clear()
         assert frames.total_frames == 0
+
+    def test_model_image_resolution_uses_load_stream_option(self):
+        from klygo.models.utils import resolve_images
+
+        image_path = self.tmp_path / "model_input.png"
+        Image.new("RGB", (20, 10), "red").save(image_path)
+
+        frames, is_single = resolve_images(image_path, stream=True)
+
+        self.assertIsInstance(frames, media.MediaStream)
+        self.assertTrue(is_single)
+        self.assertEqual(len(list(frames)), 1)
+
+    def test_stream_transform_reuses_source_metadata_without_rescan(self):
+        image_dir = self.tmp_path / "many_images"
+        image_dir.mkdir()
+        for index in range(3):
+            Image.new("RGB", (20, 10), "red").save(image_dir / f"{index}.png")
+
+        stream = media.load(image_dir, stream=True)
+        with patch("klygo.media.operations.files.iter_find", side_effect=AssertionError("rescanned source")):
+            transformed = stream.transform(preprocessing.resize((8, 8)))
+
+        self.assertEqual(transformed.total_frames, 3)
+        self.assertEqual([frame.size for frame in transformed], [(8, 8)] * 3)
 
     def test_media_conversions(self):
         img_pil = Image.new("RGB", (20, 10), "red")

@@ -1,7 +1,7 @@
 # `files.save`
 
 ```python
-files.save(path, data, overwrite=False, verbose=True, indent=4, fieldnames=None, *, atomic=False)
+files.save(path, data, overwrite=False, verbose=True, indent=4, fieldnames=None, *, atomic=True)
 ```
 
 Save structured data using the destination extension.
@@ -9,8 +9,9 @@ Save structured data using the destination extension.
 ## Contract
 
 Creates parent directories. Refuses an existing entry, including a broken
-symlink, unless `overwrite=True`. The default `atomic=False` preserves direct
-writing behavior.
+symlink, unless `overwrite=True`. The default `atomic=True` protects an existing
+destination when serialization fails. Set `atomic=False` only when direct writing
+and the possibility of a partial file are acceptable.
 
 With `atomic=True`, serialization completes in a sibling temporary file before
 publication. Serialization failure leaves an existing destination unchanged.
@@ -32,7 +33,7 @@ Inputs accept strings and text-returning `os.PathLike` objects (including `pathl
 - `verbose`: `bool` — enable the progress indicator.
 - `indent`: `int` — JSON indentation width.
 - `fieldnames`: `list[str] | None` — explicit CSV columns.
-- `atomic`: `bool`, default `False` — publish a fully serialized temporary file; keyword-only.
+- `atomic`: `bool`, default `True` — publish a fully serialized temporary file; keyword-only.
 
 ## Returns
 

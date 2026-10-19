@@ -20,6 +20,18 @@ class TestMove(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 files.move(replacement, target, overwrite=False)
 
+    def test_same_directory_and_failed_copy_preserve_source(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            source.mkdir()
+            content = source / "keep.txt"
+            content.write_text("keep", encoding="utf-8")
+            for target in (source, source / "child", root):
+                with self.subTest(target=target), self.assertRaises(ValueError):
+                    files.move(source, target, overwrite=True)
+                self.assertEqual(content.read_text(encoding="utf-8"), "keep")
+
 
 if __name__ == "__main__":
     unittest.main()

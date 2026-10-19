@@ -55,7 +55,7 @@ def size(path: PathInput, human: bool = False) -> Union[int, str]:
     return _human_size(total) if human else total
 
 
-def hash(path: PathInput, algorithm: str = "md5") -> str:
+def hash(path: PathInput, algorithm: str = "sha256") -> str:
     """Calculate a streaming checksum for a file.
 
     Files are processed in chunks, so large files are not loaded fully into memory.
@@ -64,7 +64,7 @@ def hash(path: PathInput, algorithm: str = "md5") -> str:
     ----------
     path : str or os.PathLike[str]
         Path to inspect or operate on.
-    algorithm : str, default='md5'
+    algorithm : str, default='sha256'
         Algorithm accepted by ``hashlib.new``.
 
     Returns
@@ -100,29 +100,28 @@ def hash(path: PathInput, algorithm: str = "md5") -> str:
     return hasher.hexdigest()
 
 
-def info(path: PathInput, *, include_hash: bool = True) -> Dict[str, Any]:
+def info(path: PathInput, *, verbose: bool = False) -> Dict[str, Any]:
     """Collect common metadata for a file or directory.
 
-    The result includes names, type flags, byte and human sizes, timestamps,
-    and an optional checksum for regular files. Disabling the checksum avoids
-    reading file contents; directory size still requires traversal.
+    The result includes names, type flags, byte and human sizes, and timestamps.
+    Directory size requires traversal of its descendants.
 
     Parameters
     ----------
     path : str or os.PathLike[str]
         Path to inspect or operate on.
-    include_hash : bool, default=True
-        Compute the file checksum. If false, the ``hash`` field is ``None``.
+    verbose : bool, default=False
+        Print the metadata as a Rich table while returning the dictionary.
 
     Returns
     -------
     dict[str, Any]
-        Filesystem metadata with stable keys, including ``hash``.
+        Filesystem metadata with stable keys.
 
     Raises
     ------
     TypeError
-        If ``include_hash`` is not a boolean.
+        If ``verbose`` is not a boolean.
     FileNotFoundError
         If the path does not exist.
 
@@ -134,15 +133,15 @@ def info(path: PathInput, *, include_hash: bool = True) -> Dict[str, Any]:
     Examples
     --------
     >>> from klygo import files
-    >>> metadata = files.info("model.onnx")
+    >>> metadata = files.info("model.onnx", verbose=True)
     """
-    validate_type(include_hash, bool, "include_hash")
+    validate_type(verbose, bool, "verbose")
     candidate = Path(path)
     if not candidate.exists():
         raise FileNotFoundError(f"Path does not exist: {candidate}")
     stat = candidate.stat()
     byte_size = size(candidate)
-    return {
+    metadata = {
         "name": candidate.name,
         "stem": candidate.stem,
         "extension": candidate.suffix,
@@ -153,11 +152,21 @@ def info(path: PathInput, *, include_hash: bool = True) -> Dict[str, Any]:
         "is_dir": candidate.is_dir(),
         "created": datetime.fromtimestamp(stat.st_ctime),
         "modified": datetime.fromtimestamp(stat.st_mtime),
-        "hash": hash(candidate) if include_hash and candidate.is_file() else None,
     }
+    if verbose:
+        from rich.console import Console
+        from rich.table import Table
+
+        table = Table(title=f"File information: {candidate}")
+        table.add_column("Field", style="cyan")
+        table.add_column("Value")
+        for key, value in metadata.items():
+            table.add_row(key, str(value))
+        Console().print(table)
+    return metadata
 
 
-def compare(path1: PathInput, path2: PathInput, by: str = "hash") -> bool:
+def compare(path1: PathInput, path2: PathInput, by: str = "content") -> bool:
     """Compare two files by checksum or binary content.
 
     A size check is performed first. Comparison then uses either checksums or chunked binary reads.
@@ -168,7 +177,7 @@ def compare(path1: PathInput, path2: PathInput, by: str = "hash") -> bool:
         Path to the first file.
     path2 : str or os.PathLike[str]
         Path to the second file.
-    by : {'hash', 'content'}, default='hash'
+    by : {'hash', 'content'}, default='content'
         File comparison strategy.
 
     Returns
@@ -192,6 +201,8 @@ def compare(path1: PathInput, path2: PathInput, by: str = "hash") -> bool:
     >>> from klygo import files
     >>> files.compare("a.bin", "b.bin", by="content")
     """
+    if by not in ("hash", "content"):
+        raise ValueError(f"Invalid compare mode: {by!r}. Expected 'hash' or 'content'.")
     first = Path(path1)
     second = Path(path2)
     if not first.exists():
@@ -202,16 +213,14 @@ def compare(path1: PathInput, path2: PathInput, by: str = "hash") -> bool:
         return False
     if by == "hash":
         return hash(first) == hash(second)
-    if by == "content":
-        with first.open("rb") as left, second.open("rb") as right:
-            while True:
-                left_chunk = left.read(65536)
-                right_chunk = right.read(65536)
-                if left_chunk != right_chunk:
-                    return False
-                if not left_chunk:
-                    return True
-    raise ValueError(f"Invalid compare mode: {by!r}. Expected 'hash' or 'content'.")
+    with first.open("rb") as left, second.open("rb") as right:
+        while True:
+            left_chunk = left.read(65536)
+            right_chunk = right.read(65536)
+            if left_chunk != right_chunk:
+                return False
+            if not left_chunk:
+                return True
 
 
 __all__ = ["size", "hash", "info", "compare"]

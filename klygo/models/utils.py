@@ -339,8 +339,9 @@ def resolve_images(
         total_frames = None
         fps_val = 30.0
         if isinstance(source, (str, Path)):
-            raw_stream = media.stream(
+            raw_stream = media.load(
                 source,
+                stream=True,
                 sample_rate=step,
                 max_frames=max_frames,
                 verbose=False,
@@ -385,6 +386,8 @@ def resolve_images(
         loaded = media.load(source, verbose=False)
         raw_list = loaded if isinstance(loaded, list) else [loaded]
         is_single = len(raw_list) == 1 and files.extension(str(source)).lower() not in media.VIDEO_SUFFIXES
+    elif isinstance(source, media.LazyImage):
+        return [source], True
     elif isinstance(source, PIL.Image.Image):
         return [source.convert("RGB")], True
     elif hasattr(source, "shape"):

@@ -2,16 +2,15 @@
 
 from klygo import files
 
-metadata = files.info("README.md")
-print(metadata["name"], metadata["human_size"], metadata["hash"])
+metadata = files.info("README.md", verbose=True)
+print(metadata["name"], metadata["human_size"])
 
 
 # Additional cases
 assert metadata["is_file"] is True
 assert metadata["size"] > 0
-assert isinstance(metadata["hash"], str)
+assert "hash" not in metadata
 
-# Skip content hashing when only metadata is needed.
-lightweight = files.info("README.md", include_hash=False)
-assert lightweight["hash"] is None
-assert lightweight.keys() == metadata.keys()
+# Disable display when only the dictionary is needed.
+quiet = files.info("README.md")
+assert quiet == metadata

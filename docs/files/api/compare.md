@@ -1,14 +1,14 @@
 # `files.compare`
 
 ```python
-files.compare(path1, path2, by='hash')
+files.compare(path1, path2, by='content')
 ```
 
 Compare two files by checksum or binary content.
 
 ## Contract
 
-Returns early when sizes differ. by must be 'hash' or 'content'.
+Compares file contents by default and returns early when sizes differ. `by` must be `'hash'` or `'content'`; hash mode uses SHA-256.
 
 Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 

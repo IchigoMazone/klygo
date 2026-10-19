@@ -249,7 +249,7 @@ def save(
     indent: int = 4,
     fieldnames: Optional[List[str]] = None,
     *,
-    atomic: bool = False,
+    atomic: bool = True,
 ) -> None:
     """Save structured data using the destination filename extension.
 
@@ -269,7 +269,7 @@ def save(
         Number of spaces used to indent JSON output.
     fieldnames : list[str] or None, default=None
         Ordered CSV column names; inferred from the first row when omitted.
-    atomic : bool, default=False
+    atomic : bool, default=True
         Serialize to a sibling temporary file, then publish the completed file.
 
     Returns
