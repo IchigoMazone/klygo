@@ -1,24 +1,23 @@
 """Executable example for klygo.files.compare."""
 
 from tempfile import TemporaryDirectory
-from pathlib import Path
 from klygo import files
 
 with TemporaryDirectory() as directory:
-    first = Path(directory) / "a.txt"
-    second = Path(directory) / "b.txt"
-    first.write_text("same", encoding="utf-8")
-    second.write_text("same", encoding="utf-8")
+    root = files.path(directory)
+    first = root / "a.txt"
+    second = root / "b.txt"
+    files.save(first, "same", verbose=False)
+    files.save(second, "same", verbose=False)
     print(files.compare(first, second, by="content"))
 
 
 # Additional cases
 # Different content returns False without raising.
 with TemporaryDirectory() as directory:
-    root = Path(directory)
-    first, second = root / "a.bin", root / "b.bin"
-    first.write_bytes(b"one")
-    second.write_bytes(b"two")
+    root = files.path(directory)
+    first, second = root / "a.txt", root / "b.txt"
+    files.save(first, "one", verbose=False)
+    files.save(second, "two", verbose=False)
     assert not files.compare(first, second)
     assert not files.compare(first, second, by="content")
-

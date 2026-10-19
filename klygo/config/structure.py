@@ -91,3 +91,6 @@ def unflatten(flat_dict: Mapping[str, Any], sep: str = ".") -> dict[str, Any]:
             raise ValueError(f"conflicting configuration path: {key!r}")
         current[parts[-1]] = value
     return result
+
+
+__all__ = ["flatten", "unflatten"]

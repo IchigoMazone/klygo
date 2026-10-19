@@ -23,6 +23,17 @@ class TestAdd(unittest.TestCase):
             archive.add(packed, extra, on_conflict="rename", verbose=False)
             self.assertIn("extra_dup1.txt", archive.list_files(packed))
 
+            nested_tar = root / "bundle.tar.gz"
+            nested_tar.write_bytes(b"tar-gz-payload")
+            archive.add(packed, nested_tar, verbose=False)
+            archive.add(packed, nested_tar, on_conflict="rename", verbose=False)
+            self.assertIn("bundle_dup1.tar.gz", archive.list_files(packed))
+
+            tar_packed = make_archive(root, "packed.tar.gz", source_name="tar_source")
+            archive.add(tar_packed, nested_tar, verbose=False)
+            archive.add(tar_packed, nested_tar, on_conflict="rename", verbose=False)
+            self.assertIn("bundle_dup1.tar.gz", archive.list_files(tar_packed))
+
     def test_invalid_conflict_policy_is_rejected(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

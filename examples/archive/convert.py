@@ -1,6 +1,5 @@
 """Executable examples for klygo.archive.convert."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import klygo.archive as archive
@@ -10,7 +9,7 @@ from examples.archive._support import make_archive, make_source, member_ending
 
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
     source = make_archive(root)
     target = root / "converted.tar.gz"
 
@@ -18,4 +17,3 @@ with TemporaryDirectory() as directory:
     assert archive.detect_format(target) == "tar.gz"
     assert archive.test(target)
     print(target)
-

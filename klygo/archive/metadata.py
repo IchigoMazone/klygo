@@ -284,3 +284,18 @@ def compare(archive1: Union[str, Path], archive2: Union[str, Path]) -> Dict[str,
         "removed_files": sorted(set1 - set2),
         "common_files": sorted(set1 & set2),
     }
+
+
+from klygo.archive.backend import detect_format, is_archive
+
+__all__ = [
+    "list_files",
+    "iter_files",
+    "search",
+    "get_info",
+    "test",
+    "verify",
+    "compare",
+    "detect_format",
+    "is_archive",
+]

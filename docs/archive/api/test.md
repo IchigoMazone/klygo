@@ -41,7 +41,6 @@ See [`test_test.py`](../../../test/archive/test_test.py) for the executable beha
 ```python
 """Executable examples for klygo.archive.test."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import klygo.archive as archive
@@ -51,7 +50,7 @@ from examples.archive._support import make_archive, make_source, member_ending
 
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
     packed = make_archive(root)
     assert archive.test(packed)
 

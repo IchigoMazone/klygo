@@ -6,12 +6,13 @@ Interactive Google Colab Tutorial:
 [Open in Colab](https://colab.research.google.com/drive/1-Oo8ERqSuxns1OfZAdHY5jVMTrLVpJG-?usp=sharing)
 
 The local, source-verified tutorial collection starts with
-[`tutorials/files/overview.ipynb`](../../tutorials/files/overview.ipynb) and
-continues with independent guides for [paths](../../tutorials/files/paths.ipynb),
-[filesystem](../../tutorials/files/filesystem.ipynb),
-[metadata](../../tutorials/files/metadata.ipynb),
-[structured data I/O](../../tutorials/files/io.ipynb), and
-[downloads](../../tutorials/files/download.ipynb).
+[`tutorials/files/Document_Files_Overview.ipynb`](../../tutorials/files/Document_Files_Overview.ipynb) and
+continues with 1-to-1 submodule guides for
+[`paths.py` (`Document_Files_Paths.ipynb`)](../../tutorials/files/Document_Files_Paths.ipynb),
+[`filesystem.py` (`Document_Files_Filesystem.ipynb`)](../../tutorials/files/Document_Files_Filesystem.ipynb),
+[`metadata.py` (`Document_Files_Metadata.ipynb`)](../../tutorials/files/Document_Files_Metadata.ipynb),
+[`io.py` (`Document_Files_Io.ipynb`)](../../tutorials/files/Document_Files_Io.ipynb), and
+[`download.py` (`Document_Files_Download.ipynb`)](../../tutorials/files/Document_Files_Download.ipynb).
 
 ---
 
@@ -96,18 +97,24 @@ check in `save()`.
 ## 3. Public APIs Reference (43 Functions)
 
 <details>
-<summary><b>Structured data I/O and downloads (5 functions)</b> <i>(Click to expand)</i></summary>
+<summary><b>Structured data I/O — <code>io.py</code> (4 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`load(path, as_lines=False, ...)`](api/load.md): Automatically load structured data based on file extension.
 - [`iter_load(path)`](api/iter_load.md): Yield JSONL values or CSV row dictionaries incrementally.
 - [`save(path, data, overwrite=False, ...)`](api/save.md): Serialize structured data using destination file extension.
 - [`convert(source, target, ...)`](api/convert.md): Format conversion between structured data files.
+
+</details>
+
+<details>
+<summary><b>Downloads — <code>download.py</code> (1 function)</b> <i>(Click to expand)</i></summary>
+
 - [`download(source, output_dir, ...)`](api/download.md): Download URL, Colab, or local file with progress bar.
 
 </details>
 
 <details>
-<summary><b>Filesystem operations (13 functions)</b> <i>(Click to expand)</i></summary>
+<summary><b>Filesystem — <code>filesystem.py</code> (14 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`exists(path)`](api/exists.md): Check whether a file or directory exists.
 - [`is_file(path)`](api/is_file.md): Check if path identifies a regular file.
@@ -119,7 +126,6 @@ check in `save()`.
 - [`mkdir(path, parents, exist_ok)`](api/mkdir.md): Create a new directory and missing parent directories.
 - [`copy(source, target, overwrite=False)`](api/copy.md): Copy a file or directory tree recursively with staged publication.
 - [`move(source, target, overwrite=False)`](api/move.md): Move a file or directory after publishing a complete destination.
-- [`as_posix(path)`](api/as_posix.md): Represent a path with forward slashes.
 - [`is_symlink(path)`](api/is_symlink.md): Check whether a path is a symbolic link.
 - [`rename(path, new_name_or_path, overwrite)`](api/rename.md): Rename or relocate a file or directory.
 - [`remove(path, recursive, missing_ok)`](api/remove.md): Remove a file or directory recursively.
@@ -127,7 +133,7 @@ check in `save()`.
 </details>
 
 <details>
-<summary><b>Metadata and file inspection (4 functions)</b> <i>(Click to expand)</i></summary>
+<summary><b>Metadata — <code>metadata.py</code> (4 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`info(path, *, verbose=False)`](api/info.md): Metadata dictionary (sizes, timestamps, type flags) with optional Rich table output.
 - [`size(path, human=False)`](api/size.md): Size of file or directory tree (bytes or formatted string).
@@ -137,7 +143,7 @@ check in `save()`.
 </details>
 
 <details>
-<summary><b>Path operations (20 functions)</b> <i>(Click to expand)</i></summary>
+<summary><b>Paths — <code>paths.py</code> (20 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`name(path)`](api/name.md): Final path component including extension.
 - [`stem(path)`](api/stem.md): Final path component without its last extension.

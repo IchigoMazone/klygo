@@ -46,20 +46,18 @@ See [`test_remove.py`](../../../test/files/test_remove.py) for the executable be
 """Executable example for klygo.files.remove."""
 
 from tempfile import TemporaryDirectory
-from pathlib import Path
 from klygo import files
 
 with TemporaryDirectory() as directory:
-    target = Path(directory) / "temporary"
-    target.mkdir()
+    target = files.mkdir(files.path(directory) / "temporary")
     files.remove(target)
-    print(target.exists())
+    print(files.exists(target))
 
 
 # Additional cases
 # missing_ok controls whether an absent path is an error.
 with TemporaryDirectory() as directory:
-    missing = Path(directory) / "missing"
+    missing = files.path(directory) / "missing"
     files.remove(missing)
     try:
         files.remove(missing, missing_ok=False)

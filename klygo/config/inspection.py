@@ -9,6 +9,8 @@ from typing import Any
 
 from box import Box
 
+from klygo.validators import validate_type
+
 from ._utils import to_dict
 from .io import load
 from .structure import flatten
@@ -40,8 +42,7 @@ def keys(config_data: dict[str, Any] | Box, flat: bool = False) -> list[str]:
     >>> config.keys({"model": {"batch": 16}}, flat=True)
     ['model.batch']
     """
-    if not isinstance(flat, bool):
-        raise TypeError("flat must be a bool")
+    validate_type(flat, bool, "flat")
     data = to_dict(config_data)
     return builtins.list(flatten(data).keys() if flat else data.keys())
 
@@ -72,8 +73,7 @@ def values(config_data: dict[str, Any] | Box, flat: bool = False) -> list[Any]:
     >>> config.values({"model": {"batch": 16}}, flat=True)
     [16]
     """
-    if not isinstance(flat, bool):
-        raise TypeError("flat must be a bool")
+    validate_type(flat, bool, "flat")
     data = to_dict(config_data)
     return builtins.list(flatten(data).values() if flat else data.values())
 
@@ -104,8 +104,7 @@ def items(config_data: dict[str, Any] | Box, flat: bool = False) -> list[tuple[s
     >>> config.items({"model": {"batch": 16}}, flat=True)
     [('model.batch', 16)]
     """
-    if not isinstance(flat, bool):
-        raise TypeError("flat must be a bool")
+    validate_type(flat, bool, "flat")
     data = to_dict(config_data)
     return builtins.list(flatten(data).items() if flat else data.items())
 
@@ -157,3 +156,6 @@ def diff(
             if key in right and left[key] != right[key]
         },
     }
+
+
+__all__ = ["keys", "values", "items", "diff"]

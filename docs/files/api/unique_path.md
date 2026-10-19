@@ -44,20 +44,19 @@ See [`test_unique_path.py`](../../../test/files/test_unique_path.py) for the exe
 """Executable example for klygo.files.unique_path."""
 
 from tempfile import TemporaryDirectory
-from pathlib import Path
 from klygo import files
 
 with TemporaryDirectory() as directory:
-    existing = Path(directory) / "result.json"
-    existing.touch()
+    existing = files.path(directory) / "result.json"
+    files.save(existing, {"ok": True}, verbose=False)
     print(files.unique_path(existing))
 
 
 # Additional cases
 # Compound extensions remain intact when numbering is needed.
 with TemporaryDirectory() as directory:
-    existing = Path(directory) / "dataset.tar.gz"
+    existing = files.path(directory) / "dataset.tar.gz"
     existing.touch()
-    assert files.unique_path(existing).name == "dataset_1.tar.gz"
-    assert files.unique_path(existing, separator="-", start=4).name == "dataset-4.tar.gz"
+    assert files.name(files.unique_path(existing)) == "dataset_1.tar.gz"
+    assert files.name(files.unique_path(existing, separator="-", start=4)) == "dataset-4.tar.gz"
 ```

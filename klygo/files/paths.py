@@ -82,7 +82,7 @@ def join(*parts: PathInput) -> Path:
         raise ValueError("join() requires at least one path component")
     for index, part in enumerate(parts):
         validate_type(part, (str, os.PathLike), f"parts[{index}]")
-    return Path(parts[0]).joinpath(*parts[1:])
+    return path(parts[0]).joinpath(*parts[1:])
 
 
 def normalize(value: PathInput) -> Path:
@@ -780,11 +780,5 @@ __all__ = [
     "path", "join", "normalize", "resolve", "relative", "is_within",
     "common_path", "replace_root", "with_name", "with_stem",
     "with_extension", "unique_path", "extensions", "compound_extension",
-    "parents", "is_absolute", "name", "stem", "extension", "parent",
+    "parents", "is_absolute", "as_posix", "name", "stem", "extension", "parent",
 ]
-
-
-
-
-
-

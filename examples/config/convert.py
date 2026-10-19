@@ -1,8 +1,10 @@
 """Convert YAML configuration to TOML."""
-from pathlib import Path
+
 from tempfile import TemporaryDirectory
-from klygo import config
+
+from klygo import config, files
+
 with TemporaryDirectory() as directory:
-    root = Path(directory); source = root / "a.yaml"
-    config.save(source, {"seed": 7}, verbose=False)
-    assert config.convert(source, root / "a.toml", verbose=False).is_file()
+    root = files.path(directory)
+    source = config.save(root / "a.yaml", {"seed": 7}, verbose=False)
+    assert files.is_file(config.convert(source, root / "a.toml", verbose=False))

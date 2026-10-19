@@ -9,6 +9,8 @@ from typing import Any
 
 from box import Box
 
+from klygo.validators import validate_type
+
 from ._utils import to_dict
 from .mapping import update
 from .structure import unflatten
@@ -66,12 +68,10 @@ def from_env(
     >>> config.from_env(prefix="APP_", parse_values=True)["model"]["batch"]
     32
     """
-    if not isinstance(prefix, str):
-        raise TypeError("prefix must be a string")
+    validate_type(prefix, str, "prefix")
     if not isinstance(sep, str) or not sep:
         raise ValueError("sep must be a non-empty string")
-    if not isinstance(parse_values, bool):
-        raise TypeError("parse_values must be a bool")
+    validate_type(parse_values, bool, "parse_values")
     base = {} if config_data is None else to_dict(config_data)
     flat_updates: dict[str, Any] = {}
     for name, value in os.environ.items():
@@ -82,3 +82,6 @@ def from_env(
     if not flat_updates:
         return base
     return update(base, unflatten(flat_updates), deep=True).to_dict()
+
+
+__all__ = ["from_env"]

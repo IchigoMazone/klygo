@@ -3,7 +3,7 @@
 import fnmatch
 import re
 import shutil
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED, ZIP_STORED, ZIP_BZIP2, ZIP_LZMA
 from typing import Iterator, Any, Dict, List, Optional, Union, Literal
 
@@ -338,12 +338,14 @@ class ZipBackend(ArchiveBackend):
                 if on_conflict == "skip":
                     continue
                 elif on_conflict == "rename":
-                    member_path = PurePosixPath(arcname)
+                    member_name = file_utils.name(arcname)
+                    suffix = file_utils.compound_extension(member_name)
+                    stem = member_name[:-len(suffix)] if suffix else member_name
                     index = 1
                     while True:
-                        candidate = member_path.with_name(
-                            f"{member_path.stem}_dup{index}{member_path.suffix}"
-                        ).as_posix()
+                        candidate = file_utils.as_posix(
+                            file_utils.with_name(arcname, f"{stem}_dup{index}{suffix}")
+                        )
                         if candidate not in existing:
                             arcname = candidate
                             break
@@ -458,8 +460,9 @@ class ZipBackend(ArchiveBackend):
         file_utils.mkdir(output_dir)
         max_bytes = int(size * 1024 * 1024)
 
-        stem = file_utils.stem(archive_path)
-        suffix = file_utils.extension(archive_path)
+        archive_name = file_utils.name(archive_path)
+        suffix = file_utils.compound_extension(archive_name)
+        stem = archive_name[:-len(suffix)] if suffix else archive_name
         parts: List[str] = []
         part_num = 1
 

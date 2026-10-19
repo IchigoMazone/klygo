@@ -17,7 +17,9 @@ from klygo.utils.progress import ProgressBar
 from klygo.validators import validate_type
 
 from ._typing import PathInput
-from .filesystem import copy
+from .filesystem import copy, exists, is_dir, is_symlink, mkdir, remove
+from .metadata import hash as file_hash
+from .paths import name, path as to_path, resolve
 
 
 def download(
@@ -99,22 +101,22 @@ def download(
 
     source_text = os.fspath(source)
     validate_type(source_text, str, "source")
-    destination_dir = Path(output_dir)
-    destination_dir.mkdir(parents=True, exist_ok=True)
+    destination_dir = mkdir(output_dir, parents=True, exist_ok=True)
 
     if source_text.startswith(("http://", "https://", "ftp://")):
         parsed = urlparse(source_text)
-        destination = destination_dir / (os.path.basename(parsed.path) or "downloaded_file")
-        if (destination.exists() or destination.is_symlink()) and not overwrite:
+        filename = name(parsed.path) if parsed.path else ""
+        destination = destination_dir / (filename or "downloaded_file")
+        if (exists(destination) or is_symlink(destination)) and not overwrite:
             raise FileExistsError(
                 f"File already exists: {destination}. Use overwrite=True to replace it."
             )
         request = urllib.request.Request(source_text, headers={"User-Agent": "klygo/2.0"})
         for attempt in range(retries + 1):
             descriptor, temporary_name = tempfile.mkstemp(
-                prefix=f".{destination.name}.", suffix=".tmp", dir=destination_dir
+                prefix=f".{name(destination)}.", suffix=".tmp", dir=destination_dir
             )
-            temporary = Path(temporary_name)
+            temporary = to_path(temporary_name, expand_user=False)
             os.close(descriptor)
             try:
                 try:
@@ -125,7 +127,7 @@ def download(
                         downloaded = 0
                         with temporary.open("wb") as stream, ProgressBar(
                             total=total_size,
-                            desc=f"Downloading {destination.name}",
+                            desc=f"Downloading {name(destination)}",
                             unit="B",
                             unit_scale=True,
                             verbose=verbose,
@@ -151,18 +153,15 @@ def download(
                     os.link(temporary, destination)
                 return destination
             finally:
-                temporary.unlink(missing_ok=True)
+                remove(temporary, missing_ok=True)
 
-    source_path = Path(source)
-    if not source_path.exists():
+    source_path = to_path(source)
+    if not exists(source_path):
         raise FileNotFoundError(f"Source file does not exist: {source_path}")
-    if source_path.is_dir():
+    if is_dir(source_path):
         raise ValueError(f"download() only supports single files, not directories: {source_path}")
-    if expected_sha256 is not None:
-        from .metadata import hash as file_hash
-
-        if file_hash(source_path, "sha256") != expected_sha256.lower():
-            raise ValueError("Source file does not match expected_sha256")
+    if expected_sha256 is not None and file_hash(source_path, "sha256") != expected_sha256.lower():
+        raise ValueError("Source file does not match expected_sha256")
 
     try:
         from google.colab import files as colab_files
@@ -172,16 +171,10 @@ def download(
     except ImportError:
         pass
 
-    destination = destination_dir / source_path.name
-    if destination.resolve() != source_path.resolve():
+    destination = destination_dir / name(source_path)
+    if resolve(destination) != resolve(source_path):
         copy(source_path, destination, overwrite=overwrite)
     return destination
 
 
 __all__ = ["download"]
-
-
-
-
-
-

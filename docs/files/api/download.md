@@ -48,23 +48,22 @@ See [`test_download.py`](../../../test/files/test_download.py) for the executabl
 """Executable example for klygo.files.download."""
 
 from tempfile import TemporaryDirectory
-from pathlib import Path
 from klygo import files
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
-    source = root / "source.bin"
-    source.write_bytes(b"klygo")
+    root = files.path(directory)
+    source = root / "source.txt"
+    files.save(source, "klygo", verbose=False)
     downloaded = files.download(source, root / "downloads", verbose=False)
-    print(downloaded, downloaded.read_bytes())
+    print(downloaded, files.load(downloaded, verbose=False))
 
 
 # Additional cases
 # Existing destinations are protected unless overwrite=True.
 with TemporaryDirectory() as directory:
-    root = Path(directory)
-    source = root / "weights.bin"
-    source.write_bytes(b"v1")
+    root = files.path(directory)
+    source = root / "weights.txt"
+    files.save(source, "v1", verbose=False)
     destination = files.download(source, root / "cache", verbose=False)
     try:
         files.download(source, root / "cache", verbose=False)

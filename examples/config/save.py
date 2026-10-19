@@ -1,13 +1,12 @@
 """Save ordinary configuration and model metadata by destination extension."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from klygo import config, models
+from klygo import config, files, models
 
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
 
     settings_path = root / "settings.yaml"
     assert config.save(

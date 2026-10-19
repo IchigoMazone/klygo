@@ -38,30 +38,27 @@ See [`test_io.py`](../../../test/config/test_io.py).
 ## Complete executable example
 
 ```python
-from pathlib import Path
+"""Load dot-accessible settings and model metadata."""
+
 from tempfile import TemporaryDirectory
-from klygo import config
+
+from klygo import config, files, models
+
 
 with TemporaryDirectory() as directory:
-    path = Path(directory) / "settings.json"
-    config.save(path, {"model": {"batch": 16}}, verbose=False)
-    assert config.load(path, verbose=False).model.batch == 16
-```
+    root = files.path(directory)
 
-Load a model schema without losing permissions or optional `None` fields:
+    settings_path = root / "settings.json"
+    config.save(settings_path, {"model": {"batch": 16}}, verbose=False)
+    assert config.load(settings_path, verbose=False).model.batch == 16
 
-```python
-from pathlib import Path
-from tempfile import TemporaryDirectory
-from klygo import config, models
+    flags = models.flags(model=False, processor=True, post=True)
+    schema = models.metadata(flags)
+    metadata_path = root / "model.toml"
+    config.save(metadata_path, schema, verbose=False)
 
-flags = models.flags(model=False, processor=True, post=True)
-schema = models.metadata(flags)
-
-with TemporaryDirectory() as directory:
-    path = Path(directory) / "model.toml"
-    config.save(path, schema, verbose=False)
-    restored = config.load(path, verbose=False)
+    restored = config.load(metadata_path, verbose=False)
     assert restored.flags.model is False
+    assert restored.flags.processor is True
     assert restored["class"] is None
 ```

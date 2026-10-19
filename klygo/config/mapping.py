@@ -8,6 +8,8 @@ from typing import Any
 
 from box import Box
 
+from klygo.validators import validate_type
+
 from ._utils import to_dict
 
 
@@ -44,8 +46,7 @@ def update(
     >>> config.update({"model": {"batch": 16}}, {"model": {"batch": 32}}).model.batch
     32
     """
-    if not isinstance(deep, bool):
-        raise TypeError("deep must be a bool")
+    validate_type(deep, bool, "deep")
     result = copy.deepcopy(to_dict(config_data))
     replacement = to_dict(updates, name="updates")
     for key, value in replacement.items():
@@ -88,3 +89,6 @@ def merge(*configs: Mapping[str, Any] | Box, deep: bool = True) -> Box:
     for index, value in enumerate(configs):
         result = update(result, to_dict(value, name=f"configs[{index}]"), deep=deep)
     return result
+
+
+__all__ = ["merge", "update"]

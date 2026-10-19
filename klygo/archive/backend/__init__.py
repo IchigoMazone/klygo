@@ -1,7 +1,7 @@
 """Archive backend contracts, built-in adapters, and format selection (``klygo.archive.backend``).
 
 Interactive Google Colab Tutorial:
-    https://colab.research.google.com/drive/1CYtOv1nz-lujPiQA_f50HRwEdN5FVVnE?usp=sharing
+    https://colab.research.google.com/drive/1z5cuH35jFOkTtSkS4IcufF8ZygnylEJS?usp=sharing
 
 Most callers should use :mod:`klygo.archive`. Import this package directly when
 writing a backend, inspecting capabilities, or deliberately selecting a

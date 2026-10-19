@@ -1,6 +1,9 @@
 """Export an in-memory configuration."""
-from pathlib import Path
+
 from tempfile import TemporaryDirectory
-from klygo import config
+
+from klygo import config, files
+
 with TemporaryDirectory() as directory:
-    assert config.export({"seed": 7}, Path(directory) / "settings.json", verbose=False).is_file()
+    output = config.export({"seed": 7}, files.path(directory) / "settings.json", verbose=False)
+    assert files.is_file(output)

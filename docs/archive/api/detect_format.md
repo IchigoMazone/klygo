@@ -40,7 +40,6 @@ See [`test_detect_format.py`](../../../test/archive/test_detect_format.py) for t
 ```python
 """Executable examples for klygo.archive.detect_format."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import klygo.archive as archive
@@ -54,7 +53,7 @@ assert archive.detect_format("dataset.tar.gz") == "tar.gz"
 assert archive.detect_format("dataset.tbz2") == "tar.bz2"
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
     packed = make_archive(root)
     renamed = files.move(packed, root / "archive.bin")
     assert archive.detect_format(renamed) == "zip"

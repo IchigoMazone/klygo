@@ -1,5 +1,6 @@
-"""Documentation and example coverage contract for klygo.files."""
+"""Documentation, example, and tutorial coverage contract for klygo.files."""
 
+import importlib
 import inspect
 import io
 import re
@@ -36,7 +37,9 @@ class TestFilesDocumentation(unittest.TestCase):
                     self.assertIn(f"{heading}\n{'-' * len(heading)}", source_doc)
                 document = docs / f"{name}.md"
                 self.assertTrue(document.is_file(), f"Missing doc file: {document}")
-                self.assertTrue((examples / f"{name}.py").is_file(), f"Missing example file: {examples / f'{name}.py'}")
+                example = examples / f"{name}.py"
+                self.assertTrue(example.is_file(), f"Missing example file: {example}")
+                self.assertNotIn("from pathlib import Path", example.read_text(encoding="utf-8"))
                 text = document.read_text(encoding="utf-8")
                 for section in required_sections:
                     self.assertIn(section, text, f"Missing section '{section}' in {document.name}")
@@ -58,6 +61,41 @@ class TestFilesDocumentation(unittest.TestCase):
                 self.assertIsNotNone(code)
                 example = repository / "examples" / "files" / f"{name}.py"
                 self.assertEqual(code.group(1).strip(), example.read_text(encoding="utf-8").strip())
+
+    def test_submodules_and_tutorial_notebooks_are_synchronized(self):
+        repository = Path(__file__).resolve().parents[2]
+        tutorials = repository / "tutorials" / "files"
+        expected_map = {
+            "Io": importlib.import_module("klygo.files.io").__all__,
+            "Download": importlib.import_module("klygo.files.download").__all__,
+            "Filesystem": importlib.import_module("klygo.files.filesystem").__all__,
+            "Metadata": importlib.import_module("klygo.files.metadata").__all__,
+            "Paths": importlib.import_module("klygo.files.paths").__all__,
+        }
+        combined = [name for group in expected_map.values() for name in group]
+        self.assertEqual(set(combined), set(files.__all__))
+        self.assertEqual(len(combined), len(files.__all__))
+
+        overview = tutorials / "Document_Files_Overview.ipynb"
+        self.assertTrue(overview.is_file())
+        overview_text = overview.read_text(encoding="utf-8")
+        for heading in ("## Choose a guide", "## Remember"):
+            self.assertIn(heading, overview_text, f"Missing '{heading}' in {overview.name}")
+
+        actual_notebooks = {p.name for p in tutorials.glob("*.ipynb")}
+        expected_notebooks = {"Document_Files_Overview.ipynb"} | {
+            f"Document_Files_{suffix}.ipynb" for suffix in expected_map
+        }
+        self.assertEqual(actual_notebooks, expected_notebooks)
+
+        for suffix, api_names in expected_map.items():
+            notebook = tutorials / f"Document_Files_{suffix}.ipynb"
+            text = notebook.read_text(encoding="utf-8")
+            for heading in ("## Jump to an API", "## Put it together", "## Remember"):
+                self.assertIn(heading, text, f"Missing '{heading}' in {notebook.name}")
+            for api_name in api_names:
+                with self.subTest(notebook=notebook.name, api=api_name):
+                    self.assertIn(f"files.{api_name}", text)
 
     def test_native_pathlib_guide_examples_execute(self):
         repository = Path(__file__).resolve().parents[2]

@@ -41,7 +41,6 @@ See [`test_compare.py`](../../../test/archive/test_compare.py) for the executabl
 ```python
 """Executable examples for klygo.archive.compare."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import klygo.archive as archive
@@ -51,7 +50,7 @@ from examples.archive._support import make_archive, make_source, member_ending
 
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
     source = make_source(root)
     first, second = root / "v1.zip", root / "v2.zip"
     archive.compress(source, first, verbose=False)

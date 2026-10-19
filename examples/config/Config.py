@@ -1,13 +1,12 @@
 """Use Config for general settings and exact model metadata."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from klygo import Config, models
+from klygo import Config, files, models
 
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
 
     settings = Config.create_default(root / "settings.yaml", verbose=False)
     settings.set("model.batch", 32)

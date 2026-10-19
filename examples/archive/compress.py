@@ -1,6 +1,5 @@
 """Executable examples for klygo.archive.compress."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import klygo.archive as archive
@@ -10,7 +9,7 @@ from examples.archive._support import make_archive, make_source, member_ending
 
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
     source = make_source(root)
 
     zip_path = root / "dataset.zip"

@@ -40,12 +40,14 @@ See [`test_io.py`](../../../test/config/test_io.py).
 ## Complete executable example
 
 ```python
-from pathlib import Path
+"""Convert YAML configuration to TOML."""
+
 from tempfile import TemporaryDirectory
-from klygo import config
+
+from klygo import config, files
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
     source = config.save(root / "a.yaml", {"seed": 7}, verbose=False)
-    assert config.convert(source, root / "a.toml", verbose=False).is_file()
+    assert files.is_file(config.convert(source, root / "a.toml", verbose=False))
 ```

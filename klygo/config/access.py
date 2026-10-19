@@ -8,6 +8,8 @@ from typing import Any
 
 from box import Box
 
+from klygo.validators import validate_type
+
 from ._utils import resolve_key_path, to_dict
 
 
@@ -156,8 +158,7 @@ def delete(config_data: MutableMapping[str, Any] | Box, key_path: str) -> bool:
     >>> config.delete(data, "model.batch")
     True
     """
-    if not isinstance(config_data, (MutableMapping, Box)):
-        raise TypeError("config_data must be a mutable mapping or Box")
+    validate_type(config_data, (MutableMapping, Box), "config_data")
     current: Any = config_data
     parts = resolve_key_path(key_path)
     for part in parts[:-1]:
@@ -168,3 +169,6 @@ def delete(config_data: MutableMapping[str, Any] | Box, key_path: str) -> bool:
         del current[parts[-1]]
         return True
     return False
+
+
+__all__ = ["get", "set", "has", "delete"]

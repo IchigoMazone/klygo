@@ -48,8 +48,6 @@ print(files.exists("missing-file"))
 
 
 # Additional cases
-from pathlib import Path
-
-assert files.exists(Path("README.md"))
+assert files.exists(files.path("README.md"))
 assert not files.exists("path-that-does-not-exist")
 ```

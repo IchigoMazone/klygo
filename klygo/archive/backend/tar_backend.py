@@ -349,8 +349,8 @@ class TarBackend(ArchiveBackend):
                     if collision and on_conflict == "overwrite":
                         replaced_roots.add(root_name)
                     elif collision:
-                        stem = file_utils.stem(root_name)
-                        suffix = file_utils.extension(root_name)
+                        suffix = file_utils.compound_extension(root_name)
+                        stem = root_name[:-len(suffix)] if suffix else root_name
                         index = 1
                         while True:
                             candidate = f"{stem}_dup{index}{suffix}"
@@ -457,8 +457,9 @@ class TarBackend(ArchiveBackend):
         file_utils.mkdir(output_dir)
         max_bytes = int(size * 1024 * 1024)
 
-        stem = file_utils.stem(archive_path)
-        suffix = file_utils.extension(archive_path)
+        archive_name = file_utils.name(archive_path)
+        suffix = file_utils.compound_extension(archive_name)
+        stem = archive_name[:-len(suffix)] if suffix else archive_name
         parts: List[str] = []
         part_num = 1
 

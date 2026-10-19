@@ -408,3 +408,14 @@ def copy(
     >>> archive.copy("dataset.zip", "backup/dataset.zip")
     """
     fs.copy(source_path, target_path, overwrite=overwrite)
+
+
+__all__ = [
+    "add",
+    "remove",
+    "merge",
+    "split_by_size",
+    "convert",
+    "recompress",
+    "copy",
+]

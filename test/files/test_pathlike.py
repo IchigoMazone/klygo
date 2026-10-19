@@ -5,7 +5,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from klygo import files
-from klygo.files import operations
 
 
 class TextPath:
@@ -34,6 +33,7 @@ class TestPathLike(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(getattr(files, name)(value), getattr(files, name)(expected))
         self.assertEqual(files.join(TextPath("dataset"), TextPath("a.txt")), Path("dataset/a.txt"))
+        self.assertEqual(files.join(TextPath("~"), TextPath("dataset")), Path.home() / "dataset")
         self.assertEqual(files.relative(value, TextPath("dataset")), Path("archive.tar.gz"))
         self.assertTrue(files.is_within(value, TextPath("dataset")))
         self.assertEqual(files.common_path([value, TextPath("dataset/a.txt")]), Path("dataset"))
@@ -84,10 +84,10 @@ class TestPathLike(unittest.TestCase):
             with self.assertRaises(TypeError):
                 files.save(value, {}, verbose=False)
 
-    def test_legacy_namespace_has_matching_exports(self):
-        self.assertEqual(set(files.__all__), set(operations.__all__))
-        for name in files.__all__:
-            self.assertIs(getattr(files, name), getattr(operations, name))
+    def test_user_home_expansion_across_operations(self):
+        self.assertTrue(files.exists("~"))
+        self.assertTrue(files.is_dir("~"))
+        self.assertFalse(files.is_file("~"))
 
 
 if __name__ == "__main__":

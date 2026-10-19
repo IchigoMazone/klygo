@@ -315,3 +315,11 @@ def open_archive(archive_path: Union[str, Path]) -> ArchiveFile:
     ...     names = opened.list_files()
     """
     return ArchiveFile(archive_path)
+
+
+open = open_archive
+
+__all__ = [
+    "open",
+    "ArchiveFile",
+]

@@ -46,11 +46,10 @@ See [`test_load.py`](../../../test/files/test_load.py) for the executable behavi
 """Executable example for klygo.files.load."""
 
 from tempfile import TemporaryDirectory
-from pathlib import Path
 from klygo import files
 
 with TemporaryDirectory() as directory:
-    source = Path(directory) / "config.json"
+    source = files.path(directory) / "config.json"
     files.save(source, {"model": "yolo"}, overwrite=True, verbose=False)
     print(files.load(source, verbose=False))
 
@@ -58,7 +57,7 @@ with TemporaryDirectory() as directory:
 # Additional cases
 # Load line-oriented text without retaining newline characters.
 with TemporaryDirectory() as directory:
-    labels = Path(directory) / "labels.txt"
-    labels.write_text("cat\ndog\n", encoding="utf-8")
+    labels = files.path(directory) / "labels.txt"
+    files.save(labels, ["cat", "dog"], verbose=False)
     assert files.load(labels, as_lines=True, verbose=False) == ["cat", "dog"]
 ```

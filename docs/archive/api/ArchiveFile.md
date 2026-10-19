@@ -41,7 +41,6 @@ See [`test_ArchiveFile.py`](../../../test/archive/test_ArchiveFile.py) for the e
 ```python
 """Executable examples for klygo.archive.ArchiveFile."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import klygo.archive as archive
@@ -51,7 +50,7 @@ from examples.archive._support import make_archive, make_source, member_ending
 
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
     packed = make_archive(root)
     opened = archive.ArchiveFile(packed)
 

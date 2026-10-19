@@ -7,13 +7,14 @@ from typing import Any
 
 from box import Box
 
+from klygo.validators import validate_type
+
 
 def to_dict(value: Mapping[str, Any] | Box, *, name: str = "config_data") -> dict[str, Any]:
     """Return a plain dictionary or raise a consistent public-facing error."""
+    validate_type(value, (Mapping, Box), name)
     if isinstance(value, Box):
         return value.to_dict()
-    if not isinstance(value, Mapping):
-        raise TypeError(f"{name} must be a mapping or Box, got {type(value).__name__}")
     return dict(value)
 
 

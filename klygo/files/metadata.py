@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, Union
 
 from klygo.utils.formatting import human_size as _human_size
 from klygo.validators import validate_type
 
 from ._typing import PathInput
+from .filesystem import exists, find, is_dir, is_file
+from .paths import extension, name, parent, path as _to_path, stem
 
 
 def size(path: PathInput, human: bool = False) -> Union[int, str]:
@@ -44,13 +45,13 @@ def size(path: PathInput, human: bool = False) -> Union[int, str]:
     >>> from klygo import files
     >>> files.size("model.onnx", human=True)
     """
-    candidate = Path(path)
-    if not candidate.exists():
+    candidate = _to_path(path)
+    if not exists(candidate):
         raise FileNotFoundError(f"Path does not exist: {candidate}")
     total = (
         candidate.stat().st_size
-        if candidate.is_file()
-        else sum(item.stat().st_size for item in candidate.rglob("*") if item.is_file())
+        if is_file(candidate)
+        else sum(item.stat().st_size for item in find(candidate, "*", recursive=True))
     )
     return _human_size(total) if human else total
 
@@ -88,10 +89,10 @@ def hash(path: PathInput, algorithm: str = "sha256") -> str:
     >>> from klygo import files
     >>> digest = files.hash("model.onnx", "sha256")
     """
-    candidate = Path(path)
-    if not candidate.exists():
+    candidate = _to_path(path)
+    if not exists(candidate):
         raise FileNotFoundError(f"Path does not exist: {candidate}")
-    if not candidate.is_file():
+    if not is_file(candidate):
         raise ValueError(f"Path must be a file to hash: {candidate}")
     hasher = hashlib.new(algorithm)
     with candidate.open("rb") as stream:
@@ -136,20 +137,20 @@ def info(path: PathInput, *, verbose: bool = False) -> Dict[str, Any]:
     >>> metadata = files.info("model.onnx", verbose=True)
     """
     validate_type(verbose, bool, "verbose")
-    candidate = Path(path)
-    if not candidate.exists():
+    candidate = _to_path(path)
+    if not exists(candidate):
         raise FileNotFoundError(f"Path does not exist: {candidate}")
     stat = candidate.stat()
     byte_size = size(candidate)
     metadata = {
-        "name": candidate.name,
-        "stem": candidate.stem,
-        "extension": candidate.suffix,
-        "parent": candidate.parent,
+        "name": name(candidate),
+        "stem": stem(candidate),
+        "extension": extension(candidate),
+        "parent": parent(candidate),
         "size": byte_size,
         "human_size": _human_size(byte_size),
-        "is_file": candidate.is_file(),
-        "is_dir": candidate.is_dir(),
+        "is_file": is_file(candidate),
+        "is_dir": is_dir(candidate),
         "created": datetime.fromtimestamp(stat.st_ctime),
         "modified": datetime.fromtimestamp(stat.st_mtime),
     }
@@ -203,11 +204,11 @@ def compare(path1: PathInput, path2: PathInput, by: str = "content") -> bool:
     """
     if by not in ("hash", "content"):
         raise ValueError(f"Invalid compare mode: {by!r}. Expected 'hash' or 'content'.")
-    first = Path(path1)
-    second = Path(path2)
-    if not first.exists():
+    first = _to_path(path1)
+    second = _to_path(path2)
+    if not exists(first):
         raise FileNotFoundError(f"Path does not exist: {first}")
-    if not second.exists():
+    if not exists(second):
         raise FileNotFoundError(f"Path does not exist: {second}")
     if first.stat().st_size != second.stat().st_size:
         return False
@@ -224,7 +225,3 @@ def compare(path1: PathInput, path2: PathInput, by: str = "content") -> bool:
 
 
 __all__ = ["size", "hash", "info", "compare"]
-
-
-
-

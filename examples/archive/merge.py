@@ -1,6 +1,5 @@
 """Executable examples for klygo.archive.merge."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import klygo.archive as archive
@@ -10,7 +9,7 @@ from examples.archive._support import make_archive, make_source, member_ending
 
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
     source = make_source(root)
     first, second = root / "a.zip", root / "b.zip"
     archive.compress(source, first, verbose=False)
@@ -20,4 +19,3 @@ with TemporaryDirectory() as directory:
     archive.merge([first, second], merged, verbose=False)
     assert archive.test(merged)
     print(archive.list_files(merged))
-

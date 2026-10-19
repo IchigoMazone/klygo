@@ -3,7 +3,15 @@
 `klygo.archive` provides high-level and low-level utilities for creating, extracting, inspecting, validating, mutating, and transforming multi-format archive files.
 
 Interactive Google Colab Tutorial:
-[Open in Colab](https://colab.research.google.com/drive/1CYtOv1nz-lujPiQA_f50HRwEdN5FVVnE?usp=sharing)
+[Open in Colab](https://colab.research.google.com/drive/1z5cuH35jFOkTtSkS4IcufF8ZygnylEJS?usp=sharing)
+
+The source-verified local tutorial collection starts at
+[`tutorials/archive/Document_Archive_Overview.ipynb`](../../tutorials/archive/Document_Archive_Overview.ipynb)
+and continues with 1-to-1 submodule guides for
+[`io.py` (`Document_Archive_Io.ipynb`)](../../tutorials/archive/Document_Archive_Io.ipynb),
+[`metadata.py` (`Document_Archive_Metadata.ipynb`)](../../tutorials/archive/Document_Archive_Metadata.ipynb),
+[`operations.py` (`Document_Archive_Operations.ipynb`)](../../tutorials/archive/Document_Archive_Operations.ipynb),
+and [`context.py` (`Document_Archive_Context.ipynb`)](../../tutorials/archive/Document_Archive_Context.ipynb).
 
 ---
 
@@ -64,7 +72,7 @@ Interactive Google Colab Tutorial:
 ## 3. Public APIs Reference (21 Functions, 1 Class)
 
 <details>
-<summary><b>Archive creation and extraction (4 functions)</b> <i>(Click to expand)</i></summary>
+<summary><b>I/O — <code>io.py</code> (4 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`compress(source, output_path, ...)`](api/compress.md): Create an archive from a file or directory.
 - [`extract(archive_path, output_dir, ...)`](api/extract.md): Extract all or filtered members safely.
@@ -74,7 +82,7 @@ Interactive Google Colab Tutorial:
 </details>
 
 <details>
-<summary><b>Archive discovery, metadata, and validation (9 functions)</b> <i>(Click to expand)</i></summary>
+<summary><b>Metadata — <code>metadata.py</code> (9 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`list_files(archive_path)`](api/list_files.md): Return all stored member names as a list.
 - [`iter_files(archive_path)`](api/iter_files.md): Lazily yield stored member names without loading the whole list.
@@ -89,7 +97,7 @@ Interactive Google Colab Tutorial:
 </details>
 
 <details>
-<summary><b>Archive transformation and in-place modification (7 functions)</b> <i>(Click to expand)</i></summary>
+<summary><b>Operations — <code>operations.py</code> (7 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`add(archive_path, files, ...)`](api/add.md): Add files or directories to an existing archive.
 - [`remove(archive_path, files)`](api/remove.md): Remove named members from an existing archive.
@@ -102,7 +110,7 @@ Interactive Google Colab Tutorial:
 </details>
 
 <details>
-<summary><b>Object-oriented interface and backend subsystem (1 class, 1 subpackage)</b> <i>(Click to expand)</i></summary>
+<summary><b>Context — <code>context.py</code> (1 function, 1 class) and backend subsystem</b> <i>(Click to expand)</i></summary>
 
 - [`ArchiveFile(archive_path)`](api/ArchiveFile.md): Stateful wrapper binding an archive to its backend.
 - [`open(archive_path)`](api/open.md): Convenience context manager returning an `ArchiveFile` instance.

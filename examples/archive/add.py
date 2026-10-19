@@ -1,6 +1,5 @@
 """Executable examples for klygo.archive.add."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import klygo.archive as archive
@@ -10,7 +9,7 @@ from examples.archive._support import make_archive, make_source, member_ending
 
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
     packed = make_archive(root)
     extra = root / "extra.txt"
     files.save(extra, "extra", verbose=False)
@@ -21,4 +20,3 @@ with TemporaryDirectory() as directory:
     assert "extra.txt" in names
     assert any("extra_dup" in name for name in names)
     print(names)
-

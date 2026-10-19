@@ -73,3 +73,6 @@ def validate(
                 raise ValueError(f"missing required config key: {path!r}")
         return True
     raise TypeError("required_keys must be a sequence, mapping, or None")
+
+
+__all__ = ["validate"]

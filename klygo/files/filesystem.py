@@ -12,30 +12,31 @@ from typing import Generator, Iterable, List, Tuple
 from klygo.validators import validate_type
 
 from ._typing import PathInput
+from .paths import is_absolute, name, parent, parents, path as _to_path, resolve
 
 
 def _entry_exists(candidate: Path) -> bool:
-    return candidate.exists() or candidate.is_symlink()
+    return exists(candidate) or is_symlink(candidate)
 
 
 def _validate_transfer(source: Path, target: Path) -> None:
     if not _entry_exists(source):
         raise FileNotFoundError(f"Source does not exist: {source}")
-    source_resolved = source.resolve(strict=False)
-    target_resolved = target.resolve(strict=False)
+    source_resolved = resolve(source, strict=False)
+    target_resolved = resolve(target, strict=False)
     if source_resolved == target_resolved:
         raise ValueError("Source and destination must be different paths")
-    if target_resolved in source_resolved.parents or (
-        source.is_dir() and source_resolved in target_resolved.parents
+    if target_resolved in parents(source_resolved) or (
+        is_dir(source) and source_resolved in parents(target_resolved)
     ):
         raise ValueError("Source and destination cannot contain each other")
 
 
 def _publish_staged(staged: Path, target: Path, overwrite: bool) -> None:
     if not overwrite:
-        if staged.is_symlink():
-            target.symlink_to(os.readlink(staged), target_is_directory=staged.is_dir())
-        elif staged.is_file():
+        if is_symlink(staged):
+            target.symlink_to(os.readlink(staged), target_is_directory=is_dir(staged))
+        elif is_file(staged):
             os.link(staged, target)
         else:
             if _entry_exists(target):
@@ -50,7 +51,7 @@ def _publish_staged(staged: Path, target: Path, overwrite: bool) -> None:
                     target.rmdir()
                     raise
         return
-    backup = staged.parent / "previous"
+    backup = parent(staged) / "previous"
     if _entry_exists(target):
         os.replace(target, backup)
     try:
@@ -95,7 +96,7 @@ def exists(path: PathInput) -> bool:
     >>> files.exists("README.md")
     True
     """
-    return Path(path).exists()
+    return _to_path(path).exists()
 
 
 def is_file(path: PathInput) -> bool:
@@ -127,7 +128,7 @@ def is_file(path: PathInput) -> bool:
     >>> files.is_file("README.md")
     True
     """
-    return Path(path).is_file()
+    return _to_path(path).is_file()
 
 
 def is_dir(path: PathInput) -> bool:
@@ -159,7 +160,7 @@ def is_dir(path: PathInput) -> bool:
     >>> files.is_dir("klygo")
     True
     """
-    return Path(path).is_dir()
+    return _to_path(path).is_dir()
 
 
 def is_symlink(path: PathInput) -> bool:
@@ -186,7 +187,7 @@ def is_symlink(path: PathInput) -> bool:
     >>> files.is_symlink("missing-link")
     False
     """
-    return Path(path).is_symlink()
+    return _to_path(path).is_symlink()
 
 
 def list_entries(path: PathInput = ".", pattern: str = "*", recursive: bool = False) -> List[Path]:
@@ -225,10 +226,10 @@ def list_entries(path: PathInput = ".", pattern: str = "*", recursive: bool = Fa
     >>> from klygo import files
     >>> files.list_entries("dataset", pattern="*.json")
     """
-    candidate = Path(path)
-    if not candidate.exists():
+    candidate = _to_path(path)
+    if not exists(candidate):
         raise FileNotFoundError(f"Path does not exist: {candidate}")
-    if not candidate.is_dir():
+    if not is_dir(candidate):
         raise ValueError(f"Path must be a directory: {candidate}")
     iterator = candidate.rglob(pattern) if recursive else candidate.glob(pattern)
     return sorted(iterator, key=lambda item: str(item).lower())
@@ -268,11 +269,11 @@ def find(path: PathInput = ".", pattern: str = "*", recursive: bool = True) -> L
     >>> from klygo import files
     >>> images = files.find("dataset", pattern="*.jpg")
     """
-    candidate = Path(path)
-    if not candidate.exists():
+    candidate = _to_path(path)
+    if not exists(candidate):
         raise FileNotFoundError(f"Path does not exist: {candidate}")
     iterator = candidate.rglob(pattern) if recursive else candidate.glob(pattern)
-    return sorted((item for item in iterator if item.is_file()), key=lambda item: str(item).lower())
+    return sorted((item for item in iterator if is_file(item)), key=lambda item: str(item).lower())
 
 
 def iter_find(
@@ -341,10 +342,10 @@ def iter_find(
         validate_type(item, str, "pattern")
         if not item or "/" in item or "\\" in item:
             raise ValueError("Patterns must be non-empty basenames without path separators")
-    candidate = Path(path)
-    if not candidate.exists():
+    candidate = _to_path(path)
+    if not exists(candidate):
         raise FileNotFoundError(f"Path does not exist: {candidate}")
-    if not candidate.is_dir():
+    if not is_dir(candidate):
         raise ValueError(f"Path must be a directory: {candidate}")
 
     def on_error(error):
@@ -354,13 +355,13 @@ def iter_find(
     def generate():
         for current, directories, filenames in os.walk(candidate, onerror=on_error, followlinks=False):
             directories[:] = [
-                name for name in directories
-                if recursive and not any(fnmatch(name, rule) for rule in excluded)
+                entry_name for entry_name in directories
+                if recursive and not any(fnmatch(entry_name, rule) for rule in excluded)
             ]
-            for name in filenames:
-                if fnmatch(name, pattern):
-                    item = Path(current) / name
-                    if item.is_file():
+            for entry_name in filenames:
+                if fnmatch(entry_name, pattern):
+                    item = _to_path(current, expand_user=False) / entry_name
+                    if is_file(item):
                         yield item
 
     return generate()
@@ -399,7 +400,7 @@ def walk(path: PathInput = ".") -> Generator[Tuple[str, List[str], List[str]], N
     """
     value = os.fspath(path)
     validate_type(value, str, "path")
-    return os.walk(value)
+    return os.walk(os.path.expanduser(value))
 
 
 def mkdir(path: PathInput, parents: bool = True, exist_ok: bool = True) -> Path:
@@ -433,7 +434,7 @@ def mkdir(path: PathInput, parents: bool = True, exist_ok: bool = True) -> Path:
     >>> from klygo import files
     >>> output = files.mkdir("runs/detect")
     """
-    candidate = Path(path)
+    candidate = _to_path(path)
     candidate.mkdir(parents=parents, exist_ok=exist_ok)
     return candidate
 
@@ -473,12 +474,12 @@ def remove(path: PathInput, recursive: bool = True, missing_ok: bool = True) -> 
     >>> from klygo import files
     >>> files.remove("runs/temp", missing_ok=True)
     """
-    candidate = Path(path)
-    if not (candidate.exists() or candidate.is_symlink()):
+    candidate = _to_path(path)
+    if not _entry_exists(candidate):
         if missing_ok:
             return
         raise FileNotFoundError(f"Path does not exist: {candidate}")
-    if candidate.is_file() or candidate.is_symlink():
+    if is_file(candidate) or is_symlink(candidate):
         candidate.unlink()
     elif recursive:
         shutil.rmtree(candidate)
@@ -524,22 +525,25 @@ def copy(source: PathInput, target: PathInput, overwrite: bool = False) -> Path:
     >>> from klygo import files
     >>> backup = files.copy("config.yaml", "backup/config.yaml")
     """
-    source_path = Path(source)
-    target_path = Path(target)
+    source_path = _to_path(source)
+    target_path = _to_path(target)
     validate_type(overwrite, bool, "overwrite")
     _validate_transfer(source_path, target_path)
     if _entry_exists(target_path) and not overwrite:
         raise FileExistsError(f"Target already exists: {target_path}")
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=f".{target_path.name}.", dir=target_path.parent))
+    mkdir(parent(target_path), parents=True, exist_ok=True)
+    staging = _to_path(
+        tempfile.mkdtemp(prefix=f".{name(target_path)}.", dir=parent(target_path)),
+        expand_user=False,
+    )
     staged = staging / "payload"
     published = False
     try:
-        if source_path.is_symlink():
-            staged.symlink_to(source_path.resolve(strict=False), target_is_directory=source_path.is_dir())
-        elif source_path.is_dir():
+        if is_symlink(source_path):
+            staged.symlink_to(resolve(source_path, strict=False), target_is_directory=is_dir(source_path))
+        elif is_dir(source_path):
             shutil.copytree(source_path, staged, symlinks=True)
-        elif source_path.is_file():
+        elif is_file(source_path):
             shutil.copy2(source_path, staged)
         else:
             raise ValueError(f"Source must be a file or directory: {source_path}")
@@ -590,8 +594,8 @@ def move(source: PathInput, target: PathInput, overwrite: bool = False) -> Path:
     >>> from klygo import files
     >>> result = files.move("draft.json", "output/result.json")
     """
-    source_path = Path(source)
-    target_path = Path(target)
+    source_path = _to_path(source)
+    target_path = _to_path(target)
     validate_type(overwrite, bool, "overwrite")
     _validate_transfer(source_path, target_path)
     copy(source_path, target_path, overwrite=overwrite)
@@ -636,29 +640,29 @@ def rename(path: PathInput, new_name_or_path: PathInput, overwrite: bool = False
     >>> from klygo import files
     >>> result = files.rename("draft.txt", "final.txt")
     """
-    source_path = Path(path)
+    source_path = _to_path(path)
     validate_type(overwrite, bool, "overwrite")
-    requested = Path(new_name_or_path)
-    target_path = source_path.parent / requested if len(requested.parts) == 1 else requested
+    requested = _to_path(new_name_or_path)
+    target_path = parent(source_path) / requested if len(requested.parts) == 1 else requested
     _validate_transfer(source_path, target_path)
     if (
-        source_path.is_symlink()
-        and not Path(os.readlink(source_path)).is_absolute()
-        and source_path.parent.resolve() != target_path.parent.resolve()
+        is_symlink(source_path)
+        and not is_absolute(os.readlink(source_path))
+        and resolve(parent(source_path), strict=False) != resolve(parent(target_path), strict=False)
     ):
         raise ValueError("Renaming a relative symlink into another directory would change its target")
     if _entry_exists(target_path) and not overwrite:
         raise FileExistsError(f"Target already exists: {target_path}")
-    target_path.parent.mkdir(parents=True, exist_ok=True)
+    mkdir(parent(target_path), parents=True, exist_ok=True)
     if not overwrite:
         if os.name == "nt":
             os.rename(source_path, target_path)
-        elif source_path.is_symlink():
+        elif is_symlink(source_path):
             target_path.symlink_to(
-                os.readlink(source_path), target_is_directory=source_path.is_dir()
+                os.readlink(source_path), target_is_directory=is_dir(source_path)
             )
             source_path.unlink()
-        elif source_path.is_file():
+        elif is_file(source_path):
             os.link(source_path, target_path)
             source_path.unlink()
         else:
@@ -669,7 +673,10 @@ def rename(path: PathInput, new_name_or_path: PathInput, overwrite: bool = False
                 target_path.rmdir()
                 raise
         return target_path
-    staging = Path(tempfile.mkdtemp(prefix=f".{target_path.name}.", dir=target_path.parent))
+    staging = _to_path(
+        tempfile.mkdtemp(prefix=f".{name(target_path)}.", dir=parent(target_path)),
+        expand_user=False,
+    )
     backup = staging / "previous"
     published = False
     try:
@@ -697,9 +704,3 @@ __all__ = [
     "exists", "is_file", "is_dir", "is_symlink", "list_entries", "find", "iter_find", "walk",
     "mkdir", "copy", "move", "rename", "remove",
 ]
-
-
-
-
-
-

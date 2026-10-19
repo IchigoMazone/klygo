@@ -44,12 +44,11 @@ See [`test_rename.py`](../../../test/files/test_rename.py) for the executable be
 """Executable example for klygo.files.rename."""
 
 from tempfile import TemporaryDirectory
-from pathlib import Path
 from klygo import files
 
 with TemporaryDirectory() as directory:
-    source = Path(directory) / "draft.txt"
-    source.write_text("done", encoding="utf-8")
+    source = files.path(directory) / "draft.txt"
+    files.save(source, "done", verbose=False)
     renamed = files.rename(source, "final.txt")
     print(renamed)
 
@@ -57,10 +56,10 @@ with TemporaryDirectory() as directory:
 # Additional cases
 # A full destination path can move and rename in one operation.
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
     source = root / "a.txt"
-    source.touch()
+    files.save(source, "item", verbose=False)
     destination = root / "nested" / "b.txt"
-    destination.parent.mkdir()
+    files.mkdir(files.parent(destination))
     assert files.rename(source, destination) == destination
 ```

@@ -274,3 +274,11 @@ def extract_matching(
         password=password,
         verbose=False,
     )
+
+
+__all__ = [
+    "compress",
+    "extract",
+    "extract_file",
+    "extract_matching",
+]

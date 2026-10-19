@@ -40,7 +40,6 @@ See [`test_verify.py`](../../../test/archive/test_verify.py) for the executable 
 ```python
 """Executable examples for klygo.archive.verify."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import klygo.archive as archive
@@ -50,7 +49,7 @@ from examples.archive._support import make_archive, make_source, member_ending
 
 
 with TemporaryDirectory() as directory:
-    packed = make_archive(Path(directory))
+    packed = make_archive(files.path(directory))
     report = archive.verify(packed)
     assert report["valid"] is True
     print(report)

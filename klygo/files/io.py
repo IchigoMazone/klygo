@@ -18,6 +18,8 @@ from klygo.utils.progress import ProgressBar
 from klygo.validators import validate_type
 
 from ._typing import PathInput
+from .filesystem import exists, is_file, is_symlink, mkdir, remove
+from .paths import extension, name, parent, path as _to_path
 
 _DATA_SUFFIXES = {
     ".yaml", ".yml", ".json", ".jsonl", ".toml", ".csv", ".txt",
@@ -26,9 +28,9 @@ _DATA_SUFFIXES = {
 }
 
 
-def _suffix(path: Path) -> str:
-    suffix = path.suffix.lower()
-    return ".env" if not suffix and path.name.lower().startswith(".env") else suffix
+def _suffix(candidate: Path) -> str:
+    suffix = extension(candidate).lower()
+    return ".env" if not suffix and name(candidate).lower().startswith(".env") else suffix
 
 
 def _run_with_progress(verbose: bool, description: str, function):
@@ -118,11 +120,10 @@ def load(path: PathInput, as_lines: bool = False, verbose: bool = True) -> Any:
     >>> from klygo import files
     >>> config = files.load("config.json", verbose=False)
     """
-    validate_type(path, (str, os.PathLike), "path")
-    candidate = Path(path)
-    if not candidate.exists():
+    candidate = _to_path(path)
+    if not exists(candidate):
         raise FileNotFoundError(f"Path does not exist: {candidate}")
-    if not candidate.is_file():
+    if not is_file(candidate):
         raise ValueError(f"Path must be a file: {candidate}")
     suffix = _suffix(candidate)
     if suffix not in _DATA_SUFFIXES:
@@ -219,11 +220,10 @@ def iter_load(path: PathInput) -> Generator[Any, None, None]:
     ...     for record in records:
     ...         print(record)
     """
-    validate_type(path, (str, os.PathLike), "path")
-    candidate = Path(path)
-    if not candidate.exists():
+    candidate = _to_path(path)
+    if not exists(candidate):
         raise FileNotFoundError(f"Path does not exist: {candidate}")
-    if not candidate.is_file():
+    if not is_file(candidate):
         raise ValueError(f"Path must be a file: {candidate}")
     suffix = _suffix(candidate)
     if suffix not in (".jsonl", ".csv"):
@@ -309,21 +309,20 @@ def save(
     >>> from klygo import files
     >>> files.save("config.json", {"batch": 16}, verbose=False)
     """
-    validate_type(path, (str, os.PathLike), "path")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
     validate_type(atomic, bool, "atomic")
-    candidate = Path(path)
+    candidate = _to_path(path)
     suffix = _suffix(candidate)
     if suffix not in _DATA_SUFFIXES:
         raise ValueError(
             f"Unsupported export format: {suffix!r}, supported: {sorted(_DATA_SUFFIXES)}"
         )
-    if (candidate.exists() or candidate.is_symlink()) and not overwrite:
+    if (exists(candidate) or is_symlink(candidate)) and not overwrite:
         raise FileExistsError(
             f"File already exists: {candidate}. Use overwrite=True to replace it."
         )
-    candidate.parent.mkdir(parents=True, exist_ok=True)
+    mkdir(parent(candidate), parents=True, exist_ok=True)
 
     def write(destination):
         if suffix in (".yaml", ".yml"):
@@ -386,9 +385,9 @@ def save(
             write(candidate)
             return
         descriptor, temporary_name = tempfile.mkstemp(
-            prefix=f".{candidate.name}.", suffix=".tmp", dir=candidate.parent
+            prefix=f".{name(candidate)}.", suffix=".tmp", dir=parent(candidate)
         )
-        temporary = Path(temporary_name)
+        temporary = _to_path(temporary_name, expand_user=False)
         try:
             os.close(descriptor)
             write(temporary)
@@ -399,7 +398,7 @@ def save(
                 # An exists-then-replace sequence could overwrite another writer.
                 os.link(temporary, candidate)
         finally:
-            temporary.unlink(missing_ok=True)
+            remove(temporary, missing_ok=True)
 
     _run_with_progress(verbose, f"Writing {suffix.lstrip('.').upper()}", publish)
 
@@ -451,13 +450,7 @@ def convert(
     """
     data = load(source, verbose=verbose)
     save(target, data, overwrite=overwrite, verbose=verbose)
-    return Path(target)
+    return _to_path(target)
 
 
 __all__ = ["load", "iter_load", "save", "convert"]
-
-
-
-
-
-

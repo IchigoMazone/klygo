@@ -40,7 +40,6 @@ See [`test_is_archive.py`](../../../test/archive/test_is_archive.py) for the exe
 ```python
 """Executable examples for klygo.archive.is_archive."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import klygo.archive as archive
@@ -50,7 +49,7 @@ from examples.archive._support import make_archive, make_source, member_ending
 
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
     packed = make_archive(root)
     plain = root / "notes.txt"
     files.save(plain, "plain text", verbose=False)

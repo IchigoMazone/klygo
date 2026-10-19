@@ -1,9 +1,8 @@
 """Persist model schemas and configured metadata in every supported format."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from klygo import Config, config, models
+from klygo import Config, config, files, models
 
 
 flags = models.flags(
@@ -39,7 +38,7 @@ configured = models.configure(
 )
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
 
     for suffix in ("json", "yaml", "toml"):
         schema_path = root / f"schema.{suffix}"

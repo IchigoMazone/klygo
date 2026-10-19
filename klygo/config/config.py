@@ -527,3 +527,6 @@ class Config:
         destination = files.join(destination_dir, f"{params.name}{params.suffix}")
         data = self._cfg or load(self.config_path, verbose=False)
         return export(data, destination, overwrite=params.overwrite, verbose=params.verbose)
+
+
+__all__ = ["Config"]

@@ -7,7 +7,11 @@ wheels/
 *.egg-info
 uv.lock
 .pypirc
-.agents
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/klygo-module-guides/
+!.agents/skills/klygo-module-guides/**
 grounding-dino-base/
 grounding-dino-base.rar
 .hf-http-test/
@@ -24,6 +28,7 @@ _cmake_build/
 temp_*/
 *.ipynb
 !tutorials/files/*.ipynb
+!tutorials/archive/*.ipynb
 *.jpg
 *.png
 *.mp4

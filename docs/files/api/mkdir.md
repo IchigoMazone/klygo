@@ -44,18 +44,17 @@ See [`test_mkdir.py`](../../../test/files/test_mkdir.py) for the executable beha
 """Executable example for klygo.files.mkdir."""
 
 from tempfile import TemporaryDirectory
-from pathlib import Path
 from klygo import files
 
 with TemporaryDirectory() as directory:
-    created = files.mkdir(Path(directory) / "outputs" / "images")
-    print(created, created.is_dir())
+    created = files.mkdir(files.path(directory) / "outputs" / "images")
+    print(created, files.is_dir(created))
 
 
 # Additional cases
 # Reusing the same path is safe with the default exist_ok=True.
 with TemporaryDirectory() as directory:
-    target = Path(directory) / "cache"
+    target = files.path(directory) / "cache"
     assert files.mkdir(target) == target
     assert files.mkdir(target) == target
 ```

@@ -1,6 +1,5 @@
 """Executable examples for klygo.archive.test."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import klygo.archive as archive
@@ -10,7 +9,7 @@ from examples.archive._support import make_archive, make_source, member_ending
 
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
     packed = make_archive(root)
     assert archive.test(packed)
 
@@ -18,4 +17,3 @@ with TemporaryDirectory() as directory:
     broken.write_bytes(b"PK\x03\x04broken")
     assert archive.test(broken) is False
     print("valid and corrupted cases checked")
-

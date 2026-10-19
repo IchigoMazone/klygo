@@ -10,6 +10,18 @@ in JSON, YAML, and TOML. See the dedicated
 Interactive Google Colab Tutorial:
 [Open in Colab](https://colab.research.google.com/drive/1-aOofq_ZwLi00gRXnBLbJ4raupc6OZKm?usp=sharing)
 
+Local Tutorial Notebooks (`tutorials/config/`, 1-to-1 with `klygo/config/` submodules):
+- [`Document_Config_Overview.ipynb`](../../tutorials/config/Document_Config_Overview.ipynb)
+- [`Document_Config_Io.ipynb`](../../tutorials/config/Document_Config_Io.ipynb) (`klygo/config/io.py`)
+- [`Document_Config_Creation.ipynb`](../../tutorials/config/Document_Config_Creation.ipynb) (`klygo/config/creation.py`)
+- [`Document_Config_Mapping.ipynb`](../../tutorials/config/Document_Config_Mapping.ipynb) (`klygo/config/mapping.py`)
+- [`Document_Config_Access.ipynb`](../../tutorials/config/Document_Config_Access.ipynb) (`klygo/config/access.py`)
+- [`Document_Config_Inspection.ipynb`](../../tutorials/config/Document_Config_Inspection.ipynb) (`klygo/config/inspection.py`)
+- [`Document_Config_Structure.ipynb`](../../tutorials/config/Document_Config_Structure.ipynb) (`klygo/config/structure.py`)
+- [`Document_Config_Environment.ipynb`](../../tutorials/config/Document_Config_Environment.ipynb) (`klygo/config/environment.py`)
+- [`Document_Config_Validation.ipynb`](../../tutorials/config/Document_Config_Validation.ipynb) (`klygo/config/validation.py`)
+- [`Document_Config_Config.ipynb`](../../tutorials/config/Document_Config_Config.ipynb) (`klygo/config/config.py`)
+
 ---
 
 ## 1. Functional vs Stateful Interface
@@ -31,7 +43,7 @@ Interactive Google Colab Tutorial:
 ## 2. Task-Oriented Cheatsheet (Common AI / User Questions)
 
 <details open>
-<summary><b>Task-oriented quick reference (19 tasks)</b> <i>(Click to expand or collapse)</i></summary>
+<summary><b>Task-oriented quick reference (21 tasks)</b> <i>(Click to expand or collapse)</i></summary>
 
 | I want to... | Recommended API | Key Parameters / Example |
 | :--- | :--- | :--- |
@@ -61,10 +73,10 @@ Interactive Google Colab Tutorial:
 
 ---
 
-## 3. Public APIs Reference (20 Functions, 1 Class)
+## 3. Public APIs Reference (20 Functions, 1 Class across 9 Submodules)
 
-<details>
-<summary><b>File I/O and format conversion (4 functions)</b> <i>(Click to expand)</i></summary>
+<details open>
+<summary><b>File I/O and format conversion — <code>io.py</code> (4 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`load(path, verbose=True)`](api/load.md): Load configuration file into dot-accessible `Box` with `./` expansion.
 - [`save(path, data, overwrite=False, ...)`](api/save.md): Save configuration mapping or `Box` to destination format.
@@ -73,18 +85,24 @@ Interactive Google Colab Tutorial:
 
 </details>
 
-<details>
-<summary><b>Configuration creation and merging (4 functions)</b> <i>(Click to expand)</i></summary>
+<details open>
+<summary><b>Default configuration and file creation — <code>creation.py</code> (2 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`defaults(default_data=None)`](api/defaults.md): Return a fresh copy of Klygo default configuration template.
 - [`create(path, default_data=None, ...)`](api/create.md): Create and reload configuration file from defaults.
+
+</details>
+
+<details open>
+<summary><b>Configuration merging and updating — <code>mapping.py</code> (2 functions)</b> <i>(Click to expand)</i></summary>
+
 - [`merge(*configs, deep=True)`](api/merge.md): Merge multiple configurations left to right.
 - [`update(config_data, updates, deep=True)`](api/update.md): Deep update configuration mapping without mutating input.
 
 </details>
 
-<details>
-<summary><b>Nested value access and assignment with dot paths (4 functions)</b> <i>(Click to expand)</i></summary>
+<details open>
+<summary><b>Nested value access and assignment — <code>access.py</code> (4 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`get(config_data, key_path, default=None)`](api/get.md): Retrieve nested value by dot path (e.g. `"model.batch"`).
 - [`set(config_data, key_path, value)`](api/set.md): Return copied configuration with nested value assigned.
@@ -93,23 +111,41 @@ Interactive Google Colab Tutorial:
 
 </details>
 
-<details>
-<summary><b>Structure inspection and transformation (6 functions)</b> <i>(Click to expand)</i></summary>
+<details open>
+<summary><b>Collection views and comparison — <code>inspection.py</code> (4 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`keys(config_data, flat=False)`](api/keys.md): Return top-level or flattened dot-path keys.
 - [`values(config_data, flat=False)`](api/values.md): Return top-level or flattened values.
 - [`items(config_data, flat=False)`](api/items.md): Return top-level or flattened `(key, value)` tuples.
 - [`diff(config1, config2)`](api/diff.md): Compare two configs or files returning added, removed, and modified values.
+
+</details>
+
+<details open>
+<summary><b>Structure transformation — <code>structure.py</code> (2 functions)</b> <i>(Click to expand)</i></summary>
+
 - [`flatten(config_data, sep='.')`](api/flatten.md): Flatten nested mappings into single-level dot-path mapping.
 - [`unflatten(flat_dict, sep='.')`](api/unflatten.md): Reconstruct nested dictionary from dot-path mapping.
 
 </details>
 
-<details>
-<summary><b>Environment, validation, and class interface (2 functions, 1 class)</b> <i>(Click to expand)</i></summary>
+<details open>
+<summary><b>Environment overlays — <code>environment.py</code> (1 function)</b> <i>(Click to expand)</i></summary>
 
 - [`from_env(config_data=None, prefix='KLYGO_', ...)`](api/from_env.md): Overlay environment variables onto configuration.
+
+</details>
+
+<details open>
+<summary><b>Schema validation — <code>validation.py</code> (1 function)</b> <i>(Click to expand)</i></summary>
+
 - [`validate(config_data, required_keys=None)`](api/validate.md): Validate required paths and schema type contracts.
+
+</details>
+
+<details open>
+<summary><b>Stateful configuration manager — <code>config.py</code> (1 class)</b> <i>(Click to expand)</i></summary>
+
 - [`Config(config_path)`](api/Config.md): Stateful object-oriented configuration interface.
 
 </details>

@@ -43,19 +43,21 @@ See [`test_TarBackend.py`](../../../../test/archive/backend/test_TarBackend.py).
 ## Complete executable example
 
 ```python
-from pathlib import Path
+"""Create a compressed TAR archive with explicit backend selection."""
+
 from tempfile import TemporaryDirectory
+
 import klygo.files as files
 from klygo.archive.backend import TarBackend
 
+
 with TemporaryDirectory() as directory:
-    root = Path(directory)
-    source = root / "file.txt"
-    files.save(source, "tar test", verbose=False)
-    packed = root / "bundle.tar.gz"
+    root = files.path(directory)
+    source = files.mkdir(root / "dataset")
+    files.save(source / "labels.txt", "cat\ndog", verbose=False)
+    packed = root / "dataset.tar.gz"
 
     backend = TarBackend("tar.gz")
-    backend.compress(source, packed, verbose=False)
-    assert "file.txt" in backend.list_files(packed)
-    assert backend.test(packed) is True
+    backend.compress(source, packed, include_root=False, verbose=False)
+    print(backend.format_name, backend.list_files(packed))
 ```

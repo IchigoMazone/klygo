@@ -44,7 +44,6 @@ See [`test_extract_matching.py`](../../../test/archive/test_extract_matching.py)
 ```python
 """Executable examples for klygo.archive.extract_matching."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import klygo.archive as archive
@@ -54,7 +53,7 @@ from examples.archive._support import make_archive, make_source, member_ending
 
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
     packed = make_archive(root)
 
     output = root / "text-members"

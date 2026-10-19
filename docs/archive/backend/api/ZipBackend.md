@@ -44,19 +44,22 @@ See [`test_ZipBackend.py`](../../../../test/archive/backend/test_ZipBackend.py).
 ## Complete executable example
 
 ```python
-from pathlib import Path
+"""Create and inspect a ZIP archive through the low-level adapter."""
+
 from tempfile import TemporaryDirectory
+
 import klygo.files as files
 from klygo.archive.backend import ZipBackend
 
+
 with TemporaryDirectory() as directory:
-    root = Path(directory)
-    source = root / "sample.txt"
-    files.save(source, "content", verbose=False)
-    packed = root / "sample.zip"
+    root = files.path(directory)
+    source = root / "hello.txt"
+    files.save(source, "hello", verbose=False)
+    packed = root / "hello.zip"
 
     backend = ZipBackend()
-    backend.compress(source, packed, verbose=False)
-    assert "sample.txt" in backend.list_files(packed)
-    assert backend.test(packed) is True
+    backend.compress(source, packed, method="deflated", verbose=False)
+    print(backend.list_files(packed))
+    print(backend.search(packed, "*.txt"))
 ```
