@@ -1,0 +1,37 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+uv.lock
+.pypirc
+.agents
+.pytest_cache
+grounding-dino-base/
+grounding-dino-base.rar
+.hf-http-test/
+
+# Build & Binary artifacts
+_cmake_build/
+*.pyd
+*.so
+*.dll
+*.exe
+*.rar
+
+# Temp test folders & scratch artifacts
+temp_*/
+*.ipynb
+*.jpg
+*.png
+*.mp4
+*.bak
+
+# Virtual environments & IDE
+.venv
+typings/
+.vscode/
+.idea/
+
