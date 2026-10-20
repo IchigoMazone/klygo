@@ -1,4 +1,44 @@
 {
+  "yolov8*-world*.pt": {
+    "class": "klygo.models.detection.YOLODetect",
+    "details": {
+      "name": "YOLO-World",
+      "task": "Open-Vocabulary Object-Detection",
+      "backend": "Ultralytics",
+      "library": "ultralytics",
+      "num_params": "Unknown"
+    },
+    "flags": {"model": false, "post": true},
+    "priority": {
+      "model": ["device", "imgsz", "half", "max_det"],
+      "post": ["threshold", "iou"]
+    },
+    "model": {},
+    "post": {
+      "threshold": 0.25,
+      "iou": 0.7
+    }
+  },
+  "yoloe-*.pt": {
+    "class": "klygo.models.detection.YOLODetect",
+    "details": {
+      "name": "YOLOE",
+      "task": "Open-Vocabulary Object-Detection",
+      "backend": "Ultralytics",
+      "library": "ultralytics",
+      "num_params": "Unknown"
+    },
+    "flags": {"model": false, "post": true},
+    "priority": {
+      "model": ["device", "imgsz", "half", "max_det"],
+      "post": ["threshold", "iou"]
+    },
+    "model": {},
+    "post": {
+      "threshold": 0.25,
+      "iou": 0.7
+    }
+  },
   "yolo11*.pt": {
     "class": "klygo.models.detection.YOLODetect",
     "details": {

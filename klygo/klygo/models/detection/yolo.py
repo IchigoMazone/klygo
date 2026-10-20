@@ -18,6 +18,7 @@ class YOLODetect(Detector):
             **kwargs,
         )
         self.model = None
+        self._prompt_classes = None
         if self.model_id and self.model_id not in ("custom-detector", "yolo-audit"):
             try:
                 from ultralytics import YOLO
@@ -37,6 +38,18 @@ class YOLODetect(Detector):
         post_config = dict(self.metadata["post"])
         raw_list = []
         if self.model is not None:
+            prompt_classes = (prompt,) if isinstance(prompt, str) else tuple(prompt or [])
+            if prompt_classes and prompt_classes != self._prompt_classes:
+                set_classes = getattr(self.model, "set_classes", None)
+                if not callable(set_classes):
+                    raise ValueError(
+                        "This YOLO checkpoint is closed-set and cannot detect arbitrary "
+                        "prompt classes. Use a YOLO-World checkpoint such as "
+                        "'yolov8s-worldv2.pt'."
+                    )
+                set_classes(list(prompt_classes))
+                self._prompt_classes = prompt_classes
+
             conf_thresh = post_config.get("threshold", 0.25)
             iou_thresh = post_config.get("iou", 0.7)
             ultra_results = self.model(
@@ -50,4 +63,4 @@ class YOLODetect(Detector):
         else:
             raw_list = [{"boxes": [], "scores": [], "labels": []} for _ in images]
 
-        return self.build_detections(images, raw_list, **post_config)
+        return self.build_detections(images, raw_list, prompt=prompt, **post_config)
