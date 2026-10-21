@@ -1,6 +1,6 @@
 """Shared fixtures used by executable dataset examples."""
 
-from pathlib import Path
+from typing import Any
 
 from PIL import Image
 
@@ -9,10 +9,10 @@ from klygo.outputs.detect import Box, Detection, Detections
 
 
 def make_dataset(
-    root: Path,
+    root: Any,
     names: tuple[str, ...] = ("apple", "banana"),
     prefix: str = "sample",
-) -> Path:
+) -> Any:
     """Create a tiny valid YOLO dataset for examples."""
     for index, class_id in enumerate((0, 1, 0, 1)):
         split = "train" if index < 2 else "val"

@@ -9,6 +9,7 @@ Create deterministic train, validation, and optional test folders from a flat or
 - `source`: directory or archive.
 - `target`: output directory or ZIP path.
 - `ratios`: one to three float values.
+- `format`: dataset format (default `"yolo"`). Currently only `"yolo"` is supported.
 - `overwrite`, `verbose`: replacement and progress controls.
 
 ## Returns

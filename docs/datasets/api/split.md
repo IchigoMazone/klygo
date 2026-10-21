@@ -8,6 +8,7 @@ Create multiple ZIP datasets by individual class, explicit class groups, or dete
 
 - `source`: dataset directory or archive.
 - `output_dir`: directory receiving ZIP parts.
+- `format`: dataset format (default `"yolo"`). Currently only `"yolo"` is supported.
 - `by_class`: create one part per class.
 - `class_groups`: explicit lists of class names.
 - `ratios`: two or more values summing to one.

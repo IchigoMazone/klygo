@@ -1,8 +1,8 @@
-"""
-Lớp cơ sở chuyên biệt cho bài toán Nhận diện Đối tượng (klygo.models.detection.base).
-TẦNG 2: Task Engine Interface + Implementation - Cài đặt toàn bộ Động cơ Detection,
-phân giải đa nguồn qua media.load, Batching loop, ProgressBar, đo thời gian ngoài luồng,
-quản lý phần cứng, export và benchmark.
+"""Specialized base class for object detection tasks (`klygo.models.detection.base`).
+
+LAYER 2: Task engine interface and implementation managing multi-source resolution
+via media.load, batching loop, progress bar tracking, external timing, hardware dispatch,
+export, and benchmark workflows.
 """
 
 import time
@@ -14,6 +14,8 @@ from klygo.models import utils
 from klygo.models.backend import common
 from klygo.outputs.detect import Detections, Detection, Box
 from klygo.utils.progress import ProgressBar
+
+__all__ = ["Detector"]
 
 
 def _materialize_model_images(images: Sequence[Any]) -> List[PIL.Image.Image]:
@@ -31,10 +33,10 @@ def _materialize_model_images(images: Sequence[Any]) -> List[PIL.Image.Image]:
 
 
 class Detector(BaseModel):
-    """
-    TẦNG 2: Động cơ thực thi toàn diện cho bài toán Object Detection.
-    Đảm nhiệm vòng đời suy luận batching, ProgressBar và đóng gói Detections.
-    Hoàn toàn framework-agnostic, đọc toàn bộ thông tin cấu hình từ metadata.
+    """Backend-neutral detector wrapper for image and video prediction.
+
+    Concrete subclasses implement ``forward`` and can use the inherited
+    batching, result packaging, and backend-dispatch methods.
     """
 
     def __init__(
@@ -259,40 +261,57 @@ class Detector(BaseModel):
         }
 
         if verbose:
-            print("=" * 60)
-            print("         BAO CAO DANH GIA HIEU NANG & TOC DO MO HINH")
-            print("=" * 60)
-            print(f" * Mo hinh      : {report['model_id']}")
-            print(f" * Backend/Task : {report['backend']} / {self.task}")
-            print(f" * Thiet bi/Dtype: {report['device']} / {report['dtype']}")
-            print(f" * So vong lap  : {report['iterations']} (Warmup: {report['warmup']})")
-            print("-" * 60)
-            print(f" * Do tre TB    : {report['latency_avg_ms']} ms / frame")
-            print(f" * Toc do (FPS) : {report['fps']} FPS (frames / sec)")
-            print("=" * 60)
+            from rich.console import Console
+            from rich.table import Table
+
+            table = Table(title=f"Model Benchmark: {self.model_id}")
+            table.add_column("Metric", style="cyan", no_wrap=True)
+            table.add_column("Value", style="green")
+            table.add_row("Model ID", str(report["model_id"]))
+            table.add_row("Backend / Task", f"{report['backend']} / {self.task}")
+            table.add_row("Device / Dtype", f"{report['device']} / {report['dtype']}")
+            table.add_row("Image Size", str(report["image_size"]))
+            table.add_row("Iterations / Warmup", f"{report['iterations']} (warmup: {report['warmup']})")
+            table.add_row("Average Latency", f"{report['latency_avg_ms']} ms / frame")
+            table.add_row("Throughput", f"{report['fps']} FPS")
+            Console().print(table)
 
         return report
 
     def help(self) -> None:
-        """In ra huong dan su dung chuan hoa va cac tham so dac thu cua mo hinh."""
-        print(f"MODEL: {self.model_id} ({self.backend}/{self.task})")
-        print(f"CLASS: {self.class_name}")
-        print("=" * 60)
-        print("1. predict(source, prompt, batch=1, vid_stride=1, max_frames=None, verbose=True, **kwargs)")
-        print("   Nhan dien doi tuong tren anh, video, folder thong qua klygo.media.load.")
+        """Display standardized usage guide and parameters for the model."""
+        from rich.console import Console
+        from rich.table import Table
+
+        table = Table(title=f"Model Help & Usage: {self.model_id}")
+        table.add_column("Command / Method", style="cyan", no_wrap=True)
+        table.add_column("Description", style="green")
+
+        table.add_row(
+            "predict(source, prompt, ...)",
+            "Perform object detection on images, videos, directories, or streams via klygo.media.load.",
+        )
+        table.add_row(
+            "benchmark(iterations=20, warmup=5)",
+            "Evaluate inference latency (ms) and throughput (FPS).",
+        )
+        table.add_row(
+            "info()",
+            "Print model architecture, backend, state, and active settings in a table.",
+        )
 
         settings_dict = self.settings
         has_params = any(bool(v) for v in settings_dict.values()) if isinstance(settings_dict, dict) else False
         if has_params:
-            print("\n   [Tham so dac thu co the tuy chinh trong predict]:")
+            param_lines = []
             for group_name, group_val in settings_dict.items():
                 if isinstance(group_val, dict) and group_val:
                     for k, v in group_val.items():
-                        print(f"     * {k}={v} (nhom: {group_name})")
+                        param_lines.append(f"{k}={v} (group: {group_name})")
+            if param_lines:
+                table.add_row("Custom Parameters", "\n".join(param_lines))
 
-        print("\n2. benchmark(iterations=20, warmup=5)")
-        print("   Danh gia toc do suy luan (Latency ms / FPS).")
-        print("=" * 60)
+        Console().print(table)
 
     # =========================================================================
     # ĐỘNG CƠ SUY LUẬN DETECTION HOÀN CHỈNH (predict & forward)

@@ -139,3 +139,6 @@ def create_progress_bar(
         unit_scale=unit_scale,
         unit_divisor=unit_divisor,
     )
+
+
+__all__ = ["ProgressBar", "create_progress_bar"]

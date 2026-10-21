@@ -105,10 +105,11 @@ restored = config.load("configured.yaml", verbose=False)
 model = models.load(restored)
 ```
 
-`models.load()` also accepts the path directly:
+Read configuration files through `klygo.config`, then pass the loaded metadata
+to `models.load()`:
 
 ```python
-model = models.load("configured.yaml")
+model = models.load(config.load("configured.yaml", verbose=False))
 ```
 
 The `class` field must contain an importable implementation path before using
@@ -147,7 +148,7 @@ not read or write that marker directly.
   already-loaded manager.
 - Use `models.metadata()` for a reusable schema.
 - Use `models.configure()` for a concrete model definition.
-- Use `models.load()` only after the definition has an importable `class`.
+- Use `models.load()` only after loading the definition and confirming it has an importable `class`.
 
 ## Executable example and tests
 

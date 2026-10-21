@@ -3,51 +3,57 @@ from pathlib import Path
 from typing import Tuple, Union
 
 from klygo.archive import extract
-from klygo.datasets import get_dataset_info
+from klygo.datasets import info as get_dataset_info
 from klygo import files
 from klygo.datasets._structure import find_dataset_root, scan_dataset_files
+
+__all__ = ["plot_dataset_stats"]
 
 
 def plot_dataset_stats(
     source: Union[str, Path],
     figsize: Tuple[int, int] = (10, 6),
 ) -> None:
-    """
-    Tác dụng:
-    - Vẽ biểu đồ số lượng đối tượng theo class của dataset
+    """Plot YOLO object counts for each class in a dataset.
 
-    Đầu vào:
-    - source: File ZIP hoặc thư mục dataset
-    - figsize: Kích thước figure của Matplotlib
+    Parameters
+    ----------
+    source : str or pathlib.Path
+        Dataset directory or supported archive.
+    figsize : tuple of int
+        Matplotlib figure size in inches.
 
-    Đầu ra:
-    - Không trả về dữ liệu
+    Returns
+    -------
+    None
+        Displays a bar chart.
 
-    Nguồn: TrinhNhuNhat_12072026.
+    Notes
+    -----
+    Counts class IDs found in label files under ``images`` and ``labels``.
+    An archive is extracted to a temporary directory before scanning.
     """
     info = get_dataset_info(source)
     classes = info.get("classes", [])
+    class_ids = info.get("class_ids", list(range(len(classes))))
     source = files.path(source)
-    temp_dir = None
+    class_counts = {class_id: 0 for class_id in class_ids}
+    with tempfile.TemporaryDirectory() as temporary:
+        if files.is_file(source):
+            extracted = files.path(temporary)
+            extract(source, extracted, overwrite=True, verbose=False)
+            source_dir = find_dataset_root(extracted)
+        else:
+            source_dir = source
 
-    if source.is_file():
-        temp_dir = files.path(tempfile.mkdtemp())
-        extract(source, temp_dir, overwrite=True, verbose=False)
-        source_dir = find_dataset_root(temp_dir)
-    else:
-        source_dir = source
-
-    class_counts = {idx: 0 for idx in range(len(classes))}
-    images_dir = source_dir / "images"
-    labels_dir = source_dir / "labels"
-
-    if images_dir.exists() and labels_dir.exists():
-        for _, label_path, _, _ in scan_dataset_files(images_dir, labels_dir):
-            if not label_path or not label_path.exists():
-                continue
-            with open(label_path, "r", encoding="utf-8") as file:
-                for line in file:
-                    parts = line.strip().split()
+        images_dir = files.join(source_dir, "images")
+        labels_dir = files.join(source_dir, "labels")
+        if files.is_dir(images_dir) and files.is_dir(labels_dir):
+            for _, label_path, _, _ in scan_dataset_files(images_dir, labels_dir):
+                if not label_path or not files.is_file(label_path):
+                    continue
+                for line in files.load(label_path, as_lines=True, verbose=False):
+                    parts = str(line).strip().split()
                     if not parts:
                         continue
                     try:
@@ -57,12 +63,9 @@ def plot_dataset_stats(
                     if class_id in class_counts:
                         class_counts[class_id] += 1
 
-    if temp_dir and temp_dir.exists():
-        files.remove(temp_dir)
-
     import matplotlib.pyplot as plt
 
-    class_names = [classes[idx] for idx in class_counts]
+    class_names = list(classes)
     plt.figure(figsize=figsize)
     plt.bar(class_names, list(class_counts.values()), color="royalblue")
     plt.xlabel("Classes")

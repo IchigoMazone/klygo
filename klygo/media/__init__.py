@@ -1,7 +1,7 @@
 """Image and video I/O, lazy frames, and tensor conversion.
 
 Google Colab guide:
-https://colab.research.google.com/drive/1bXduGq2Y4YEfOQlutNMYmz6nYmrJPsmq?usp=sharing
+https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/media/Document_Media_Overview.ipynb
 
 Supported images: PNG, JPEG, WebP, BMP, and TIFF.
 Supported videos: MP4, AVI, MOV, MKV, M4V, and WebM.

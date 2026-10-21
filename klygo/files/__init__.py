@@ -1,7 +1,7 @@
 """Work with paths, filesystems, metadata, and structured data.
 
 Colab tutorial:
-    https://colab.research.google.com/drive/1-Oo8ERqSuxns1OfZAdHY5jVMTrLVpJG-?usp=sharing
+    https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/files/Document_Files_Overview.ipynb
 
 Public API (43 functions):
     Structured data I/O (io.py):

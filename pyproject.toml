@@ -7,6 +7,10 @@ name = "klygo"
 version = "2.1.0"
 description = "Python utilities for archive, config and zero-shot detection"
 readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Trinh Nhu Nhat (IchigoMazone)", email = "nhattrinh2702@gmail.com" }
+]
 requires-python = ">=3.10,<4.0"
 
 dependencies = [
@@ -33,6 +37,10 @@ transformers = [
 ultralytics = [
     "ultralytics",
 ]
+torchvision = [
+    "torch>=2.7,<3.0",
+    "torchvision>=0.22,<1.0",
+]
 keras-hub = [
     "keras-hub",
 ]
@@ -40,6 +48,7 @@ models = [
     "torch>=2.7,<3.0",
     "transformers>=4.50,<6.0",
     "ultralytics",
+    "torchvision>=0.22,<1.0",
     "keras-hub",
 ]
 py7zr = [

@@ -4,22 +4,32 @@ def validate_type(
     expected: type | tuple[type, ...],
     name: str,
 ) -> None:
-    """
-    Tác dụng:
-    - Kiểm tra kiểu dữ liệu của tham số
+    """Raise ``TypeError`` when an argument has an unexpected type.
 
-    Đầu vào:
-    - value: Tham số value của hàm
-    - expected: Tham số expected của hàm
-    - name: Tham số name của hàm
+    Parameters
+    ----------
+    value : object
+        Argument to check.
+    expected : type or tuple[type, ...]
+        Accepted type or types, evaluated with ``isinstance``.
+    name : str
+        Argument name included in the error message.
 
-    Đầu ra:
-    - Không trả về dữ liệu
+    Returns
+    -------
+    None
+        Successful validation has no return value.
 
-    Ngoại lệ:
-    - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+    Raises
+    ------
+    TypeError
+        If ``value`` is not an instance of any accepted type.
 
-    Nguồn: TrinhNhuNhat_12072026.
+    Examples
+    --------
+    >>> from klygo import validators
+    >>> validators.validate_type("image.jpg", (str, bytes), "source") is None
+    True
     """
     if not isinstance(value, expected):
         if isinstance(expected, tuple):
@@ -33,3 +43,6 @@ def validate_type(
             f"{name} must be {expected_name}, "
             f"got {type(value).__name__}"
         )
+
+
+__all__ = ["validate_type"]

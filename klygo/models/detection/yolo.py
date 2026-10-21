@@ -1,5 +1,4 @@
-"""
-Trình bao bọc mô hình nhận diện đối tượng kiến trúc YOLO (klygo.models.detection.yolo).
+"""Object detection wrapper for YOLO architectures (`klygo.models.detection.yolo`).
 """
 
 from typing import Dict, Any, List, Union

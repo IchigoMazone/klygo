@@ -1,5 +1,4 @@
-"""
-Trình bao bọc mô hình nhận diện đối tượng kiến trúc LocateAnything (klygo.models.detection.locate_anything).
+"""Object detection wrapper for LocateAnything architectures (`klygo.models.detection.locate_anything`).
 """
 
 from typing import Dict, Any, List, Union

@@ -8,10 +8,34 @@ from PIL import Image, ImageOps
 
 
 def get_trace(image: Any) -> List[Dict[str, Any]]:
+    """Return or update get trace using preprocessing geometry history.
+
+    Parameters
+    ----------
+    image : Any
+        Input PIL, NumPy, or lazy image.
+
+    Returns
+    -------
+    object
+        Restored coordinates, trace information, or updated image.
+    """
     return [dict(item) for item in getattr(image, "_preprocessing_trace", [])]
 
 
 def original_size(image: Any) -> Tuple[int, int]:
+    """Return or update original size using preprocessing geometry history.
+
+    Parameters
+    ----------
+    image : Any
+        Input PIL, NumPy, or lazy image.
+
+    Returns
+    -------
+    object
+        Restored coordinates, trace information, or updated image.
+    """
     stored = getattr(image, "_preprocessing_original_size", None)
     if stored is not None:
         return tuple(stored)
@@ -22,6 +46,18 @@ def original_size(image: Any) -> Tuple[int, int]:
 
 
 def processed_size(image: Any) -> Tuple[int, int]:
+    """Return or update processed size using preprocessing geometry history.
+
+    Parameters
+    ----------
+    image : Any
+        Input PIL, NumPy, or lazy image.
+
+    Returns
+    -------
+    object
+        Restored coordinates, trace information, or updated image.
+    """
     trace = get_trace(image)
     if trace:
         return tuple(trace[-1]["after"])
@@ -29,6 +65,18 @@ def processed_size(image: Any) -> Tuple[int, int]:
 
 
 def clear_trace(image: Any) -> Any:
+    """Return or update clear trace using preprocessing geometry history.
+
+    Parameters
+    ----------
+    image : Any
+        Input PIL, NumPy, or lazy image.
+
+    Returns
+    -------
+    object
+        Restored coordinates, trace information, or updated image.
+    """
     image._preprocessing_trace = []
     image._preprocessing_original_size = None
     return image
@@ -111,6 +159,20 @@ def _restore_point(point: Sequence[float], item: Dict[str, Any]) -> Tuple[float,
 
 
 def restore_points(points: Iterable[Sequence[float]], trace: Iterable[Dict[str, Any]]) -> List[List[float]]:
+    """Return or update restore points using preprocessing geometry history.
+
+    Parameters
+    ----------
+    points : Iterable[Sequence[float]]
+        Pixel points to map back to source coordinates.
+    trace : Iterable[Dict[str, Any]]
+        Recorded geometry transformations.
+
+    Returns
+    -------
+    object
+        Restored coordinates, trace information, or updated image.
+    """
     restored = [tuple(map(float, point[:2])) for point in points]
     for item in reversed(list(trace)):
         restored = [_restore_point(point, item) for point in restored]
@@ -118,6 +180,20 @@ def restore_points(points: Iterable[Sequence[float]], trace: Iterable[Dict[str, 
 
 
 def restore_boxes(boxes: Iterable[Sequence[float]], trace: Iterable[Dict[str, Any]]) -> List[List[float]]:
+    """Return or update restore boxes using preprocessing geometry history.
+
+    Parameters
+    ----------
+    boxes : Iterable[Sequence[float]]
+        XYXY boxes to map back to source coordinates.
+    trace : Iterable[Dict[str, Any]]
+        Recorded geometry transformations.
+
+    Returns
+    -------
+    object
+        Restored coordinates, trace information, or updated image.
+    """
     output: List[List[float]] = []
     active_trace = list(trace)
     for box in boxes:
@@ -129,6 +205,20 @@ def restore_boxes(boxes: Iterable[Sequence[float]], trace: Iterable[Dict[str, An
 
 
 def restore_mask(mask: Any, trace: Iterable[Dict[str, Any]]) -> Image.Image:
+    """Return or update restore mask using preprocessing geometry history.
+
+    Parameters
+    ----------
+    mask : Any
+        Mask image.
+    trace : Iterable[Dict[str, Any]]
+        Recorded geometry transformations.
+
+    Returns
+    -------
+    object
+        Restored coordinates, trace information, or updated image.
+    """
     result = mask if isinstance(mask, Image.Image) else Image.fromarray(np.asarray(mask))
     for item in reversed(list(trace)):
         name = item["name"]

@@ -15,6 +15,10 @@ import klygo.media as media
 import klygo.preprocessing as preprocessing
 
 class TestMedia(unittest.TestCase):
+    def test_partial_reader_and_stream_release_is_safe(self):
+        media.VideoReader.__new__(media.VideoReader).close()
+        media.MediaStream.__new__(media.MediaStream).close()
+
     def setUp(self):
         temporary_directory = tempfile.TemporaryDirectory()
         self.addCleanup(temporary_directory.cleanup)

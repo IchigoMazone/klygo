@@ -7,13 +7,21 @@ from pathlib import Path
 from klygo import config, files
 from klygo.validators.datasets import Merge
 
-from ._structure import copy_entry, flattened_name, read_class_map, remap_label_file, scan_dataset_files
+from ._structure import (
+    copy_entry,
+    flattened_name,
+    read_class_map,
+    remap_label_file,
+    scan_dataset_files,
+    validate_dataset_format,
+)
 from ._workspace import dataset_workspace, open_dataset, set_output_metadata_path, write_output
 
 
 def merge(
     sources: list[str | PathLike[str]],
     output_path: str | PathLike[str],
+    format: str = "yolo",
     overwrite: bool = False,
     verbose: bool = True,
 ) -> Path:
@@ -29,6 +37,8 @@ def merge(
         Two or more dataset directories or supported archives.
     output_path : str or os.PathLike[str]
         Destination ``.zip`` archive.
+    format : str, default='yolo'
+        Dataset format to merge. Currently only ``'yolo'`` is supported.
     overwrite : bool, default=False
         Replace an existing archive.
     verbose : bool, default=True
@@ -41,18 +51,21 @@ def merge(
 
     Raises
     ------
+    TypeError
+        If ``format`` is not a string.
+    ValueError
+        If ``format`` is not supported, the output is not ZIP, or a source has invalid metadata.
     FileNotFoundError
         If a source does not exist.
     FileExistsError
         If the destination exists and overwrite is disabled.
-    ValueError
-        If the output is not ZIP or a source has invalid metadata.
 
     Examples
     --------
     >>> from klygo import datasets
     >>> merged = datasets.merge(["cars", "buses.zip"], "transport.zip")
     """
+    validate_dataset_format(format)
     params = Merge(sources, output_path, overwrite, verbose)
     if len(params.sources) < 2:
         raise ValueError("sources must contain at least two datasets")

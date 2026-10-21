@@ -224,22 +224,27 @@ def top_boxes(result: Result, count: int) -> Result:
 
 
 def threshold(minimum: float) -> Operation:
+    """Build an operation that keeps boxes meeting a score threshold."""
     return Operation("threshold", lambda result: filter_score(result, minimum))
 
 
 def clip(image_size: Optional[Tuple[int, int]] = None) -> Operation:
+    """Build an operation that clips box coordinates to image bounds."""
     return Operation("clip", lambda result: clip_boxes(result, image_size))
 
 
 def remove_invalid(min_area: float = 0) -> Operation:
+    """Build an operation that removes boxes smaller than ``min_area``."""
     return Operation("remove_invalid", lambda result: remove_invalid_boxes(result, min_area))
 
 
 def nms(iou: float = 0.5, class_agnostic: bool = False) -> Operation:
+    """Build a nonmaximum-suppression operation for overlapping boxes."""
     return Operation("nms", lambda result: suppress(result, iou, class_agnostic))
 
 
 def top(count: int) -> Operation:
+    """Build an operation retaining the highest-scoring ``count`` boxes."""
     return Operation("top", lambda result: top_boxes(result, count))
 
 

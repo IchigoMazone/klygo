@@ -8,6 +8,7 @@ Flatten split image/label trees into one `images` and one `labels` directory whi
 
 - `source`: partitioned directory or archive.
 - `target`: flat directory or ZIP destination.
+- `format`: dataset format (default `"yolo"`). Currently only `"yolo"` is supported.
 - `overwrite`, `verbose`: replacement and progress controls.
 
 ## Returns

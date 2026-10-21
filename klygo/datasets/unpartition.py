@@ -5,13 +5,14 @@ from pathlib import Path
 
 from klygo import config, files
 
-from ._structure import copy_entry, flattened_name, read_class_map, scan_dataset_files
+from ._structure import copy_entry, flattened_name, read_class_map, scan_dataset_files, validate_dataset_format
 from ._workspace import dataset_workspace, open_dataset, set_output_metadata_path, write_output
 
 
 def unpartition(
     source: str | PathLike[str],
     target: str | PathLike[str],
+    format: str = "yolo",
     overwrite: bool = False,
     verbose: bool = True,
 ) -> Path:
@@ -26,6 +27,8 @@ def unpartition(
         Partitioned dataset directory or archive.
     target : str or os.PathLike[str]
         Destination directory or ``.zip`` archive.
+    format : str, default='yolo'
+        Dataset format to unpartition. Currently only ``'yolo'`` is supported.
     overwrite : bool, default=False
         Replace an existing target.
     verbose : bool, default=True
@@ -38,6 +41,10 @@ def unpartition(
 
     Raises
     ------
+    TypeError
+        If ``format`` is not a string.
+    ValueError
+        If ``format`` is not supported.
     FileNotFoundError
         If the source dataset or its images directory is missing.
     FileExistsError
@@ -48,6 +55,7 @@ def unpartition(
     >>> from klygo import datasets
     >>> output = datasets.unpartition("partitioned", "flat")
     """
+    validate_dataset_format(format)
     destination = files.path(target)
     if files.exists(destination) and not overwrite:
         raise FileExistsError(f"target already exists: {destination}")

@@ -28,6 +28,8 @@ def _runtime_adapter(backend: Optional[str]):
         return _import_adapter("huggingface")
     if family == "Ultralytics":
         return _import_adapter("ultralytics")
+    if family == "Torchvision":
+        return _import_adapter("torchvision")
     if family in KERAS_BACKENDS:
         return _import_adapter("keras")
     return None
@@ -90,6 +92,8 @@ def cast_inputs(backend: str, inputs: Any, dev: Any, dtype: Any) -> Any:
     family = backend_family(backend)
     if family == "Hugging Face":
         return _import_adapter("huggingface").cast_inputs(inputs, dev=dev, dtype=dtype)
+    if family == "Torchvision":
+        return _import_adapter("torchvision").cast_inputs(inputs, dev=dev, dtype=dtype)
     if family in KERAS_BACKENDS:
         return _import_adapter("keras").cast_inputs(inputs, dev=dev, dtype=dtype)
     return inputs
@@ -102,6 +106,8 @@ def run_inference(backend: str, model: Any, inputs: Any, cur_dtype: Any, **model
         return _import_adapter("huggingface").run_inference(
             model, inputs, cur_dtype=cur_dtype, **model_kwargs
         )
+    if family == "Torchvision":
+        return _import_adapter("torchvision").run_inference(model, inputs, **model_kwargs)
     if family in KERAS_BACKENDS:
         return _import_adapter("keras").run_inference(model, inputs, **model_kwargs)
     if model is not None and callable(model):
@@ -133,6 +139,8 @@ def format_results(backend: str, raw_outputs: Any) -> List[Dict[str, Any]]:
     family = backend_family(backend)
     if family == "Ultralytics":
         return _import_adapter("ultralytics").format_results(raw_outputs)
+    if family == "Torchvision":
+        return _import_adapter("torchvision").format_results(raw_outputs)
     if family in KERAS_BACKENDS:
         return _import_adapter("keras").format_results(raw_outputs)
     return raw_outputs
@@ -145,6 +153,8 @@ def reset(backend: str, model: Any, processor: Optional[Any] = None) -> None:
         _import_adapter("huggingface").reset(model, processor=processor)
     elif family == "Ultralytics":
         _import_adapter("ultralytics").reset(model)
+    elif family == "Torchvision":
+        _import_adapter("torchvision").reset(model)
     elif family in KERAS_BACKENDS:
         _import_adapter("keras").reset(model)
     elif model is not None and hasattr(model, "cpu"):
@@ -159,6 +169,8 @@ def unload(backend: str, model: Any, processor: Optional[Any] = None) -> None:
         _import_adapter("huggingface").unload(model, processor=processor)
     elif family == "Ultralytics":
         _import_adapter("ultralytics").unload(model)
+    elif family == "Torchvision":
+        _import_adapter("torchvision").unload(model)
     elif family in KERAS_BACKENDS:
         _import_adapter("keras").unload(model)
     elif model is not None and hasattr(model, "cpu"):
@@ -202,6 +214,8 @@ def save(
         _import_adapter("huggingface").save(model, processor, abs_out)
     elif family == "Ultralytics":
         _import_adapter("ultralytics").save(model, abs_out)
+    elif family == "Torchvision":
+        _import_adapter("torchvision").save(model, abs_out)
     elif family in KERAS_BACKENDS:
         _import_adapter("keras").save(model, abs_out)
     elif model is not None:

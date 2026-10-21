@@ -1,5 +1,4 @@
-"""
-Bộ phân giải và nạp mô hình AI Klygo (klygo.models.load).
+"""AI model resolution and instantiation helpers (`klygo.models.load`).
 """
 
 import os
@@ -14,6 +13,8 @@ from klygo import files
 from .base import BaseModel
 from . import utils
 from .detection.base import Detector
+
+__all__ = ["load", "configure", "set_backend", "get_backend"]
 
 CLASS_MAPPING = {
     "Detector": Detector,
@@ -86,7 +87,7 @@ def _resolve_class(class_path: str, search_dir: Optional[str] = None) -> Any:
             pass
 
     raise KeyError(
-        f"Lớp mô hình '{class_path}' không tồn tại hoặc không thể nạp. Các lớp hỗ trợ: {list(CLASS_MAPPING.keys())}"
+        f"Model class '{class_path}' does not exist or cannot be loaded. Supported classes: {list(CLASS_MAPPING.keys())}"
     )
 
 
@@ -143,12 +144,12 @@ def _instantiate(
 
 
 def load(model: Union[str, Any], **kwargs) -> BaseModel:
-    """Load a model from metadata, a configuration file, or a model source.
+    """Load a model from metadata or a model source.
 
     ``model`` may be an existing :class:`BaseModel`, a metadata mapping, a
-    :class:`klygo.config.Config`, a JSON/YAML/TOML metadata file, an offline
-    model directory, a registered model name, a YOLO ``.pt`` file, or an
-    in-memory module exposing ``parameters()``.
+    loaded :class:`klygo.config.Config`, an offline model directory, a
+    registered model name, a YOLO ``.pt`` file, or an in-memory module exposing
+    ``parameters()``. Read configuration files with :mod:`klygo.config` first.
 
     Keyword arguments override parameter groups declared by the resolved
     metadata. Priority parameters keep their original names; all other
@@ -169,6 +170,8 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
 
     Raises
     ------
+    TypeError
+        If ``model`` is a configuration file path instead of loaded metadata.
     ValueError
         If the source cannot be resolved, its class is missing, or an override
         does not map to a declared parameter group.
@@ -234,6 +237,14 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
     entry = None
     search_dir = None
 
+    if files.is_file(model) and files.extension(model).lower() in {
+        ".json", ".yaml", ".yml", ".toml"
+    }:
+        raise TypeError(
+            "models.load() does not read configuration files; "
+            "pass config.load(path) or Config(path).read()"
+        )
+
     # 1. Nạp từ thư mục Offline hoặc Thư mục Export
     if files.is_dir(model):
         abs_model_path = str(files.resolve(model))
@@ -272,14 +283,7 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
                         },
                     }
 
-    # 2. Nạp từ file config .json trực tiếp
-    elif files.is_file(model) and files.extension(model).lower() in {
-        ".json", ".yaml", ".yml", ".toml"
-    }:
-        entry = files.load(model, verbose=False)
-        search_dir = str(files.parent(files.resolve(model)))
-
-    # 3. Nạp từ file trọng số YOLO .pt
+    # 2. Nạp từ file trọng số YOLO .pt
     elif files.is_file(model) and files.extension(model).lower() == ".pt":
         entry = {
             "class": "klygo.models.detection.YOLODetect",
@@ -299,22 +303,23 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
             },
         }
 
-    # 4. Tra cứu từ Registry Trực Tuyến
+    # 3. Tra cứu từ Registry Trực Tuyến
     if entry is None:
         entry = _resolve(model)
 
     if entry is None:
         raise ValueError(
-            f"Mô hình '{model}' không tồn tại trong registry và không phải thư mục/file mô hình offline hợp lệ."
+            f"Model '{model}' does not exist in registry and is not a valid offline model directory or file."
         )
 
-    # 5. Mọi nguồn đều đi qua cùng pipeline configure -> instantiate.
+    # 4. Mọi nguồn đều đi qua cùng pipeline configure -> instantiate.
     return _instantiate(
         entry,
         source_id=model,
         overrides=kwargs,
         search_dir=search_dir,
     )
+
 def configure(
     model_id: str,
     metadata: Optional[Mapping[str, Any]] = None,
@@ -413,20 +418,13 @@ def configure(
     base.setdefault("details", None)
     base.setdefault("priority", None)
     return utils.resolve_metadata(base, kwargs)
+
 def set_backend(backend: str, engine: Optional[str] = None) -> None:
-    """
-    Thiết lập backend mặc định cho Klygo (và engine tính toán cho Keras 3 nếu có).
-    
-    Ví dụ:
-        models.set_backend("keras", engine="torch")
-        models.set_backend("ultralytics")
-        models.set_backend("huggingface")
-    """
+    """Set the default Klygo backend and optional Keras engine environment."""
     os.environ["KLYGO_BACKEND"] = str(backend)
     if engine is not None:
         os.environ["KERAS_BACKEND"] = str(engine)
 
-
 def get_backend() -> str:
-    """Trả về backend hiện tại đang được cấu hình qua os.environ."""
+    """Return the configured backend, or ``"auto"`` when unset."""
     return os.environ.get("KLYGO_BACKEND", "auto")

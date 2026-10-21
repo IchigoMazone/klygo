@@ -19,6 +19,7 @@ class TestOptionalModelDependencies(unittest.TestCase):
         self.assertNotIn("torch", dependencies)
         self.assertNotIn("transformers", dependencies)
         self.assertNotIn("ultralytics", dependencies)
+        self.assertNotIn("torchvision", dependencies)
         self.assertNotIn("keras-hub", dependencies)
 
     def test_each_model_stack_has_an_install_extra(self):
@@ -31,10 +32,11 @@ class TestOptionalModelDependencies(unittest.TestCase):
             ["torch>=2.7,<3.0", "transformers>=4.50,<6.0"],
         )
         self.assertEqual(optional["ultralytics"], ["ultralytics"])
+        self.assertEqual(optional["torchvision"], ["torch>=2.7,<3.0", "torchvision>=0.22,<1.0"])
         self.assertEqual(optional["keras-hub"], ["keras-hub"])
         self.assertEqual(
             set(optional["models"]),
-            {"torch>=2.7,<3.0", "transformers>=4.50,<6.0", "ultralytics", "keras-hub"},
+            {"torch>=2.7,<3.0", "transformers>=4.50,<6.0", "ultralytics", "torchvision>=0.22,<1.0", "keras-hub"},
         )
 
     def test_core_and_models_import_without_optional_frameworks(self):
@@ -43,7 +45,7 @@ import builtins
 import sys
 
 blocked_roots = {
-    "jax", "keras", "keras_hub", "tensorflow", "torch", "transformers", "ultralytics"
+    "jax", "keras", "keras_hub", "tensorflow", "torch", "torchvision", "transformers", "ultralytics"
 }
 real_import = builtins.__import__
 
@@ -72,7 +74,7 @@ assert not blocked_roots.intersection(sys.modules)
 import sys
 import klygo.models
 
-frameworks = {"jax", "keras", "tensorflow", "torch", "transformers", "ultralytics"}
+frameworks = {"jax", "keras", "tensorflow", "torch", "torchvision", "transformers", "ultralytics"}
 assert not frameworks.intersection(sys.modules), frameworks.intersection(sys.modules)
 '''
         completed = subprocess.run(
@@ -100,6 +102,7 @@ def block_optional(name, globals=None, locals=None, fromlist=(), level=0):
 builtins.__import__ = block_optional
 for backend, extra in (
     ("Hugging Face", "klygo[transformers]"),
+    ("Torchvision", "klygo[torchvision]"),
     ("Ultralytics", "klygo[ultralytics]"),
     ("KerasHub", "klygo[keras-hub]"),
 ):
@@ -121,7 +124,7 @@ for backend, extra in (
 
     def test_readme_documents_pip_and_uv_for_model_extras(self):
         readme = (REPOSITORY / "README.md").read_text(encoding="utf-8")
-        for extra in ("transformers", "ultralytics", "keras-hub", "models"):
+        for extra in ("transformers", "ultralytics", "torchvision", "keras-hub", "models"):
             with self.subTest(extra=extra):
                 self.assertIn(f'pip install "klygo[{extra}]"', readme)
                 self.assertIn(f'uv add "klygo[{extra}]"', readme)

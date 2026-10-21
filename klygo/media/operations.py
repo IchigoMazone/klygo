@@ -12,6 +12,12 @@ from klygo.utils.progress import ProgressBar
 from klygo.validators import validate_type
 from klygo import files
 
+__all__ = [
+    "load", "save", "convert", "copy", "save_video", "save_images",
+    "iter_frames", "probe", "to_array", "to_tensor", "to_pil",
+    "MediaFrames", "MediaStream", "LazyImage", "VideoReader",
+]
+
 
 def _optional_torch(required: bool = False):
     """Load PyTorch only for media operations that explicitly need tensors."""
@@ -50,15 +56,22 @@ VIDEO_SUFFIXES = {
 # =========================================================================
 
 class VideoReader:
-    """
-    Trình quản lý đọc video thông minh, tối ưu tốc độ đọc tuần tự và nhảy frame.
-    Duy trì kết nối cv.VideoCapture duy nhất, tự động theo dõi con trỏ vị trí frame `_current_pos`.
-    - Đọc tuần tự (frame sau = frame trước + 1): Gọi trực tiếp `cap.read()` đạt tốc độ gốc OpenCV
-      (300-500+ FPS), hoàn toàn loại bỏ độ trễ seek của `cap.set()`.
-    - Truy cập ngẫu nhiên (vd: frames[500] hoặc frames[-1]): Tự động gọi `cap.set(CAP_PROP_POS_FRAMES, index)`
-      rồi tiếp tục đọc tuần tự từ vị trí đó.
-    - Zero-RAM: Khởi tạo tức thì không decode bất kỳ frame pixel nào vào bộ nhớ RAM.
-    """
+    """Read video frames through one reusable OpenCV capture.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Existing video path.
+
+    Returns
+    -------
+    VideoReader
+        Open reader; call close() to release the capture.
+
+    Raises
+    ------
+    FileNotFoundError
+        The video is missing or unreadable."""
 
     def __init__(self, path: Union[str, Path]) -> None:
         self.path = files.resolve(path)
@@ -113,7 +126,7 @@ class VideoReader:
         return None
 
     def release(self) -> None:
-        if self._cap is not None:
+        if getattr(self, "_cap", None) is not None:
             try:
                 self._cap.release()
             except Exception:
@@ -132,15 +145,17 @@ class VideoReader:
 # =========================================================================
 
 class LazyImage(Image.Image):
-    """
-    Đại diện cho một bức ảnh hoặc frame video theo cơ chế nạp lười (Zero-RAM URL/Path Proxy).
-    Lưu trữ đường dẫn/URL file ảnh hoặc vị trí frame video với chi phí RAM = 0.
-    Hỗ trợ Zero-RAM Lazy Crop mặc định: Cắt vùng ảnh con chỉ bằng cách lưu (URL/Frame, bounding_box),
-    không decode pixel vào RAM và tính toán size bằng hiệu tọa độ tức thì.
-    Kế thừa PIL.Image.Image để giữ 100% khả năng tương thích với isinstance(x, Image.Image).
-    Hỗ trợ đầy đủ cú pháp của cả PIL Image (.size, .crop, .show, .save, .convert)
-    và NumPy ndarray (.shape, .dtype, np.array).
-    """
+    """Represent source pixels without decoding them until requested.
+
+    Parameters
+    ----------
+    source : str, pathlib.Path, or LazyImage
+        Source file or another lazy frame reference.
+
+    Returns
+    -------
+    LazyImage
+        Lazy image proxy with conversion and crop methods."""
 
     def __init__(
         self,
@@ -523,12 +538,17 @@ class LazyImage(Image.Image):
 # =========================================================================
 
 class MediaFrames(list):
-    """List-like collection of lazy images returned by :func:`klygo.media.load`.
+    """Hold indexed lazy frames and their source metadata.
 
-    The collection stores one ``LazyImage`` proxy per item for indexing and
-    slicing. Pixels remain unloaded until an image is materialized. For large
-    sources, use ``media.load(..., stream=True)`` to bound memory usage.
-    """
+    Parameters
+    ----------
+    frames : iterable
+        Images or lazy image proxies.
+
+    Returns
+    -------
+    MediaFrames
+        List-like collection that retains media metadata."""
 
     def __init__(
         self,
@@ -662,11 +682,22 @@ class MediaFrames(list):
 
 
 class MediaStream:
-    """Iterate over media without retaining a proxy for every frame.
+    """Yield source frames sequentially with bounded decoded memory.
 
-    Each iteration creates only the current ``LazyImage`` proxy. Pixels are
-    decoded when the image is materialized by a consumer.
-    """
+    Parameters
+    ----------
+    source : str or pathlib.Path
+        Image, video, or image-directory source.
+
+    Returns
+    -------
+    MediaStream
+        Iterable stream with sampling and filtering methods.
+
+    Raises
+    ------
+    FileNotFoundError
+        The source does not exist."""
 
     def __init__(
         self,
@@ -912,9 +943,10 @@ class MediaStream:
                 emitted += 1
 
     def close(self) -> None:
-        for reader in tuple(self._active_readers):
+        for reader in tuple(getattr(self, "_active_readers", ())):
             reader.release()
-        self._active_readers.clear()
+        if hasattr(self, "_active_readers"):
+            self._active_readers.clear()
 
     def __enter__(self) -> "MediaStream":
         return self
@@ -1089,10 +1121,30 @@ def save(
     overwrite: bool = False,
     verbose: bool = False,
 ) -> Path:
-    """
-    Tác dụng:
-    - Lưu một đối tượng ảnh (PIL Image, NumPy array, PyTorch Tensor) ra tập tin đĩa.
-    """
+    """Save one image to the requested path.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Destination image file.
+image : PIL.Image.Image, numpy.ndarray, or LazyImage
+        Pixels to write.
+overwrite : bool
+        Replace an existing file when true.
+verbose : bool
+        Show progress when true.
+
+    Returns
+    -------
+    pathlib.Path
+        Destination path.
+
+    Raises
+    ------
+    FileExistsError
+        Destination exists without overwrite.
+TypeError
+        Image type is unsupported."""
     validate_type(path, (str, os.PathLike), "path")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
@@ -1131,12 +1183,36 @@ def convert(
     overwrite: bool = False,
     verbose: bool = False,
 ) -> Path:
-    """
-    Tác dụng:
-    - Chuyển đổi định dạng file ảnh (.png -> .jpg) hoặc file video (.avi -> .mp4, .mkv -> .webm...).
-    - Tự động nhận diện nhóm chuyển đổi Web-ready, Storage, Modern Web, hoặc Demo.
-    - Tự động phát hiện và tận dụng GPU (NVIDIA NVENC) nếu máy/Colab có sẵn (`gpu=None`), hoặc chỉ định rõ `gpu=True`/`gpu=False`.
-    """
+    """Convert an image format or transcode a video file.
+
+    Parameters
+    ----------
+    source, target : str or pathlib.Path
+        Existing input and requested output.
+codec : str, optional
+        Video codec override.
+crf : int
+        Video quality control.
+fps : float, optional
+        Output frame rate.
+gpu : bool, optional
+        Select or autodetect GPU encoding.
+preset : str, optional
+        Video encoder preset.
+overwrite, verbose : bool
+        Replacement and progress options.
+
+    Returns
+    -------
+    pathlib.Path
+        Converted output path.
+
+    Raises
+    ------
+    FileNotFoundError
+        Source is missing.
+ValueError
+        Input and output are incompatible media kinds."""
     validate_type(source, (str, os.PathLike), "source")
     validate_type(target, (str, os.PathLike), "target")
     validate_type(overwrite, bool, "overwrite")
@@ -1301,22 +1377,26 @@ def copy(
     target: Union[str, Path],
     overwrite: bool = False,
 ) -> Path:
-    """
-    Tác dụng:
-    - Sao chép tập tin ảnh/video hoặc thư mục media sang vị trí mới với kiểm tra tính toàn vẹn media.
+    """Copy a media file or directory to another location.
 
-    Đầu vào:
-    - source [str | Path]: Đường dẫn file hoặc thư mục media nguồn.
-    - target [str | Path]: Đường dẫn file hoặc thư mục media đích.
-    - overwrite [bool]: Ghi đè nếu mục tiêu đã tồn tại. Mặc định: False.
+    Parameters
+    ----------
+    source, target : str or pathlib.Path
+        Existing input and requested output.
+overwrite : bool
+        Allow replacement of an existing target.
 
-    Đầu ra:
-    - [Path]: Đường dẫn vị trí mới sau khi copy.
+    Returns
+    -------
+    pathlib.Path
+        Copied destination.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> media.copy("image.jpg", "backup/image.jpg", overwrite=True)
-    """
+    Raises
+    ------
+    FileNotFoundError
+        Source does not exist.
+FileExistsError
+        Destination exists without overwrite."""
     validate_type(source, (str, os.PathLike), "source")
     validate_type(target, (str, os.PathLike), "target")
     validate_type(overwrite, bool, "overwrite")
@@ -1336,25 +1416,32 @@ def save_video(
     overwrite: bool = False,
     verbose: bool = False,
 ) -> Path:
-    """
-    Tác dụng:
-    - Lưu danh sách hoặc Generator các khung hình (frames) thành tập tin video (.mp4, .avi, .mkv...).
+    """Encode an iterable of image frames as a video.
 
-    Đầu vào:
-    - output_path [str | Path]: Đường dẫn file video đầu ra.
-    - frames [Iterable]: Danh sách hoặc Generator các ảnh/frames.
-    - fps [float]: Số khung hình trên giây. Mặc định: 30.0.
-    - fourcc [str]: Mã codec video OpenCV (vd: 'mp4v', 'xvid'). Mặc định: 'mp4v'.
-    - overwrite [bool]: Ghi đè file nếu đã tồn tại. Mặc định: False.
-    - verbose [bool]: Hiển thị thanh tiến trình ProgressBar khi đóng gói video. Mặc định: True.
+    Parameters
+    ----------
+    output_path : str or pathlib.Path
+        Output video path.
+frames : iterable
+        Frames with matching dimensions.
+fps : float
+        Playback frame rate.
+fourcc : str
+        Four-character OpenCV codec.
+overwrite, verbose : bool
+        Replacement and progress options.
 
-    Đầu ra:
-    - [Path]: Đường dẫn file video đã lưu.
+    Returns
+    -------
+    pathlib.Path
+        Encoded video path.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> media.save_video("output.mp4", frames_list, fps=30, overwrite=True)
-    """
+    Raises
+    ------
+    ValueError
+        Frames iterable is empty.
+RuntimeError
+        Video writer cannot be opened."""
     validate_type(output_path, (str, os.PathLike), "output_path")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
@@ -1408,25 +1495,28 @@ def save_images(
     overwrite: bool = False,
     verbose: bool = False,
 ) -> List[Path]:
-    """
-    Tác dụng:
-    - Lưu chuỗi ảnh/frames vào một thư mục với tên tăng dần (vd: frame_000001.jpg).
+    """Save an iterable of images to numbered files.
 
-    Đầu vào:
-    - output_dir [str | Path]: Thư mục xuất các file ảnh.
-    - images [Iterable]: Danh sách ảnh hoặc frames.
-    - prefix [str]: Tiền tố tên file. Mặc định: 'frame'.
-    - extension [str]: Đuôi file ảnh (.jpg, .png, .webp...). Mặc định: '.jpg'.
-    - overwrite [bool]: Ghi đè nếu file ảnh đã tồn tại. Mặc định: False.
-    - verbose [bool]: Hiển thị thanh tiến trình ProgressBar khi lưu. Mặc định: True.
+    Parameters
+    ----------
+    output_dir : str or pathlib.Path
+        Output directory.
+images : iterable
+        Images to write.
+prefix, extension : str
+        Generated filename components.
+overwrite, verbose : bool
+        Replacement and progress options.
 
-    Đầu ra:
-    - [List[Path]]: Danh sách đường dẫn tới từng file ảnh đã được lưu.
+    Returns
+    -------
+    list of pathlib.Path
+        Paths written in input order.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> media.save_images("extracted_frames", frames_list, extension=".jpg")
-    """
+    Raises
+    ------
+    FileExistsError
+        A generated file already exists without overwrite."""
     validate_type(output_dir, (str, os.PathLike), "output_dir")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
@@ -1456,25 +1546,32 @@ def iter_frames(
     backend: str = "pil",
     verbose: bool = False,
 ) -> Generator[Union[Image.Image, np.ndarray], None, None]:
-    """
-    Tác dụng:
-    - Generator duyệt từng khung hình (frame) từ file video hoặc thư mục ảnh với tham số bước nhảy (sample_rate).
+    """Yield sampled frames from a video or image directory.
 
-    Đầu vào:
-    - source [str | Path]: Đường dẫn file video hoặc thư mục ảnh.
-    - sample_rate [int]: Bước nhảy duyệt (vd: 1 = duyệt từng frame, 5 = lấy 1 frame mỗi 5 frame). Mặc định: 1.
-    - recursive [bool]: Duyệt đệ quy (nếu source là thư mục). Mặc định: False.
-    - backend [str]: 'pil' (mặc định) hoặc 'opencv'.
-    - verbose [bool]: Hiển thị thanh tiến trình. Mặc định: False.
+    Parameters
+    ----------
+    source : str or pathlib.Path
+        Existing media source.
+sample_rate : int
+        Yield every nth frame.
+recursive : bool
+        Traverse image subdirectories.
+backend : str
+        PIL or OpenCV pixel backend.
+verbose : bool
+        Show progress when true.
 
-    Đầu ra:
-    - [Generator]: Generator phát ra từng khung hình dạng PIL Image hoặc NumPy array.
+    Returns
+    -------
+    generator
+        Frames decoded as they are requested.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> for frame in media.iter_frames("video.mp4", sample_rate=5):
-    ...     process(frame)
-    """
+    Raises
+    ------
+    ValueError
+        Sampling rate is below one.
+FileNotFoundError
+        Source is missing."""
     if sample_rate < 1:
         raise ValueError("sample_rate must be an integer >= 1")
 
@@ -1515,21 +1612,27 @@ def iter_frames(
                 yield img
 
 
-def probe(path: Union[str, Path]) -> Dict[str, Any]:
-    """
-    Tác dụng:
-    - Trích xuất thông tin metadata chi tiết của một tập tin ảnh hoặc video (soi định dạng).
+def probe(path: Union[str, Path], *, verbose: bool = False) -> Dict[str, Any]:
+    """Read image or video metadata from a media file.
 
-    Đầu vào:
-    - path [str | Path]: Đường dẫn file ảnh hoặc file video.
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Existing media file.
+    verbose : bool, default=False
+        Print the metadata as a Rich table while returning the dictionary.
 
-    Đầu ra:
-    - [Dict[str, Any]]: Dictionary chứa metadata (name, path, format, width, height, size, fps...).
+    Returns
+    -------
+    dict
+        Format, dimensions, and video timing where available.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> v_info = media.probe("video.mp4")
-    >>> print(v_info['fps'], v_info['frame_count'])
+    Raises
+    ------
+    FileNotFoundError
+        Path does not exist.
+    ValueError
+        Path is a directory.
     """
     p = files.path(path)
     if not files.exists(p):
@@ -1553,7 +1656,6 @@ def probe(path: Union[str, Path]) -> Dict[str, Any]:
         codec_raw = "".join([chr((fourcc_int >> (8 * i)) & 0xFF) for i in range(4)]).strip().lower()
         cap.release()
 
-        # Map to friendly codec names
         codec_map = {
             "avc1": "h264",
             "h264": "h264",
@@ -1571,7 +1673,7 @@ def probe(path: Union[str, Path]) -> Dict[str, Any]:
         codec = codec_map.get(codec_raw, codec_raw if codec_raw else "unknown")
         web_ready = codec in ("h264", "vp8", "vp9", "av1") and suf in (".mp4", ".webm")
 
-        return {
+        result = {
             "name": files.name(p),
             "path": p,
             "type": "video",
@@ -1585,40 +1687,55 @@ def probe(path: Union[str, Path]) -> Dict[str, Any]:
             "frame_count": frame_count,
             "duration_seconds": round(duration, 2),
         }
+    else:
+        with Image.open(p) as img:
+            width, height = img.size
+            result = {
+                "name": files.name(p),
+                "path": p,
+                "type": "image",
+                "format": img.format,
+                "mode": img.mode,
+                "width": width,
+                "height": height,
+                "size": (width, height),
+            }
 
-    with Image.open(p) as img:
-        width, height = img.size
-        return {
-            "name": files.name(p),
-            "path": p,
-            "type": "image",
-            "format": img.format,
-            "mode": img.mode,
-            "width": width,
-            "height": height,
-            "size": (width, height),
-        }
+    if verbose:
+        from rich.console import Console
+        from rich.table import Table
 
+        table = Table(title=f"Media Information: {files.name(p)}")
+        table.add_column("Property", style="cyan", no_wrap=True)
+        table.add_column("Value", style="green")
+        for key, val in result.items():
+            label = str(key).replace("_", " ").title()
+            table.add_row(label, str(val))
+        Console().print(table)
+
+    return result
 
 # =========================================================================
 # 2. Format Conversions (to_array, to_tensor, to_pil)
 # =========================================================================
 
 def to_array(image: Any) -> np.ndarray:
-    """
-    Tác dụng:
-    - Chuyển đổi linh hoạt hình ảnh từ PIL Image, PyTorch Tensor, NumPy array hoặc LazyImage sang mảng NumPy ndarray (dạng [H, W, C]).
+    """Convert supported image data to a NumPy array.
 
-    Đầu vào:
-    - image [Image.Image | torch.Tensor | np.ndarray | LazyImage]: Đối tượng dữ liệu ảnh.
+    Parameters
+    ----------
+    image : PIL image, numpy.ndarray, LazyImage, or torch.Tensor
+        Input image representation.
 
-    Đầu ra:
-    - [np.ndarray]: Mảng NumPy ndarray.
+    Returns
+    -------
+    numpy.ndarray
+        Independent pixel array.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> arr = media.to_array(pil_img)
-    """
+    Raises
+    ------
+    TypeError
+        Image representation is unsupported."""
     if isinstance(image, LazyImage):
         return image.to_array()
 
@@ -1644,21 +1761,26 @@ def to_array(image: Any) -> np.ndarray:
 
 
 def to_tensor(image: Any, normalize: bool = True) -> Any:
-    """
-    Tác dụng:
-    - Chuyển đổi hình ảnh (PIL Image, NumPy array hoặc LazyImage) sang PyTorch Tensor dạng chuẩn mô hình AI [C, H, W].
+    """Convert supported image data to a CHW PyTorch tensor.
 
-    Đầu vào:
-    - image [Image.Image | np.ndarray | torch.Tensor | LazyImage]: Dữ liệu ảnh.
-    - normalize [bool]: Tự động chuẩn hóa giá trị về dải 0.0 - 1.0 (float32). Mặc định: True.
+    Parameters
+    ----------
+    image : PIL image, numpy.ndarray, LazyImage, or torch.Tensor
+        Input image representation.
+    normalize : bool
+        Scale uint8 pixels to floating-point values in 0-1.
 
-    Đầu ra:
-    - [torch.Tensor]: Đối tượng PyTorch Tensor.
+    Returns
+    -------
+    torch.Tensor
+        CHW tensor.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> tensor = media.to_tensor(pil_img)
-    """
+    Raises
+    ------
+    ImportError
+        PyTorch is unavailable.
+TypeError
+        Image representation is unsupported."""
     torch = _optional_torch(required=True)
 
     if isinstance(image, LazyImage):
@@ -1690,20 +1812,24 @@ def to_tensor(image: Any, normalize: bool = True) -> Any:
 
 
 def to_pil(image: Any) -> Image.Image:
-    """
-    Tác dụng:
-    - Chuyển đổi mảng NumPy ndarray, PyTorch Tensor hoặc LazyImage sang đối tượng PIL Image.
+    """Convert supported image data to a PIL image.
 
-    Đầu vào:
-    - image [np.ndarray | torch.Tensor | Image.Image | LazyImage]: Dữ liệu ảnh.
+    Parameters
+    ----------
+    image : PIL image, numpy.ndarray, LazyImage, or torch.Tensor
+        Input image representation.
 
-    Đầu ra:
-    - [Image.Image]: Đối tượng PIL Image.
+    Returns
+    -------
+    PIL.Image.Image
+        Independent PIL image.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> pil_img = media.to_pil(np_array)
-    """
+    Raises
+    ------
+    TypeError
+        Image representation is unsupported.
+ValueError
+        Array shape is unsupported."""
     if isinstance(image, LazyImage):
         return image.to_pil()
 

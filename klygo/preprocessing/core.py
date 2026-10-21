@@ -63,6 +63,28 @@ def _to_pil(value: Any) -> Image.Image:
 
 @dataclass(frozen=True)
 class Operation:
+    """Create or execute Operation for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    name : str
+        Public name used in operation descriptions and traces.
+    params : Dict[str, Any]
+        Operation parameters passed to the executor.
+    backend : str
+        Requested pixel backend; auto selects a compatible implementation.
+    requires_pixels : bool
+        Whether execution needs decoded pixels.
+    changes_geometry : bool
+        Whether output coordinates differ from input coordinates.
+    terminal : bool
+        Whether execution yields a terminal value instead of an image.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     name: str
     params: Dict[str, Any] = field(default_factory=dict)
     backend: str = "auto"
@@ -142,6 +164,18 @@ class Operation:
 
 
 class Compose:
+    """Create or execute Compose for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    operations : Iterable[Union[Operation, 'Compose']]
+        Ordered preprocessing operations to compose or execute.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     def __init__(self, operations: Iterable[Union[Operation, "Compose"]]) -> None:
         flattened: List[Operation] = []
         for operation in operations:
@@ -174,6 +208,22 @@ class Compose:
 
 
 class Metric:
+    """Create or execute Metric for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    name : str
+        Public name used in operation descriptions and traces.
+    evaluator : Callable[[Any], Any]
+        Value passed to the operation or evaluator.
+    params : Optional[Dict[str, Any]]
+        Operation parameters passed to the executor.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     def __init__(self, name: str, evaluator: Callable[[Any], Any], params: Optional[Dict[str, Any]] = None) -> None:
         self.name = name
         self.evaluator = evaluator
@@ -202,6 +252,20 @@ class Metric:
 
 
 class Predicate:
+    """Create or execute Predicate for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    evaluator : Callable[[Any], bool]
+        Value passed to the operation or evaluator.
+    description : str
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     def __init__(self, evaluator: Callable[[Any], bool], description: str = "predicate") -> None:
         self.evaluator = evaluator
         self.description = description
@@ -220,18 +284,58 @@ class Predicate:
 
 
 def compose(*operations: Any) -> Compose:
+    """Create or execute compose for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    operations : Any
+        Ordered preprocessing operations to compose or execute.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     if len(operations) == 1 and isinstance(operations[0], (list, tuple)):
         operations = tuple(operations[0])
     return Compose(operations)
 
 
 def apply(image: Any, operation_or_pipeline: Union[Operation, Compose]) -> Any:
+    """Create or execute apply for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    image : Any
+        Input PIL, NumPy, or lazy image.
+    operation_or_pipeline : Union[Operation, Compose]
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     if not isinstance(operation_or_pipeline, (Operation, Compose)):
         raise TypeError("operation_or_pipeline must be an Operation or Compose")
     return operation_or_pipeline(image)
 
 
 def register(name: str, executor: Callable[..., Any]) -> None:
+    """Create or execute register for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    name : str
+        Public name used in operation descriptions and traces.
+    executor : Callable[..., Any]
+        Callable implementation registered under a name.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     if not isinstance(name, str) or not name.strip():
         raise ValueError("name must be a non-empty string")
     if not callable(executor):
@@ -240,6 +344,24 @@ def register(name: str, executor: Callable[..., Any]) -> None:
 
 
 def custom(function: Callable[[Any], Any], backend: str = "auto", name: Optional[str] = None, **kwargs: Any) -> Operation:
+    """Create or execute custom for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    function : Callable[[Any], Any]
+        Callable transformation applied to image data.
+    backend : str
+        Requested pixel backend; auto selects a compatible implementation.
+    name : Optional[str]
+        Public name used in operation descriptions and traces.
+    kwargs : Any
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     if not callable(function):
         raise TypeError("function must be callable")
     return Operation(
@@ -250,6 +372,18 @@ def custom(function: Callable[[Any], Any], backend: str = "auto", name: Optional
 
 
 def inspect(pipeline: Union[Operation, Compose, Any]) -> List[Dict[str, Any]]:
+    """Create or execute inspect for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    pipeline : Union[Operation, Compose, Any]
+        Operation or composed pipeline to inspect or optimize.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     if _is_lazy_image(pipeline):
         operations = pipeline._preprocessing_ops
     elif isinstance(pipeline, Operation):
@@ -262,6 +396,18 @@ def inspect(pipeline: Union[Operation, Compose, Any]) -> List[Dict[str, Any]]:
 
 
 def optimize(pipeline: Union[Operation, Compose]) -> Compose:
+    """Create or execute optimize for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    pipeline : Union[Operation, Compose]
+        Operation or composed pipeline to inspect or optimize.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     operations = [pipeline] if isinstance(pipeline, Operation) else list(pipeline.operations)
     optimized: List[Operation] = []
     for operation in operations:
@@ -290,6 +436,22 @@ def execute_pipeline(
     operations: Sequence[Operation],
     trace: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[Any, List[Dict[str, Any]]]:
+    """Create or execute execute pipeline for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    value : Any
+        Input value or numeric setting.
+    operations : Sequence[Operation]
+        Ordered preprocessing operations to compose or execute.
+    trace : Optional[List[Dict[str, Any]]]
+        Recorded geometry transformations.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     active_trace = trace if trace is not None else []
     result = value
     for operation in operations:
@@ -298,6 +460,22 @@ def execute_pipeline(
 
 
 def materialize(image: Any, output: str = "pil", cache: bool = False) -> Any:
+    """Create or execute materialize for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    image : Any
+        Input PIL, NumPy, or lazy image.
+    output : str
+        Materialization format such as PIL or array.
+    cache : bool
+        Whether to keep decoded pixels for later access.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     output = output.lower()
     if _is_lazy_image(image):
         if output == "pil":
@@ -332,18 +510,70 @@ def materialize(image: Any, output: str = "pil", cache: bool = False) -> Any:
 
 
 def all_of(*conditions: Predicate) -> Predicate:
+    """Create or execute all of for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    conditions : Predicate
+        Predicates to combine.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     return Predicate(lambda image: all(condition(image) for condition in conditions), "all_of")
 
 
 def any_of(*conditions: Predicate) -> Predicate:
+    """Create or execute any of for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    conditions : Predicate
+        Predicates to combine.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     return Predicate(lambda image: any(condition(image) for condition in conditions), "any_of")
 
 
 def not_(condition: Predicate) -> Predicate:
+    """Create or execute not  for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    condition : Predicate
+        Predicate to invert.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     return ~condition
 
 
 def between(metric: Metric, minimum: Any, maximum: Any) -> Predicate:
+    """Create or execute between for an image preprocessing pipeline.
+
+    Parameters
+    ----------
+    metric : Metric
+        Metric used to build a condition.
+    minimum : Any
+        Lower bound or threshold.
+    maximum : Any
+        Upper bound.
+
+    Returns
+    -------
+    object
+        An operation, pipeline, predicate, metric, or evaluated image result.
+    """
     return metric.between(minimum, maximum)
 
 

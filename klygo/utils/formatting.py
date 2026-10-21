@@ -41,3 +41,6 @@ def human_size(num_bytes: int, decimal_places: int = 2) -> str:
             return f"{fmt.format(size)} {unit}"
         size /= 1024
     return f"{fmt.format(size)} TB"
+
+
+__all__ = ["human_size"]

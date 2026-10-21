@@ -1,5 +1,4 @@
-"""
-Các hàm tiện ích và tiền xử lý dùng chung cho các mô hình AI (`klygo.models.utils`).
+"""Common utilities and preprocessing helpers for AI models (`klygo.models.utils`).
 """
 
 import os
@@ -14,13 +13,13 @@ from box import Box
 
 from klygo import files
 
+__all__ = ["suppress_warnings", "suppress_ai_warnings"]
+
 
 import functools
 
 def suppress_warnings(func=None):
-    """
-    Decorator hoặc Context Manager tắt warning của Python và các AI framework.
-    """
+    """Suppress Python warnings as a context manager or decorator."""
     class SuppressContext:
         def __enter__(self):
             suppress_ai_warnings()
@@ -409,7 +408,7 @@ def resolve_images(
         raw_list = list(source)
         is_single = len(raw_list) == 1
     else:
-        raise TypeError(f"Đầu vào '{type(source).__name__}' không hợp lệ.")
+        raise TypeError(f"Invalid source input type '{type(source).__name__}'.")
 
     if not raw_list:
         return [], is_single

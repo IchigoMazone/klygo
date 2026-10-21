@@ -28,4 +28,4 @@ jobs:
       - name: Test files API
         run: python -m unittest discover -s test/files -v
       - name: Test documentation and runnable examples
-        run: python -m unittest discover -s docs/files -p test_documentation.py -v
+        run: python .agents/skills/klygo-module-guides/scripts/audit_public_api.py files

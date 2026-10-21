@@ -3,7 +3,7 @@
 `klygo.archive` provides high-level and low-level utilities for creating, extracting, inspecting, validating, mutating, and transforming multi-format archive files.
 
 Interactive Google Colab Tutorial:
-[Open in Colab](https://colab.research.google.com/drive/1z5cuH35jFOkTtSkS4IcufF8ZygnylEJS?usp=sharing)
+[Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/archive/Document_Archive_Overview.ipynb)
 
 The source-verified local tutorial collection starts at
 [`tutorials/archive/Document_Archive_Overview.ipynb`](../../tutorials/archive/Document_Archive_Overview.ipynb)

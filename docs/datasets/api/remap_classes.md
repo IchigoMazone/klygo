@@ -8,6 +8,7 @@ Rename classes or move their numeric IDs while copying images and rewriting YOLO
 
 - `source`, `target`: input and output dataset paths.
 - `class_map`: string keys select names, integer keys select IDs; string values rename and integer values move IDs.
+- `format`: dataset format (default `"yolo"`). Currently only `"yolo"` is supported.
 - `overwrite`, `verbose`: replacement and progress controls.
 
 ## Returns

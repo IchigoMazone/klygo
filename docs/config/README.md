@@ -8,7 +8,7 @@ in JSON, YAML, and TOML. See the dedicated
 [model metadata configuration guide](model-metadata.md).
 
 Interactive Google Colab Tutorial:
-[Open in Colab](https://colab.research.google.com/drive/1-aOofq_ZwLi00gRXnBLbJ4raupc6OZKm?usp=sharing)
+[Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/config/Document_Config_Overview.ipynb)
 
 Local Tutorial Notebooks (`tutorials/config/`, 1-to-1 with `klygo/config/` submodules):
 - [`Document_Config_Overview.ipynb`](../../tutorials/config/Document_Config_Overview.ipynb)

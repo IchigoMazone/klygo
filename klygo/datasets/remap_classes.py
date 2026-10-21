@@ -6,7 +6,7 @@ from pathlib import Path
 from klygo import config, files
 from klygo.validators.datasets import RemapClasses
 
-from ._structure import copy_entry, read_class_map, remap_label_file, scan_dataset_files
+from ._structure import copy_entry, read_class_map, remap_label_file, scan_dataset_files, validate_dataset_format
 from ._workspace import dataset_workspace, open_dataset, set_output_metadata_path, write_output
 
 
@@ -14,6 +14,7 @@ def remap_classes(
     source: str | PathLike[str],
     target: str | PathLike[str],
     class_map: dict[int | str, int | str],
+    format: str = "yolo",
     overwrite: bool = False,
     verbose: bool = True,
 ) -> Path:
@@ -31,6 +32,8 @@ def remap_classes(
         Destination directory or ``.zip`` archive.
     class_map : dict[int or str, int or str]
         Class-name and class-ID transformations.
+    format : str, default='yolo'
+        Dataset format to remap. Currently only ``'yolo'`` is supported.
     overwrite : bool, default=False
         Replace an existing target.
     verbose : bool, default=True
@@ -43,10 +46,10 @@ def remap_classes(
 
     Raises
     ------
-    ValueError
-        If a requested class does not exist or an ID is out of range.
     TypeError
-        If mapping keys or values are not integers or strings.
+        If ``format`` is not a string, or mapping keys or values are not integers or strings.
+    ValueError
+        If ``format`` is not supported, a requested class does not exist, or an ID is out of range.
 
     Examples
     --------
@@ -55,6 +58,7 @@ def remap_classes(
     ...     "dataset", "renamed", {"car": "vehicle"}
     ... )
     """
+    validate_dataset_format(format)
     params = RemapClasses(source, target, class_map, overwrite, verbose)
     destination = files.path(params.target)
 

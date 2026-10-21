@@ -31,6 +31,13 @@ exist.
      at the orchestration layer.
    - Add code comments only where an invariant, safety decision, lazy behavior, or
      non-obvious compatibility rule needs explanation.
+   - **Language consistency (English-only standard)**:
+     - All exception and error messages (`raise ValueError(...)`, `raise TypeError(...)`,
+       `raise KeyError(...)`, etc.) across the entire codebase must be authored in clear,
+       concise, professional English. No non-English or mixed-language error strings are permitted.
+     - All public API docstrings, parameter definitions, return descriptions, and official
+       API comments must strictly be written in English. Internal comments explaining
+       invariants or safety logic must also be in English.
 3. Write or update one meaningful `unittest` suite. Cover observable behavior,
    supported `str` and `os.PathLike[str]` inputs, overwrite/destructive rules,
    lazy iteration, optional dependencies, and representative failures as relevant.
@@ -41,11 +48,29 @@ exist.
    imports such as `from klygo import archive, files` and dogfood Klygo's own APIs
    (`files.path()`, `files.save()`, `files.load()`, `files.mkdir()`, etc.) instead
    of importing `pathlib.Path` or calling raw `Path` I/O methods directly.
-5. Run the module tests and documentation checks. Fix all failures before creating
+   **Pure documentation boundary**: The `docs/` tree must strictly contain `.md`
+   markdown files and documentation directories. Never add test scripts (such as
+   `test_documentation.py`) or Python runtime artifacts (`__pycache__`) into `docs/`.
+   All documentation contracts, docstring conformance, and link integrity are tested
+   centrally via `scripts/audit_public_api.py`.
+5. Run the module tests and documentation checks using the centralized skill script:
+   `python .agents/skills/klygo-module-guides/scripts/audit_public_api.py <module>`
+   (or `--all` for repository-wide verification). Fix all failures before creating
    tutorial notebooks. This is a hard gate: a tutorial must not document an
    unverified implementation.
 6. Create code-heavy notebooks under `tutorials/<module>/` whose filenames mirror
    the module's public implementation files 1-to-1:
+   - **Colab GitHub integration standard**: All Google Colab URLs must point directly
+     to the official GitHub repository path on branch `v2-release`:
+     `https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/<module>/<Notebook>.ipynb`
+     Include the standard Colab badge at the top of markdown cells:
+     `[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/<module>/<Notebook>.ipynb)`
+     This eliminates manual Google Drive uploads and sync scripts; any git push
+     to the repository automatically deploys and synchronizes live, executable
+     notebooks on Google Colab.
+     **Automated Colab synchronization**: Use `scripts/audit_public_api.py --sync-colab`
+     to automatically check, inject, and fix Colab badges and cross-navigation links
+     across all notebooks repository-wide.
    - Overview notebook: `Document_<Module>_Overview.ipynb`
      - Include a `## Choose a guide` table (`| Submodule | Notebook | Colab | Use it for | APIs |`)
        linking to every `Document_<Module>_<Submodule>.ipynb` and its Colab link.
@@ -72,7 +97,8 @@ exist.
    `## Jump to an API`, `## Put it together`, `## Remember`), cross-module dogfooding,
    notebook structure, English-only authored prose, safe paths, and rerun behavior.
    State local versus Colab validation honestly.
-8. Run the relevant module suite, public API checks (`scripts/audit_public_api.py`),
+8. Run the relevant module suite, repository-wide public API and documentation checks
+   (`python .agents/skills/klygo-module-guides/scripts/audit_public_api.py --all`),
    and `git diff --check` once more. Summarize files changed, API count, test
    count, notebook execution, and any optional backend behavior not exercised.
 

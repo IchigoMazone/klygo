@@ -10,7 +10,14 @@ from pathlib import Path
 from klygo import config, files
 from klygo.validators.datasets import Split
 
-from ._structure import copy_entry, flattened_name, read_class_map, remap_label_file, scan_dataset_files
+from ._structure import (
+    copy_entry,
+    flattened_name,
+    read_class_map,
+    remap_label_file,
+    scan_dataset_files,
+    validate_dataset_format,
+)
 from ._workspace import dataset_workspace, open_dataset, write_output
 
 
@@ -38,6 +45,7 @@ def _write_split_metadata(workspace: Path, names: list[str] | dict[int, str]) ->
 def split(
     source: str | PathLike[str],
     output_dir: str | PathLike[str],
+    format: str = "yolo",
     by_class: bool = False,
     class_groups: list[list[str]] | None = None,
     ratios: tuple[float, ...] | None = None,
@@ -56,6 +64,8 @@ def split(
         Dataset directory or supported archive.
     output_dir : str or os.PathLike[str]
         Directory receiving split archives.
+    format : str, default='yolo'
+        Dataset format to split. Currently only ``'yolo'`` is supported.
     by_class : bool, default=False
         Create one archive for every class.
     class_groups : list[list[str]] or None, default=None
@@ -74,18 +84,21 @@ def split(
 
     Raises
     ------
+    TypeError
+        If ``format`` is not a string.
+    ValueError
+        If ``format`` is not supported, or the split strategy, class groups, or ratios are invalid.
     FileNotFoundError
         If the source dataset or its images directory is missing.
     FileExistsError
         If a split archive exists and ``overwrite`` is false.
-    ValueError
-        If the split strategy, class groups, or ratios are invalid.
 
     Examples
     --------
     >>> from klygo import datasets
     >>> outputs = datasets.split("dataset", "parts", ratios=(0.8, 0.2))
     """
+    validate_dataset_format(format)
     params = Split(source, output_dir, by_class, class_groups, ratios, overwrite, verbose)
     files.mkdir(params.output_dir)
     created: list[Path] = []

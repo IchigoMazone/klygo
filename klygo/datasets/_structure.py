@@ -13,6 +13,34 @@ IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".bmp", ".webp"})
 DatasetPair = tuple[Path, Path | None, Path, Path]
 
 
+def validate_dataset_format(format: str) -> str:
+    """Validate that the dataset format is supported.
+
+    Parameters
+    ----------
+    format : str
+        Format identifier string.
+
+    Returns
+    -------
+    str
+        Normalized lowercase format string.
+
+    Raises
+    ------
+    TypeError
+        If format is not a string.
+    ValueError
+        If format is not supported (currently only 'yolo').
+    """
+    if not isinstance(format, str):
+        raise TypeError("format must be a string")
+    format_name = format.strip().lower()
+    if format_name != "yolo":
+        raise ValueError(f"unsupported dataset format: {format!r}; supported: ['yolo']")
+    return format_name
+
+
 def find_dataset_root(path: str | Path) -> Path:
     """Return the nearest directory containing ``data.yaml`` and ``images``."""
     root = files.path(path)

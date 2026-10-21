@@ -1,7 +1,4 @@
-"""
-Bộ công cụ Quản lý & Nạp Mô hình AI Klygo (`klygo.models`).
-Kiến trúc 3 tầng: BaseModel -> Task Base Class (Detector) -> Concrete Models.
-"""
+"""Configure and load model wrappers across optional AI backends."""
 
 from . import utils
 
@@ -16,19 +13,8 @@ from .metadata import details, flags, metadata, priority
 from .utils import suppress_warnings, suppress_ai_warnings
 
 __all__ = [
-    "load",
-    "configure",
-    "metadata",
-    "priority",
-    "details",
-    "flags",
-    "set_backend",
-    "get_backend",
-    "base",
-    "errors",
-    "utils",
-    "BaseModel",
-    "Detector",
-    "suppress_warnings",
-    "suppress_ai_warnings",
+    "base", "BaseModel", "Detector",
+    "load", "configure", "set_backend", "get_backend",
+    "metadata", "priority", "details", "flags",
+    "errors", "utils", "suppress_warnings", "suppress_ai_warnings",
 ]

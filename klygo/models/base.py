@@ -1,7 +1,7 @@
-"""
-Lop nen tang truu tuong cho MOI mo hinh AI trong Klygo (klygo.models.base).
-TANG 1: High-level API Interface — predict, benchmark, help, metadata, settings.
-Khong quan ly phan cung. Hardware -> dung model.model truc tiep.
+"""Abstract base class for all AI models in Klygo (`klygo.models.base`).
+
+LAYER 1: High-level API interface providing predict, benchmark, help, metadata, and settings.
+Hardware management is deferred to the underlying backend model.
 """
 
 from abc import ABC, abstractmethod
@@ -13,12 +13,14 @@ from box import Box
 
 from .errors import InvalidStateError
 
+__all__ = ["BaseModel"]
+
 
 class BaseModel(ABC):
-    """
-    TANG 1: High-level API wrapper cho mọi mô hình AI trong Klygo.
-    Chỉ cung cấp: predict, benchmark, help, metadata, settings, guard.
-    Mọi thứ phần cứng → dùng model.model trực tiếp.
+    """Abstract model wrapper with metadata, settings, and lifecycle guards.
+
+    Subclasses implement ``predict``, ``benchmark``, and ``help``. Backend
+    inference remains the responsibility of the concrete implementation.
     """
 
     def __init__(
@@ -123,16 +125,23 @@ class BaseModel(ABC):
         return sorted(m for m in cls_attrs if callable(getattr(type(self), m, None)))
 
     def info(self) -> None:
-        print(self.class_name)
-        print("=" * 60)
-        print("Model ID    : " + self.model_id)
-        print("Backend/Task: " + self.backend + " / " + self.task)
-        print("State       : " + self.state)
-        print("Flags       : " + str(list(self.flags)))
-        print("Settings    : " + str(self.settings))
+        """Print model architecture, backend, state, and active settings in a Rich table."""
+        from rich.console import Console
+        from rich.table import Table
+
+        table = Table(title=f"Model Information: {self.model_id}")
+        table.add_column("Property", style="cyan", no_wrap=True)
+        table.add_column("Value", style="green")
+        table.add_row("Class Name", str(self.class_name))
+        table.add_row("Model ID", str(self.model_id))
+        table.add_row("Backend", str(self.backend))
+        table.add_row("Task", str(self.task))
+        table.add_row("State", str(self.state))
+        table.add_row("Flags", ", ".join(self.flags) if self.flags else "(None)")
+        table.add_row("Settings", str(self.settings))
         if self.params:
-            print("Params      : " + ", ".join(f"{k}={v}" for k, v in self.params.items()))
-        print("=" * 60)
+            table.add_row("Parameters", ", ".join(f"{k}={v}" for k, v in self.params.items()))
+        Console().print(table)
 
     # =========================================================================
     # PROPERTIES: config, settings, params

@@ -1,7 +1,7 @@
 # `archive.get_info`
 
 ```python
-archive.get_info(archive_path)
+archive.get_info(archive_path, *, verbose=False)
 ```
 
 Return detailed archive metadata and compression statistics.
@@ -13,6 +13,7 @@ Archive paths accept both strings and `pathlib.Path` values. Format-specific wor
 ## Parameters
 
 - `archive_path`: `str or pathlib.Path` — Archive to inspect or modify.
+- `verbose`: `bool, default=False` — Print the metadata as a Rich table while returning the dictionary.
 
 ## Returns
 

@@ -8,6 +8,7 @@ Combine multiple datasets into one ZIP, unifying class names in first-seen order
 
 - `sources`: list of dataset directories or archives.
 - `output_path`: destination ZIP.
+- `format`: dataset format (default `"yolo"`). Currently only `"yolo"` is supported.
 - `overwrite`, `verbose`: replacement and progress controls.
 
 ## Returns

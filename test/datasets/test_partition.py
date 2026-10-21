@@ -7,7 +7,16 @@ from pathlib import Path
 from klygo.datasets import partition, repartition
 from pydantic import ValidationError
 
+try:
+    from ._support import ensure_test_data_zip
+except ImportError:
+    from test.datasets._support import ensure_test_data_zip
+
 class TestPartition(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        ensure_test_data_zip()
+
     def test_partition_and_repartition(self):
         print("Testing partition and repartition success paths...")
         temp_out = "test_partition_out"

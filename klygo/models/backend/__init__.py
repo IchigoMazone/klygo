@@ -1,4 +1,4 @@
-"""Lazy framework adapters for Hugging Face, Ultralytics, and Keras."""
+"""Lazy framework adapters for Hugging Face, Ultralytics, Keras, and Torchvision."""
 
 import importlib
 
@@ -11,6 +11,7 @@ _ALIASES = {
     "keras": "keras",
     "kerashub": "keras",
     "keras_hub": "keras",
+    "torchvision": "torchvision",
     "common": "common",
 }
 

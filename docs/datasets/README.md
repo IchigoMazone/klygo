@@ -1,10 +1,10 @@
 # `klygo.datasets` Documentation
 
-`klygo.datasets` provides eight focused APIs for inspecting, restructuring,
-combining, relabeling, splitting, and generating YOLO-style datasets.
+`klygo.datasets` provides eight focused APIs for loading, inspecting, restructuring,
+combining, relabeling, and splitting YOLO-style datasets.
 
-Colab tutorial placeholder (replace with a Klygo datasets notebook):
-[Open sample Colab](https://colab.research.google.com/notebooks/intro.ipynb)
+Colab tutorial:
+[Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/datasets/Document_Datasets_Overview.ipynb)
 
 The implementation shares the established Klygo infrastructure:
 
@@ -12,7 +12,7 @@ The implementation shares the established Klygo infrastructure:
 - `klygo.config` reads and writes `data.yaml`.
 - `klygo.archive` extracts and creates archives.
 - `klygo.media` loads and saves images.
-- `klygo.models` supplies normalized predictions to `datasets.export()`.
+- `klygo.outputs.detect` supplies the normalized dataset results.
 
 No dataset operation calls `shutil`, `zipfile`, or format parsers directly.
 Temporary extraction and workspace directories are isolated and removed on
@@ -25,14 +25,14 @@ paths, so archives remain usable after moving or extracting them.
 
 | Task | API | Result |
 |---|---|---|
-| Inspect classes, labels, and splits | [`get_dataset_info`](api/get_dataset_info.md) | `dict` |
+| Flatten and load all images and annotations | [`load`](api/load.md) | `Detections` |
+| Inspect classes, labels, and splits | [`info`](api/info.md) | `dict` |
 | Create train/val/test folders | [`partition`](api/partition.md) | `Path` |
 | Replace existing split ratios | [`repartition`](api/repartition.md) | `Path` |
 | Flatten split folders | [`unpartition`](api/unpartition.md) | `Path` |
 | Combine datasets and class IDs | [`merge`](api/merge.md) | ZIP `Path` |
 | Produce multiple class/ratio archives | [`split`](api/split.md) | `list[Path]` |
 | Rename classes or move IDs | [`remap_classes`](api/remap_classes.md) | `Path` |
-| Generate data from model results | [`export`](api/export.md) | directory `Path` |
 
 ## Dataset contract
 
@@ -57,12 +57,31 @@ encoded in filenames to prevent collisions.
 Sparse numeric class IDs in `data.yaml` are preserved across inspection, merge,
 split, remap, and unpartition operations.
 
+## Load the whole dataset
+
+```python
+from klygo import datasets
+
+flat = datasets.unpartition("dataset.zip", "flat")
+results = datasets.load(flat)
+results[0].show()
+crops = results.crop()
+```
+
+`unpartition()` creates the concrete flat dataset; `load()` then reads its images
+and YOLO detection annotations into one `Detections` collection. It loads RGB
+pixels into memory, so viewing and cropping remain available after return.
+Memory use scales with the decoded dataset.
+Images without labels are retained with zero boxes. Ground-truth boxes have
+score `1.0`; original class IDs are in box metadata, and relative image paths
+and split names are in detection metadata.
+
 ## Typical workflow
 
 ```python
 from klygo import datasets
 
-info = datasets.get_dataset_info("raw.zip")
+stats = datasets.info("raw.zip")
 partitioned = datasets.partition(
     "raw.zip",
     "partitioned",
@@ -75,27 +94,9 @@ renamed = datasets.remap_classes(
 )
 ```
 
-## Model export
-
-`datasets.export()` consumes the current callable model API:
-
-```python
-generated = datasets.export(
-    model,
-    "generated",
-    format="yolo",
-    source="images",
-    classes=["car", "person"],
-    threshold=0.4,
-)
-```
-
-It calls `model(images, prompt=..., batch=..., threshold=...)`. Classification
-output is built from `Detection.crop()`; it does not require the removed
-`model.crop()` API.
-
 ## Examples and tests
 
-- Executable examples: [`examples/datasets`](../../examples/datasets/README.md)
+- Executable examples: [`examples/datasets/info.py`](../../examples/datasets/info.py)
 - Behavioral tests: [`test/datasets/test_api.py`](../../test/datasets/test_api.py)
-- Documentation contract: [`test_documentation.py`](test_documentation.py)
+- Loading tests: [`test/datasets/test_load.py`](../../test/datasets/test_load.py)
+- Documentation contract: [`audit_public_api.py`](../../.agents/skills/klygo-module-guides/scripts/audit_public_api.py)

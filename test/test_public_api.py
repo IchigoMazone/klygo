@@ -38,7 +38,7 @@ class TestPublicApi(unittest.TestCase):
         assert callable(preprocessing.compose)
         assert callable(postprocessing.compose)
         assert callable(postprocessing.relabel)
-        assert callable(datasets.export)
+        assert callable(datasets.load)
 
     def test_detection_output_types(self):
         image = Image.new("RGB", (64, 48), "white")

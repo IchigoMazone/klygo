@@ -12,6 +12,8 @@ uv.lock
 .agents/skills/*
 !.agents/skills/klygo-module-guides/
 !.agents/skills/klygo-module-guides/**
+!.agents/skills/klygo-integration-workflows/
+!.agents/skills/klygo-integration-workflows/**
 grounding-dino-base/
 grounding-dino-base.rar
 .hf-http-test/
@@ -25,10 +27,24 @@ _cmake_build/
 *.rar
 
 # Temp test folders & scratch artifacts
+test/integration/generated/
+test/data.zip
+artifacts/
 temp_*/
 *.ipynb
 !tutorials/files/*.ipynb
 !tutorials/archive/*.ipynb
+!tutorials/config/*.ipynb
+!tutorials/datasets/*.ipynb
+!tutorials/utils/*.ipynb
+!tutorials/validators/*.ipynb
+!tutorials/visual/*.ipynb
+!tutorials/media/*.ipynb
+!tutorials/models/*.ipynb
+!tutorials/outputs/*.ipynb
+!tutorials/postprocessing/*.ipynb
+!tutorials/preprocessing/*.ipynb
+!tutorials/integration/*.ipynb
 *.jpg
 *.png
 *.mp4

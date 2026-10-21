@@ -7,7 +7,16 @@ from klygo.datasets import split
 from klygo.archive import list_files
 from pydantic import ValidationError
 
+try:
+    from ._support import ensure_test_data_zip
+except ImportError:
+    from test.datasets._support import ensure_test_data_zip
+
 class TestSplit(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        ensure_test_data_zip()
+
     def test_split_success(self):
         print("Testing split by class and ratios...")
         temp_dir = tempfile.mkdtemp(prefix="klygo_split_")

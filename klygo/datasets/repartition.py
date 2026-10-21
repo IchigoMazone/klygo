@@ -6,12 +6,14 @@ from pathlib import Path
 from klygo.validators.datasets import Repartition
 
 from ._partitioning import execute_partition
+from ._structure import validate_dataset_format
 
 
 def repartition(
     source: str | PathLike[str],
     target: str | PathLike[str],
     ratios: tuple[float, ...],
+    format: str = "yolo",
     overwrite: bool = False,
     verbose: bool = True,
 ) -> Path:
@@ -29,6 +31,8 @@ def repartition(
         Destination directory or ``.zip`` archive.
     ratios : tuple[float, ...]
         Two or more split ratios whose sum is one.
+    format : str, default='yolo'
+        Dataset format to partition. Currently only ``'yolo'`` is supported.
     overwrite : bool, default=False
         Replace an existing target.
     verbose : bool, default=True
@@ -41,18 +45,21 @@ def repartition(
 
     Raises
     ------
+    TypeError
+        If ``format`` is not a string.
+    ValueError
+        If ``format`` is not supported or the ratios are invalid.
     FileNotFoundError
         If the source dataset or its images directory is missing.
     FileExistsError
         If the target exists and ``overwrite`` is false.
-    ValueError
-        If the ratios are invalid.
 
     Examples
     --------
     >>> from klygo import datasets
     >>> output = datasets.repartition("old", "new", (0.7, 0.2, 0.1))
     """
+    validate_dataset_format(format)
     params = Repartition(source, target, ratios, overwrite, verbose)
     return execute_partition(
         params.source,

@@ -24,6 +24,13 @@
     (except in guides specifically dedicated to `pathlib.Path` interoperability).
 - Do not retain compatibility aliases when the module intentionally renamed an API.
 - Comments explain why a non-obvious block exists. Do not narrate obvious syntax.
+- **Language consistency and error messaging**:
+  - Every `raise <Exception>("...")` error message across the entire codebase must be
+    written in clear, concise, professional English. Never use non-English phrases or
+    mixed languages in error messages.
+  - Official public API docstrings, parameters, return shapes, and official API comments
+    must strictly be authored in English.
+  - Internal code comments should also use English for maintainability and consistency.
 
 ## Public docstrings
 
@@ -98,6 +105,10 @@ cross-platform behavior than the implementation provides.
 - Each page gives the verified signature, purpose, parameters, return/side effects,
   relevant errors, at least one runnable example, and related APIs.
 - Link examples and tutorials from the module README. Use English throughout.
+- **Pure documentation boundary**: The `docs/` hierarchy must contain strictly `.md`
+  documentation files. Do not place test scripts (such as `test_documentation.py`) or
+  bytecode directories (`__pycache__`) inside `docs/`. All docstring and reference
+  validation must be executed via `scripts/audit_public_api.py`.
 
 ## Tutorials
 
@@ -114,6 +125,14 @@ cross-platform behavior than the implementation provides.
     `Document_Config_{Overview,Io,Creation,Mapping,Access,Inspection,Structure,Environment,Validation,Config}.ipynb`
 - Every public API exported by `klygo/<module>/<submodule>.py` must be documented
   in the corresponding `Document_<Module>_<Submodule>.ipynb` notebook.
+- **Standardized Google Colab GitHub Integration**:
+  Every tutorial notebook must link to the official GitHub repository on branch `v2-release`
+  using the direct Colab URL scheme:
+  `https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/<module>/<Notebook>.ipynb`
+  accompanied by the visual badge:
+  `[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/<module>/<Notebook>.ipynb)`
+  This direct Git mapping guarantees that pushing changes to the repository immediately
+  updates the live Google Colab environment with no manual Google Drive upload or syncing required.
 - **Required sections in `Document_<Module>_Overview.ipynb`**:
   - `## Choose a guide`: Markdown table (`| Submodule | Notebook | Colab | Use it for | APIs |`)
     linking every `Document_<Module>_<Submodule>.ipynb` and its Colab URL.
@@ -145,5 +164,7 @@ pages, tests, and tutorials; tutorial notebook filenames match
 `Document_<Module>_Overview.ipynb` plus every public `klygo/<module>/<submodule>.py`;
 every notebook includes its required `## Choose a guide` / `## Jump to an API` /
 `## Put it together` / `## Remember` sections; cross-module dogfooding is verified;
-focused tests pass; notebooks execute twice; no temporary generator scripts remain;
-and Git shows only intended artifacts.
+focused tests pass; notebooks execute twice; the pure `docs/` markdown directory
+rule is strictly observed; all repository verification checks pass via
+`python .agents/skills/klygo-module-guides/scripts/audit_public_api.py --all`;
+no temporary generator scripts remain; and Git shows only intended artifacts.

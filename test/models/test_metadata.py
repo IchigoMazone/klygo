@@ -443,11 +443,10 @@ class TestModelMetadata(unittest.TestCase):
             self.assertEqual(loaded.post.threshold, 0.6)
 
             from_manager = models.load(manager)
-            from_path = models.load(path)
             self.assertIsInstance(from_manager, RecordingDetector)
-            self.assertIsInstance(from_path, RecordingDetector)
             self.assertEqual(from_manager.metadata.model.device, "cuda")
-            self.assertEqual(from_path.metadata.post.threshold, 0.6)
+            with self.assertRaisesRegex(TypeError, "config.load"):
+                models.load(path)
 
     def test_saved_model_folder_round_trips_through_load(self):
         configured = models.configure(

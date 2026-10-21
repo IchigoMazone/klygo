@@ -8,8 +8,19 @@ Klygo provides Python utilities for archive operations, filesystem access, confi
 - [`klygo.archive.backend`](archive/backend/README.md): Backend interfaces, capabilities, and format-specific implementations.
 - [`klygo.files`](files/README.md): Filesystem and path operations, streaming downloads, checksums, and structured-data I/O.
 - [`klygo.config`](config/README.md): Hierarchical configuration, dot-path access, environment overlays, validation, and the `Config` class.
-- [`klygo.datasets`](datasets/README.md): Inspect, partition, split, merge, remap, export, and repartition datasets.
-- [`klygo.utils`](utils/human_size.md): Human-readable byte sizes and progress utilities.
+- [`klygo.datasets`](datasets/README.md): Load, inspect, partition, split, merge, remap, and repartition datasets.
+- [`klygo.utils`](utils/README.md): Human-readable byte sizes and progress utilities.
+- [`klygo.validators`](validators/README.md): Runtime input validation.
+- [`klygo.visual`](visual/README.md): Image annotation, display, and dataset charts.
+- [`klygo.outputs`](outputs/README.md): Structured object-detection results.
+- [`klygo.media`](media/README.md): Lazy image and video loading, streaming, conversion, and output.
+- [`klygo.postprocessing`](postprocessing/README.md): Composable detection-result transformations.
+- [`klygo.models`](models/README.md): Model metadata, loading, and backend wrappers.
+- [`klygo.preprocessing`](preprocessing/README.md): Image transforms, metrics, and coordinate restoration.
+
+## Workflows
+
+- [Real-image integration workflows](integration/README.md): Run multiple Klygo modules together and inspect isolated reports.
 
 ## Conventions
 

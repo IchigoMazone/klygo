@@ -32,18 +32,68 @@ def _preview(image: Any, preview_size: Optional[Tuple[int, int]] = (160, 160), g
 
 
 def brightness_score(preview_size: Tuple[int, int] = (160, 160)) -> Metric:
+    """Measure or prepare the brightness score image statistic.
+
+    Parameters
+    ----------
+    preview_size : Tuple[int, int]
+        Resize used for inexpensive metric evaluation.
+
+    Returns
+    -------
+    Metric or computed value
+        Lazy metric when no image is supplied, otherwise the evaluated result.
+    """
     return Metric("brightness_score", lambda image: float(_preview(image, preview_size, True).mean()), {"preview_size": preview_size})
 
 
 def contrast_score(preview_size: Tuple[int, int] = (160, 160)) -> Metric:
+    """Measure or prepare the contrast score image statistic.
+
+    Parameters
+    ----------
+    preview_size : Tuple[int, int]
+        Resize used for inexpensive metric evaluation.
+
+    Returns
+    -------
+    Metric or computed value
+        Lazy metric when no image is supplied, otherwise the evaluated result.
+    """
     return Metric("contrast_score", lambda image: float(_preview(image, preview_size, True).std()), {"preview_size": preview_size})
 
 
 def sharpness_score(preview_size: Tuple[int, int] = (160, 160)) -> Metric:
+    """Measure or prepare the sharpness score image statistic.
+
+    Parameters
+    ----------
+    preview_size : Tuple[int, int]
+        Resize used for inexpensive metric evaluation.
+
+    Returns
+    -------
+    Metric or computed value
+        Lazy metric when no image is supplied, otherwise the evaluated result.
+    """
     return Metric("sharpness_score", lambda image: float(cv.Laplacian(_preview(image, preview_size, True), cv.CV_64F).var()), {"preview_size": preview_size})
 
 
 def blur_score(method: str = "laplacian", preview_size: Tuple[int, int] = (160, 160)) -> Metric:
+    """Measure or prepare the blur score image statistic.
+
+    Parameters
+    ----------
+    method : str
+        Named conversion or algorithm.
+    preview_size : Tuple[int, int]
+        Resize used for inexpensive metric evaluation.
+
+    Returns
+    -------
+    Metric or computed value
+        Lazy metric when no image is supplied, otherwise the evaluated result.
+    """
     method = method.lower()
 
     def evaluate(image: Any) -> float:
@@ -62,6 +112,18 @@ def blur_score(method: str = "laplacian", preview_size: Tuple[int, int] = (160, 
 
 
 def entropy_score(preview_size: Tuple[int, int] = (160, 160)) -> Metric:
+    """Measure or prepare the entropy score image statistic.
+
+    Parameters
+    ----------
+    preview_size : Tuple[int, int]
+        Resize used for inexpensive metric evaluation.
+
+    Returns
+    -------
+    Metric or computed value
+        Lazy metric when no image is supplied, otherwise the evaluated result.
+    """
     def evaluate(image: Any) -> float:
         gray = _preview(image, preview_size, True)
         histogram_values = cv.calcHist([gray], [0], None, [256], [0, 256]).ravel()
@@ -73,6 +135,18 @@ def entropy_score(preview_size: Tuple[int, int] = (160, 160)) -> Metric:
 
 
 def noise_score(preview_size: Tuple[int, int] = (160, 160)) -> Metric:
+    """Measure or prepare the noise score image statistic.
+
+    Parameters
+    ----------
+    preview_size : Tuple[int, int]
+        Resize used for inexpensive metric evaluation.
+
+    Returns
+    -------
+    Metric or computed value
+        Lazy metric when no image is supplied, otherwise the evaluated result.
+    """
     def evaluate(image: Any) -> float:
         gray = _preview(image, preview_size, True).astype(np.float32)
         smooth = cv.GaussianBlur(gray, (3, 3), 0)
@@ -82,6 +156,18 @@ def noise_score(preview_size: Tuple[int, int] = (160, 160)) -> Metric:
 
 
 def exposure_score(preview_size: Tuple[int, int] = (160, 160)) -> Metric:
+    """Measure or prepare the exposure score image statistic.
+
+    Parameters
+    ----------
+    preview_size : Tuple[int, int]
+        Resize used for inexpensive metric evaluation.
+
+    Returns
+    -------
+    Metric or computed value
+        Lazy metric when no image is supplied, otherwise the evaluated result.
+    """
     def evaluate(image: Any) -> float:
         gray = _preview(image, preview_size, True).astype(np.float32) / 255.0
         return float(1.0 - min(1.0, abs(float(gray.mean()) - 0.5) * 2.0))
@@ -90,6 +176,22 @@ def exposure_score(preview_size: Tuple[int, int] = (160, 160)) -> Metric:
 
 
 def similarity_score(other: Any, method: str = "phash", preview_size: Tuple[int, int] = (32, 32)) -> Metric:
+    """Measure or prepare the similarity score image statistic.
+
+    Parameters
+    ----------
+    other : Any
+        Second image or value.
+    method : str
+        Named conversion or algorithm.
+    preview_size : Tuple[int, int]
+        Resize used for inexpensive metric evaluation.
+
+    Returns
+    -------
+    Metric or computed value
+        Lazy metric when no image is supplied, otherwise the evaluated result.
+    """
     method = method.lower()
 
     def evaluate(image: Any) -> float:
@@ -111,6 +213,20 @@ def similarity_score(other: Any, method: str = "phash", preview_size: Tuple[int,
 
 
 def motion_score(previous: Any, preview_size: Tuple[int, int] = (160, 160)) -> Metric:
+    """Measure or prepare the motion score image statistic.
+
+    Parameters
+    ----------
+    previous : Any
+        Value passed to the operation or evaluator.
+    preview_size : Tuple[int, int]
+        Resize used for inexpensive metric evaluation.
+
+    Returns
+    -------
+    Metric or computed value
+        Lazy metric when no image is supplied, otherwise the evaluated result.
+    """
     def evaluate(image: Any) -> float:
         first = _preview(previous, preview_size, True).astype(np.float32)
         second = _preview(image, preview_size, True).astype(np.float32)
@@ -126,6 +242,20 @@ def _phash(gray: np.ndarray) -> np.ndarray:
 
 
 def perceptual_hash(image: Any = None, method: str = "phash") -> Any:
+    """Measure or prepare the perceptual hash image statistic.
+
+    Parameters
+    ----------
+    image : Any
+        Input PIL, NumPy, or lazy image.
+    method : str
+        Named conversion or algorithm.
+
+    Returns
+    -------
+    Metric or computed value
+        Lazy metric when no image is supplied, otherwise the evaluated result.
+    """
     def evaluate(value: Any) -> str:
         gray = _preview(value, (32, 32), True)
         if method.lower() == "phash":
@@ -142,6 +272,22 @@ def perceptual_hash(image: Any = None, method: str = "phash") -> Any:
 
 
 def histogram(image: Any = None, channel: Optional[int] = None, bins: int = 256) -> Any:
+    """Measure or prepare the histogram image statistic.
+
+    Parameters
+    ----------
+    image : Any
+        Input PIL, NumPy, or lazy image.
+    channel : Optional[int]
+        Value passed to the operation or evaluator.
+    bins : int
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Metric or computed value
+        Lazy metric when no image is supplied, otherwise the evaluated result.
+    """
     def evaluate(value: Any) -> np.ndarray:
         array = _preview(value, None, False)
         selected = array if array.ndim == 2 else array[..., channel or 0]
@@ -152,16 +298,58 @@ def histogram(image: Any = None, channel: Optional[int] = None, bins: int = 256)
 
 
 def mean(image: Any = None, channel: Optional[int] = None) -> Any:
+    """Measure or prepare the mean image statistic.
+
+    Parameters
+    ----------
+    image : Any
+        Input PIL, NumPy, or lazy image.
+    channel : Optional[int]
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Metric or computed value
+        Lazy metric when no image is supplied, otherwise the evaluated result.
+    """
     metric = Metric("mean", lambda value: float((_preview(value, None, False) if channel is None else _preview(value, None, False)[..., channel]).mean()), {"channel": channel})
     return metric if image is None else metric(image)
 
 
 def std(image: Any = None, channel: Optional[int] = None) -> Any:
+    """Measure or prepare the std image statistic.
+
+    Parameters
+    ----------
+    image : Any
+        Input PIL, NumPy, or lazy image.
+    channel : Optional[int]
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Metric or computed value
+        Lazy metric when no image is supplied, otherwise the evaluated result.
+    """
     metric = Metric("std", lambda value: float((_preview(value, None, False) if channel is None else _preview(value, None, False)[..., channel]).std()), {"channel": channel})
     return metric if image is None else metric(image)
 
 
 def min_max(image: Any = None, channel: Optional[int] = None) -> Any:
+    """Measure or prepare the min max image statistic.
+
+    Parameters
+    ----------
+    image : Any
+        Input PIL, NumPy, or lazy image.
+    channel : Optional[int]
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Metric or computed value
+        Lazy metric when no image is supplied, otherwise the evaluated result.
+    """
     def evaluate(value: Any) -> Tuple[float, float]:
         array = _preview(value, None, False)
         if channel is not None:
@@ -173,6 +361,22 @@ def min_max(image: Any = None, channel: Optional[int] = None) -> Any:
 
 
 def percentile(value: float, image: Any = None, channel: Optional[int] = None) -> Any:
+    """Measure or prepare the percentile image statistic.
+
+    Parameters
+    ----------
+    value : float
+        Input value or numeric setting.
+    image : Any
+        Input PIL, NumPy, or lazy image.
+    channel : Optional[int]
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Metric or computed value
+        Lazy metric when no image is supplied, otherwise the evaluated result.
+    """
     def evaluate(target: Any) -> float:
         array = _preview(target, None, False)
         if channel is not None:

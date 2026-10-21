@@ -1,7 +1,7 @@
 """Read, compose, inspect, and validate structured configuration.
 
 Colab tutorial:
-    https://colab.research.google.com/drive/1-aOofq_ZwLi00gRXnBLbJ4raupc6OZKm?usp=sharing
+    https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/config/Document_Config_Overview.ipynb
 
 Public API (20 functions, 1 class across 9 submodules):
     File I/O (`io.py`):

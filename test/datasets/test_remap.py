@@ -31,7 +31,16 @@ def safe_unlink(path):
             time.sleep(0.1)
     os.unlink(path)
 
+try:
+    from ._support import ensure_test_data_zip
+except ImportError:
+    from test.datasets._support import ensure_test_data_zip
+
 class TestRemap(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        ensure_test_data_zip()
+
     def test_remap_success_list_format(self):
         print("Testing remap_classes with continuous list format...")
         temp_zip = "test_remap_out.zip"

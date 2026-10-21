@@ -5,6 +5,8 @@ import PIL.ImageDraw
 import PIL.ImageFont
 import numpy as np
 
+__all__ = ["draw_bboxes"]
+
 # Bảng 20 mã màu Hex chuẩn đẹp của Ultralytics YOLOv8 / YOLOv11
 ULTRALYTICS_HEX = (
     "042aff", "0bdfdf", "ff9700", "ff4477", "b644ff", "074799",
@@ -36,26 +38,36 @@ def draw_bboxes(
     show_scores: bool = True,
     **kwargs,
 ) -> Union[PIL.Image.Image, np.ndarray]:
-    """
-    Tác dụng:
-    - Vẽ bounding box và nhãn tên theo chuẩn đồ họa chuyên nghiệp Ultralytics YOLO (2-Pass Rendering).
-    - Tự động phân chia bảng 20 màu độc lập cho từng class.
-    - Badge nhãn nổi bật chữ trắng trên nền màu, tự động canh lề và chống đè chéo.
+    """Draw bounding boxes and optional captions on a copy of an image.
 
-    Đầu vào:
-    - image: Ảnh PIL hoặc mảng NumPy
-    - bboxes: Danh sách bounding box theo định dạng [xmin, ymin, xmax, ymax]
-    - labels: Danh sách nhãn của các bounding box
-    - scores: Danh sách điểm tin cậy của các bounding box
-    - thickness / line_width: Độ dày nét vẽ viền box
-    - font_size: Cỡ chữ nhãn
-    - box_color: Màu viền box cố định (nếu muốn override màu mặc định)
-    - text_color: Màu chữ nhãn
-    - show_labels: Có hiển thị tên nhãn hay không
-    - show_scores: Có hiển thị điểm tin cậy hay không
+    Parameters
+    ----------
+    image : PIL.Image.Image or numpy.ndarray
+        Source image. NumPy images use RGB channel order.
+    bboxes : list of four-number sequences
+        Boxes in ``[xmin, ymin, xmax, ymax]`` pixel coordinates.
+    labels : list of str, optional
+        Class labels, matched to boxes by position.
+    scores : list of float, optional
+        Confidence values, matched to boxes by position.
+    thickness, line_width : int, optional
+        Border width. ``line_width`` takes precedence.
+    font_size : int, optional
+        Caption font size.
+    box_color, text_color : tuple of int, optional
+        RGB overrides for the box and caption text.
+    show_labels, show_scores : bool
+        Whether to include labels and scores in captions.
 
-    Đầu ra:
-    - Ảnh PIL.Image hoặc NumPy đã vẽ Bounding Box hoàn chỉnh.
+    Returns
+    -------
+    PIL.Image.Image or numpy.ndarray
+        Annotated copy in the same representation as ``image``.
+
+    Notes
+    -----
+    Labels receive stable colors from a 20-color palette within one call.
+    Extra ``width`` in ``kwargs`` is a legacy border-width fallback.
     """
     is_np = isinstance(image, np.ndarray)
     if is_np:

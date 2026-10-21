@@ -1,15 +1,15 @@
 """Round-trip one file through a GZip stream."""
 
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import klygo.files as files
 from klygo.archive.backend import GZipBackend
 
 
 with TemporaryDirectory() as directory:
-    root = Path(directory)
+    root = files.path(directory)
     source = root / "model.bin"
-    source.write_bytes(b"model bytes")
+    files.save(source, b"model bytes", verbose=False)
     packed = root / "model.gz"
 
     backend = GZipBackend()

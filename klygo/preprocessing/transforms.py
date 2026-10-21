@@ -27,85 +27,354 @@ def _operation(name: str, backend: str = "auto", geometry: bool = False, termina
 
 # Geometry
 def crop(box: Sequence[int]) -> Operation:
+    """Build a crop image preprocessing operation.
+
+    Parameters
+    ----------
+    box : Sequence[int]
+        XYXY pixel crop coordinates.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("crop", "pil", True, box=tuple(int(v) for v in box))
 
 
 def center_crop(size: Size) -> Operation:
+    """Build a center crop image preprocessing operation.
+
+    Parameters
+    ----------
+    size : Size
+        Target width and height.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("center_crop", "pil", True, size=_pair(size))
 
 
 def resize(size: Size, keep_ratio: bool = False, interpolation: str = "bilinear") -> Operation:
+    """Build a resize image preprocessing operation.
+
+    Parameters
+    ----------
+    size : Size
+        Target width and height.
+    keep_ratio : bool
+        Preserve input aspect ratio when true.
+    interpolation : str
+        Resampling algorithm.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("resize", "pil", True, size=_pair(size), keep_ratio=keep_ratio, interpolation=interpolation)
 
 
 def thumbnail(size: Size, interpolation: str = "bilinear") -> Operation:
+    """Build a thumbnail image preprocessing operation.
+
+    Parameters
+    ----------
+    size : Size
+        Target width and height.
+    interpolation : str
+        Resampling algorithm.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("thumbnail", "pil", True, size=_pair(size), interpolation=interpolation)
 
 
 def contain(size: Size, interpolation: str = "bilinear") -> Operation:
+    """Build a contain image preprocessing operation.
+
+    Parameters
+    ----------
+    size : Size
+        Target width and height.
+    interpolation : str
+        Resampling algorithm.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("contain", "pil", True, size=_pair(size), interpolation=interpolation)
 
 
 def cover(size: Size, interpolation: str = "bilinear") -> Operation:
+    """Build a cover image preprocessing operation.
+
+    Parameters
+    ----------
+    size : Size
+        Target width and height.
+    interpolation : str
+        Resampling algorithm.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("cover", "pil", True, size=_pair(size), interpolation=interpolation)
 
 
 def fit(size: Size, interpolation: str = "bilinear", centering: Tuple[float, float] = (0.5, 0.5)) -> Operation:
+    """Build a fit image preprocessing operation.
+
+    Parameters
+    ----------
+    size : Size
+        Target width and height.
+    interpolation : str
+        Resampling algorithm.
+    centering : Tuple[float, float]
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("fit", "pil", True, size=_pair(size), interpolation=interpolation, centering=centering)
 
 
 def letterbox(size: Size, color: Any = (114, 114, 114), stride: Optional[int] = None) -> Operation:
+    """Build a letterbox image preprocessing operation.
+
+    Parameters
+    ----------
+    size : Size
+        Target width and height.
+    color : Any
+        Fill color.
+    stride : Optional[int]
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("letterbox", "pil", True, size=_pair(size), color=color, stride=stride)
 
 
 def pad(padding: Union[int, Sequence[int]], color: Any = 0) -> Operation:
+    """Build a pad image preprocessing operation.
+
+    Parameters
+    ----------
+    padding : Union[int, Sequence[int]]
+        Pixels added around the image.
+    color : Any
+        Fill color.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     normalized = padding if isinstance(padding, int) else tuple(int(v) for v in padding)
     return _operation("pad", "pil", True, padding=normalized, color=color)
 
 
 def flip(horizontal: bool = False, vertical: bool = False) -> Operation:
+    """Build a flip image preprocessing operation.
+
+    Parameters
+    ----------
+    horizontal : bool
+        Apply horizontal orientation change.
+    vertical : bool
+        Apply vertical orientation change.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("flip", "pil", True, horizontal=horizontal, vertical=vertical)
 
 
 def rotate(angle: float, expand: bool = False, fill: Any = 0, interpolation: str = "bilinear") -> Operation:
+    """Build a rotate image preprocessing operation.
+
+    Parameters
+    ----------
+    angle : float
+        Rotation angle in degrees.
+    expand : bool
+        Value passed to the operation or evaluator.
+    fill : Any
+        Value passed to the operation or evaluator.
+    interpolation : str
+        Resampling algorithm.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("rotate", "pil", True, angle=angle, expand=expand, fill=fill, interpolation=interpolation)
 
 
 def transpose(method: str) -> Operation:
+    """Build a transpose image preprocessing operation.
+
+    Parameters
+    ----------
+    method : str
+        Named conversion or algorithm.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("transpose", "pil", True, method=method)
 
 
 def affine(matrix: Sequence[float], size: Optional[Size] = None, fill: Any = 0) -> Operation:
+    """Build a affine image preprocessing operation.
+
+    Parameters
+    ----------
+    matrix : Sequence[float]
+        Affine or perspective transform coefficients.
+    size : Optional[Size]
+        Target width and height.
+    fill : Any
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("affine", "pil", True, matrix=tuple(matrix), size=_pair(size) if size is not None else None, fill=fill)
 
 
 def perspective(matrix: Sequence[float], size: Optional[Size] = None, fill: Any = 0) -> Operation:
+    """Build a perspective image preprocessing operation.
+
+    Parameters
+    ----------
+    matrix : Sequence[float]
+        Affine or perspective transform coefficients.
+    size : Optional[Size]
+        Target width and height.
+    fill : Any
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("perspective", "pil", True, matrix=tuple(matrix), size=_pair(size) if size is not None else None, fill=fill)
 
 
 def warp(matrix: Sequence[float], size: Optional[Size] = None, fill: Any = 0) -> Operation:
+    """Build a warp image preprocessing operation.
+
+    Parameters
+    ----------
+    matrix : Sequence[float]
+        Affine or perspective transform coefficients.
+    size : Optional[Size]
+        Target width and height.
+    fill : Any
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("warp", "pil", True, matrix=tuple(matrix), size=_pair(size) if size is not None else None, fill=fill)
 
 
 def tile(size: Size, overlap: float = 0.0) -> Operation:
+    """Build a tile image preprocessing operation.
+
+    Parameters
+    ----------
+    size : Size
+        Target width and height.
+    overlap : float
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("tile", "pil", True, True, size=_pair(size), overlap=float(overlap))
 
 
 # Orientation / EXIF
 def auto_orient() -> Operation:
+    """Build a auto orient image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("auto_orient", "pil", True)
 
 
 def exif_transpose() -> Operation:
+    """Build a exif transpose image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return auto_orient()
 
 
 def strip_exif() -> Operation:
+    """Build a strip exif image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("strip_exif", "pil")
 
 
 # Color and channels
 def convert_color(source: str, target: Optional[str] = None) -> Operation:
+    """Build a convert color image preprocessing operation.
+
+    Parameters
+    ----------
+    source : str
+        Input color representation.
+    target : Optional[str]
+        Output color representation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     if target is None:
         target = source
         source = "AUTO"
@@ -113,256 +382,995 @@ def convert_color(source: str, target: Optional[str] = None) -> Operation:
 
 
 def grayscale(channels: int = 1) -> Operation:
+    """Build a grayscale image preprocessing operation.
+
+    Parameters
+    ----------
+    channels : int
+        Channel count or selected channel indexes.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("grayscale", "pil", channels=int(channels))
 
 
 def rgb() -> Operation:
+    """Build a rgb image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return convert_color("RGB")
 
 
 def bgr() -> Operation:
+    """Build a bgr image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return convert_color("BGR")
 
 
 def rgba() -> Operation:
+    """Build a rgba image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return convert_color("RGBA")
 
 
 def add_alpha(value: int = 255) -> Operation:
+    """Build a add alpha image preprocessing operation.
+
+    Parameters
+    ----------
+    value : int
+        Input value or numeric setting.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("add_alpha", "numpy", value=int(value))
 
 
 def remove_alpha(background: Any = (255, 255, 255)) -> Operation:
+    """Build a remove alpha image preprocessing operation.
+
+    Parameters
+    ----------
+    background : Any
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("remove_alpha", "pil", background=background)
 
 
 def select_channels(channels: Sequence[int]) -> Operation:
+    """Build a select channels image preprocessing operation.
+
+    Parameters
+    ----------
+    channels : Sequence[int]
+        Channel count or selected channel indexes.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("select_channels", "numpy", channels=tuple(channels))
 
 
 def swap_channels(order: Sequence[int]) -> Operation:
+    """Build a swap channels image preprocessing operation.
+
+    Parameters
+    ----------
+    order : Sequence[int]
+        Output channel order.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("swap_channels", "numpy", order=tuple(order))
 
 
 # Tone and enhancement
 def brightness(factor: float) -> Operation:
+    """Build a brightness image preprocessing operation.
+
+    Parameters
+    ----------
+    factor : float
+        Multiplicative adjustment.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("brightness", "pil", factor=float(factor))
 
 
 def contrast(factor: float) -> Operation:
+    """Build a contrast image preprocessing operation.
+
+    Parameters
+    ----------
+    factor : float
+        Multiplicative adjustment.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("contrast", "pil", factor=float(factor))
 
 
 def saturation(factor: float) -> Operation:
+    """Build a saturation image preprocessing operation.
+
+    Parameters
+    ----------
+    factor : float
+        Multiplicative adjustment.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("saturation", "pil", factor=float(factor))
 
 
 def hue(value: float) -> Operation:
+    """Build a hue image preprocessing operation.
+
+    Parameters
+    ----------
+    value : float
+        Input value or numeric setting.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("hue", "opencv", value=float(value))
 
 
 def gamma(value: float) -> Operation:
+    """Build a gamma image preprocessing operation.
+
+    Parameters
+    ----------
+    value : float
+        Input value or numeric setting.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("gamma", "numpy", value=float(value))
 
 
 def temperature(value: float) -> Operation:
+    """Build a temperature image preprocessing operation.
+
+    Parameters
+    ----------
+    value : float
+        Input value or numeric setting.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("temperature", "numpy", value=float(value))
 
 
 def tint(value: float) -> Operation:
+    """Build a tint image preprocessing operation.
+
+    Parameters
+    ----------
+    value : float
+        Input value or numeric setting.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("tint", "numpy", value=float(value))
 
 
 def white_balance(method: str = "gray_world") -> Operation:
+    """Build a white balance image preprocessing operation.
+
+    Parameters
+    ----------
+    method : str
+        Named conversion or algorithm.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("white_balance", "opencv", method=method)
 
 
 def autocontrast(cutoff: Union[int, float, Tuple[float, float]] = 0) -> Operation:
+    """Build a autocontrast image preprocessing operation.
+
+    Parameters
+    ----------
+    cutoff : Union[int, float, Tuple[float, float]]
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("autocontrast", "pil", cutoff=cutoff)
 
 
 def equalize() -> Operation:
+    """Build a equalize image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("equalize", "pil")
 
 
 def clahe(clip_limit: float = 2.0, grid_size: Tuple[int, int] = (8, 8)) -> Operation:
+    """Build a clahe image preprocessing operation.
+
+    Parameters
+    ----------
+    clip_limit : float
+        Value passed to the operation or evaluator.
+    grid_size : Tuple[int, int]
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("clahe", "opencv", clip_limit=float(clip_limit), grid_size=tuple(grid_size))
 
 
 def invert() -> Operation:
+    """Build a invert image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("invert", "pil")
 
 
 def solarize(threshold: int = 128) -> Operation:
+    """Build a solarize image preprocessing operation.
+
+    Parameters
+    ----------
+    threshold : int
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("solarize", "pil", threshold=int(threshold))
 
 
 def posterize(bits: int) -> Operation:
+    """Build a posterize image preprocessing operation.
+
+    Parameters
+    ----------
+    bits : int
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("posterize", "pil", bits=int(bits))
 
 
 def colorize(black: Any, white: Any, mid: Any = None) -> Operation:
+    """Build a colorize image preprocessing operation.
+
+    Parameters
+    ----------
+    black : Any
+        Value passed to the operation or evaluator.
+    white : Any
+        Value passed to the operation or evaluator.
+    mid : Any
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("colorize", "pil", black=black, white=white, mid=mid)
 
 
 # Filters
 def blur(radius: float = 1) -> Operation:
+    """Build a blur image preprocessing operation.
+
+    Parameters
+    ----------
+    radius : float
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return box_blur(radius)
 
 
 def box_blur(radius: float = 1) -> Operation:
+    """Build a box blur image preprocessing operation.
+
+    Parameters
+    ----------
+    radius : float
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("box_blur", "pil", radius=float(radius))
 
 
 def gaussian_blur(kernel: int = 3, sigma: float = 0) -> Operation:
+    """Build a gaussian blur image preprocessing operation.
+
+    Parameters
+    ----------
+    kernel : int
+        Filter or morphology kernel.
+    sigma : float
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("gaussian_blur", "opencv", kernel=int(kernel), sigma=float(sigma))
 
 
 def median_blur(kernel: int = 3) -> Operation:
+    """Build a median blur image preprocessing operation.
+
+    Parameters
+    ----------
+    kernel : int
+        Filter or morphology kernel.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("median_blur", "opencv", kernel=int(kernel))
 
 
 def bilateral_filter(diameter: int = 5, sigma_color: float = 50, sigma_space: float = 50) -> Operation:
+    """Build a bilateral filter image preprocessing operation.
+
+    Parameters
+    ----------
+    diameter : int
+        Value passed to the operation or evaluator.
+    sigma_color : float
+        Value passed to the operation or evaluator.
+    sigma_space : float
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("bilateral_filter", "opencv", diameter=int(diameter), sigma_color=float(sigma_color), sigma_space=float(sigma_space))
 
 
 def sharpen(amount: float = 1.0) -> Operation:
+    """Build a sharpen image preprocessing operation.
+
+    Parameters
+    ----------
+    amount : float
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("sharpen", "pil", amount=float(amount))
 
 
 def unsharp_mask(radius: float = 2, amount: float = 1.0, threshold: int = 0) -> Operation:
+    """Build a unsharp mask image preprocessing operation.
+
+    Parameters
+    ----------
+    radius : float
+        Value passed to the operation or evaluator.
+    amount : float
+        Value passed to the operation or evaluator.
+    threshold : int
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("unsharp_mask", "pil", radius=float(radius), amount=float(amount), threshold=int(threshold))
 
 
 def denoise(strength: float = 5) -> Operation:
+    """Build a denoise image preprocessing operation.
+
+    Parameters
+    ----------
+    strength : float
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("denoise", "opencv", strength=float(strength))
 
 
 def detail() -> Operation:
+    """Build a detail image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("detail", "pil")
 
 
 def smooth() -> Operation:
+    """Build a smooth image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("smooth", "pil")
 
 
 def emboss() -> Operation:
+    """Build a emboss image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("emboss", "pil")
 
 
 def convolve(kernel: Sequence[Sequence[float]], scale: Optional[float] = None, offset: float = 0) -> Operation:
+    """Build a convolve image preprocessing operation.
+
+    Parameters
+    ----------
+    kernel : Sequence[Sequence[float]]
+        Filter or morphology kernel.
+    scale : Optional[float]
+        Value passed to the operation or evaluator.
+    offset : float
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("convolve", "opencv", kernel=np.asarray(kernel, dtype=np.float32), scale=scale, offset=float(offset))
 
 
 # Threshold
 def threshold(value: float, mode: str = "binary", max_value: float = 255) -> Operation:
+    """Build a threshold image preprocessing operation.
+
+    Parameters
+    ----------
+    value : float
+        Input value or numeric setting.
+    mode : str
+        Value passed to the operation or evaluator.
+    max_value : float
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("threshold", "opencv", value=float(value), mode=mode, max_value=float(max_value))
 
 
 def adaptive_threshold(method: str = "gaussian", block_size: int = 11, constant: float = 2, mode: str = "binary") -> Operation:
+    """Build a adaptive threshold image preprocessing operation.
+
+    Parameters
+    ----------
+    method : str
+        Named conversion or algorithm.
+    block_size : int
+        Value passed to the operation or evaluator.
+    constant : float
+        Value passed to the operation or evaluator.
+    mode : str
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("adaptive_threshold", "opencv", method=method, block_size=int(block_size), constant=float(constant), mode=mode)
 
 
 def otsu_threshold(mode: str = "binary") -> Operation:
+    """Build a otsu threshold image preprocessing operation.
+
+    Parameters
+    ----------
+    mode : str
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("otsu_threshold", "opencv", mode=mode)
 
 
 def triangle_threshold(mode: str = "binary") -> Operation:
+    """Build a triangle threshold image preprocessing operation.
+
+    Parameters
+    ----------
+    mode : str
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("triangle_threshold", "opencv", mode=mode)
 
 
 # Morphology
 def morphology(operation: str, kernel: Union[int, Sequence[Sequence[int]]] = 3, iterations: int = 1) -> Operation:
+    """Build a morphology image preprocessing operation.
+
+    Parameters
+    ----------
+    operation : str
+        Value passed to the operation or evaluator.
+    kernel : Union[int, Sequence[Sequence[int]]]
+        Filter or morphology kernel.
+    iterations : int
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("morphology", "opencv", operation=operation, kernel=kernel, iterations=int(iterations))
 
 
 def erode(kernel: Any = 3, iterations: int = 1) -> Operation:
+    """Build a erode image preprocessing operation.
+
+    Parameters
+    ----------
+    kernel : Any
+        Filter or morphology kernel.
+    iterations : int
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return morphology("erode", kernel, iterations)
 
 
 def dilate(kernel: Any = 3, iterations: int = 1) -> Operation:
+    """Build a dilate image preprocessing operation.
+
+    Parameters
+    ----------
+    kernel : Any
+        Filter or morphology kernel.
+    iterations : int
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return morphology("dilate", kernel, iterations)
 
 
 def opening(kernel: Any = 3, iterations: int = 1) -> Operation:
+    """Build a opening image preprocessing operation.
+
+    Parameters
+    ----------
+    kernel : Any
+        Filter or morphology kernel.
+    iterations : int
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return morphology("open", kernel, iterations)
 
 
 def closing(kernel: Any = 3, iterations: int = 1) -> Operation:
+    """Build a closing image preprocessing operation.
+
+    Parameters
+    ----------
+    kernel : Any
+        Filter or morphology kernel.
+    iterations : int
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return morphology("close", kernel, iterations)
 
 
 def morphological_gradient(kernel: Any = 3) -> Operation:
+    """Build a morphological gradient image preprocessing operation.
+
+    Parameters
+    ----------
+    kernel : Any
+        Filter or morphology kernel.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return morphology("gradient", kernel)
 
 
 def tophat(kernel: Any = 3) -> Operation:
+    """Build a tophat image preprocessing operation.
+
+    Parameters
+    ----------
+    kernel : Any
+        Filter or morphology kernel.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return morphology("tophat", kernel)
 
 
 def blackhat(kernel: Any = 3) -> Operation:
+    """Build a blackhat image preprocessing operation.
+
+    Parameters
+    ----------
+    kernel : Any
+        Filter or morphology kernel.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return morphology("blackhat", kernel)
 
 
 # Edges
 def canny(low: float = 100, high: float = 200, aperture_size: int = 3) -> Operation:
+    """Build a canny image preprocessing operation.
+
+    Parameters
+    ----------
+    low : float
+        Value passed to the operation or evaluator.
+    high : float
+        Value passed to the operation or evaluator.
+    aperture_size : int
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("canny", "opencv", low=float(low), high=float(high), aperture_size=int(aperture_size))
 
 
 def sobel(dx: int = 1, dy: int = 0, kernel: int = 3) -> Operation:
+    """Build a sobel image preprocessing operation.
+
+    Parameters
+    ----------
+    dx : int
+        Value passed to the operation or evaluator.
+    dy : int
+        Value passed to the operation or evaluator.
+    kernel : int
+        Filter or morphology kernel.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("sobel", "opencv", dx=int(dx), dy=int(dy), kernel=int(kernel))
 
 
 def scharr(dx: int = 1, dy: int = 0) -> Operation:
+    """Build a scharr image preprocessing operation.
+
+    Parameters
+    ----------
+    dx : int
+        Value passed to the operation or evaluator.
+    dy : int
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("scharr", "opencv", dx=int(dx), dy=int(dy))
 
 
 def laplacian(kernel: int = 3) -> Operation:
+    """Build a laplacian image preprocessing operation.
+
+    Parameters
+    ----------
+    kernel : int
+        Filter or morphology kernel.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("laplacian", "opencv", kernel=int(kernel))
 
 
 def find_edges() -> Operation:
+    """Build a find edges image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("find_edges", "pil")
 
 
 # Model input
 def cast(dtype: str = "float32") -> Operation:
+    """Build a cast image preprocessing operation.
+
+    Parameters
+    ----------
+    dtype : str
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("cast", "numpy", dtype=dtype)
 
 
 def rescale(scale: float = 1 / 255) -> Operation:
+    """Build a rescale image preprocessing operation.
+
+    Parameters
+    ----------
+    scale : float
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("rescale", "numpy", scale=float(scale))
 
 
 def normalize(mean: Optional[Sequence[float]] = None, std: Optional[Sequence[float]] = None, scale: Optional[float] = None) -> Operation:
+    """Build a normalize image preprocessing operation.
+
+    Parameters
+    ----------
+    mean : Optional[Sequence[float]]
+        Value passed to the operation or evaluator.
+    std : Optional[Sequence[float]]
+        Value passed to the operation or evaluator.
+    scale : Optional[float]
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("normalize", "numpy", mean=tuple(mean) if mean is not None else None, std=tuple(std) if std is not None else None, scale=scale)
 
 
 def clamp(min_value: float = 0, max_value: float = 1) -> Operation:
+    """Build a clamp image preprocessing operation.
+
+    Parameters
+    ----------
+    min_value : float
+        Value passed to the operation or evaluator.
+    max_value : float
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("clamp", "numpy", min_value=min_value, max_value=max_value)
 
 
 def channels_first() -> Operation:
+    """Build a channels first image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("channels_first", "numpy")
 
 
 def channels_last() -> Operation:
+    """Build a channels last image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("channels_last", "numpy")
 
 
 def add_batch_dimension() -> Operation:
+    """Build a add batch dimension image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("add_batch_dimension", "numpy")
 
 
 def remove_batch_dimension() -> Operation:
+    """Build a remove batch dimension image preprocessing operation.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("remove_batch_dimension", "numpy")
 
 
 def tensor(dtype: str = "float32", device: Optional[str] = None) -> Operation:
+    """Build a tensor image preprocessing operation.
+
+    Parameters
+    ----------
+    dtype : str
+        Value passed to the operation or evaluator.
+    device : Optional[str]
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("tensor", "torch", dtype=dtype, device=device)
 
 
 def from_input_spec(input_spec: Any) -> Compose:
+    """Build a preprocessing pipeline from a model input specification.
+
+    Parameters
+    ----------
+    input_spec : Any
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Compose
+        Ordered preprocessing operations.
+    """
     getter = input_spec.get if isinstance(input_spec, dict) else lambda key, default=None: getattr(input_spec, key, default)
     operations: List[Operation] = []
     size = getter("size")
@@ -386,71 +1394,303 @@ def from_input_spec(input_spec: Any) -> Compose:
 
 # Multiple images
 def apply_mask(mask: Any) -> Operation:
+    """Build a apply mask image preprocessing operation.
+
+    Parameters
+    ----------
+    mask : Any
+        Mask image.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("apply_mask", "pil", mask=mask)
 
 
 def composite(foreground: Any, background: Any, mask: Any) -> Operation:
+    """Build a composite image preprocessing operation.
+
+    Parameters
+    ----------
+    foreground : Any
+        Value passed to the operation or evaluator.
+    background : Any
+        Value passed to the operation or evaluator.
+    mask : Any
+        Mask image.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("composite", "pil", True, foreground=foreground, background=background, mask=mask)
 
 
 def blend(other: Any, alpha: float = 0.5) -> Operation:
+    """Build a blend image preprocessing operation.
+
+    Parameters
+    ----------
+    other : Any
+        Second image or value.
+    alpha : float
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("blend", "pil", other=other, alpha=float(alpha))
 
 
 def add(other: Any, scale: float = 1.0) -> Operation:
+    """Build a add image preprocessing operation.
+
+    Parameters
+    ----------
+    other : Any
+        Second image or value.
+    scale : float
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("add", "opencv", other=other, scale=float(scale))
 
 
 def subtract(other: Any) -> Operation:
+    """Build a subtract image preprocessing operation.
+
+    Parameters
+    ----------
+    other : Any
+        Second image or value.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("subtract", "opencv", other=other)
 
 
 def difference(other: Any) -> Operation:
+    """Build a difference image preprocessing operation.
+
+    Parameters
+    ----------
+    other : Any
+        Second image or value.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("difference", "opencv", other=other)
 
 
 def multiply(other: Any) -> Operation:
+    """Build a multiply image preprocessing operation.
+
+    Parameters
+    ----------
+    other : Any
+        Second image or value.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("multiply", "opencv", other=other)
 
 
 def alpha_composite(other: Any) -> Operation:
+    """Build a alpha composite image preprocessing operation.
+
+    Parameters
+    ----------
+    other : Any
+        Second image or value.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("alpha_composite", "pil", other=other)
 
 
 # Augmentation
 def random_apply(operation: Union[Operation, Compose], probability: float = 0.5) -> Operation:
+    """Build a random apply image preprocessing operation.
+
+    Parameters
+    ----------
+    operation : Union[Operation, Compose]
+        Value passed to the operation or evaluator.
+    probability : float
+        Probability that a random operation runs.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("random_apply", "auto", operation=operation, probability=float(probability))
 
 
 def random_choice(operations: Sequence[Union[Operation, Compose]]) -> Operation:
+    """Build a random choice image preprocessing operation.
+
+    Parameters
+    ----------
+    operations : Sequence[Union[Operation, Compose]]
+        Ordered preprocessing operations to compose or execute.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("random_choice", "auto", operations=tuple(operations))
 
 
 def random_crop(size: Size) -> Operation:
+    """Build a random crop image preprocessing operation.
+
+    Parameters
+    ----------
+    size : Size
+        Target width and height.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("random_crop", "pil", True, size=_pair(size))
 
 
 def random_resize(min_size: Size, max_size: Size) -> Operation:
+    """Build a random resize image preprocessing operation.
+
+    Parameters
+    ----------
+    min_size : Size
+        Value passed to the operation or evaluator.
+    max_size : Size
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("random_resize", "pil", True, min_size=_pair(min_size), max_size=_pair(max_size))
 
 
 def random_flip(probability: float = 0.5, horizontal: bool = True, vertical: bool = False) -> Operation:
+    """Build a random flip image preprocessing operation.
+
+    Parameters
+    ----------
+    probability : float
+        Probability that a random operation runs.
+    horizontal : bool
+        Apply horizontal orientation change.
+    vertical : bool
+        Apply vertical orientation change.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("random_flip", "pil", True, probability=float(probability), horizontal=horizontal, vertical=vertical)
 
 
 def random_rotate(angle_range: Tuple[float, float] = (-10, 10), expand: bool = False) -> Operation:
+    """Build a random rotate image preprocessing operation.
+
+    Parameters
+    ----------
+    angle_range : Tuple[float, float]
+        Value passed to the operation or evaluator.
+    expand : bool
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("random_rotate", "pil", True, angle_range=tuple(angle_range), expand=expand)
 
 
 def color_jitter(brightness: float = 0, contrast: float = 0, saturation: float = 0, hue: float = 0) -> Operation:
+    """Build a color jitter image preprocessing operation.
+
+    Parameters
+    ----------
+    brightness : float
+        Value passed to the operation or evaluator.
+    contrast : float
+        Value passed to the operation or evaluator.
+    saturation : float
+        Value passed to the operation or evaluator.
+    hue : float
+        Value passed to the operation or evaluator.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("color_jitter", "pil", brightness=brightness, contrast=contrast, saturation=saturation, hue=hue)
 
 
 def random_erasing(probability: float = 0.5, scale: Tuple[float, float] = (0.02, 0.33), value: Any = 0) -> Operation:
+    """Build a random erasing image preprocessing operation.
+
+    Parameters
+    ----------
+    probability : float
+        Probability that a random operation runs.
+    scale : Tuple[float, float]
+        Value passed to the operation or evaluator.
+    value : Any
+        Input value or numeric setting.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return _operation("random_erasing", "numpy", probability=float(probability), scale=tuple(scale), value=value)
 
 
 def seed(value: int) -> Operation:
+    """Build a seed image preprocessing operation.
+
+    Parameters
+    ----------
+    value : int
+        Input value or numeric setting.
+
+    Returns
+    -------
+    Operation
+        A reusable image transform; execution is deferred for lazy images.
+    """
     return Operation("seed", {"value": int(value)}, "auto", False)
 
 

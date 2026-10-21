@@ -1,12 +1,4 @@
-"""
-Các lớp kết quả đầu ra chuẩn hóa cho nhận diện đối tượng (`klygo.outputs.detect`).
-
-Hệ thống phân cấp 4 tầng:
-- Box        : 1 BBox / 1 vật thể
-- Crops      : Tập hợp các ảnh con đã cắt (alias: Boxes)
-- Detection  : Kết quả nhận diện trên 1 ảnh / 1 frame
-- Detections : Kết quả nhận diện toàn bộ video / folder
-"""
+"""Represent one box, one image, or a sequence of detection results."""
 
 import os
 import datetime
@@ -22,9 +14,26 @@ from klygo import files, media, visual
 # 1. CẤP HẠT NHÂN: Box - Đại diện cho 1 BBox / 1 Vật thể
 # =============================================================================
 class Box:
-    """
-    Đại diện cho một vật thể / một Bounding Box / một ảnh con đã cắt.
-    detections[0][0] == detection[0] == crops[0] == box
+    """Represent one detected object and its optional lazy image crop.
+
+    Parameters
+    ----------
+    id : int
+        Numeric class ID.
+    label : str
+        Human-readable class label.
+    score : float
+        Confidence score.
+    box : list of float
+        Pixel coordinates in XYXY order.
+    parent_image : PIL.Image.Image, optional
+        Source image for lazy cropping.
+    pad : int
+        Crop padding in pixels.
+    uid : str, optional
+        Stable object identifier; generated when omitted.
+    metadata : dict, optional
+        Extra object attributes.
     """
 
     def __init__(
@@ -236,10 +245,7 @@ class Box:
 # 2. CẤP TẬP HỢP ẢNH CON: Crops
 # =============================================================================
 class Crops:
-    """
-    Tập hợp tất cả các ảnh con (Crops) đã cắt từ 1 hoặc nhiều ảnh.
-    crops[0] == box
-    """
+    """Hold a sequence of :class:`Box` objects and their source image."""
 
     def __init__(
         self,
@@ -286,7 +292,7 @@ class Crops:
 
     def __add__(self, other: "Crops") -> "Crops":
         if not isinstance(other, Crops):
-            raise TypeError(f"Không thể cộng Crops với kiểu {type(other)}")
+            raise TypeError(f"Cannot concatenate Crops with type {type(other)}")
         return Crops(list(self.crops) + list(other.crops), self.source_image, self.pad)
 
     def __iter__(self):
@@ -432,11 +438,7 @@ class Crops:
 # 3. CẤP 1 BỨC ẢNH / 1 FRAME: Detection
 # =============================================================================
 class Detection:
-    """
-    Đầu ra chuẩn hóa chứa tất cả kết quả nhận diện của một bức ảnh / 1 frame.
-    detections[0] == detection
-    detection[0] == box
-    """
+    """Hold the boxes and source image for one image or video frame."""
 
     def __init__(
         self,
@@ -602,7 +604,7 @@ class Detection:
 
     def __add__(self, other: "Detection") -> "Detection":
         if not isinstance(other, Detection):
-            raise TypeError(f"Không thể cộng Detection với kiểu {type(other)}")
+            raise TypeError(f"Cannot concatenate Detection with type {type(other)}")
         return Detection(
             self.source_image,
             list(self.objects) + list(other.objects),
@@ -971,12 +973,7 @@ class Detection:
 # 4. CẤP TOÀN BỘ VIDEO / FOLDER: Detections
 # =============================================================================
 class Detections:
-    """
-    Tập hợp tất cả các Detection của toàn bộ Video / Folder ảnh.
-    detections[0] == detection
-    detections[0][0] == box
-    Hỗ trợ đồng nhất cả chế độ In-Memory (danh sách) lẫn Stream (tiết kiệm RAM chống tràn bộ nhớ).
-    """
+    """Hold image-level detections in memory or consume them as a stream."""
 
     def __init__(
         self,
@@ -1246,7 +1243,7 @@ class Detections:
 
     def __add__(self, other: "Detections") -> "Detections":
         if not isinstance(other, Detections):
-            raise TypeError(f"Không thể cộng Detections với kiểu {type(other)}")
+            raise TypeError(f"Cannot concatenate Detections with type {type(other)}")
         return Detections(list(self) + list(other), self.source_type, self.fps, self.output_path)
 
     def __iter__(self):
@@ -1328,7 +1325,7 @@ class Detections:
         if len(self) == 1:
             self[0].url = new_url
         else:
-            raise ValueError("Không thể gán 1 URL duy nhất cho nhiều frame kết quả. Hãy gán url cho từng frame results[i].url = 'path'")
+            raise ValueError("Cannot assign a single URL to multiple result frames. Assign url to individual frames via results[i].url = 'path'")
 
     @property
     def count(self) -> int:
@@ -1527,3 +1524,9 @@ CropResults = Crops
 DetectionResult = Detection
 DetectionResults = Detections
 PreviewResult = Detections
+
+__all__ = [
+    "Box", "Crops", "Detection", "Detections",
+    "CropResult", "DetectedObject", "CroppedObject", "Boxes",
+    "CropResults", "DetectionResult", "DetectionResults", "PreviewResult",
+]

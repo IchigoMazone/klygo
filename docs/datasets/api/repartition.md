@@ -8,6 +8,7 @@ Replace an existing dataset split layout using the same deterministic engine as 
 
 - `source`, `target`: input and output dataset paths.
 - `ratios`: new train/validation/test ratios.
+- `format`: dataset format (default `"yolo"`). Currently only `"yolo"` is supported.
 - `overwrite`, `verbose`: replacement and progress controls.
 
 ## Returns

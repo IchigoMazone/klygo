@@ -1,7 +1,7 @@
 # `archive.verify`
 
 ```python
-archive.verify(archive_path)
+archive.verify(archive_path, *, verbose=False)
 ```
 
 Build a high-level archive verification report.
@@ -14,6 +14,7 @@ Archive paths accept both strings and `pathlib.Path` values. Format-specific wor
 ## Parameters
 
 - `archive_path`: `str or pathlib.Path` — Archive to inspect or modify.
+- `verbose`: `bool, default=False` — Print the verification report as a Rich table while returning the dictionary.
 
 ## Returns
 

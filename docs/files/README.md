@@ -3,7 +3,7 @@
 `klygo.files` provides 43 filesystem operations, path inspection helpers, streaming download tools, and multi-format structured data I/O.
 
 Interactive Google Colab Tutorial:
-[Open in Colab](https://colab.research.google.com/drive/1-Oo8ERqSuxns1OfZAdHY5jVMTrLVpJG-?usp=sharing)
+[Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/files/Document_Files_Overview.ipynb)
 
 The local, source-verified tutorial collection starts with
 [`tutorials/files/Document_Files_Overview.ipynb`](../../tutorials/files/Document_Files_Overview.ipynb) and

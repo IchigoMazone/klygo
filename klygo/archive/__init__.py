@@ -1,7 +1,7 @@
 """Create, extract, inspect, and transform archives.
 
 Colab tutorial:
-    https://colab.research.google.com/drive/1z5cuH35jFOkTtSkS4IcufF8ZygnylEJS?usp=sharing
+    https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/archive/Document_Archive_Overview.ipynb
 
 Public API (21 functions, 1 class):
     I/O (io.py):
