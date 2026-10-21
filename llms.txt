@@ -1,22 +1,37 @@
 # klygo
 
-> Python utilities for archive handling, filesystem operations, configuration, dataset management, and object detection.
+> A unified, high-performance Python toolkit for file operations, archives, configuration, dataset management, and zero-shot object detection pipelines.
 
-Klygo offers modular functional APIs and selected stateful interfaces.
+Klygo provides modular functional APIs and selected stateful interfaces across 12 public modules plus end-to-end integration workflows.
 
 ## Documentation
 
-- [Archive operations](docs/archive/README.md)
-- [Archive backend interfaces](docs/archive/backend/README.md)
-- [Filesystem and path operations](docs/files/README.md)
-- [Configuration](docs/config/README.md)
-- [Dataset operations](docs/datasets/README.md)
-- [Utilities](docs/utils/human_size.md)
+- [Files and Path Operations](docs/files/README.md): Path construction (`files.path`), filesystem operations (`mkdir`, `remove`, `copy`, `move`), structured data I/O (JSON, YAML, TOML, CSV, ENV), hashing (`hash`), and chunked streaming downloads (`download`).
+- [Archive Operations](docs/archive/README.md): Create, inspect, extract, search, verify, merge, and split ZIP, TAR, GZip, 7z (`py7zr`), and RAR (`rarfile`) archives with path traversal protection.
+- [Configuration](docs/config/README.md): Multi-format configuration management (YAML, JSON, TOML, ENV) with dot-path notation (`config.get`, `config.set`), validation, and object-oriented `Config` access.
+- [Dataset Operations](docs/datasets/README.md): YOLO dataset management: inspect statistics (`info`), load annotations (`load`), partition (`partition`), repartition (`repartition`), unpartition (`unpartition`), merge (`merge`), split (`split`), and remap class IDs (`remap_classes`).
+- [Media Operations](docs/media/README.md): Zero-RAM video and image reading (`media.load(..., stream=True)`), frame iteration (`iter_frames`), video probing (`probe`), and conversion to NumPy/PIL/Tensor (`to_array`, `to_pil`, `to_tensor`).
+- [Model Registry & Inference](docs/models/README.md): Unified AI model registry, auto-download, backend routing (Transformers, Ultralytics, Torchvision, KerasHub), and inference execution (`models.load`).
+- [Standardized Detection Outputs](docs/outputs/README.md): Standardized detection collections (`Box`, `Crops`, `Detection`, `Detections`) with built-in cropping, coordinate restoration, filtering, and serialization.
+- [Postprocessing Pipelines](docs/postprocessing/README.md): Composable postprocessing operations: Non-Maximum Suppression (`nms`, `suppress`), confidence thresholding (`threshold`, `filter_score`), box clipping (`clip`, `clip_boxes`), and top-k selection (`top`).
+- [Preprocessing Transforms](docs/preprocessing/README.md): Composable, lazy image transformations, color grading, geometric warping, normalization, and automatic spatial coordinate tracking (`trace`).
+- [Utilities](docs/utils/README.md): Formatting helpers (`human_size`), string conversions, and interactive Rich progress bars (`ProgressBar`).
+- [Runtime Validators](docs/validators/README.md): Strict runtime type and value validation (`validate_type`).
+- [Visualization](docs/visual/README.md): Draw bounding boxes with labels and scores (`draw_bboxes`), preview images (`show_image`), and plot dataset class distributions (`plot_dataset_stats`).
+- [Integration Workflows](docs/integration/README.md): End-to-end integration workflows testing authentic pretrained models against Ground Truth labels on Colab GPU or CPU.
 
 ## Guidance for coding assistants
 
-1. Import public APIs from package facades, such as `from klygo import files, archive, config`.
-2. Functional APIs return independent values unless mutation is explicitly documented.
-3. File and archive operations accept `str` and text-returning `os.PathLike[str]` inputs.
-4. Set `overwrite=True` when replacing existing outputs where supported.
-5. Archive extraction protects against path traversal.
+1. **Import facades**: Always import public APIs through top-level package facades:
+   `from klygo import archive, config, datasets, files, media, models, outputs, postprocessing, preprocessing, utils, validators, visual`
+2. **Cross-module dogfooding**: Never call raw `pathlib.Path`, `os.path`, or `shutil` directly in user-facing code or examples when a native `klygo.files` API exists (`files.path`, `files.save`, `files.load`, `files.mkdir`, `files.copy`, `files.remove`, `files.join`, etc.).
+3. **Pure documentation boundary**: The `docs/` tree strictly contains `.md` Markdown files. Never place test scripts or Python bytecode (`__pycache__`) in `docs/`.
+4. **Clean separation of code and artifacts**: Never place generated outputs, raw datasets, zip archives, or caches inside source or test directories. Put all artifacts under `artifacts/` (e.g. `artifacts/integration/<run-id>/`).
+5. **English-only language policy**:
+   - All exception messages (`raise ValueError(...)`, `raise TypeError(...)`, etc.) must strictly be written in clear, concise English.
+   - All docstrings, parameter descriptions, return types, and code comments must strictly be written in English.
+6. **Local model construction**: When building integration workflows or custom models, subclass `klygo.models.detection.base.Detector` or `BaseModel` and run authentic pretrained weights locally.
+7. **Hardware acceleration**: Workflows must support automatic hardware dispatch:
+   `device = "cuda" if torch.cuda.is_available() else "cpu"`
+   On Google Colab, document switching runtime via **Runtime → Change runtime type → T4 GPU**.
+8. **File and archive inputs**: All file and archive APIs accept `str` and `os.PathLike[str]` inputs. Pass `overwrite=True` when replacing existing files or archives.

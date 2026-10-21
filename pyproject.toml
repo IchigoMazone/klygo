@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "klygo"
 version = "2.1.0"
-description = "Python utilities for archive, config and zero-shot detection"
+description = "Unified high-performance Python toolkit for file operations, archives, configuration, dataset management, and zero-shot object detection pipelines."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
