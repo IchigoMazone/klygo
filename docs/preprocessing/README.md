@@ -1,6 +1,73 @@
-# `klygo.preprocessing`
+# `klygo.preprocessing` Documentation
 
-Build image transformations, metrics, and coordinate restoration pipelines. Import with `from klygo import preprocessing as p`. Operations applied to `media.LazyImage` remain lazy until materialization.
+`klygo.preprocessing` provides 137 lazy, backend-aware image transformations, quality metrics, conditional predicates, and reversible coordinate-trace utilities. Import with `from klygo import preprocessing as p`. Operations applied to `media.LazyImage` remain lazy until materialization.
+
+Interactive Google Colab Tutorial:
+[Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/preprocessing/Document_Preprocessing_Overview.ipynb)
+
+Local Tutorial Notebooks (`tutorials/preprocessing/`, 1-to-1 with `klygo/preprocessing/` submodules):
+- [`Document_Preprocessing_Overview.ipynb`](../../tutorials/preprocessing/Document_Preprocessing_Overview.ipynb)
+- [`Document_Preprocessing_Core.ipynb`](../../tutorials/preprocessing/Document_Preprocessing_Core.ipynb) (`klygo/preprocessing/core.py`)
+- [`Document_Preprocessing_Transforms.ipynb`](../../tutorials/preprocessing/Document_Preprocessing_Transforms.ipynb) (`klygo/preprocessing/transforms.py`)
+- [`Document_Preprocessing_Metrics.ipynb`](../../tutorials/preprocessing/Document_Preprocessing_Metrics.ipynb) (`klygo/preprocessing/metrics.py`)
+- [`Document_Preprocessing_Trace.ipynb`](../../tutorials/preprocessing/Document_Preprocessing_Trace.ipynb) (`klygo/preprocessing/trace.py`)
+
+---
+
+## 1. Lazy Pipelines, Quality Predicates & Automatic Coordinate Restoration (`trace`)
+
+<details open>
+<summary><b>How lazy execution, quality predicates, and coordinate restoration work together</b> <i>(Click to expand or collapse)</i></summary>
+
+1. **Lazy Pipelines on `media.LazyImage` (`Operation` & `Compose`)**:
+   - Every transform in `transforms.py` returns a serializable [`Operation`](api/Operation.md) and pipelines are built with [`compose()`](api/compose.md) / [`Compose`](api/Compose.md).
+   - Applying an `Operation` or `Compose` pipeline to a `media.LazyImage` appends operations to the image's lazy queue without decoding pixels until [`materialize()`](api/materialize.md) (or `.to_pil()` / `.to_numpy()`) is called. Use [`inspect()`](api/inspect.md) to preview queued steps and [`optimize()`](api/optimize.md) to fuse redundant operations.
+2. **Quality Scoring & Conditional Predicates (`Metric` & `Predicate`)**:
+   - Functions in `metrics.py` (such as [`blur_score()`](api/blur_score.md), [`brightness_score()`](api/brightness_score.md), [`contrast_score()`](api/contrast_score.md), and [`perceptual_hash()`](api/perceptual_hash.md)) return reusable [`Metric`](api/Metric.md) evaluators that compute fast preview statistics.
+   - Comparing a `Metric` (e.g., `p.brightness_score() < 80`) or combining conditions with [`all_of()`](api/all_of.md), [`any_of()`](api/any_of.md), [`not_()`](api/not_.md), and [`between()`](api/between.md) produces a [`Predicate`](api/Predicate.md) that gates transforms via `op.when(predicate)`.
+3. **Automatic Coordinate Restoration (`trace.py` & `models.Detector`)**:
+   - Geometry-changing transforms (`resize`, `letterbox`, `pad`, `crop`, `center_crop`, `flip`, `rotate`, `affine`, `perspective`, etc.) record exact before/after spatial parameters on the image's preprocessing trace.
+   - Call [`get_trace()`](api/get_trace.md) and pass the history to [`restore_boxes()`](api/restore_boxes.md), [`restore_points()`](api/restore_points.md), or [`restore_mask()`](api/restore_mask.md) to map predictions from preprocessed coordinates back to the original image space—or pass preprocessed images directly to `models.Detector`, which reads the trace automatically.
+
+</details>
+
+---
+
+## 2. Task-Oriented Cheatsheet (24 Common Preprocessing Tasks)
+
+<details open>
+<summary><b>Task-oriented quick reference (24 tasks)</b> <i>(Click to expand or collapse)</i></summary>
+
+| I want to... | Recommended API | Key Parameters / Example |
+| :--- | :--- | :--- |
+| **Chain multiple transforms into a reusable pipeline** | [`compose()`](api/compose.md) | `pipe = p.compose(p.auto_orient(), p.letterbox((640, 640)))` |
+| **Execute a lazy pipeline to PIL / NumPy / tensor** | [`materialize()`](api/materialize.md) | `pil_img = p.materialize(lazy_img, output="pil")` |
+| **Inspect or fuse queued operations before decoding** | [`inspect()`](api/inspect.md) / [`optimize()`](api/optimize.md) | `plan = p.inspect(lazy_img); fast_pipe = p.optimize(pipe)` |
+| **Run a transform conditionally based on image quality** | [`Predicate`](api/Predicate.md) / [`between()`](api/between.md) | `op = p.clahe().when(p.brightness_score() < 90)` |
+| **Combine multiple quality conditions** | [`all_of()`](api/all_of.md) / [`any_of()`](api/any_of.md) | `ok = p.all_of(p.blur_score() > 50, p.between(p.brightness_score(), 40, 220))` |
+| **Resize with aspect-ratio preservation & padding** | [`letterbox()`](api/letterbox.md) | `img2 = p.letterbox((640, 640), fill=(114, 114, 114))(img)` |
+| **Resize to exact width/height or fit inside bounds** | [`resize()`](api/resize.md) / [`contain()`](api/contain.md) | `p.resize((512, 512))(img)`, `p.contain((512, 512))(img)` |
+| **Crop a region or center window** | [`crop()`](api/crop.md) / [`center_crop()`](api/center_crop.md) | `p.crop((x1, y1, x2, y2))(img)`, `p.center_crop((224, 224))(img)` |
+| **Slice a high-resolution image into overlapping tiles** | [`tile()`](api/tile.md) | `tiles = p.tile((640, 640), overlap=0.2)(img)` |
+| **Fix camera EXIF orientation and strip metadata** | [`auto_orient()`](api/auto_orient.md) / [`strip_exif()`](api/strip_exif.md) | `clean = p.compose(p.auto_orient(), p.strip_exif())(img)` |
+| **Rotate, flip, or apply perspective warp** | [`rotate()`](api/rotate.md) / [`flip()`](api/flip.md) / [`perspective()`](api/perspective.md) | `p.rotate(90, expand=True)(img)`, `p.flip("horizontal")(img)` |
+| **Convert color spaces or channel ordering** | [`rgb()`](api/rgb.md) / [`bgr()`](api/bgr.md) / [`grayscale()`](api/grayscale.md) | `p.rgb()(img)`, `p.bgr()(img)`, `p.grayscale()(img)` |
+| **Boost local contrast on dark or hazy images** | [`clahe()`](api/clahe.md) / [`autocontrast()`](api/autocontrast.md) | `p.clahe(clip_limit=2.0, tile_grid_size=(8, 8))(img)` |
+| **Correct color cast and lighting temperature** | [`white_balance()`](api/white_balance.md) / [`gamma()`](api/gamma.md) | `p.white_balance()(img)`, `p.gamma(1.2)(img)` |
+| **Denoise or sharpen edges** | [`bilateral_filter()`](api/bilateral_filter.md) / [`unsharp_mask()`](api/unsharp_mask.md) | `p.bilateral_filter()(img)`, `p.unsharp_mask(radius=2.0)(img)` |
+| **Binarize documents with adaptive/Otsu thresholding** | [`adaptive_threshold()`](api/adaptive_threshold.md) / [`otsu_threshold()`](api/otsu_threshold.md) | `p.otsu_threshold()(img)` |
+| **Extract edges or apply morphological cleanup** | [`canny()`](api/canny.md) / [`opening()`](api/opening.md) / [`closing()`](api/closing.md) | `p.canny(100, 200)(img)`, `p.opening(kernel_size=3)(img)` |
+| **Normalize pixels and convert to NCHW model tensor** | [`normalize()`](api/normalize.md) / [`tensor()`](api/tensor.md) | `p.compose(p.rescale(1 / 255.0), p.normalize(), p.tensor())(img)` |
+| **Build a pipeline automatically from model input spec** | [`from_input_spec()`](api/from_input_spec.md) | `pipe = p.from_input_spec({"size": (640, 640), "letterbox": True})` |
+| **Apply deterministic data augmentations** | [`seed()`](api/seed.md) / [`color_jitter()`](api/color_jitter.md) | `p.compose(p.seed(42), p.random_flip(), p.color_jitter(0.2))(img)` |
+| **Measure blur, sharpness, brightness, or noise** | [`blur_score()`](api/blur_score.md) / [`brightness_score()`](api/brightness_score.md) | `score = p.blur_score()(img); lum = p.brightness_score()(img)` |
+| **Compute perceptual hash or image similarity** | [`perceptual_hash()`](api/perceptual_hash.md) / [`similarity_score()`](api/similarity_score.md) | `digest = p.perceptual_hash()(img)` |
+| **Inspect original vs. processed image dimensions** | [`original_size()`](api/original_size.md) / [`processed_size()`](api/processed_size.md) | `orig_wh = p.original_size(processed_img)` |
+| **Restore predicted boxes/points/masks to original image** | [`restore_boxes()`](api/restore_boxes.md) / [`get_trace()`](api/get_trace.md) | `boxes = p.restore_boxes(pred_boxes, p.get_trace(processed_img))` |
+
+</details>
+
+---
 
 ## Core
 

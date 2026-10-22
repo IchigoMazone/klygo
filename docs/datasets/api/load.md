@@ -1,95 +1,78 @@
 # `datasets.load`
 
-## Contract
-
 ```python
-datasets.load(source, verbose=True) -> Detections
+datasets.load(
+    source: str | os.PathLike[str],
+    format: str = "yolo",
+    verbose: bool = True,
+) -> klygo.outputs.detect.Detections
 ```
 
-Load a flat YOLO detection dataset into `klygo.outputs.detect.Detections`.
-For a real train/validation/test dataset, call `unpartition()` first and pass
-the created flat dataset to `load()`. The loader reads images through
-`klygo.media` and returns one `Detection` per image.
+Load all images and five-column YOLO detection annotations from a flat dataset directory or archive into a `Detections` collection.
 
-The input is unchanged. Flattening encodes relative paths to keep images with
-the same basename in different directories distinct.
+## Contract
+
+Reads a flat YOLO dataset (`images/<file>` and optional `labels/<file>.txt` alongside `data.yaml`), decodes each image into an in-memory RGB PIL image via `klygo.media`, and converts normalized `[class_id, cx, cy, width, height]` rows into pixel XYXY `Box` instances.
+
+For a partitioned dataset (`train`/`val`/`test` folders), call [`datasets.unpartition()`](unpartition.md) first and pass the resulting flat directory or `.zip` archive to `datasets.load()`. The input dataset is never modified.
 
 ## Parameters
 
-- `source`: flat dataset directory or supported archive; accepts strings,
-  `pathlib.Path`, and text-returning `os.PathLike` objects. Nested roots are
-  found using the existing dataset root discovery.
-- `verbose`: display loading progress; defaults to `True`.
+- `source`: `str | os.PathLike[str]` — flat YOLO dataset directory or supported archive containing `data.yaml`, `images/`, and optional `labels/`.
+- `format`: `str`, default `"yolo"` — annotation format to decode. Currently only `"yolo"` is supported.
+- `verbose`: `bool`, default `True` — display a progress bar while loading images and annotations.
 
 ## Returns
 
-A `Detections` collection with `source_type="images"`. Each detection contains:
-
-- An RGB PIL image fully loaded into memory.
-- Boxes converted from normalized YOLO center/size coordinates to pixel XYXY.
-- Ground-truth scores of `1.0`, rather than model confidence estimates.
-- `box.metadata["class_id"]` preserving the original numeric class ID, including
-  sparse IDs, and `box.metadata["ground_truth"] = True`.
-- Detection metadata with `dataset_source`, `relative_path` relative to the
-  input dataset's images directory, `split` (`train`, `val`, `test`, or `raw`),
-  and `ground_truth = True`.
-
-The output supports the existing `show()`, `crop()`, filtering, and
-postprocessing APIs. Images are materialized before return, so images and crops
-remain usable even if the source is removed.
-`source_path` is unset because the returned images are in memory; use the
-metadata fields for provenance.
+`klygo.outputs.detect.Detections` with `source_type="images"`. Each `Detection` item contains:
+- An in-memory RGB PIL `source_image` (safe to `.show()` or `.crop()` even after temporary workspaces are removed).
+- `Box` objects in pixel `[x1, y1, x2, y2]` coordinates with `score=1.0`, `box.metadata["class_id"]` preserving the original numeric ID (including sparse IDs), and `box.metadata["ground_truth"] = True`.
+- Detection metadata fields: `dataset_source`, `relative_path` (decoded back to the original split-relative path when flattened by `unpartition()`), `split` (`"train"`, `"val"`, `"test"`, or `"raw"`), and `ground_truth=True`.
 
 ## Errors and edge cases
 
-- Missing sources or image directories raise `FileNotFoundError`.
-- A partitioned dataset raises `ValueError` with guidance to call
-  `datasets.unpartition()` first.
-- Unsupported source files, invalid class metadata, or datasets without
-  supported images raise `ValueError`.
-- Missing or empty label files produce detections with zero boxes. Blank
-  annotation lines are ignored.
-- Labels must contain exactly `class_id cx cy width height`. Unknown class IDs,
-  nonnumeric values, nonfinite values, values outside `[0, 1]`, and zero box
-  dimensions raise `ValueError` with the label path and line number.
-- Coordinates are converted without clipping or rounding. Segmentation,
-  pose, and confidence-appended label rows are not accepted.
-- Unreadable or corrupt images raise `OSError`.
+- Raises `TypeError` if `format` is not a `str`.
+- Raises `FileNotFoundError` if `source` or its `images` directory is missing.
+- Raises `ValueError` if `format` is unsupported, if the dataset is partitioned (must call `datasets.unpartition()` first), if no supported images exist, or if any label line violates the five-column normalized YOLO detection contract (`class_id cx cy width height` with coordinates in `[0, 1]` and positive width/height).
+- Raises `OSError` if an image file is corrupt or unreadable.
+- Missing or empty `.txt` label files produce `Detection` objects with zero boxes.
 
 ## AI usage guidance
 
-Use this API after flattening when annotations should be available through the
-same output types used by model predictions. Memory use scales with all decoded
-image pixels, and flattening requires disk space for a copy of the dataset. Use
-[`info`](info.md) when only statistics are needed.
-
-Pass the directory or archive returned by [`unpartition`](unpartition.md)
-directly. Encoded filenames preserve their original relative paths and split
-metadata.
+Always flatten partitioned datasets with `datasets.unpartition()` before calling `datasets.load()`. Because `load()` materializes RGB pixels in memory for every image, use [`datasets.info()`](info.md) instead when you only need counts or class metadata.
 
 ## Example
 
-```python
-from klygo import datasets
-
-flat = datasets.unpartition("dataset.zip", "flat")
-results = datasets.load(flat)
-results[0].show()
-crops = results.crop()
-print(results.total_objects, results.label_counts)
-```
+See [`load.py`](../../../examples/datasets/load.py) for an executable example.
 
 ## Tests
 
-[`test_load.py`](../../../test/datasets/test_load.py) covers all splits,
-duplicate filenames, sparse class IDs, empty labels, path-like inputs, nested
-archive roots, cleanup, invalid labels, corrupt images, and export/load
-round trips.
+See [`test_load.py`](../../../test/datasets/test_load.py) for the executable behavioral contract.
 
 ## Complete executable example
 
-Run the self-contained [`load.py`](../../../examples/datasets/load.py) example:
+```python
+"""Executable example for klygo.datasets.load."""
 
-```bash
-python examples/datasets/load.py
+from tempfile import TemporaryDirectory
+from PIL import Image
+from klygo import config, datasets, files, media
+
+with TemporaryDirectory() as directory:
+    root = files.path(directory)
+    source = root / "source"
+    media.save(source / "images" / "train" / "sample_0.jpg", Image.new("RGB", (32, 24), "white"), verbose=False)
+    files.save(source / "labels" / "train" / "sample_0.txt", ["0 0.5 0.5 0.5 0.5"], overwrite=True, verbose=False)
+    config.save(
+        source / "data.yaml",
+        {"train": "images/train", "nc": 1, "names": ["apple"]},
+        overwrite=True,
+        verbose=False,
+    )
+
+    flat = datasets.unpartition(source, root / "flat", verbose=False)
+    results = datasets.load(flat, format="yolo", verbose=False)
+    assert len(results) == 1
+    assert results.total_objects == 1
+    assert results[0].metadata["split"] == "train"
 ```

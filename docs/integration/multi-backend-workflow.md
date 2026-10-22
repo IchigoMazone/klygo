@@ -39,4 +39,4 @@ Generated outputs (kept outside Git in `artifacts/integration/four-backends-eval
 - **Structured JSON report**: `artifacts/integration/four-backends-eval/report/multi_backend_report.json`
 - **Annotated preview images**: `artifacts/integration/four-backends-eval/preview/{yolo,yoloworld,torchvision,keras}_*.jpg`
 
-See the executable implementation in [`examples/integration/multi_backend_workflow.py`](../../examples/integration/multi_backend_workflow.py).
+See the executable implementation in [`examples/integration/multi_backend_workflow.py`](../../examples/integration/multi_backend_workflow.py) and the interactive notebook [`tutorials/integration/Multi_Backend_COCO15.ipynb`](../../tutorials/integration/Multi_Backend_COCO15.ipynb) ([Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/integration/Multi_Backend_COCO15.ipynb)).
