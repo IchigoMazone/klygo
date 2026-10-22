@@ -125,26 +125,191 @@ See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](back
 
 ---
 
-## 4. Custom Multi-Backend Detector Workflow
+## 4. How to Write a Custom `Detector` Subclass (All 4 Backends)
 
-Any framework detector (Torchvision Faster R-CNN, KerasHub RT-DETR / D-FINE, Ultralytics YOLO, or custom PyTorch models) integrates into Klygo by subclassing [`models.Detector`](api/Detector.md) and delegating tensor casting, execution, and output formatting to the built-in backend helpers:
+Every model in Klygo follows a standardized **4-step pattern** when subclassing [`models.Detector`](api/Detector.md):
+
+1. **`__init__(self, metadata=None, **kwargs)`**: Call `super().__init__(metadata=metadata, backend="...", **kwargs)`, instantiate the underlying framework model into `self.model` (and `self.processor` if needed), and set `self.names` (`dict[int, str]`).
+2. **`forward(self, images, prompt=None) -> list[Detection]`**:
+   - Read active runtime settings from `self.metadata["model"]`, `self.metadata.get("processor", {})`, and `self.metadata["post"]`.
+   - Preprocess `images` (`list[PIL.Image.Image]`) and cast tensors with `self.cast_inputs(...)`.
+   - Execute the forward pass with `self.run_inference(...)`.
+   - Normalize outputs with `self.format_results(...)` and pack into `Detection` frames via [`outputs.build_detections()`](../outputs/api/build_detections.md).
+3. **Define schema (`flags`, `priority`, `details`, `metadata`)**: Declare which parameter groups (`model`, `processor`, `post`) are locked vs overridable at `predict()` time.
+4. **Bind & Load (`configure` $\rightarrow$ `load`)**: Bind `implementation=YourDetectorClass` in [`models.configure()`](api/configure.md) and instantiate via [`models.load()`](api/load.md).
+
+<details open>
+<summary><b>Pattern A: Torchvision Detector (Faster R-CNN, RetinaNet, FCOS, SSD)</b> <i>(Click to expand)</i></summary>
+
+```python
+from torchvision.models.detection import (
+    FasterRCNN_MobileNet_V3_Large_FPN_Weights,
+    fasterrcnn_mobilenet_v3_large_fpn,
+)
+from torchvision.transforms.functional import pil_to_tensor
+from klygo import models, outputs
+
+
+class TorchvisionFasterRCNN(models.Detector):
+    def __init__(self, metadata=None, **kwargs):
+        super().__init__(metadata=metadata, backend="Torchvision", **kwargs)
+        weights = FasterRCNN_MobileNet_V3_Large_FPN_Weights.COCO_V1
+        self.model = fasterrcnn_mobilenet_v3_large_fpn(weights=weights).eval()
+        self.names = {i: name for i, name in enumerate(weights.meta["categories"])}
+
+    def forward(self, images, prompt=None):
+        post_cfg = dict(self.metadata.get("post", {}))
+        threshold = float(post_cfg.get("threshold", 0.25))
+
+        tensors = [pil_to_tensor(img.convert("RGB")).float() / 255.0 for img in images]
+        inputs = self.cast_inputs(tensors)
+        raw_outputs = self.run_inference(inputs)
+        formatted = self.format_results(raw_outputs)
+
+        for item in formatted:
+            keep = [i for i, s in enumerate(item["scores"]) if s >= threshold]
+            item["boxes"] = [item["boxes"][i] for i in keep]
+            item["scores"] = [item["scores"][i] for i in keep]
+            item["class_ids"] = [item["class_ids"][i] for i in keep]
+            item["labels"] = [self.names.get(cid, str(cid)) for cid in item["class_ids"]]
+
+        return outputs.build_detections(
+            images,
+            formatted,
+            metadata={"prompt": prompt, **post_cfg},
+            names=self.names,
+        )
+```
+
+</details>
+
+<details open>
+<summary><b>Pattern B: Keras 3 / KerasHub Detector (RT-DETR / D-FINE, RetinaNet)</b> <i>(Click to expand)</i></summary>
+
+```python
+import numpy as np
+import keras_hub
+from klygo import models, outputs
+
+
+class KerasHubDFineDetector(models.Detector):
+    def __init__(self, metadata=None, **kwargs):
+        super().__init__(metadata=metadata, backend="Keras", **kwargs)
+        self.model = keras_hub.models.ObjectDetector.from_preset(self.model_id)
+        self.names = {0: "person", 1: "bicycle", 2: "car", 7: "truck"}  # COCO mapping
+
+    def forward(self, images, prompt=None):
+        post_cfg = dict(self.metadata.get("post", {}))
+        threshold = float(post_cfg.get("threshold", 0.25))
+
+        batch = np.stack([np.asarray(img.convert("RGB"), dtype=np.float32) for img in images], axis=0)
+        # Keras backend automatically resizes to converter target, runs decode_predictions,
+        # filters -1 padding, and converts yxyx -> xyxy boxes.
+        inputs = self.cast_inputs(batch)
+        raw_outputs = self.run_inference(inputs)
+        formatted = self.format_results(raw_outputs)
+
+        for item in formatted:
+            keep = [i for i, s in enumerate(item["scores"]) if s >= threshold]
+            item["boxes"] = [item["boxes"][i] for i in keep]
+            item["scores"] = [item["scores"][i] for i in keep]
+            item["class_ids"] = [item["class_ids"][i] for i in keep]
+            item["labels"] = [self.names.get(cid, str(cid)) for cid in item["class_ids"]]
+
+        return outputs.build_detections(
+            images,
+            formatted,
+            metadata={"prompt": prompt, **post_cfg},
+            names=self.names,
+        )
+```
+
+</details>
+
+<details open>
+<summary><b>Pattern C: Ultralytics Detector (YOLOv8/v11 &amp; YOLO-World)</b> <i>(Click to expand)</i></summary>
+
+```python
+from ultralytics import YOLO
+from klygo import models, outputs
+
+
+class CustomUltralyticsDetector(models.Detector):
+    def __init__(self, metadata=None, **kwargs):
+        super().__init__(metadata=metadata, backend="Ultralytics", **kwargs)
+        self.model = YOLO(self.model_id)
+        self.names = dict(self.model.names)
+
+    def forward(self, images, prompt=None):
+        post_cfg = dict(self.metadata.get("post", {}))
+        results = self.model(
+            images,
+            conf=post_cfg.get("threshold", 0.25),
+            iou=post_cfg.get("iou", 0.7),
+            verbose=False,
+        )
+        return outputs.build_detections(
+            images,
+            self.format_results(results),
+            metadata={"prompt": prompt, **post_cfg},
+            names=self.names,
+        )
+```
+
+</details>
+
+<details open>
+<summary><b>Pattern D: Hugging Face Transformers Detector (Grounding DINO / DETR)</b> <i>(Click to expand)</i></summary>
+
+```python
+from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
+from klygo import models, outputs
+
+
+class CustomHFZeroShotDetector(models.Detector):
+    def __init__(self, metadata=None, **kwargs):
+        super().__init__(metadata=metadata, backend="Hugging Face", **kwargs)
+        self.processor = AutoProcessor.from_pretrained(self.model_id)
+        self.model = AutoModelForZeroShotObjectDetection.from_pretrained(self.model_id).eval()
+
+    def forward(self, images, prompt=None):
+        post_cfg = dict(self.metadata.get("post", {}))
+        labels = models.utils.normalize_prompt(prompt or ["object"])
+        inputs = self.processor(images=images, text=[labels] * len(images), return_tensors="pt")
+        inputs = self.cast_inputs(inputs)
+        raw_outputs = self.run_inference(inputs)
+
+        out_dev = self.get_output_device(raw_outputs)
+        input_ids = self.sync_device(inputs.get("input_ids"), out_dev)
+        target_sizes = [img.size[::-1] for img in images]
+        results = self.processor.post_process_grounded_object_detection(
+            raw_outputs,
+            input_ids,
+            threshold=post_cfg.get("threshold", 0.25),
+            text_threshold=post_cfg.get("text_threshold", 0.3),
+            target_sizes=target_sizes,
+        )
+        return outputs.build_detections(images, results, metadata={"prompt": labels, **post_cfg})
+```
+
+</details>
+
+<details open>
+<summary><b>Step 3 &amp; 4: Configure Schema and Load Any Custom Detector</b> <i>(Click to expand)</i></summary>
 
 ```python
 from klygo import models, outputs
 
 
-class CustomBackendDetector(models.Detector):
+class MinimalDetector(models.Detector):
     def __init__(self, metadata=None, **kwargs):
         super().__init__(metadata=metadata, backend="Torchvision", **kwargs)
-        # Attach self.model (e.g., fasterrcnn_mobilenet_v3_large_fpn or KerasHub ObjectDetector)
         self.names = {1: "person", 2: "bicycle", 3: "car"}
 
     def forward(self, images, prompt=None):
         threshold = float(self.metadata.get("post", {}).get("threshold", 0.25))
-        # Use self.cast_inputs(), self.run_inference(), and self.format_results()
-        # to automatically dispatch to the active backend adapter.
         raw_predictions = [
-            {"boxes": [[12.0, 18.0, 140.0, 220.0]], "scores": [0.94], "labels": [1], "class_ids": [1]}
+            {"boxes": [[12.0, 18.0, 140.0, 220.0]], "scores": [0.94], "labels": ["person"], "class_ids": [1]}
             for _ in images
         ]
         return outputs.build_detections(
@@ -155,11 +320,12 @@ class CustomBackendDetector(models.Detector):
         )
 
 
+flags = models.flags(model=False, post=True)
 schema = models.metadata(
-    models.flags(model=False, post=True),
-    priority=models.priority(models.flags(model=False, post=True), post=("threshold",)),
+    flags,
+    priority=models.priority(flags, post=("threshold", "iou")),
     details=models.details(
-        name="CustomBackendDetector",
+        name="MinimalDetector",
         task="Object-Detection",
         backend="Torchvision",
         library="torchvision",
@@ -168,10 +334,12 @@ schema = models.metadata(
 configured = models.configure(
     "custom-fasterrcnn",
     metadata=schema,
-    implementation=CustomBackendDetector,
+    implementation=MinimalDetector,
     threshold=0.4,
 )
 detector = models.load(configured)
 ```
+
+</details>
 
 For a complete, real-image benchmark running **Ultralytics YOLOv8**, **Ultralytics YOLO-World**, **Torchvision Faster R-CNN**, and **KerasHub RT-DETR (D-FINE)** side by side on COCO15, see [`examples/integration/multi_backend_workflow.py`](../../examples/integration/multi_backend_workflow.py) and the [integration workflows guide](../integration/README.md).
