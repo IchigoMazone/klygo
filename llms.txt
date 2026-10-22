@@ -6,6 +6,7 @@ Klygo provides modular functional APIs and selected stateful interfaces across 1
 
 ## Documentation
 
+- [AI Agent Guide (AGENTS.md)](AGENTS.md): Complete architectural map, dogfooding rules, 4-backend `Detector` templates, and quality gate commands for AI coding assistants.
 - [Files and Path Operations](docs/files/README.md): Path construction (`files.path`), filesystem operations (`mkdir`, `remove`, `copy`, `move`), structured data I/O (JSON, YAML, TOML, CSV, ENV), hashing (`hash`), and chunked streaming downloads (`download`).
 - [Archive Operations](docs/archive/README.md): Create, inspect, extract, search, verify, merge, and split ZIP, TAR, GZip, 7z (`py7zr`), and RAR (`rarfile`) archives with path traversal protection.
 - [Configuration](docs/config/README.md): Multi-format configuration management (YAML, JSON, TOML, ENV) with dot-path notation (`config.get`, `config.set`), validation, and object-oriented `Config` access.
