@@ -155,13 +155,13 @@ class LocalYOLOWorldDetector(Detector):
 
 
 class LocalTorchvisionDetector(Detector):
-    """Local Torchvision Detector wrapping a pretrained SSDLite model."""
+    """Local Torchvision Detector wrapping a pretrained Faster R-CNN FPN model."""
 
     def __init__(self, categories: List[str], device: str | None = None) -> None:
         metadata = {
-            "model_id": "local-torchvision-ssdlite",
+            "model_id": "local-torchvision-fasterrcnn",
             "details": {
-                "name": "Local Torchvision Detector",
+                "name": "Local Torchvision Faster R-CNN Detector",
                 "task": "Object-Detection",
                 "backend": "Torchvision",
                 "library": "torchvision",
@@ -175,8 +175,8 @@ class LocalTorchvisionDetector(Detector):
         import torchvision.models.detection as tv_det
 
         self.device_name = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        weights = tv_det.SSDLite320_MobileNet_V3_Large_Weights.COCO_V1
-        self.model = tv_det.ssdlite320_mobilenet_v3_large(weights=weights).to(self.device_name)
+        weights = tv_det.FasterRCNN_MobileNet_V3_Large_FPN_Weights.COCO_V1
+        self.model = tv_det.fasterrcnn_mobilenet_v3_large_fpn(weights=weights).to(self.device_name)
         self.model.eval()
         self.categories = {i: name for i, name in enumerate(categories)}
         self.names = dict(self.categories)
@@ -187,7 +187,7 @@ class LocalTorchvisionDetector(Detector):
         prompt: List[str] | None = None,
         **kwargs,
     ) -> List[Detection]:
-        tensors = [media.to_tensor(img).to(self.device_name) for img in images]
+        tensors = self.cast_inputs([media.to_tensor(img) for img in images])
         raw_outputs = self.run_inference(tensors)
         formatted = self.format_results(raw_outputs)
 
@@ -198,26 +198,27 @@ class LocalTorchvisionDetector(Detector):
 
         results = outputs.build_detections(images, formatted, names=self.names)
         if prompt:
-            requested = {prompt} if isinstance(prompt, str) else set(prompt)
-            filtered = []
-            for det in results:
-                kept = [box for box in det.objects if box.label in requested]
-                filtered.append(Detection(source_image=det.source_image, objects=kept))
-            return filtered
+            requested = [prompt] if isinstance(prompt, str) else list(prompt)
+            return [postprocessing.select(det, labels=requested) for det in results]
         return results
 
 
 class LocalKerasDetector(Detector):
-    """Local Keras 3 Detector with PyTorch compute engine."""
+    """Local KerasHub RT-DETR (D-FINE) Detector with PyTorch compute engine."""
 
-    def __init__(self, target_classes: List[str], device: str | None = None) -> None:
+    def __init__(
+        self,
+        categories: Dict[int, str],
+        preset: str = "dfine_nano_coco",
+        device: str | None = None,
+    ) -> None:
         metadata = {
-            "model_id": "local-keras-detector",
+            "model_id": f"local-kerashub-{preset}",
             "details": {
-                "name": "Local Keras Detector",
+                "name": "Local KerasHub RT-DETR (D-FINE) Detector",
                 "task": "Object-Detection",
                 "backend": "Keras",
-                "library": "keras",
+                "library": "keras_hub",
             },
             "flags": {"model": False, "post": True},
             "model": {},
@@ -225,21 +226,12 @@ class LocalKerasDetector(Detector):
             "post": {"threshold": 0.25},
         }
         super().__init__(metadata=metadata, backend="Keras")
-        self.target_classes = list(target_classes)
-        self.names = {i: name for i, name in enumerate(self.target_classes)}
+        import keras_hub
 
-        # Build a lightweight Keras 3 detection network
-        input_layer = layers.Input(shape=(320, 320, 3), name="image_input")
-        x = layers.Conv2D(16, (3, 3), padding="same", activation="relu")(input_layer)
-        x = layers.MaxPooling2D((2, 2))(x)
-        x = layers.Conv2D(32, (3, 3), padding="same", activation="relu")(x)
-        x = layers.GlobalAveragePooling2D()(x)
-
-        # Heads for box regression (normalized [x1, y1, x2, y2]) and classification logits
-        box_out = layers.Dense(4, activation="sigmoid", name="boxes")(x)
-        cls_out = layers.Dense(len(self.target_classes), activation="softmax", name="scores")(x)
-
-        self.model = keras.Model(inputs=input_layer, outputs={"boxes": box_out, "scores": cls_out})
+        self.device_name = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = keras_hub.models.ObjectDetector.from_preset(preset)
+        self.categories = dict(categories)
+        self.names = dict(self.categories)
 
     def forward(
         self,
@@ -247,50 +239,22 @@ class LocalKerasDetector(Detector):
         prompt: List[str] | None = None,
         **kwargs,
     ) -> List[Detection]:
-        # Resize images to 320x320 array
-        resized_arrs = []
+        raw_list = []
         for img in images:
-            pil_img = media.to_pil(img).resize((320, 320))
-            resized_arrs.append(media.to_array(pil_img) / 255.0)
+            inputs_tensor = self.cast_inputs([img])
+            raw_outputs = self.run_inference(inputs_tensor)
+            formatted = self.format_results(raw_outputs)
+            for item in formatted:
+                item["labels"] = [
+                    self.categories.get(cid, str(cid)) for cid in item["class_ids"]
+                ]
+                raw_list.append(item)
 
-        inputs_tensor = self.cast_inputs(resized_arrs)
-        preds = self.run_inference(inputs_tensor)
-
-        all_detections = []
-        for idx, img in enumerate(images):
-            w, h = img.width, img.height
-            # Extract sample outputs
-            b_norm = preds["boxes"][idx]
-            s_all = preds["scores"][idx]
-
-            if hasattr(b_norm, "detach"):
-                b_norm = b_norm.detach().cpu().numpy()
-            if hasattr(s_all, "detach"):
-                s_all = s_all.detach().cpu().numpy()
-
-            best_cls_id = int(s_all.argmax())
-            best_score = float(s_all[best_cls_id])
-            label_name = self.target_classes[best_cls_id]
-
-            # Ensure valid bounding box coordinates [xmin, ymin, xmax, ymax]
-            xmin = float(min(b_norm[0], b_norm[2]) * w)
-            ymin = float(min(b_norm[1], b_norm[3]) * h)
-            xmax = float(max(b_norm[0], b_norm[2]) * w)
-            ymax = float(max(b_norm[1], b_norm[3]) * h)
-            abs_box = [xmin, ymin, max(xmin + 1.0, xmax), max(ymin + 1.0, ymax)]
-            box_obj = Box(
-                id=0,
-                class_id=best_cls_id,
-                label=label_name,
-                score=best_score,
-                box=abs_box,
-            )
-            # Filter by prompt and threshold
-            prompt_set = {prompt} if isinstance(prompt, str) else set(prompt or self.target_classes)
-            objects = [box_obj] if (label_name in prompt_set and best_score >= 0.25) else []
-            all_detections.append(Detection(source_image=img, objects=objects))
-
-        return all_detections
+        results = outputs.build_detections(images, raw_list, names=self.names)
+        if prompt:
+            requested = [prompt] if isinstance(prompt, str) else list(prompt)
+            return [postprocessing.select(det, labels=requested) for det in results]
+        return results
 
 
 # =============================================================================
@@ -315,10 +279,15 @@ def evaluate_model_on_dataset(
     latencies = []
 
     for label in assigned_classes:
-        # Select 1 representative positive and 1 negative image
-        pos_id = next(
-            (k for k, f in sorted(frames_by_id.items()) if any(b.label == label for b in f.objects)),
-            None,
+        # Select 1 representative positive image (with the clearest foreground object) and 1 negative image
+        pos_id = max(
+            (k for k, f in frames_by_id.items() if any(b.label == label for b in f.objects)),
+            key=lambda k: max(
+                (b.box[2] - b.box[0]) * (b.box[3] - b.box[1])
+                for b in frames_by_id[k].objects
+                if b.label == label
+            ),
+            default=None,
         )
         neg_id = next(
             (k for k, f in sorted(frames_by_id.items()) if all(b.label != label for b in f.objects)),
@@ -337,8 +306,12 @@ def evaluate_model_on_dataset(
             pred_det = model.predict(image, prompt=[label], verbose=False)[0]
             latencies.append(time.perf_counter() - t0)
 
-            # Apply postprocessing threshold
-            pred_det = postprocessing.apply(pred_det, postprocessing.threshold(0.25))
+            # Apply postprocessing threshold and NMS
+            pred_det = postprocessing.apply(
+                pred_det,
+                postprocessing.threshold(0.35),
+                postprocessing.nms(0.50),
+            )
             pred_boxes = [b for b in pred_det.objects if b.label == label]
             class_stats[label]["pred"] += len(pred_boxes)
 
@@ -373,7 +346,8 @@ def evaluate_model_on_dataset(
                     labels=bboxes_labels,
                     scores=bboxes_scores,
                 )
-                out_preview = files.join(preview_dir, f"{model_name}_{label}_{image_id}.jpg")
+                safe_name = model_name.replace("/", "-").replace(" ", "_")
+                out_preview = files.join(preview_dir, f"{safe_name}_{label}_{image_id}.jpg")
                 media.save(out_preview, vis_img, overwrite=True, verbose=False)
 
     # Compute overall metrics
@@ -438,8 +412,8 @@ def run_four_backend_evaluation(
     class_allocation = {
         "YOLO (Ultralytics)": ["person", "car", "knife", "chair"],
         "YOLO-World (Ultralytics)": ["umbrella", "handbag", "bottle", "cup"],
-        "Torchvision": ["wine glass", "spoon", "bowl", "book"],
-        "Keras (Keras 3)": ["elephant", "traffic light", "teddy bear"],
+        "Faster R-CNN (Torchvision)": ["wine glass", "spoon", "bowl", "book"],
+        "RT-DETR / D-FINE (KerasHub)": ["elephant", "traffic light", "teddy bear"],
     }
 
     # 4. Instantiate the 4 authentic local Detector models
@@ -447,16 +421,19 @@ def run_four_backend_evaluation(
     device = "cuda" if torch.cuda.is_available() else "cpu"
     console.print(f"[dim]Hardware device: {device}[/dim]")
 
-    # Load official COCO categories for Torchvision
+    # Load official COCO categories for Torchvision Faster R-CNN
     import torchvision.models.detection as tv_det
-    tv_weights = tv_det.SSDLite320_MobileNet_V3_Large_Weights.COCO_V1
-    coco_categories = tv_weights.meta["categories"]
+    tv_weights = tv_det.FasterRCNN_MobileNet_V3_Large_FPN_Weights.COCO_V1
+    coco_91_categories = tv_weights.meta["categories"]
+
+    yolo_det = LocalYOLODetector("yolov8n.pt", device=device)
+    coco_80_categories = dict(yolo_det.names)
 
     models_suite: Dict[str, Tuple[Detector, List[str]]] = {
-        "YOLO (Ultralytics)": (LocalYOLODetector("yolov8n.pt", device=device), class_allocation["YOLO (Ultralytics)"]),
+        "YOLO (Ultralytics)": (yolo_det, class_allocation["YOLO (Ultralytics)"]),
         "YOLO-World (Ultralytics)": (LocalYOLOWorldDetector("yolov8s-worldv2.pt", device=device), class_allocation["YOLO-World (Ultralytics)"]),
-        "Torchvision": (LocalTorchvisionDetector(categories=coco_categories, device=device), class_allocation["Torchvision"]),
-        "Keras (Keras 3)": (LocalKerasDetector(target_classes=class_allocation["Keras (Keras 3)"], device=device), class_allocation["Keras (Keras 3)"]),
+        "Faster R-CNN (Torchvision)": (LocalTorchvisionDetector(categories=coco_91_categories, device=device), class_allocation["Faster R-CNN (Torchvision)"]),
+        "RT-DETR / D-FINE (KerasHub)": (LocalKerasDetector(categories=coco_80_categories, preset="dfine_small_coco", device=device), class_allocation["RT-DETR / D-FINE (KerasHub)"]),
     }
 
     # 5. Run evaluation and compile results
@@ -537,7 +514,7 @@ def run_four_backend_evaluation(
 
     # 7. Save persistent evaluation report using files.save
     report_file = files.join(report_dir, "multi_backend_report.json")
-    files.save(report_file, results_list, verbose=False)
+    files.save(report_file, results_list, overwrite=True, verbose=False)
     console.print(f"\n[bold green][OK] Full evaluation report saved to:[/bold green] {report_file}")
     console.print(f"[bold green][OK] Annotated visual previews saved to:[/bold green] {preview_dir}")
 

@@ -1,8 +1,7 @@
-"""
-Keras 3 & KerasHub Backend Logic (klygo.models.backend.keras).
-Chứa toàn bộ logic xử lý đặc thù cho hệ sinh thái Keras 3 và kho mô hình KerasHub.
-Tự động hỗ trợ cả 3 computation engines: PyTorch (torch), JAX (jax), và TensorFlow (tensorflow).
-Lazy-import để không gây crash nếu môi trường chưa cài đặt keras / keras_hub.
+"""Keras 3 and KerasHub backend adapter (`klygo.models.backend.keras`).
+
+Supports PyTorch (`torch`), JAX (`jax`), and TensorFlow (`tensorflow`) computation engines
+with lazy imports so environments without `keras` / `keras_hub` remain unaffected.
 """
 
 import importlib
@@ -23,10 +22,7 @@ def _torch_runtime():
 
 
 def ensure_backend() -> str:
-    """
-    Tự động dò tìm và cấu hình KERAS_BACKEND tối ưu nếu chưa được thiết lập.
-    Thứ tự ưu tiên: PyTorch (torch) -> JAX (jax) -> TensorFlow (tensorflow).
-    """
+    """Configure `KERAS_BACKEND` automatically if not already set (priority: torch -> jax -> tensorflow)."""
     if "KERAS_BACKEND" not in os.environ:
         try:
             import torch
@@ -56,23 +52,19 @@ def _require_keras():
 
 
 def get_active_backend() -> str:
-    """Trả về backend tính toán hiện hành của Keras (torch, jax, hoặc tensorflow)."""
+    """Return the active Keras computation backend (`torch`, `jax`, or `tensorflow`)."""
     ensure_backend()
     keras = _require_keras()
     return keras.backend.backend()
 
 
 def cast_inputs(inputs: Any, dev: Any = None, dtype: Any = None) -> Any:
-    """
-    Chuyển đổi dữ liệu ảnh/mảng NumPy sang dạng Tensor đa nền tảng của Keras 3.
-    Tự động hỗ trợ đồng bộ theo backend tính toán (PyTorch, JAX, TensorFlow).
-    """
+    """Convert image or NumPy inputs into Keras 3 tensors for the active compute backend."""
     ensure_backend()
     keras = _require_keras()
     import numpy as np
     from klygo import media
 
-    # Nếu đã là Keras/Backend tensor
     if hasattr(inputs, "shape") and hasattr(inputs, "dtype") and not isinstance(inputs, np.ndarray):
         return inputs
 
@@ -102,21 +94,53 @@ def cast_inputs(inputs: Any, dev: Any = None, dtype: Any = None) -> Any:
 
 
 def run_inference(model: Any, inputs: Any, **model_kwargs) -> Any:
-    """
-    Thực thi forward pass của mô hình Keras 3 / KerasHub.
-    Ưu tiên gọi model.predict(inputs) hoặc model(inputs, training=False).
-    """
+    """Execute a forward pass on a Keras 3 or KerasHub model."""
     if model is None:
         return inputs
 
-    # 1. KerasHub / Keras model.predict
-    if hasattr(model, "predict") and callable(model.predict):
+    bbox_fmt = getattr(
+        getattr(model, "prediction_decoder", model),
+        "bounding_box_format",
+        getattr(model, "bounding_box_format", None),
+    )
+
+    # 1. KerasHub ObjectDetector with preprocessor + decode_predictions
+    if hasattr(model, "decode_predictions") and callable(model.decode_predictions):
         try:
-            return model.predict(inputs, verbose=0, **model_kwargs)
-        except TypeError:
+            keras = _require_keras()
+            preprocessor = getattr(model, "preprocessor", None)
+            if callable(preprocessor):
+                img_conv = getattr(preprocessor, "image_converter", None)
+                target_size = getattr(img_conv, "image_size", None) if img_conv is not None else None
+                prep_inputs = (
+                    keras.ops.image.resize(inputs, target_size)
+                    if target_size is not None and hasattr(keras.ops, "image")
+                    else inputs
+                )
+                prep = preprocessor(prep_inputs)
+            else:
+                prep = inputs
+            raw_preds = model(prep, training=False, **model_kwargs)
+            decoded = model.decode_predictions(raw_preds, inputs)
+            if isinstance(decoded, dict) and bbox_fmt:
+                decoded = dict(decoded)
+                decoded["_bounding_box_format"] = str(bbox_fmt)
+            return decoded
+        except Exception:
             pass
 
-    # 2. Direct callable
+    # 2. Standard Keras model.predict
+    if hasattr(model, "predict") and callable(model.predict):
+        try:
+            out = model.predict(inputs, verbose=0, **model_kwargs)
+            if isinstance(out, dict) and bbox_fmt:
+                out = dict(out)
+                out["_bounding_box_format"] = str(bbox_fmt)
+            return out
+        except (TypeError, ImportError):
+            pass
+
+    # 3. Direct callable
     if callable(model):
         try:
             return model(inputs, training=False, **model_kwargs)
@@ -127,7 +151,7 @@ def run_inference(model: Any, inputs: Any, **model_kwargs) -> Any:
 
 
 def _to_numpy_array(tensor: Any) -> Optional[Any]:
-    """Chuyển đổi linh hoạt tensor từ Keras 3 (torch/jax/tf) sang NumPy ndarray."""
+    """Convert a Keras 3 tensor (torch/jax/tf) to a NumPy ndarray."""
     if tensor is None:
         return None
     try:
@@ -148,11 +172,7 @@ def _to_numpy_array(tensor: Any) -> Optional[Any]:
 
 
 def format_results(raw_outputs: Any) -> List[Dict[str, Any]]:
-    """
-    Chuẩn hóa kết quả nhận diện từ output của KerasHub / KerasCV.
-    Hỗ trợ định dạng dict chuẩn của KerasHub:
-    {'boxes': ..., 'confidence': ... (hoặc 'scores'), 'classes': ... (hoặc 'labels')}.
-    """
+    """Normalize KerasHub / KerasCV detection outputs into `[{boxes, scores, labels, class_ids}]`."""
     raw_list: List[Dict[str, Any]] = []
     if raw_outputs is None:
         return raw_list
@@ -161,10 +181,13 @@ def format_results(raw_outputs: Any) -> List[Dict[str, Any]]:
         boxes_tensor = raw_outputs.get("boxes", raw_outputs.get("detection_boxes"))
         scores_tensor = raw_outputs.get("confidence", raw_outputs.get("scores", raw_outputs.get("detection_scores")))
         classes_tensor = raw_outputs.get("classes", raw_outputs.get("labels", raw_outputs.get("detection_classes")))
+        num_det_tensor = raw_outputs.get("num_detections")
+        bbox_fmt = str(raw_outputs.get("_bounding_box_format", "")).lower()
 
         b_np = _to_numpy_array(boxes_tensor)
         s_np = _to_numpy_array(scores_tensor)
         c_np = _to_numpy_array(classes_tensor)
+        n_np = _to_numpy_array(num_det_tensor)
 
         if b_np is not None and s_np is not None:
             batch_size = len(b_np)
@@ -173,11 +196,20 @@ def format_results(raw_outputs: Any) -> List[Dict[str, Any]]:
                 sample_b = b_np[b_idx]
                 sample_s = s_np[b_idx]
                 sample_c = c_np[b_idx] if c_np is not None else [0] * len(sample_s)
+                limit = int(n_np[b_idx]) if n_np is not None else len(sample_s)
 
-                for box, score, cls_id in zip(sample_b, sample_s, sample_c):
-                    boxes_data.append([float(x) for x in box])
-                    scores_data.append(float(score))
+                for idx, (box, score, cls_id) in enumerate(zip(sample_b, sample_s, sample_c)):
+                    if idx >= limit:
+                        break
+                    score_val = float(score)
                     class_id = int(cls_id)
+                    if score_val < 0.0 or class_id < 0:
+                        continue
+                    coords = [float(x) for x in box]
+                    if bbox_fmt == "yxyx" and len(coords) == 4:
+                        coords = [coords[1], coords[0], coords[3], coords[2]]
+                    boxes_data.append(coords)
+                    scores_data.append(score_val)
                     class_ids.append(class_id)
                     labels_data.append(str(class_id))
 
@@ -195,10 +227,7 @@ def format_results(raw_outputs: Any) -> List[Dict[str, Any]]:
 
 
 def current_device(model: Any) -> Any:
-    """
-    Dò tìm thiết bị thực tế của model Keras 3 theo backend đang chạy
-    (PyTorch CUDA/CPU, JAX device, hoặc TensorFlow GPU/CPU).
-    """
+    """Detect the active device for a Keras 3 model across PyTorch, TensorFlow, or JAX."""
     active_backend = get_active_backend()
     if active_backend == "torch":
         try:
@@ -232,7 +261,7 @@ def current_device(model: Any) -> Any:
 
 
 def current_dtype(model: Any) -> str:
-    """Dò tìm dtype hiện tại của model Keras 3 / KerasHub."""
+    """Return the active dtype of a Keras 3 / KerasHub model."""
     if model is not None:
         if hasattr(model, "compute_dtype") and model.compute_dtype is not None:
             return str(getattr(model.compute_dtype, "name", model.compute_dtype))
@@ -358,11 +387,7 @@ def clear_cache() -> None:
 
 
 def save(model: Any, output_dir: str) -> None:
-    """
-    Lưu model Keras 3 / KerasHub:
-    1. Nếu là KerasHub preset -> model.save_to_preset(abs_out)
-    2. Nếu là Keras model chuẩn -> model.save(abs_out / "model.keras")
-    """
+    """Save a Keras 3 or KerasHub model to `output_dir`."""
     from klygo import files
     abs_out = files.resolve(output_dir)
     files.mkdir(abs_out)
@@ -376,7 +401,7 @@ def save(model: Any, output_dir: str) -> None:
             except Exception:
                 pass
 
-        # 2. File định dạng chuẩn .keras
+        # 2. Standard .keras format
         if hasattr(model, "save") and callable(model.save):
             try:
                 keras_file = files.join(abs_out, "model.keras")
@@ -387,7 +412,7 @@ def save(model: Any, output_dir: str) -> None:
 
 
 def reset(model: Any) -> None:
-    """Dọn dẹp session Keras và giải phóng bộ nhớ khi reset trạng thái."""
+    """Clear the Keras session when resetting model state."""
     try:
         import keras
         if hasattr(keras.backend, "clear_session"):
@@ -397,7 +422,7 @@ def reset(model: Any) -> None:
 
 
 def unload(model: Any) -> None:
-    """Thu hồi tài nguyên Keras model."""
+    """Release Keras model resources."""
     try:
         import keras
         if hasattr(keras.backend, "clear_session"):
