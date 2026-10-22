@@ -11,6 +11,25 @@ from typing import Any, Optional, Dict, List
 
 KERAS_BACKENDS = {"Keras", "KerasHub", "TensorFlow"}
 
+__all__ = [
+    "KERAS_BACKENDS",
+    "backend_family",
+    "current_device",
+    "current_dtype",
+    "is_accelerator_available",
+    "synchronize",
+    "clear_cache",
+    "inference_context",
+    "cast_inputs",
+    "run_inference",
+    "get_output_device",
+    "sync_device",
+    "format_results",
+    "reset",
+    "unload",
+    "save",
+]
+
 
 def _import_adapter(name: str):
     """Import one framework adapter without loading unrelated dependencies."""
@@ -18,7 +37,7 @@ def _import_adapter(name: str):
 
 
 def backend_family(backend: Optional[str]) -> str:
-    """Normalize decorated names such as ``Hugging Face (Offline)``."""
+    """Normalize decorated backend names such as ``'Hugging Face (Offline)'`` to ``'Hugging Face'``."""
     return (backend or "").split(" (", 1)[0]
 
 
@@ -37,7 +56,7 @@ def _runtime_adapter(backend: Optional[str]):
 
 
 def current_device(model: Any, backend: Optional[str] = None) -> Any:
-    """Detect the active device hosting the wrapped model."""
+    """Detect the active device hosting the wrapped model across supported backends."""
     adapter = _runtime_adapter(backend)
     if adapter is not None:
         return adapter.current_device(model)
@@ -45,7 +64,7 @@ def current_device(model: Any, backend: Optional[str] = None) -> Any:
 
 
 def current_dtype(model: Any, backend: Optional[str] = None) -> Any:
-    """Detect the numerical dtype of the wrapped model."""
+    """Detect the numerical precision (dtype) of the wrapped model across supported backends."""
     adapter = _runtime_adapter(backend)
     if adapter is not None:
         return adapter.current_dtype(model)
@@ -53,7 +72,7 @@ def current_dtype(model: Any, backend: Optional[str] = None) -> Any:
 
 
 def is_accelerator_available(backend: str, device: Any = None) -> bool:
-    """Ask the selected framework whether its accelerator is available."""
+    """Return whether the selected backend's hardware accelerator (e.g., CUDA) is available."""
     adapter = _runtime_adapter(backend)
     if adapter is None:
         return False
@@ -65,21 +84,21 @@ def synchronize(
     device: Any = None,
     value: Any = None,
 ) -> None:
-    """Synchronize work through the selected framework adapter."""
+    """Synchronize asynchronous accelerator queues through the selected backend adapter."""
     adapter = _runtime_adapter(backend)
     if adapter is not None:
         adapter.synchronize(device=device, value=value)
 
 
 def clear_cache(backend: str) -> None:
-    """Clear only caches that the selected framework can safely release."""
+    """Release unused accelerator memory caches held by the selected backend framework."""
     adapter = _runtime_adapter(backend)
     if adapter is not None:
         adapter.clear_cache()
 
 
 def inference_context(backend: str):
-    """Return the inference context provided by the selected framework."""
+    """Return the no-gradient inference context manager provided by the selected backend."""
     adapter = _runtime_adapter(backend)
     if adapter is None:
         from contextlib import nullcontext
@@ -89,7 +108,7 @@ def inference_context(backend: str):
 
 
 def cast_inputs(backend: str, inputs: Any, dev: Any, dtype: Any) -> Any:
-    """Dispatch input tensor casting to the selected backend adapter."""
+    """Dispatch input tensor casting to ``(dev, dtype)`` via the selected backend adapter."""
     family = backend_family(backend)
     if family == "Hugging Face":
         return _import_adapter("huggingface").cast_inputs(inputs, dev=dev, dtype=dtype)
@@ -101,7 +120,7 @@ def cast_inputs(backend: str, inputs: Any, dev: Any, dtype: Any) -> Any:
 
 
 def run_inference(backend: str, model: Any, inputs: Any, cur_dtype: Any, **model_kwargs) -> Any:
-    """Dispatch model forward execution to the selected backend adapter."""
+    """Dispatch model forward execution (including AMP/preprocessing where applicable) to the selected backend adapter."""
     family = backend_family(backend)
     if family == "Hugging Face":
         return _import_adapter("huggingface").run_inference(
@@ -117,7 +136,7 @@ def run_inference(backend: str, model: Any, inputs: Any, cur_dtype: Any, **model
 
 
 def get_output_device(backend: str, outputs: Any, default_device: Any) -> Any:
-    """Dispatch output tensor device detection to the selected backend adapter."""
+    """Detect the device of raw output tensors produced by the selected backend."""
     family = backend_family(backend)
     if family == "Hugging Face":
         return _import_adapter("huggingface").get_output_device(
@@ -129,14 +148,14 @@ def get_output_device(backend: str, outputs: Any, default_device: Any) -> Any:
 
 
 def sync_device(backend: str, tensor: Any, target_device: Any) -> Any:
-    """Dispatch tensor device synchronization to the selected backend adapter."""
+    """Move ``tensor`` to ``target_device`` when required by multi-GPU backend execution."""
     if backend_family(backend) == "Hugging Face":
         return _import_adapter("huggingface").sync_device(tensor, target_device)
     return tensor
 
 
 def format_results(backend: str, raw_outputs: Any) -> List[Dict[str, Any]]:
-    """Dispatch raw prediction normalization to the selected backend adapter."""
+    """Normalize backend-specific raw predictions into ``[{'boxes', 'scores', 'labels', 'class_ids'}]`` dicts."""
     family = backend_family(backend)
     if family == "Ultralytics":
         return _import_adapter("ultralytics").format_results(raw_outputs)

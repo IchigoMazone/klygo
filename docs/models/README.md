@@ -23,10 +23,12 @@ Local Tutorial Notebooks (`tutorials/models/`, 1-to-1 with `klygo/models/` submo
 
 1. **Layer 1 — Abstract Contract ([`BaseModel`](api/BaseModel.md) in `base.py`)**:
    Manages lifecycle state (`LOADING`, `READY`, `UNLOADED`), `metadata`, `details`, `flags`, call-local runtime parameter overrides (`_use_metadata`), Rich terminal inspection (`info()`), and post-unload access guards (`InvalidStateError`).
-2. **Layer 2 — Task Engine ([`Detector`](api/Detector.md) in `detection/base.py`)**:
-   Implements the complete object-detection pipeline (`predict()`, streaming video/image generators via `stream=True`, coordinate restoration when paired with `klygo.preprocessing`, `warmup()`, `benchmark()`, `save()`, `reset()`, and `unload()`) and delegates low-level tensor/device operations to `klygo.models.backend`.
+2. **Layer 2 — Task Engine ([`Detector`](api/Detector.md) in `detection/base.py` & [`backend.common`](backend/README.md))**:
+   Implements the complete object-detection pipeline (`predict()`, streaming video/image generators via `stream=True`, coordinate restoration when paired with `klygo.preprocessing`, `warmup()`, `benchmark()`, `save()`, `reset()`, and `unload()`) and delegates low-level tensor/device operations to [`klygo.models.backend.common`](backend/api/common.md).
 3. **Layer 3 — Concrete & Application Wrappers (`detection/*.py` & custom subclasses)**:
-   Built-in registry wrappers (`YOLODetect`, `YOLOWorldDetect`, `GroundingDinoDetect`) or application-owned [`Detector`](api/Detector.md) subclasses implement `forward(images, prompt=None)` using `self.cast_inputs()`, `self.run_inference()`, and `self.format_results()`.
+   Built-in registry wrappers (`YOLODetect`, `YOLOWorldDetect`, `GroundingDinoDetect`) or application-owned [`Detector`](api/Detector.md) subclasses implement `forward(images, prompt=None)` using `self.cast_inputs()`, `self.run_inference()`, and `self.format_results()` (or by calling [`klygo.models.backend.common`](backend/api/common.md) directly).
+
+See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](backend/README.md) and [`common` API Reference](backend/api/common.md) for all 15 unified backend functions (`backend_family`, `current_device`, `current_dtype`, `is_accelerator_available`, `inference_context`, `synchronize`, `clear_cache`, `cast_inputs`, `run_inference`, `get_output_device`, `sync_device`, `format_results`, `save`, `reset`, `unload`).
 
 ### Supported Backend Families
 

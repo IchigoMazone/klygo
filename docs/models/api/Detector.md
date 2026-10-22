@@ -15,11 +15,13 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
 
 `Detector` subclasses [`models.BaseModel`](BaseModel.md) and sets `task="Object-Detection"`. Concrete detectors (such as `YOLODetect`, `YOLOWorldDetect`, `GroundingDinoDetect`, or application-defined subclasses for Torchvision Faster R-CNN and KerasHub RT-DETR / D-FINE) implement `forward(images, prompt=None)` while inheriting the full Klygo detection lifecycle:
 
-1. **Multi-Backend Dispatch Helpers**:
-   - `self.current_device` / `self.current_dtype`: Query the active device and dtype of `self.model`.
-   - `self.cast_inputs(inputs, dev=None, dtype=None)`: Cast floating-point tensors to the model's device and dtype while preserving integer tensors (`input_ids`).
-   - `self.run_inference(inputs, **model_kwargs)`: Execute forward pass via the active backend adapter (`Hugging Face`, `Ultralytics`, `Torchvision`, or `Keras`).
-   - `self.format_results(raw_outputs)`: Normalize framework-native predictions into `list[dict[str, Any]]` with `"boxes"` (`xyxy`), `"scores"`, `"labels"`, and `"class_ids"`.
+1. **Multi-Backend Dispatch Helpers (delegated to [`klygo.models.backend.common`](../backend/api/common.md))**:
+   - `self.current_device` / `self.current_dtype`: Query the active device and dtype of `self.model` via `common.current_device()` and `common.current_dtype()`.
+   - `self.cast_inputs(inputs, dev=None, dtype=None)`: Cast floating-point tensors to the model's device and dtype while preserving integer tensors (`input_ids`) via `common.cast_inputs()`.
+   - `self.run_inference(inputs, **model_kwargs)`: Execute forward pass via `common.run_inference()` on the active backend adapter (`Hugging Face`, `Ultralytics`, `Torchvision`, or `Keras`).
+   - `self.get_output_device(outputs)` / `self.sync_device(tensor, target_device)`: Inspect output device and synchronize multi-GPU tensors via `common.get_output_device()` and `common.sync_device()`.
+   - `self.format_results(raw_outputs)`: Normalize framework-native predictions into `list[dict[str, Any]]` with `"boxes"` (`xyxy`), `"scores"`, `"labels"`, and `"class_ids"` via `common.format_results()`.
+   - See the [`klygo.models.backend` & `common` Guide](../backend/README.md) for direct usage of all 15 `common` functions.
 2. **Inference Engine (`predict`)**:
    - Resolves single images, lists of images, directories, or video streams through `klygo.media`.
    - Applies call-local parameter overrides (`**kwargs`) validated against `metadata.flags` and `metadata.priority` without mutating default model settings.
