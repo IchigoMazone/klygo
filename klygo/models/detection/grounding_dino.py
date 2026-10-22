@@ -15,8 +15,9 @@ except ImportError as exc:
         "Install it using 'pip install \"klygo[transformers]\"'."
     ) from exc
 
-from klygo import outputs, utils
+from klygo import utils
 from klygo.models.detection.base import Detector
+from klygo.outputs import build_detections
 from klygo.outputs.detect import Detection
 
 
@@ -99,7 +100,7 @@ class GroundingDinoDetect(Detector):
             )
 
         # 5. Pack into Detection objects
-        results = outputs.build_detections(
+        results = build_detections(
             images,
             raw,
             metadata={"prompt": prompt, **post_config},

@@ -48,6 +48,7 @@ temp_*/
 *.jpg
 *.png
 *.mp4
+*.pt
 *.bak
 
 # Virtual environments & IDE
