@@ -41,6 +41,7 @@ class TestPublicApi(unittest.TestCase):
         assert callable(datasets.load)
 
     def test_detection_output_types(self):
+        assert callable(outputs.build_detections)
         image = Image.new("RGB", (64, 48), "white")
         box = Box(id=0, label="object", score=0.9, box=[4, 5, 20, 25], parent_image=image)
         detection = Detection(source_image=image, objects=[box])

@@ -7,7 +7,10 @@ import unittest
 import zipfile
 from pathlib import Path
 
-import nbformat
+try:
+    import nbformat
+except ImportError:
+    nbformat = None
 
 from klygo import datasets
 
@@ -58,6 +61,8 @@ class TestCOCO15Workflow(unittest.TestCase):
         )
 
     def test_one_valid_colab_notebook_per_class(self):
+        if nbformat is None:
+            self.skipTest("nbformat is not installed")
         paths = sorted(NOTEBOOK_DIR.glob("Klygo_COCO15_*.ipynb"))
         self.assertEqual(len(paths), 15)
         seen = set()

@@ -5,10 +5,10 @@ from __future__ import annotations
 import math
 from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence, Tuple, Union
 
-from klygo.outputs.detect import Box, Detection, Detections
+from klygo.outputs.detect import Box, Crops, Detection, Detections
 from .core import Operation
 
-Result = Union[Detection, Detections]
+Result = Union[Crops, Detection, Detections]
 Predicate = Callable[[Box], bool]
 
 
@@ -19,6 +19,7 @@ def _copy_detection(result: Detection, boxes: Iterable[Box]) -> Detection:
         dict(result.speed),
         result.image_frame_index,
         config=dict(result.config),
+        names=result._all_names,
     )
     copied.timestamp = result.timestamp
     copied._source_path = result.source_path
@@ -27,22 +28,38 @@ def _copy_detection(result: Detection, boxes: Iterable[Box]) -> Detection:
 
 
 def _map_result(result: Result, function: Callable[[Detection], Detection]) -> Result:
+    if isinstance(result, Crops):
+        frame = Detection(
+            result.source_image,
+            list(result.crops),
+            names=result._all_names,
+        )
+        transformed = function(frame)
+        return Crops(
+            transformed.objects,
+            result.source_image,
+            result.pad,
+            transformed._all_names,
+        )
     if isinstance(result, Detections):
         return result.map(function)
     if isinstance(result, Detection):
         return function(result)
-    raise TypeError("result must be Detection or Detections")
+    raise TypeError("result must be Crops, Detection, or Detections")
 
 
 def _matches(
     box: Box,
     *,
     ids: Optional[Iterable[int]] = None,
+    class_ids: Optional[Iterable[int]] = None,
     uids: Optional[Iterable[str]] = None,
     labels: Optional[Iterable[str]] = None,
     where: Optional[Predicate] = None,
 ) -> bool:
     if ids is not None and box.id not in set(ids):
+        return False
+    if class_ids is not None and box.class_id not in set(class_ids):
         return False
     if uids is not None and box.uid not in set(uids):
         return False
@@ -55,12 +72,14 @@ def select(
     result: Result,
     *,
     ids: Optional[Iterable[int]] = None,
+    class_ids: Optional[Iterable[int]] = None,
     uids: Optional[Iterable[str]] = None,
     labels: Optional[Iterable[str]] = None,
     where: Optional[Predicate] = None,
 ) -> Result:
     """Keep boxes matching all supplied selectors."""
     id_set = set(ids) if ids is not None else None
+    class_id_set = set(class_ids) if class_ids is not None else None
     uid_set = set(uids) if uids is not None else None
     label_set = set(labels) if labels is not None else None
     return _map_result(
@@ -70,7 +89,14 @@ def select(
             (
                 box
                 for box in frame
-                if _matches(box, ids=id_set, uids=uid_set, labels=label_set, where=where)
+                if _matches(
+                    box,
+                    ids=id_set,
+                    class_ids=class_id_set,
+                    uids=uid_set,
+                    labels=label_set,
+                    where=where,
+                )
             ),
         ),
     )
@@ -100,17 +126,26 @@ def relabel(
     label: Union[str, Mapping[int, str], Callable[[Box], str]],
     *,
     ids: Optional[Iterable[int]] = None,
+    class_ids: Optional[Iterable[int]] = None,
     uids: Optional[Iterable[str]] = None,
     labels: Optional[Iterable[str]] = None,
     where: Optional[Predicate] = None,
 ) -> Result:
     """Relabel selected boxes while retaining every unselected box."""
     id_set = set(ids) if ids is not None else None
+    class_id_set = set(class_ids) if class_ids is not None else None
     uid_set = set(uids) if uids is not None else None
     label_set = set(labels) if labels is not None else None
 
     def rename(box: Box) -> Box:
-        if not _matches(box, ids=id_set, uids=uid_set, labels=label_set, where=where):
+        if not _matches(
+            box,
+            ids=id_set,
+            class_ids=class_id_set,
+            uids=uid_set,
+            labels=label_set,
+            where=where,
+        ):
             return box
         if isinstance(label, Mapping):
             new_label = label.get(box.id, box.label)
@@ -118,7 +153,7 @@ def relabel(
             new_label = label(box)
         else:
             new_label = label
-        return box.with_label(str(new_label))
+        return box.with_label(new_label)
 
     return map_boxes(result, rename)
 
@@ -127,18 +162,27 @@ def drop(
     result: Result,
     *,
     ids: Optional[Iterable[int]] = None,
+    class_ids: Optional[Iterable[int]] = None,
     uids: Optional[Iterable[str]] = None,
     labels: Optional[Iterable[str]] = None,
     where: Optional[Predicate] = None,
 ) -> Result:
     """Remove boxes matching all supplied selectors."""
     id_set = set(ids) if ids is not None else None
+    class_id_set = set(class_ids) if class_ids is not None else None
     uid_set = set(uids) if uids is not None else None
     label_set = set(labels) if labels is not None else None
     return map_boxes(
         result,
         lambda box: None
-        if _matches(box, ids=id_set, uids=uid_set, labels=label_set, where=where)
+        if _matches(
+            box,
+            ids=id_set,
+            class_ids=class_id_set,
+            uids=uid_set,
+            labels=label_set,
+            where=where,
+        )
         else box,
     )
 
@@ -201,7 +245,7 @@ def suppress(result: Result, iou: float = 0.5, class_agnostic: bool = False) -> 
             remaining = [
                 candidate
                 for candidate in remaining
-                if (not class_agnostic and candidate.label != current.label)
+                if (not class_agnostic and candidate.class_id != current.class_id)
                 or box_iou(current, candidate) <= threshold_value
             ]
         return _copy_detection(frame, kept)

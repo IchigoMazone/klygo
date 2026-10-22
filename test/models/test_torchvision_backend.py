@@ -32,6 +32,7 @@ class TestTorchvisionBackend(unittest.TestCase):
         )
         results = torchvision.format_results(torchvision.run_inference(model, inputs))
         self.assertEqual(results[0]["labels"], [7])
+        self.assertEqual(results[0]["class_ids"], [7])
         self.assertEqual(results[0]["boxes"], [[1.0, 2.0, 3.0, 4.0]])
 
         with tempfile.TemporaryDirectory() as temporary:

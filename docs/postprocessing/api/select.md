@@ -1,7 +1,7 @@
 # `postprocessing.select`
 
 ```python
-postprocessing.select(result: 'Result', *, ids: 'Optional[Iterable[int]]' = None, uids: 'Optional[Iterable[str]]' = None, labels: 'Optional[Iterable[str]]' = None, where: 'Optional[Predicate]' = None) -> 'Result'
+postprocessing.select(result: 'Result', *, ids: 'Optional[Iterable[int]]' = None, class_ids: 'Optional[Iterable[int]]' = None, uids: 'Optional[Iterable[str]]' = None, labels: 'Optional[Iterable[str]]' = None, where: 'Optional[Predicate]' = None) -> 'Result'
 ```
 
 Keep boxes matching all supplied selectors.
@@ -20,6 +20,7 @@ from klygo.outputs.detect import Box, Detection
 image = Image.new("RGB", (100, 80), "white")
 frame = Detection(image, [Box(0, "cat", 0.9, [-5, 0, 50, 50]), Box(0, "cat", 0.8, [0, 0, 48, 48]), Box(1, "dog", 0.4, [60, 10, 90, 60])])
 print(post.select(frame, labels=["cat"]).labels)
+print(post.select(frame, class_ids=[0]).labels)
 ```
 
 Run [the standalone example](../../../examples/postprocessing/select.py) or explore the [module index](../README.md).

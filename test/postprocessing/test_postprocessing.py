@@ -54,6 +54,45 @@ class TestPostprocessing(unittest.TestCase):
         assert cleaned[0].id == 0
         assert cleaned[0].box == [0.0, 0.0, 50.0, 50.0]
 
+    def test_class_id_selectors_and_relabel_registry(self):
+        result = _detection()
+
+        selected = result.select(class_ids=[0, 1])
+        assert selected.ids == [0, 1, 2]
+        assert selected.class_ids == [0, 0, 1]
+
+        renamed = result.relabel("car", class_ids=[0])
+        assert renamed.ids == result.ids
+        assert renamed[0].class_id == renamed[1].class_id
+        assert renamed.names[renamed[0].class_id] == "car"
+        assert result.labels[:2] == ["vehicle", "vehicle"]
+
+    def test_class_aware_nms_uses_class_id(self):
+        image = Image.new("RGB", (100, 80), "white")
+        result = Detection(
+            image,
+            [
+                Box(0, "object", 0.9, [0, 0, 50, 50], class_id=3),
+                Box(1, "object", 0.8, [1, 1, 49, 49], class_id=4),
+            ],
+            names={3: "object", 4: "object"},
+        )
+
+        assert len(result.nms(iou=0.5)) == 2
+        assert len(result.nms(iou=0.5, class_agnostic=True)) == 1
+
+    def test_filtering_preserves_sparse_box_ids(self):
+        result = _detection().drop(ids=[1])
+        assert result.ids == [0, 2, 3]
+        assert result.crops.ids == [0, 2, 3]
+
+        vehicle_crops = result.crops.select(class_ids=[0])
+        assert vehicle_crops.ids == [0]
+        assert vehicle_crops.names == {0: "vehicle"}
+
+        selected_results = Detections([result]).select(class_ids=[0])
+        assert selected_results[0].ids == [0]
+
     def test_pipeline_and_frame_operations(self):
         pipeline = post.compose(
             post.clip(),

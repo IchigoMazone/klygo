@@ -7,6 +7,7 @@ _CLASS_MODULES = {
     "Detector": "base",
     "GroundingDinoDetect": "grounding_dino",
     "YOLODetect": "yolo",
+    "YOLOWorldDetect": "yolo_world",
     "LocateAnythingDetect": "locate_anything",
 }
 

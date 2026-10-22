@@ -3,11 +3,162 @@
 import os
 import datetime
 import uuid
-from typing import List, Dict, Any, Optional, Union, Callable, Iterable
+from copy import deepcopy
+from typing import List, Dict, Any, Optional, Union, Callable, Iterable, Mapping, Sequence
 import PIL.Image
 import numpy as np
 
 from klygo import files, media, visual
+
+
+ClassName = Optional[str]
+Names = Dict[int, ClassName]
+
+
+def _normalize_label(value: Any) -> ClassName:
+    """Return a clean class name, using ``None`` for blank labels."""
+    if value is None:
+        return None
+    label = str(value).strip()
+    return label or None
+
+
+def _normalize_names(value: Optional[Union[Mapping[int, Any], Sequence[Any]]]) -> Names:
+    """Normalize a mapping or sequence into an integer-keyed class registry."""
+    if value is None:
+        return {}
+    items = value.items() if isinstance(value, Mapping) else enumerate(value)
+    return {int(class_id): _normalize_label(label) for class_id, label in items}
+
+
+def _next_class_id(names: Mapping[int, ClassName]) -> int:
+    return max(names, default=-1) + 1
+
+
+def _class_id_for_label(names: Names, label: ClassName) -> int:
+    for class_id, known_label in names.items():
+        if known_label == label:
+            return class_id
+    class_id = _next_class_id(names)
+    names[class_id] = label
+    return class_id
+
+
+def _subset_names(objects: Iterable["Box"], names: Mapping[int, ClassName]) -> Names:
+    class_ids = {item.class_id for item in objects}
+    return {class_id: names.get(class_id) for class_id in sorted(class_ids)}
+
+
+def _register_box(names: Names, item: "Box") -> None:
+    """Register a box class, remapping label edits without changing box identity."""
+    if not item._class_id_explicit:
+        item.class_id = _class_id_for_label(names, item.label)
+        item.metadata["class_id"] = item.class_id
+        item._class_id_explicit = True
+        return
+    if item.class_id in names and names[item.class_id] != item.label:
+        item.class_id = _class_id_for_label(names, item.label)
+        item.metadata["class_id"] = item.class_id
+    else:
+        names.setdefault(item.class_id, item.label)
+
+
+def _plain_list(value: Any, name: str) -> list[Any]:
+    """Convert tensor-like prediction fields to ordinary Python lists."""
+    if hasattr(value, "detach"):
+        value = value.detach()
+    if hasattr(value, "cpu"):
+        value = value.cpu()
+    if hasattr(value, "tolist"):
+        value = value.tolist()
+    try:
+        return list(value)
+    except TypeError as exc:
+        raise TypeError(f"prediction {name!r} must be a sequence") from exc
+
+
+def build_detections(
+    images: Sequence[Any],
+    predictions: Sequence[Mapping[str, Any]],
+    *,
+    metadata: Optional[Mapping[str, Any]] = None,
+    names: Optional[Union[Mapping[int, Any], Sequence[Any]]] = None,
+) -> List["Detection"]:
+    """Build one :class:`Detection` per image from normalized predictions.
+
+    Each prediction must provide equally sized ``boxes``, ``scores``, and
+    ``labels`` sequences. Optional ``class_ids`` become ``Box.class_id`` values;
+    ``Box.id`` always identifies a box within its frame. Labels missing from
+    ``names`` are appended to the result registry in first-seen order.
+    """
+    image_list = list(images)
+    prediction_list = list(predictions)
+    if len(image_list) != len(prediction_list):
+        raise ValueError("images and predictions must have the same length")
+    if metadata is not None and not isinstance(metadata, Mapping):
+        raise TypeError("metadata must be a mapping or None")
+
+    registry = _normalize_names(names)
+    results: List[Detection] = []
+    for image, prediction in zip(image_list, prediction_list):
+        if not isinstance(prediction, Mapping):
+            raise TypeError("each prediction must be a mapping")
+        boxes = _plain_list(prediction.get("boxes", []), "boxes")
+        scores = _plain_list(prediction.get("scores", []), "scores")
+        labels_value = prediction.get("text_labels", prediction.get("labels", []))
+        labels = _plain_list(labels_value, "labels")
+        class_ids_value = prediction.get("class_ids")
+        class_ids = None if class_ids_value is None else _plain_list(class_ids_value, "class_ids")
+
+        lengths = {len(boxes), len(scores), len(labels)}
+        if len(lengths) != 1:
+            raise ValueError("prediction boxes, scores, and labels must have the same length")
+        if class_ids is not None and len(class_ids) != len(boxes):
+            raise ValueError("prediction class_ids must match the number of boxes")
+
+        objects = []
+        for index, (coordinates, score, label) in enumerate(zip(boxes, scores, labels)):
+            coordinates = _plain_list(coordinates, "box")
+            if len(coordinates) != 4:
+                raise ValueError("each prediction box must contain four coordinates")
+            label_text = _normalize_label(label)
+            if class_ids is None:
+                class_id = _class_id_for_label(registry, label_text)
+            else:
+                raw_class_id = class_ids[index]
+                if hasattr(raw_class_id, "item"):
+                    raw_class_id = raw_class_id.item()
+                class_id = int(raw_class_id)
+                if class_id not in registry:
+                    registry[class_id] = label_text
+                elif registry[class_id] != label_text:
+                    raise ValueError(
+                        f"class ID {class_id} maps to both "
+                        f"{registry[class_id]!r} and {label_text!r}"
+                    )
+            if hasattr(score, "item"):
+                score = score.item()
+            objects.append(
+                Box(
+                    id=index,
+                    class_id=class_id,
+                    label=label_text,
+                    score=round(float(score), 3),
+                    box=[round(float(value), 2) for value in coordinates],
+                    parent_image=image,
+                )
+            )
+        results.append(
+            Detection(
+                source_image=image,
+                objects=objects,
+                config=deepcopy(dict(metadata or {})),
+                names=registry,
+            )
+        )
+    for result in results:
+        result._all_names = dict(registry)
+    return results
 
 
 # =============================================================================
@@ -19,8 +170,8 @@ class Box:
     Parameters
     ----------
     id : int
-        Numeric class ID.
-    label : str
+        Frame-local box ID.
+    label : str or None
         Human-readable class label.
     score : float
         Confidence score.
@@ -34,31 +185,41 @@ class Box:
         Stable object identifier; generated when omitted.
     metadata : dict, optional
         Extra object attributes.
+    class_id : int, optional
+        Class ID used to look up ``label`` in a result's ``names`` mapping.
     """
 
     def __init__(
         self,
         id: int,
-        label: str,
+        label: ClassName,
         score: float,
         box: List[float],
         parent_image: Optional[PIL.Image.Image] = None,
         pad: int = 0,
         uid: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        *,
+        class_id: Optional[int] = None,
     ) -> None:
         self.id = int(id)
-        self.label = str(label)
+        supplied_metadata = dict(metadata or {})
+        self._class_id_explicit = class_id is not None or "class_id" in supplied_metadata
+        self.metadata = supplied_metadata
+        legacy_class_id = self.metadata.get("class_id", id)
+        self.class_id = int(legacy_class_id if class_id is None else class_id)
+        self.metadata["class_id"] = self.class_id
+        self.label = _normalize_label(label)
         self.score = float(score)
         self.box = [float(x) for x in box]  # [xmin, ymin, xmax, ymax]
         self.parent_image = parent_image
         self.pad = int(pad)
         self.uid = str(uid or uuid.uuid4().hex)
-        self.metadata = dict(metadata or {})
 
     def _copy(self, **changes: Any) -> "Box":
         values = {
             "id": self.id,
+            "class_id": self.class_id,
             "label": self.label,
             "score": self.score,
             "box": list(self.box),
@@ -143,9 +304,9 @@ class Box:
         """Alias của score."""
         return self.score
 
-    def with_label(self, new_label: str) -> "Box":
+    def with_label(self, new_label: ClassName) -> "Box":
         """Tạo bản sao mới với nhãn được đổi."""
-        return self._copy(label=str(new_label))
+        return self._copy(label=_normalize_label(new_label))
 
     def with_score(self, new_score: float) -> "Box":
         """Tạo bản sao mới với điểm số được đổi."""
@@ -226,6 +387,7 @@ class Box:
         """Xuất thông tin Box sang JSON Key-Value."""
         return {
             "id": self.id,
+            "class_id": self.class_id,
             "uid": self.uid,
             "label": self.label,
             "score": round(self.score, 4),
@@ -238,7 +400,10 @@ class Box:
 
     def __repr__(self) -> str:
         coords = [round(x, 1) for x in self.box]
-        return f"Box(id={self.id}, label='{self.label}', score={self.score:.2f}, box={coords})"
+        return (
+            f"Box(id={self.id}, class_id={self.class_id}, label={self.label!r}, "
+            f"score={self.score:.2f}, box={coords})"
+        )
 
 
 # =============================================================================
@@ -252,14 +417,18 @@ class Crops:
         crops: List[Box],
         source_image: Optional[PIL.Image.Image] = None,
         pad: int = 0,
+        names: Optional[Union[Mapping[int, Any], Sequence[Any]]] = None,
     ) -> None:
         self.crops = crops
         self.source_image = source_image
         self.pad = int(pad)
+        self._all_names = _normalize_names(names)
+        for crop in self.crops:
+            _register_box(self._all_names, crop)
 
     def __getitem__(self, index: Union[int, slice]) -> Union[Box, "Crops"]:
         if isinstance(index, slice):
-            return Crops(self.crops[index], self.source_image, self.pad)
+            return Crops(self.crops[index], self.source_image, self.pad, self._all_names)
         return self.crops[index]
 
     def __setitem__(self, index: Union[int, slice], value: Any) -> None:
@@ -293,10 +462,25 @@ class Crops:
     def __add__(self, other: "Crops") -> "Crops":
         if not isinstance(other, Crops):
             raise TypeError(f"Cannot concatenate Crops with type {type(other)}")
-        return Crops(list(self.crops) + list(other.crops), self.source_image, self.pad)
+        names = dict(self._all_names)
+        names.update(other._all_names)
+        return Crops(list(self.crops) + list(other.crops), self.source_image, self.pad, names)
 
     def __iter__(self):
         return iter(self.crops)
+
+    @property
+    def names(self) -> Names:
+        """Return the sparse class mapping referenced by these crops."""
+        return _subset_names(self.crops, self._all_names)
+
+    @property
+    def ids(self) -> List[int]:
+        return [crop.id for crop in self.crops]
+
+    @property
+    def class_ids(self) -> List[int]:
+        return [crop.class_id for crop in self.crops]
 
     @property
     def images(self) -> List[PIL.Image.Image]:
@@ -304,7 +488,7 @@ class Crops:
         return [c.image for c in self.crops if c.image is not None]
 
     @property
-    def labels(self) -> List[str]:
+    def labels(self) -> List[ClassName]:
         return [c.label for c in self.crops]
 
     @property
@@ -324,7 +508,7 @@ class Crops:
         return len(self.crops)
 
     @property
-    def unique_labels(self) -> List[str]:
+    def unique_labels(self) -> List[ClassName]:
         seen = set()
         out = []
         for c in self.crops:
@@ -334,16 +518,46 @@ class Crops:
         return out
 
     @property
-    def label_counts(self) -> Dict[str, int]:
-        counts: Dict[str, int] = {}
+    def label_counts(self) -> Dict[ClassName, int]:
+        counts: Dict[ClassName, int] = {}
         for c in self.crops:
             counts[c.label] = counts.get(c.label, 0) + 1
         return counts
 
     def filter(self, fn: Callable[[Box], bool]) -> "Crops":
         """Lọc tập ảnh con bằng Lambda -> Trả về Crops mới."""
-        filtered = [c for c in self.crops if fn(c)]
-        return Crops(filtered, self.source_image, self.pad)
+        from klygo import postprocessing as post
+        return post.select(self, where=fn)
+
+    def select(
+        self,
+        *,
+        ids: Optional[Iterable[int]] = None,
+        class_ids: Optional[Iterable[int]] = None,
+        uids: Optional[Iterable[str]] = None,
+        labels: Optional[Iterable[ClassName]] = None,
+        where: Optional[Callable[[Box], bool]] = None,
+    ) -> "Crops":
+        """Select crops by box identity, class, label, or predicate."""
+        from klygo import postprocessing as post
+        return post.select(
+            self,
+            ids=ids,
+            class_ids=class_ids,
+            uids=uids,
+            labels=labels,
+            where=where,
+        )
+
+    def drop(self, **selectors: Any) -> "Crops":
+        """Drop crops matching the supplied selectors."""
+        from klygo import postprocessing as post
+        return post.drop(self, **selectors)
+
+    def relabel(self, label: Any, **selectors: Any) -> "Crops":
+        """Relabel matching crops while preserving box identities."""
+        from klygo import postprocessing as post
+        return post.relabel(self, label, **selectors)
 
     def sort(
         self,
@@ -352,7 +566,12 @@ class Crops:
     ) -> "Crops":
         """Sắp xếp tập ảnh con bằng Lambda -> Trả về Crops mới."""
         sort_fn = key or (lambda c: c.score)
-        return Crops(sorted(self.crops, key=sort_fn, reverse=reverse), self.source_image, self.pad)
+        return Crops(
+            sorted(self.crops, key=sort_fn, reverse=reverse),
+            self.source_image,
+            self.pad,
+            self._all_names,
+        )
 
     def group_by(
         self,
@@ -363,7 +582,7 @@ class Crops:
         groups: Dict[Any, List[Box]] = {}
         for c in self.crops:
             groups.setdefault(key_fn(c), []).append(c)
-        return {k: Crops(v, self.source_image, self.pad) for k, v in groups.items()}
+        return {k: Crops(v, self.source_image, self.pad, self._all_names) for k, v in groups.items()}
 
     def map(
         self,
@@ -371,16 +590,19 @@ class Crops:
     ) -> "Crops":
         """Biến đổi dữ liệu ảnh con bằng Dict đổi nhãn hoặc Lambda."""
         mapped = []
-        for i, c in enumerate(self.crops):
+        names = dict(self._all_names)
+        for c in self.crops:
             if isinstance(fn, dict):
-                mapped.append(c._copy(id=i, label=fn.get(c.label, c.label)))
+                label = _normalize_label(fn.get(c.label, c.label))
+                mapped.append(c._copy(label=label, class_id=_class_id_for_label(names, label)))
             elif callable(fn):
                 res = fn(c)
                 if isinstance(res, Box):
                     mapped.append(res)
                 elif isinstance(res, str):
-                    mapped.append(c._copy(id=i, label=res))
-        return Crops(mapped, self.source_image, self.pad)
+                    label = _normalize_label(res)
+                    mapped.append(c._copy(label=label, class_id=_class_id_for_label(names, label)))
+        return Crops(mapped, self.source_image, self.pad, names)
 
     def show(self, limit: Optional[int] = None, cell_size: int = 200) -> None:
         """Hiển thị tập ảnh con trên màn hình hoặc notebook."""
@@ -419,6 +641,7 @@ class Crops:
         return {
             "total_crops": len(self.crops),
             "pad": self.pad,
+            "names": dict(self.names),
             "unique_labels": self.unique_labels,
             "label_counts": self.label_counts,
             "crops": [c.to_dict() for c in self.crops],
@@ -447,12 +670,26 @@ class Detection:
         speed: Optional[dict] = None,
         image_frame_index: int = 0,
         config: Optional[Dict[str, Any]] = None,
+        names: Optional[Union[Mapping[int, Any], Sequence[Any]]] = None,
         **kwargs,
     ) -> None:
         self._source_image = None
         self._source_path = None
         self._url = None
         self.objects = objects  # Danh sách các Box
+        used_ids = set()
+        next_id = 0
+        for item in self.objects:
+            if item.id in used_ids:
+                while next_id in used_ids:
+                    next_id += 1
+                item.id = next_id
+            used_ids.add(item.id)
+            next_id = max(next_id, item.id + 1)
+
+        self._all_names = _normalize_names(names)
+        for item in self.objects:
+            _register_box(self._all_names, item)
         self.source_image = source_image
         self.speed = speed or {"preprocess": 0.0, "inference": 0.0, "postprocess": 0.0, "total": 0.0}
         self.image_frame_index = image_frame_index
@@ -556,6 +793,7 @@ class Detection:
                 self.speed,
                 self.image_frame_index,
                 config=self.config,
+                names=self._all_names,
             )
         return self.objects[index]
 
@@ -567,6 +805,10 @@ class Detection:
                 if isinstance(item, Box):
                     item.parent_image = self.source_image
         self.objects[index] = value
+        values = value if isinstance(value, (list, tuple)) else [value]
+        for item in values:
+            if isinstance(item, Box):
+                _register_box(self._all_names, item)
 
     def __delitem__(self, index: Union[int, slice]) -> None:
         del self.objects[index]
@@ -574,16 +816,16 @@ class Detection:
     def append(self, crop: Box) -> None:
         if isinstance(crop, Box):
             crop.parent_image = self.source_image
+            used_ids = {item.id for item in self.objects}
+            if crop.id in used_ids:
+                crop.id = max(used_ids, default=-1) + 1
+            _register_box(self._all_names, crop)
         self.objects.append(crop)
 
     def extend(self, other: Union[List[Box], "Detection", Crops]) -> None:
         items = other.objects if isinstance(other, Detection) else (other.crops if isinstance(other, Crops) else list(other))
         for c in items:
-            if isinstance(c, Box):
-                c.parent_image = self.source_image
-            self.objects.append(c)
-        for i, c in enumerate(self.objects):
-            c.id = i
+            self.append(c)
 
     def pop(self, index: int = -1) -> Box:
         return self.objects.pop(index)
@@ -591,6 +833,10 @@ class Detection:
     def insert(self, index: int, crop: Box) -> None:
         if isinstance(crop, Box):
             crop.parent_image = self.source_image
+            used_ids = {item.id for item in self.objects}
+            if crop.id in used_ids:
+                crop.id = max(used_ids, default=-1) + 1
+            _register_box(self._all_names, crop)
         self.objects.insert(index, crop)
 
     def remove(self, crop: Box) -> None:
@@ -611,10 +857,28 @@ class Detection:
             self.speed,
             self.image_frame_index,
             config=self.config,
+            names=self._all_names,
         )
 
     def __iter__(self):
         return iter(self.objects)
+
+    @property
+    def names(self) -> Names:
+        """Return the sparse class mapping referenced by this frame."""
+        return _subset_names(self.objects, self._all_names)
+
+    @property
+    def ids(self) -> List[int]:
+        return [item.id for item in self.objects]
+
+    @property
+    def class_ids(self) -> List[int]:
+        return [item.class_id for item in self.objects]
+
+    @property
+    def unique_class_ids(self) -> List[int]:
+        return list(dict.fromkeys(self.class_ids))
 
     @property
     def boxes(self) -> List[List[float]]:
@@ -630,7 +894,7 @@ class Detection:
         return []
 
     @property
-    def labels(self) -> List[str]:
+    def labels(self) -> List[ClassName]:
         return [c.label for c in self.objects]
 
     @property
@@ -642,7 +906,7 @@ class Detection:
         return len(self.objects)
 
     @property
-    def unique_labels(self) -> List[str]:
+    def unique_labels(self) -> List[ClassName]:
         seen = set()
         out = []
         for c in self.objects:
@@ -652,8 +916,8 @@ class Detection:
         return out
 
     @property
-    def label_counts(self) -> Dict[str, int]:
-        counts: Dict[str, int] = {}
+    def label_counts(self) -> Dict[ClassName, int]:
+        counts: Dict[ClassName, int] = {}
         for c in self.objects:
             counts[c.label] = counts.get(c.label, 0) + 1
         return counts
@@ -661,7 +925,7 @@ class Detection:
     @property
     def crops(self) -> Crops:
         """Tự động cắt toàn bộ các vật thể -> Trả về Crops."""
-        return Crops(self.objects, self.source_image)
+        return Crops(self.objects, self.source_image, names=self._all_names)
 
     @property
     def summary(self) -> Dict[str, Any]:
@@ -702,13 +966,21 @@ class Detection:
         self,
         *,
         ids: Optional[Iterable[int]] = None,
+        class_ids: Optional[Iterable[int]] = None,
         uids: Optional[Iterable[str]] = None,
-        labels: Optional[Iterable[str]] = None,
+        labels: Optional[Iterable[ClassName]] = None,
         where: Optional[Callable[[Box], bool]] = None,
     ) -> "Detection":
         """Chọn box bằng ID, UID, label và/hoặc predicate."""
         from klygo import postprocessing as post
-        return post.select(self, ids=ids, uids=uids, labels=labels, where=where)
+        return post.select(
+            self,
+            ids=ids,
+            class_ids=class_ids,
+            uids=uids,
+            labels=labels,
+            where=where,
+        )
 
     def map_boxes(self, function: Callable[[Box], Optional[Box]]) -> "Detection":
         """Biến đổi từng box; trả về ``None`` để loại box."""
@@ -720,25 +992,42 @@ class Detection:
         label: Any,
         *,
         ids: Optional[Iterable[int]] = None,
+        class_ids: Optional[Iterable[int]] = None,
         uids: Optional[Iterable[str]] = None,
-        labels: Optional[Iterable[str]] = None,
+        labels: Optional[Iterable[ClassName]] = None,
         where: Optional[Callable[[Box], bool]] = None,
     ) -> "Detection":
         """Đổi nhãn các box phù hợp mà không sửa object hiện tại."""
         from klygo import postprocessing as post
-        return post.relabel(self, label, ids=ids, uids=uids, labels=labels, where=where)
+        return post.relabel(
+            self,
+            label,
+            ids=ids,
+            class_ids=class_ids,
+            uids=uids,
+            labels=labels,
+            where=where,
+        )
 
     def drop(
         self,
         *,
         ids: Optional[Iterable[int]] = None,
+        class_ids: Optional[Iterable[int]] = None,
         uids: Optional[Iterable[str]] = None,
-        labels: Optional[Iterable[str]] = None,
+        labels: Optional[Iterable[ClassName]] = None,
         where: Optional[Callable[[Box], bool]] = None,
     ) -> "Detection":
         """Loại các box phù hợp."""
         from klygo import postprocessing as post
-        return post.drop(self, ids=ids, uids=uids, labels=labels, where=where)
+        return post.drop(
+            self,
+            ids=ids,
+            class_ids=class_ids,
+            uids=uids,
+            labels=labels,
+            where=where,
+        )
 
     def filter_score(self, minimum: float) -> "Detection":
         """Giữ box có score lớn hơn hoặc bằng ``minimum``."""
@@ -773,11 +1062,18 @@ class Detection:
     ) -> "Detection":
         """Sắp xếp các box bằng Lambda."""
         sort_fn = key or (lambda c: c.score)
-        return Detection(self.source_image, sorted(self.objects, key=sort_fn, reverse=reverse), self.speed, self.image_frame_index, config=self.config)
+        return Detection(
+            self.source_image,
+            sorted(self.objects, key=sort_fn, reverse=reverse),
+            self.speed,
+            self.image_frame_index,
+            config=self.config,
+            names=self._all_names,
+        )
 
     def crop(self, pad: int = 0) -> Crops:
         """Cắt toàn bộ vật thể kèm đệm viền."""
-        return Crops(self.objects, self.source_image, pad=pad)
+        return Crops(self.objects, self.source_image, pad=pad, names=self._all_names)
 
     def restore(self, target: str = "original", inplace: bool = False) -> "Detection":
         """Đưa kết quả về ảnh RGB nguồn ở không gian transformed hoặc original.
@@ -847,6 +1143,7 @@ class Detection:
             speed=dict(self.speed),
             image_frame_index=self.image_frame_index,
             config=dict(self.config),
+            names=self._all_names,
         )
         restored.timestamp = self.timestamp
         return restored
@@ -914,7 +1211,10 @@ class Detection:
         """Xuất file nhãn YOLO (.txt) hoặc JSON sử dụng klygo.files.save."""
         if format.lower() == "yolo":
             w, h = self.source_image.size
-            unique_classes = classes if classes is not None else sorted(list(set(self.labels)))
+            unique_classes = classes if classes is not None else sorted(
+                set(self.labels),
+                key=lambda value: "" if value is None else str(value),
+            )
             lines = []
             for c in self.objects:
                 if c.label not in unique_classes:
@@ -941,6 +1241,7 @@ class Detection:
             "timestamp": self.timestamp,
             "objects": [c.to_dict() for c in self.objects],
             "speed": self.speed,
+            "names": dict(self.names),
         }
         if self.source_path is not None:
             d["source_path"] = self.source_path
@@ -983,12 +1284,14 @@ class Detections:
         output_path: Optional[str] = None,
         stream: bool = False,
         total_frames: Optional[int] = None,
+        names: Optional[Union[Mapping[int, Any], Sequence[Any]]] = None,
     ) -> None:
         self.is_stream = bool(stream) or (not isinstance(frames, (list, tuple)) and hasattr(frames, "__iter__"))
         self.source_type = source_type
         self.fps = float(fps) if fps else 30.0
         self.output_path = output_path
         self.total_frames = total_frames
+        self._base_names = _normalize_names(names)
         self._stream_cache: List[Detection] = []
 
         if self.is_stream:
@@ -1098,11 +1401,18 @@ class Detections:
                     self.output_path,
                     stream=True,
                     total_frames=new_total,
+                    names=self.names,
                 )
             raise TypeError(f"Invalid index type: {type(index)}")
 
         if isinstance(index, slice):
-            return Detections(self._frames[index], self.source_type, self.fps, self.output_path)
+            return Detections(
+                self._frames[index],
+                self.source_type,
+                self.fps,
+                self.output_path,
+                names=self.names,
+            )
         return self._frames[index]
 
     def map(self, func: Callable[[Detection], Any]) -> "Detections":
@@ -1114,12 +1424,23 @@ class Detections:
             def _map_gen():
                 for f in self:
                     yield func(f)
-            return Detections(_map_gen(), self.source_type, self.fps, self.output_path, stream=True, total_frames=self.total_frames)
+            return Detections(
+                _map_gen(),
+                self.source_type,
+                self.fps,
+                self.output_path,
+                stream=True,
+                total_frames=self.total_frames,
+                names=self.names,
+            )
         mapped = [func(f) for f in self._frames]
-        return Detections(mapped, self.source_type, self.fps, self.output_path)
+        return Detections(mapped, self.source_type, self.fps, self.output_path, names=self.names)
 
     def map_boxes(self, function: Callable[[Box], Optional[Box]]) -> "Detections":
         return self.map(lambda frame: frame.map_boxes(function))
+
+    def select(self, **selectors: Any) -> "Detections":
+        return self.map(lambda frame: frame.select(**selectors))
 
     def relabel(self, label: Any, **selectors: Any) -> "Detections":
         return self.map(lambda frame: frame.relabel(label, **selectors))
@@ -1244,7 +1565,18 @@ class Detections:
     def __add__(self, other: "Detections") -> "Detections":
         if not isinstance(other, Detections):
             raise TypeError(f"Cannot concatenate Detections with type {type(other)}")
-        return Detections(list(self) + list(other), self.source_type, self.fps, self.output_path)
+        names = dict(self.names)
+        for class_id, label in other.names.items():
+            if class_id in names and names[class_id] != label:
+                raise ValueError(f"class ID {class_id} has conflicting labels")
+            names[class_id] = label
+        return Detections(
+            list(self) + list(other),
+            self.source_type,
+            self.fps,
+            self.output_path,
+            names=names,
+        )
 
     def __iter__(self):
         if self.is_stream:
@@ -1264,12 +1596,24 @@ class Detections:
             yield from iter(self._frames)
 
     @property
+    def names(self) -> Names:
+        """Return the complete class mapping known to this result collection."""
+        names = dict(self._base_names)
+        target = self._frames if not self.is_stream else self._stream_cache
+        for frame in target:
+            for class_id, label in frame._all_names.items():
+                if class_id in names and names[class_id] != label:
+                    raise ValueError(f"class ID {class_id} has conflicting labels")
+                names[class_id] = label
+        return dict(sorted(names.items()))
+
+    @property
     def total_objects(self) -> int:
         target = self._frames if not self.is_stream else self._stream_cache
         return sum(len(f) for f in target)
 
     @property
-    def unique_labels(self) -> List[str]:
+    def unique_labels(self) -> List[ClassName]:
         seen = set()
         out = []
         target = self._frames if not self.is_stream else self._stream_cache
@@ -1281,8 +1625,8 @@ class Detections:
         return out
 
     @property
-    def label_counts(self) -> Dict[str, int]:
-        counts: Dict[str, int] = {}
+    def label_counts(self) -> Dict[ClassName, int]:
+        counts: Dict[ClassName, int] = {}
         target = self._frames if not self.is_stream else self._stream_cache
         for f in target:
             for l in f.labels:
@@ -1348,9 +1692,16 @@ class Detections:
                 for f in self:
                     if fn(f):
                         yield f
-            return Detections(_gen(), self.source_type, self.fps, self.output_path, stream=True)
+            return Detections(
+                _gen(),
+                self.source_type,
+                self.fps,
+                self.output_path,
+                stream=True,
+                names=self.names,
+            )
         filtered = [f for f in self._frames if fn(f)]
-        return Detections(filtered, self.source_type, self.fps, self.output_path)
+        return Detections(filtered, self.source_type, self.fps, self.output_path, names=self.names)
 
     def sort(
         self,
@@ -1358,13 +1709,19 @@ class Detections:
         reverse: bool = True,
     ) -> "Detections":
         sort_fn = key or (lambda f: len(f))
-        return Detections(sorted(self.frames, key=sort_fn, reverse=reverse), self.source_type, self.fps, self.output_path)
+        return Detections(
+            sorted(self.frames, key=sort_fn, reverse=reverse),
+            self.source_type,
+            self.fps,
+            self.output_path,
+            names=self.names,
+        )
 
     def crop(self, output_path: Optional[str] = None, pad: int = 0) -> Crops:
         all_crops: List[Box] = []
         for f in self.frames:
             all_crops.extend(f.crop(pad=pad).crops)
-        crops_obj = Crops(all_crops, pad=pad)
+        crops_obj = Crops(all_crops, pad=pad, names=self.names)
         if output_path:
             crops_obj.export(output_path, format="classification")
         return crops_obj
@@ -1378,7 +1735,10 @@ class Detections:
             files.mkdir(img_dir)
             files.mkdir(lbl_dir)
 
-            classes = sorted(self.unique_labels)
+            classes = sorted(
+                self.unique_labels,
+                key=lambda value: "" if value is None else str(value),
+            )
             for idx, res in enumerate(self.frames):
                 img_name = f"frame_{idx:05d}.jpg"
                 lbl_name = f"frame_{idx:05d}.txt"
@@ -1526,7 +1886,7 @@ DetectionResults = Detections
 PreviewResult = Detections
 
 __all__ = [
-    "Box", "Crops", "Detection", "Detections",
+    "build_detections", "Box", "Crops", "Detection", "Detections",
     "CropResult", "DetectedObject", "CroppedObject", "Boxes",
     "CropResults", "DetectionResult", "DetectionResults", "PreviewResult",
 ]

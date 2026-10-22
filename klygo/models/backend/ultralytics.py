@@ -49,14 +49,22 @@ def format_results(ultra_results: Any) -> List[Dict[str, Any]]:
     raw_list = []
     if ultra_results is not None:
         for res in ultra_results:
-            boxes_data, scores_data, labels_data = [], [], []
+            boxes_data, scores_data, labels_data, class_ids = [], [], [], []
             if getattr(res, "boxes", None) is not None:
                 for b in res.boxes:
                     boxes_data.append(b.xyxy[0].tolist())
                     scores_data.append(float(b.conf[0].item()))
                     cls_id = int(b.cls[0].item())
+                    class_ids.append(cls_id)
                     labels_data.append(res.names.get(cls_id, str(cls_id)))
-            raw_list.append({"boxes": boxes_data, "scores": scores_data, "labels": labels_data})
+            raw_list.append(
+                {
+                    "boxes": boxes_data,
+                    "scores": scores_data,
+                    "labels": labels_data,
+                    "class_ids": class_ids,
+                }
+            )
     return raw_list
 
 

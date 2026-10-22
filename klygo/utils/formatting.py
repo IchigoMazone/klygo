@@ -1,4 +1,47 @@
-"""Formatting utilities shared across Klygo modules."""
+"""Formatting and mapping utilities shared across Klygo modules."""
+
+from typing import Any, Mapping
+
+
+def exclude_keys(
+    values: Mapping[str, Any],
+    keys: str | list[str],
+) -> dict[str, Any]:
+    """Return a shallow copy without the selected keys.
+
+    ``keys`` accepts one string or a list of strings. The input mapping is
+    never modified.
+    """
+    if not isinstance(values, Mapping):
+        raise TypeError("values must be a mapping")
+    if isinstance(keys, str):
+        excluded = {keys}
+    elif isinstance(keys, list) and all(isinstance(key, str) for key in keys):
+        excluded = set(keys)
+    else:
+        raise TypeError("keys must be a string or a list of strings")
+    return {key: value for key, value in values.items() if key not in excluded}
+
+
+def invert(values: Mapping[Any, Any]) -> dict[Any, Any]:
+    """Return a new dictionary with every key and value exchanged.
+
+    Values must be unique and hashable so the operation remains reversible.
+    The input mapping is never modified.
+    """
+    if not isinstance(values, Mapping):
+        raise TypeError("values must be a mapping")
+
+    swapped = {}
+    for key, value in values.items():
+        try:
+            duplicate = value in swapped
+        except TypeError as exc:
+            raise TypeError("mapping values must be hashable") from exc
+        if duplicate:
+            raise ValueError(f"mapping values must be unique; duplicate value: {value!r}")
+        swapped[value] = key
+    return swapped
 
 
 def human_size(num_bytes: int, decimal_places: int = 2) -> str:
@@ -43,4 +86,4 @@ def human_size(num_bytes: int, decimal_places: int = 2) -> str:
     return f"{fmt.format(size)} TB"
 
 
-__all__ = ["human_size"]
+__all__ = ["exclude_keys", "invert", "human_size"]

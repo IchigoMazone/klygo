@@ -121,7 +121,7 @@ class TestModelMetadata(unittest.TestCase):
 
         self.assertEqual(
             result["class"],
-            "test.models.test_metadata.RecordingDetector",
+            f"{RecordingDetector.__module__}.RecordingDetector",
         )
         self.assertIsInstance(models.load(result), RecordingDetector)
 
@@ -152,7 +152,7 @@ class TestModelMetadata(unittest.TestCase):
         self.assertEqual(result.decode.threshold, 0.4)
         self.assertEqual(
             result["class"],
-            "test.models.test_metadata.RecordingDetector",
+            f"{RecordingDetector.__module__}.RecordingDetector",
         )
 
     def test_configure_uses_declared_flags(self):
@@ -353,6 +353,7 @@ class TestModelMetadata(unittest.TestCase):
     def test_registry_uses_flat_metadata_and_model_specific_groups(self):
         grounding_dino = _resolve("grounding-dino-base")
         yolo = _resolve("yolo11n.pt")
+        yolo_world = _resolve("yolov8m-worldv2.pt")
 
         self.assertNotIn("config", grounding_dino)
         self.assertIn("processor", grounding_dino)
@@ -365,6 +366,46 @@ class TestModelMetadata(unittest.TestCase):
             ("model", "processor", "post"),
         )
         self.assertEqual(tuple(yolo["flags"]), ("model", "post"))
+        self.assertEqual(yolo_world["model_id"], "yolov8m-worldv2.pt")
+
+    def test_yolo_world_registry_lists_every_official_checkpoint(self):
+        checkpoints = (
+            "yolov8s-world.pt",
+            "yolov8s-worldv2.pt",
+            "yolov8m-world.pt",
+            "yolov8m-worldv2.pt",
+            "yolov8l-world.pt",
+            "yolov8l-worldv2.pt",
+            "yolov8x-world.pt",
+            "yolov8x-worldv2.pt",
+        )
+
+        for checkpoint in checkpoints:
+            with self.subTest(checkpoint=checkpoint):
+                self.assertEqual(_resolve(checkpoint)["model_id"], checkpoint)
+
+    def test_yolo_registry_lists_current_detection_checkpoints(self):
+        expected = {
+            "yolo11n.pt": "2.6M",
+            "yolo11s.pt": "9.4M",
+            "yolo11m.pt": "20.1M",
+            "yolo11l.pt": "25.3M",
+            "yolo11x.pt": "56.9M",
+            "yolo26n.pt": "2.4M",
+            "yolo26s.pt": "9.5M",
+            "yolo26m.pt": "20.4M",
+            "yolo26l.pt": "24.8M",
+            "yolo26x.pt": "55.7M",
+        }
+
+        for checkpoint, num_params in expected.items():
+            with self.subTest(checkpoint=checkpoint):
+                entry = _resolve(checkpoint)
+                self.assertEqual(entry["model_id"], checkpoint)
+                self.assertEqual(entry["details"]["num_params"], num_params)
+
+        self.assertIsNone(_resolve("yolo11n-seg.pt"))
+        self.assertIsNone(_resolve("yolo26n-cls.pt"))
 
     def test_load_configures_registry_entries_through_the_canonical_pipeline(self):
         load_module = importlib.import_module("klygo.models.load")
@@ -469,7 +510,7 @@ class TestModelMetadata(unittest.TestCase):
         self.assertEqual(restored.metadata.post.threshold, 0.55)
         self.assertEqual(
             restored.metadata["class"],
-            "test.models.test_metadata.RecordingDetector",
+            f"{RecordingDetector.__module__}.RecordingDetector",
         )
 
     def test_create_default_rejects_mixed_default_and_metadata_modes(self):

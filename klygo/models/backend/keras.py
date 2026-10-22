@@ -169,7 +169,7 @@ def format_results(raw_outputs: Any) -> List[Dict[str, Any]]:
         if b_np is not None and s_np is not None:
             batch_size = len(b_np)
             for b_idx in range(batch_size):
-                boxes_data, scores_data, labels_data = [], [], []
+                boxes_data, scores_data, labels_data, class_ids = [], [], [], []
                 sample_b = b_np[b_idx]
                 sample_s = s_np[b_idx]
                 sample_c = c_np[b_idx] if c_np is not None else [0] * len(sample_s)
@@ -177,9 +177,18 @@ def format_results(raw_outputs: Any) -> List[Dict[str, Any]]:
                 for box, score, cls_id in zip(sample_b, sample_s, sample_c):
                     boxes_data.append([float(x) for x in box])
                     scores_data.append(float(score))
-                    labels_data.append(str(int(cls_id)))
+                    class_id = int(cls_id)
+                    class_ids.append(class_id)
+                    labels_data.append(str(class_id))
 
-                raw_list.append({"boxes": boxes_data, "scores": scores_data, "labels": labels_data})
+                raw_list.append(
+                    {
+                        "boxes": boxes_data,
+                        "scores": scores_data,
+                        "labels": labels_data,
+                        "class_ids": class_ids,
+                    }
+                )
             return raw_list
 
     return raw_list

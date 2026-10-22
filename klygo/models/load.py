@@ -20,14 +20,17 @@ CLASS_MAPPING = {
     "Detector": Detector,
     "GroundingDinoDetect": "klygo.models.detection.grounding_dino.GroundingDinoDetect",
     "YOLODetect": "klygo.models.detection.yolo.YOLODetect",
+    "YOLOWorldDetect": "klygo.models.detection.yolo_world.YOLOWorldDetect",
     "LocateAnythingDetect": "klygo.models.detection.locate_anything.LocateAnythingDetect",
     "klygo.models.detection.Detector": Detector,
     "klygo.models.detection.base.Detector": Detector,
     "klygo.models.detection.GroundingDinoDetect": "klygo.models.detection.grounding_dino.GroundingDinoDetect",
     "klygo.models.detection.YOLODetect": "klygo.models.detection.yolo.YOLODetect",
+    "klygo.models.detection.YOLOWorldDetect": "klygo.models.detection.yolo_world.YOLOWorldDetect",
     "klygo.models.detection.LocateAnythingDetect": "klygo.models.detection.locate_anything.LocateAnythingDetect",
     "klygo.models.detection.grounding_dino.GroundingDinoDetect": "klygo.models.detection.grounding_dino.GroundingDinoDetect",
     "klygo.models.detection.yolo.YOLODetect": "klygo.models.detection.yolo.YOLODetect",
+    "klygo.models.detection.yolo_world.YOLOWorldDetect": "klygo.models.detection.yolo_world.YOLOWorldDetect",
     "klygo.models.detection.locate_anything.LocateAnythingDetect": "klygo.models.detection.locate_anything.LocateAnythingDetect",
 }
 

@@ -28,6 +28,7 @@ class TorchvisionCOCODetect(Detector):
         super().__init__(metadata=metadata, backend="Torchvision")
         self.model = model.eval()
         self.categories = {index: name for index, name in enumerate(categories)}
+        self.names = dict(self.categories)
 
     def forward(self, images, prompt=None):
         del prompt
@@ -35,8 +36,8 @@ class TorchvisionCOCODetect(Detector):
         raw = self.format_results(self.run_inference(self.cast_inputs(tensors)))
         for item in raw:
             item["labels"] = [self.categories.get(index, str(index))
-                              for index in item["labels"]]
-        return self.build_detections(images, raw)
+                              for index in item["class_ids"]]
+        return outputs.build_detections(images, raw, names=self.names)
 
 
 def evaluate(dataset_root=None, artifact_root=None):

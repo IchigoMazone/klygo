@@ -1,8 +1,8 @@
 {
-  "yolo11*.pt": {
-    "class": "klygo.models.detection.YOLODetect",
+  "yolov8*-world*.pt": {
+    "class": "klygo.models.detection.YOLOWorldDetect",
     "details": {
-      "name": "YOLO",
+      "name": "YOLO-World",
       "task": "Object-Detection",
       "backend": "Ultralytics",
       "library": "ultralytics",
@@ -10,33 +10,123 @@
     },
     "flags": {"model": false, "post": true},
     "priority": {
-      "model": ["device", "imgsz", "half", "classes", "max_det"],
+      "model": ["device", "imgsz", "half", "max_det"],
       "post": ["threshold", "iou"]
     },
     "model": {},
     "post": {
       "threshold": 0.25,
       "iou": 0.7
+    },
+    "option": {
+      "yolov8s-world.pt": {
+        "model_id": "yolov8s-world.pt"
+      },
+      "yolov8s-worldv2.pt": {
+        "model_id": "yolov8s-worldv2.pt"
+      },
+      "yolov8m-world.pt": {
+        "model_id": "yolov8m-world.pt"
+      },
+      "yolov8m-worldv2.pt": {
+        "model_id": "yolov8m-worldv2.pt"
+      },
+      "yolov8l-world.pt": {
+        "model_id": "yolov8l-world.pt"
+      },
+      "yolov8l-worldv2.pt": {
+        "model_id": "yolov8l-worldv2.pt"
+      },
+      "yolov8x-world.pt": {
+        "model_id": "yolov8x-world.pt"
+      },
+      "yolov8x-worldv2.pt": {
+        "model_id": "yolov8x-worldv2.pt"
+      }
     }
   },
-  "yolo26*.pt": {
+  "yolo11?.pt": {
     "class": "klygo.models.detection.YOLODetect",
     "details": {
       "name": "YOLO",
       "task": "Object-Detection",
       "backend": "Ultralytics",
       "library": "ultralytics",
-      "num_params": "Unknown"
+      "num_params": null
     },
     "flags": {"model": false, "post": true},
     "priority": {
-      "model": ["device", "imgsz", "half", "classes", "max_det"],
+      "model": ["device", "imgsz", "half", "classes", "max_det", "nms", "agnostic_nms"],
       "post": ["threshold", "iou"]
     },
     "model": {},
     "post": {
       "threshold": 0.25,
       "iou": 0.7
+    },
+    "option": {
+      "yolo11n.pt": {
+        "details": {"num_params": "2.6M"},
+        "model_id": "yolo11n.pt"
+      },
+      "yolo11s.pt": {
+        "details": {"num_params": "9.4M"},
+        "model_id": "yolo11s.pt"
+      },
+      "yolo11m.pt": {
+        "details": {"num_params": "20.1M"},
+        "model_id": "yolo11m.pt"
+      },
+      "yolo11l.pt": {
+        "details": {"num_params": "25.3M"},
+        "model_id": "yolo11l.pt"
+      },
+      "yolo11x.pt": {
+        "details": {"num_params": "56.9M"},
+        "model_id": "yolo11x.pt"
+      }
+    }
+  },
+  "yolo26?.pt": {
+    "class": "klygo.models.detection.YOLODetect",
+    "details": {
+      "name": "YOLO",
+      "task": "Object-Detection",
+      "backend": "Ultralytics",
+      "library": "ultralytics",
+      "num_params": null
+    },
+    "flags": {"model": false, "post": true},
+    "priority": {
+      "model": ["device", "imgsz", "half", "classes", "max_det", "nms", "agnostic_nms"],
+      "post": ["threshold", "iou"]
+    },
+    "model": {},
+    "post": {
+      "threshold": 0.25,
+      "iou": 0.7
+    },
+    "option": {
+      "yolo26n.pt": {
+        "details": {"num_params": "2.4M"},
+        "model_id": "yolo26n.pt"
+      },
+      "yolo26s.pt": {
+        "details": {"num_params": "9.5M"},
+        "model_id": "yolo26s.pt"
+      },
+      "yolo26m.pt": {
+        "details": {"num_params": "20.4M"},
+        "model_id": "yolo26m.pt"
+      },
+      "yolo26l.pt": {
+        "details": {"num_params": "24.8M"},
+        "model_id": "yolo26l.pt"
+      },
+      "yolo26x.pt": {
+        "details": {"num_params": "55.7M"},
+        "model_id": "yolo26x.pt"
+      }
     }
   },
   "locate-anything": {

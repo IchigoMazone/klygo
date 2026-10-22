@@ -49,14 +49,18 @@ def run_inference(model: Any, inputs: list[torch.Tensor], **kwargs):
 
 
 def format_results(raw_outputs: Any) -> list[dict[str, Any]]:
-    return [
-        {
-            "boxes": item["boxes"].detach().cpu().tolist(),
-            "scores": item["scores"].detach().cpu().tolist(),
-            "labels": item["labels"].detach().cpu().tolist(),
-        }
-        for item in raw_outputs
-    ]
+    results = []
+    for item in raw_outputs:
+        class_ids = [int(value) for value in item["labels"].detach().cpu().tolist()]
+        results.append(
+            {
+                "boxes": item["boxes"].detach().cpu().tolist(),
+                "scores": item["scores"].detach().cpu().tolist(),
+                "labels": list(class_ids),
+                "class_ids": class_ids,
+            }
+        )
+    return results
 
 
 def reset(model: Any) -> None:
