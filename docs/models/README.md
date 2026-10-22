@@ -61,6 +61,7 @@ See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](back
 | **Combine schema flags, priority, and details** | [`metadata()`](api/metadata.md) | `schema = models.metadata(f, priority=p, details=d)` |
 | **Bind `model_id`, class, and parameter values** | [`configure()`](api/configure.md) | `cfg = models.configure("coco-v1", metadata=schema, implementation=MyDetector, threshold=0.5)` |
 | **Build a custom multi-backend detector** | [`Detector`](api/Detector.md) | `class MyDetector(models.Detector): def forward(self, images, prompt=None): ...` |
+| **Pack formatted backend dicts into `Detection` frames** | [`outputs.build_detections()`](../outputs/api/build_detections.md) | `outputs.build_detections(images, self.format_results(raw), names=self.names)` |
 | **Run batch detection on images, folders, or videos** | [`Detector.predict()`](api/Detector.md) | `dets = detector.predict("images/", threshold=0.4)` |
 | **Stream large videos lazily without filling RAM** | [`Detector.predict()`](api/Detector.md) | `for frame_det in detector.predict("traffic.mp4", stream=True, step=2): ...` |
 | **Measure model latency (ms) and throughput (FPS)** | [`Detector.benchmark()`](api/Detector.md) | `stats = detector.benchmark("sample.jpg", num_runs=50, warmup=5)` |

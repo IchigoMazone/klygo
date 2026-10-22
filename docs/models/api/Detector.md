@@ -20,7 +20,7 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
    - `self.cast_inputs(inputs, dev=None, dtype=None)`: Cast floating-point tensors to the model's device and dtype while preserving integer tensors (`input_ids`) via `common.cast_inputs()`.
    - `self.run_inference(inputs, **model_kwargs)`: Execute forward pass via `common.run_inference()` on the active backend adapter (`Hugging Face`, `Ultralytics`, `Torchvision`, or `Keras`).
    - `self.get_output_device(outputs)` / `self.sync_device(tensor, target_device)`: Inspect output device and synchronize multi-GPU tensors via `common.get_output_device()` and `common.sync_device()`.
-   - `self.format_results(raw_outputs)`: Normalize framework-native predictions into `list[dict[str, Any]]` with `"boxes"` (`xyxy`), `"scores"`, `"labels"`, and `"class_ids"` via `common.format_results()`.
+   - `self.format_results(raw_outputs)`: Normalize framework-native predictions into `list[dict[str, Any]]` with `"boxes"` (`xyxy`), `"scores"`, `"labels"`, and `"class_ids"` via `common.format_results()`, ready to pass straight into [`outputs.build_detections(images, formatted, names=self.names)`](../../outputs/api/build_detections.md).
    - See the [`klygo.models.backend` & `common` Guide](../backend/README.md) for direct usage of all 15 `common` functions.
 2. **Inference Engine (`predict`)**:
    - Resolves single images, lists of images, directories, or video streams through `klygo.media`.
