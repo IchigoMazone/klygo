@@ -1,6 +1,7 @@
-"""
-Hugging Face Backend Logic (klygo.models.backend.huggingface).
-Chứa toàn bộ logic xử lý đặc thù cho các mô hình Hugging Face Transformers.
+"""Hugging Face Backend Logic (`klygo.models.backend.huggingface`).
+
+Provides runtime adaptation, tensor casting, AMP inference, and lifecycle
+helpers for Hugging Face Transformers models (such as Grounding DINO).
 """
 
 from typing import Any, Optional
@@ -32,9 +33,10 @@ def inference_context():
 
 
 def cast_inputs(inputs: Any, dev: torch.device, dtype: torch.dtype) -> Any:
-    """
-    Cast an toàn các floating tensors trong inputs (Hugging Face BatchFeature / Dict)
-    lên đúng device + dtype của model, bảo vệ nguyên vẹn các tensor số nguyên (input_ids).
+    """Cast floating-point tensors in Hugging Face ``BatchFeature`` or dict inputs to ``(dev, dtype)``.
+
+    Preserves integer token tensors (such as ``input_ids`` and ``attention_mask``)
+    while moving them to ``dev``.
     """
     is_cpu = (dev.type == "cpu")
     is_cuda = (dev.type == "cuda")
@@ -84,12 +86,7 @@ def cast_inputs(inputs: Any, dev: torch.device, dtype: torch.dtype) -> Any:
 
 
 def run_inference(model: Any, inputs: Any, cur_dtype: torch.dtype, **model_kwargs) -> Any:
-    """
-    Thực thi forward của mô hình Hugging Face với PyTorch AMP autocast.
-
-    Đồng bộ accelerator là quyết định của caller (ví dụ benchmark), tránh chặn
-    pipeline CUDA sau mọi lần suy luận thông thường.
-    """
+    """Execute a Hugging Face model forward pass inside PyTorch AMP ``autocast``."""
     use_half = (cur_dtype == torch.float16)
     if cur_dtype == torch.bfloat16:
         eff_dtype = "bfloat16"
@@ -125,9 +122,7 @@ def clear_cache() -> None:
 
 
 def get_output_device(outputs: Any, default_device: Optional[torch.device] = None) -> torch.device:
-    """
-    Dò tìm thiết bị thực tế của tensor đầu ra Hugging Face ModelOutput (logits, pred_boxes).
-    """
+    """Detect the actual device of Hugging Face ``ModelOutput`` tensors (``logits``, ``pred_boxes``)."""
     if hasattr(outputs, "logits") and isinstance(outputs.logits, torch.Tensor):
         return outputs.logits.device
     if hasattr(outputs, "pred_boxes") and isinstance(outputs.pred_boxes, torch.Tensor):
@@ -138,10 +133,7 @@ def get_output_device(outputs: Any, default_device: Optional[torch.device] = Non
 
 
 def sync_device(tensor: Any, target_device: Any) -> Any:
-    """
-    Đồng bộ an toàn tensor (ví dụ: input_ids) về cùng device với target_device
-    (hữu ích khi chạy multi-GPU hoặc device_map='auto' trong HF).
-    """
+    """Move ``tensor`` (such as ``input_ids``) to ``target_device`` for multi-GPU setups."""
     if isinstance(tensor, torch.Tensor) and hasattr(target_device, "type"):
         if tensor.device != target_device:
             return tensor.to(target_device, non_blocking=(target_device.type == "cuda"))
@@ -149,7 +141,7 @@ def sync_device(tensor: Any, target_device: Any) -> Any:
 
 
 def save(model: Any, processor: Optional[Any], output_dir: str) -> None:
-    """Lưu model và processor theo chuẩn Hugging Face save_pretrained()."""
+    """Save the model and processor using Hugging Face ``save_pretrained()``."""
     from klygo import files
     abs_out = files.resolve(output_dir)
     if model is not None and hasattr(model, "save_pretrained"):
@@ -159,12 +151,12 @@ def save(model: Any, processor: Optional[Any], output_dir: str) -> None:
 
 
 def reset(model: Any, processor: Optional[Any] = None) -> None:
-    """Đưa model Hugging Face về CPU khi reset trạng thái."""
+    """Move a Hugging Face model back to CPU."""
     if model is not None and hasattr(model, "cpu"):
         model.cpu()
 
 
 def unload(model: Any, processor: Optional[Any] = None) -> None:
-    """Thu hồi tài nguyên Hugging Face model & processor."""
+    """Release Hugging Face model and processor accelerator resources."""
     if model is not None and hasattr(model, "cpu"):
         model.cpu()

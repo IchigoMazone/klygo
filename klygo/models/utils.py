@@ -324,15 +324,16 @@ def resolve_images(
     max_frames: Optional[int] = None,
     stream: bool = False,
 ) -> Tuple[Union[List[PIL.Image.Image], Any], bool]:
-    """
-    Tự động phân giải nguồn dữ liệu đầu vào thông qua klygo.media.
-    Hỗ trợ stream=True để trả về Generator (chống văng RAM khi đọc video lớn).
+    """Resolve input media sources via :mod:`klygo.media`.
+
+    Supports ``stream=True`` to return a lazy generator for large videos or
+    image sequences without loading all frames into memory at once.
     """
     from klygo import media
 
     step = max(1, int(step))
 
-    # Xử lý luồng Generator/Stream
+    # Streaming / generator path
     if stream:
         raw_stream = None
         total_frames = None
@@ -380,7 +381,7 @@ def resolve_images(
 
         return _build_generator(), is_single
 
-    # Xử lý luồng List (RAM tiêu chuẩn) - Giữ nguyên logic cũ
+    # In-memory list path (standard RAM mode)
     if isinstance(source, (str, Path)):
         loaded = media.load(source, verbose=False)
         raw_list = loaded if isinstance(loaded, list) else [loaded]
@@ -434,7 +435,7 @@ def resolve_images(
 
 
 def normalize_prompt(text_prompt: Union[str, List[str]]) -> List[str]:
-    """Chuẩn hóa prompt nhãn từ khóa thành danh sách List[str]."""
+    """Normalize a text prompt string or sequence into a non-empty ``List[str]``."""
     from klygo.validators import validate_type
     validate_type(text_prompt, (str, list, tuple), "prompt")
     if isinstance(text_prompt, str):

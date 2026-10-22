@@ -1,26 +1,60 @@
 # `postprocessing.custom`
 
 ```python
-postprocessing.custom(function: 'Callable[[Any], Any]', name: 'Optional[str]' = None) -> 'Operation'
+postprocessing.custom(function, name=None)
 ```
 
-Wrap a callable as a named operation.
+Wrap an ordinary Python callable into a named [`Operation`](Operation.md) for use in postprocessing pipelines.
 
-**Parameters:** function is callable; name optionally overrides its display name.
+## Contract
 
-**Returns and effects:** Returns a new result, an `Operation`, a `Pipeline`, or an IoU float as indicated by the signature. Detection transformations preserve the original result and map lazily over `Detections` streams.
+Validates that `function` is callable and wraps it in a frozen [`Operation(name, function)`](Operation.md):
+- If `name` is explicitly provided and truthy, uses `name` as the operation's identifier.
+- Otherwise falls back to `getattr(function, "__name__", "custom")`.
+- The returned `Operation` can be called directly on a `Detection`, `Detections`, or `Crops` result, or combined with built-in stages inside [`compose()`](compose.md), [`Pipeline`](Pipeline.md), and [`apply()`](apply.md). When a [`Pipeline`](Pipeline.md) executes on a `Detections` collection, `function` is invoked per frame via `Detections.map(...)`.
 
-**Errors:** Invalid result types raise `TypeError`. Invalid selectors or parameters raise their documented validation errors where applicable.
+## Parameters
+
+- `function`: `Callable[[Any], Any]` — user-defined transformation function accepting a detection result and returning the transformed result.
+- `name`: `str | None`, default `None` — optional display name for the operation; defaults to `function.__name__` or `'custom'`.
+
+## Returns
+
+`Operation` — named operation wrapping `function`.
+
+## Errors and edge cases
+
+Raises `TypeError("function must be callable")` immediately if `function` is not callable.
+
+## Example
+
+See [`custom.py`](../../../examples/postprocessing/custom.py) for a standalone runnable script.
+
+## Complete executable example
 
 ```python
+"""Wrap a custom filtering function as a named Operation and compose it in a Pipeline."""
+
 from PIL import Image
 from klygo import postprocessing as post
 from klygo.outputs.detect import Box, Detection
 
 image = Image.new("RGB", (100, 80), "white")
-frame = Detection(image, [Box(0, "cat", 0.9, [-5, 0, 50, 50]), Box(0, "cat", 0.8, [0, 0, 48, 48]), Box(1, "dog", 0.4, [60, 10, 90, 60])])
-operation = post.custom(lambda result: post.select(result, labels=["cat"]), name="cats")
-print(operation(frame).labels)
-```
+frame = Detection(
+    image,
+    [
+        Box(0, "cat", 0.9, [-5, 0, 50, 50]),
+        Box(0, "cat", 0.8, [0, 0, 48, 48]),
+        Box(1, "dog", 0.4, [60, 10, 90, 60]),
+    ],
+)
 
-Run [the standalone example](../../../examples/postprocessing/custom.py) or explore the [module index](../README.md).
+keep_cats = post.custom(lambda result: post.select(result, labels=["cat"]), name="cats")
+assert repr(keep_cats) == "Operation(cats)"
+assert keep_cats(frame).labels == ["cat", "cat"]
+
+# Combine custom operation with built-in pipeline stages
+pipeline = post.compose(keep_cats, post.nms(0.5))
+assert pipeline(frame).labels == ["cat"]
+print(keep_cats(frame).labels)
+```

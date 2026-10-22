@@ -1,23 +1,43 @@
 # `models.base`
 
 ```python
-models.base (module)
+from klygo.models import base
 ```
 
-Access the abstract BaseModel implementation module.
+Public submodule namespace defining [`BaseModel`](BaseModel.md), the Layer-1 abstract contract for all Klygo model wrappers.
 
-**Parameters:** Module namespace; BaseModel is abstract.
+## Contract
 
-**Returns and effects:** Returns the module; concrete subclasses must implement predict, benchmark, and help.
+`klygo.models.base` is exported on the top-level `klygo.models` facade so callers and type checkers can reference `models.base.BaseModel` or inspect the Layer-1 implementation module directly. Its `__all__` inventory exports `["BaseModel"]`.
+
+## Exported Symbols
+
+- [`BaseModel`](BaseModel.md): Abstract base class providing lifecycle state tracking (`LOADING`, `READY`, `UNLOADED`), `metadata` and `flags` normalization, call-local runtime metadata context (`_use_metadata`), Rich terminal inspection (`info()`), and post-unload access guards.
+
+## Returns
+
+Importing or accessing `models.base` returns the `klygo.models.base` Python module object.
+
+## Errors and edge cases
+
+`models.base.BaseModel` is abstract and cannot be instantiated directly without implementing `predict`, `benchmark`, and `help`.
+
+## Example
+
+See [`base.py`](../../../examples/models/base.py) for a standalone executable script.
+
+## Tests
+
+See [`test_class_registry_backends.py`](../../../test/models/test_class_registry_backends.py).
+
+## Complete executable example
 
 ```python
-import sys
-
-# Prevent metadata.py and base.py from shadowing Python support modules.
-sys.path.pop(0)
+"""Executable example for klygo.models.base."""
 
 from klygo import models
-print(models.base.BaseModel is models.BaseModel)
-```
 
-Run [the standalone example](../../../examples/models/base.py) and see the [module index](../README.md) for related APIs.
+print(models.base.__all__)
+print(models.base.BaseModel is models.BaseModel)
+print(issubclass(models.Detector, models.base.BaseModel))
+```

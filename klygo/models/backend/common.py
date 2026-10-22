@@ -1,7 +1,8 @@
-"""
-Common Backend Logic & Unified Dispatchers (klygo.models.backend.common).
-Chứa toàn bộ logic dùng chung cho việc dò tìm device/dtype, dọn dẹp cache GPU,
-và bộ điều phối (dispatchers) vòng đời cho các backend framework khác nhau.
+"""Common Backend Logic & Unified Dispatchers (`klygo.models.backend.common`).
+
+Provides shared device/dtype detection, GPU cache management, and lifecycle
+dispatchers across all supported model backends (Hugging Face, Ultralytics,
+Torchvision, and Keras).
 """
 
 import importlib
@@ -36,7 +37,7 @@ def _runtime_adapter(backend: Optional[str]):
 
 
 def current_device(model: Any, backend: Optional[str] = None) -> Any:
-    """Dò tìm device thực tế của model."""
+    """Detect the active device hosting the wrapped model."""
     adapter = _runtime_adapter(backend)
     if adapter is not None:
         return adapter.current_device(model)
@@ -44,7 +45,7 @@ def current_device(model: Any, backend: Optional[str] = None) -> Any:
 
 
 def current_dtype(model: Any, backend: Optional[str] = None) -> Any:
-    """Dò tìm dtype thực tế của model."""
+    """Detect the numerical dtype of the wrapped model."""
     adapter = _runtime_adapter(backend)
     if adapter is not None:
         return adapter.current_dtype(model)
@@ -88,7 +89,7 @@ def inference_context(backend: str):
 
 
 def cast_inputs(backend: str, inputs: Any, dev: Any, dtype: Any) -> Any:
-    """Điều phối ép kiểu inputs theo backend."""
+    """Dispatch input tensor casting to the selected backend adapter."""
     family = backend_family(backend)
     if family == "Hugging Face":
         return _import_adapter("huggingface").cast_inputs(inputs, dev=dev, dtype=dtype)
@@ -100,7 +101,7 @@ def cast_inputs(backend: str, inputs: Any, dev: Any, dtype: Any) -> Any:
 
 
 def run_inference(backend: str, model: Any, inputs: Any, cur_dtype: Any, **model_kwargs) -> Any:
-    """Điều phối suy luận với autocast theo backend."""
+    """Dispatch model forward execution to the selected backend adapter."""
     family = backend_family(backend)
     if family == "Hugging Face":
         return _import_adapter("huggingface").run_inference(
@@ -116,7 +117,7 @@ def run_inference(backend: str, model: Any, inputs: Any, cur_dtype: Any, **model
 
 
 def get_output_device(backend: str, outputs: Any, default_device: Any) -> Any:
-    """Điều phối dò tìm device đầu ra theo backend."""
+    """Dispatch output tensor device detection to the selected backend adapter."""
     family = backend_family(backend)
     if family == "Hugging Face":
         return _import_adapter("huggingface").get_output_device(
@@ -128,14 +129,14 @@ def get_output_device(backend: str, outputs: Any, default_device: Any) -> Any:
 
 
 def sync_device(backend: str, tensor: Any, target_device: Any) -> Any:
-    """Điều phối đồng bộ device của tensor."""
+    """Dispatch tensor device synchronization to the selected backend adapter."""
     if backend_family(backend) == "Hugging Face":
         return _import_adapter("huggingface").sync_device(tensor, target_device)
     return tensor
 
 
 def format_results(backend: str, raw_outputs: Any) -> List[Dict[str, Any]]:
-    """Điều phối chuẩn hóa kết quả thô theo backend."""
+    """Dispatch raw prediction normalization to the selected backend adapter."""
     family = backend_family(backend)
     if family == "Ultralytics":
         return _import_adapter("ultralytics").format_results(raw_outputs)
@@ -147,7 +148,7 @@ def format_results(backend: str, raw_outputs: Any) -> List[Dict[str, Any]]:
 
 
 def reset(backend: str, model: Any, processor: Optional[Any] = None) -> None:
-    """Điều phối reset mô hình về CPU theo backend."""
+    """Move the wrapped model back to CPU and clear accelerator caches."""
     family = backend_family(backend)
     if family == "Hugging Face":
         _import_adapter("huggingface").reset(model, processor=processor)
@@ -163,7 +164,7 @@ def reset(backend: str, model: Any, processor: Optional[Any] = None) -> None:
 
 
 def unload(backend: str, model: Any, processor: Optional[Any] = None) -> None:
-    """Điều phối giải phóng tài nguyên mô hình theo backend."""
+    """Release backend model resources and clear accelerator caches."""
     family = backend_family(backend)
     if family == "Hugging Face":
         _import_adapter("huggingface").unload(model, processor=processor)
@@ -186,21 +187,18 @@ def save(
     class_module: str,
     processor: Optional[Any] = None,
 ) -> None:
-    """
-    Lưu toàn bộ mô hình (Metadata klygo.json + Custom class model.py + Trọng số backend).
-    Được dùng chung cho mọi task trong Klygo.
-    """
+    """Save a complete model bundle (``klygo.json`` metadata, custom ``model.py``, and weights)."""
     from klygo import files
 
     abs_out = files.resolve(output_dir)
     files.mkdir(abs_out)
 
-    # 1. Ghi klygo.json
+    # 1. Write klygo.json metadata
     meta = dict(metadata)
     meta.pop("num_params", None)
     files.save(files.join(abs_out, "klygo.json"), meta, verbose=False)
 
-    # 2. Xử lý Custom Class (copy model.py nếu không phải built-in)
+    # 2. Copy custom class definition (model.py) when not a built-in Klygo wrapper
     if not class_module.startswith("klygo.models."):
         mod = sys.modules.get(class_module)
         if mod and hasattr(mod, "__file__") and mod.__file__:
@@ -208,7 +206,7 @@ def save(
             if files.exists(source_file):
                 files.copy(source_file, files.join(abs_out, "model.py"), overwrite=True)
 
-    # 3. Trọng số & Artifacts ủy thác theo backend
+    # 3. Delegate model weight serialization to the active backend adapter
     family = backend_family(backend)
     if family == "Hugging Face" or processor is not None:
         _import_adapter("huggingface").save(model, processor, abs_out)

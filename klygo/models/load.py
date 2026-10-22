@@ -38,7 +38,7 @@ _REGISTRY_CACHE: Optional[Dict[str, Any]] = None
 
 
 def _get_registry() -> Dict[str, Any]:
-    """Tải và lưu vào bộ nhớ đệm models.json để truy xuất tức thì O(1)."""
+    """Load and cache ``models.json`` in memory for O(1) registry lookups."""
     global _REGISTRY_CACHE
     if _REGISTRY_CACHE is None:
         current_dir = files.parent(files.resolve(__file__))
@@ -48,7 +48,7 @@ def _get_registry() -> Dict[str, Any]:
 
 
 def _resolve_class(class_path: str, search_dir: Optional[str] = None) -> Any:
-    """Nạp động lớp mô hình từ đường dẫn module hoặc từ file .py cục bộ."""
+    """Dynamically resolve a model wrapper class from a module import path or local ``model.py``."""
     if not isinstance(class_path, str) or not class_path.strip():
         raise ValueError(
             "Model metadata must define a non-empty 'class' import path."
@@ -60,7 +60,7 @@ def _resolve_class(class_path: str, search_dir: Optional[str] = None) -> Any:
         module_path, class_name = target.rsplit(".", 1)
         return getattr(importlib.import_module(module_path), class_name)
 
-    # 1. Nạp từ file model.py cục bộ nếu nằm trong thư mục model custom
+    # 1. Resolve from a local model.py inside a saved custom model directory
     if search_dir and files.is_dir(search_dir):
         py_files = [files.join(search_dir, "model.py")]
         if "." in class_path:
@@ -80,7 +80,7 @@ def _resolve_class(class_path: str, search_dir: Optional[str] = None) -> Any:
                 except Exception:
                     pass
 
-    # 2. Nạp từ package/module chuẩn
+    # 2. Resolve from an importable Python package or module
     if "." in class_path:
         try:
             module_path, class_name = class_path.rsplit(".", 1)
@@ -96,7 +96,7 @@ def _resolve_class(class_path: str, search_dir: Optional[str] = None) -> Any:
 
 @lru_cache(maxsize=128)
 def _resolve(name: str) -> Optional[Dict[str, Any]]:
-    """Phân giải định danh mô hình với LRU Cache."""
+    """Resolve a registered model identifier or wildcard pattern with an LRU cache."""
     registry = _get_registry()
     entry = registry.get(name)
     if entry and "*" not in name:
@@ -179,11 +179,11 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
         If the source cannot be resolved, its class is missing, or an override
         does not map to a declared parameter group.
     """
-    # 0. Nhận trực tiếp BaseModel hoặc PyTorch nn.Module instance
+    # 0. Return an existing BaseModel wrapper directly
     if isinstance(model, BaseModel):
         return model
 
-    # 0.1. Nhận trực tiếp Box / Config object hoặc mapping metadata.
+    # 0.1. Accept a Box, Config object, or metadata mapping directly
     if isinstance(model, Box):
         model = model.to_dict()
 
@@ -248,7 +248,7 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
             "pass config.load(path) or Config(path).read()"
         )
 
-    # 1. Nạp từ thư mục Offline hoặc Thư mục Export
+    # 1. Load from an offline or exported model directory
     if files.is_dir(model):
         abs_model_path = str(files.resolve(model))
         search_dir = abs_model_path
@@ -286,7 +286,7 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
                         },
                     }
 
-    # 2. Nạp từ file trọng số YOLO .pt
+    # 2. Load from a local YOLO .pt weights file
     elif files.is_file(model) and files.extension(model).lower() == ".pt":
         entry = {
             "class": "klygo.models.detection.YOLODetect",
@@ -306,7 +306,7 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
             },
         }
 
-    # 3. Tra cứu từ Registry Trực Tuyến
+    # 3. Look up in the built-in model registry
     if entry is None:
         entry = _resolve(model)
 
@@ -315,7 +315,7 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
             f"Model '{model}' does not exist in registry and is not a valid offline model directory or file."
         )
 
-    # 4. Mọi nguồn đều đi qua cùng pipeline configure -> instantiate.
+    # 4. Route all resolved sources through configure -> instantiate
     return _instantiate(
         entry,
         source_id=model,

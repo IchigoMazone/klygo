@@ -2,8 +2,9 @@
 
 These guides connect Klygo modules on labeled real images. Generated datasets, weights, and reports stay outside code directories under `artifacts/integration/`.
 
-| Workflow | Example | Notebook |
+| Workflow | Example | Guide / Notebook |
 | --- | --- | --- |
+| [4-Backend Detection Benchmark (YOLO, YOLO-World, Faster R-CNN, RT-DETR/D-FINE)](multi-backend-workflow.md) | [Run](../../examples/integration/multi_backend_workflow.py) | [Docs](multi-backend-workflow.md) |
 | [Local Detector Evaluation](local-model-workflow.md) | [Run](../../examples/integration/local_model_workflow.py) | [Docs](local-model-workflow.md) |
 | [Torchvision on COCO15](torchvision-coco15.md) | [Run](../../examples/integration/torchvision_coco15.py) | [Open](../../tutorials/integration/Torchvision_COCO15.ipynb) |
 
@@ -28,4 +29,3 @@ Each notebook evaluates one object class with the pinned 128-image COCO15 datase
 | 12 | chair | 9 | [Open](../../tutorials/integration/Klygo_COCO15_12_chair.ipynb) |
 | 13 | book | 6 | [Open](../../tutorials/integration/Klygo_COCO15_13_book.ipynb) |
 | 14 | teddy bear | 6 | [Open](../../tutorials/integration/Klygo_COCO15_14_teddy_bear.ipynb) |
-

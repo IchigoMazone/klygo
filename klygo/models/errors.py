@@ -7,25 +7,25 @@ __all__ = [
 
 
 class ModelFrameworkError(Exception):
-    """Ngoại lệ cơ sở cho toàn bộ hệ thống mô hình AI trong Klygo."""
+    """Base exception for all Klygo AI model configuration and runtime errors."""
     pass
 
 
 class InvalidStateError(ModelFrameworkError):
-    """Ném ra khi gọi phương thức ở trạng thái không hợp lệ (ví dụ: gọi predict sau khi model đã unload)."""
+    """Raised when a model operation is invoked in an invalid lifecycle state (e.g., calling ``predict()`` after ``unload()``)."""
     pass
 
 
 class InvalidConfigError(ModelFrameworkError, ValueError):
-    """Ném ra khi cấu hình truyền vào không hợp lệ."""
+    """Raised when model metadata or configuration parameters are invalid."""
     pass
 
 
 class InvalidDeviceError(ModelFrameworkError, ValueError):
-    """Ném ra khi thiết bị phần cứng được chỉ định không hợp lệ."""
+    """Raised when a requested hardware accelerator or device specification is invalid."""
     pass
 
 
 class InvalidDtypeError(ModelFrameworkError, ValueError):
-    """Ném ra khi kiểu dữ liệu độ chính xác (dtype) không được hỗ trợ."""
+    """Raised when a requested numerical precision (dtype) is unsupported by the active backend."""
     pass

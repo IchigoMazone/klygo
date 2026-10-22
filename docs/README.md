@@ -15,12 +15,12 @@ Klygo provides Python utilities for archive operations, filesystem access, confi
 - [`klygo.outputs`](outputs/README.md): Structured object-detection results.
 - [`klygo.media`](media/README.md): Lazy image and video loading, streaming, conversion, and output.
 - [`klygo.postprocessing`](postprocessing/README.md): Composable detection-result transformations.
-- [`klygo.models`](models/README.md): Model metadata, loading, and backend wrappers.
+- [`klygo.models`](models/README.md): 3-tier model architecture (`BaseModel`, `Detector`), metadata schema builders, and multi-backend execution across Ultralytics, Hugging Face, Torchvision, and KerasHub.
 - [`klygo.preprocessing`](preprocessing/README.md): Image transforms, metrics, and coordinate restoration.
 
 ## Workflows
 
-- [Real-image integration workflows](integration/README.md): Run multiple Klygo modules together and inspect isolated reports.
+- [Real-image integration workflows](integration/README.md): Run multiple Klygo modules together across 4 AI backends ([4-Backend Detection Benchmark](integration/multi-backend-workflow.md)) and inspect isolated reports.
 
 ## Conventions
 

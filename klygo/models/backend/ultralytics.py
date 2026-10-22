@@ -1,6 +1,7 @@
-"""
-Ultralytics Backend Logic (klygo.models.backend.ultralytics).
-Chứa toàn bộ logic xử lý đặc thù cho các mô hình Ultralytics YOLO.
+"""Ultralytics Backend Logic (`klygo.models.backend.ultralytics`).
+
+Provides runtime adaptation, result formatting, and lifecycle helpers for
+Ultralytics YOLO and YOLO-World detection models.
 """
 
 from typing import Any, List, Dict
@@ -45,7 +46,7 @@ def clear_cache() -> None:
 
 
 def format_results(ultra_results: Any) -> List[Dict[str, Any]]:
-    """Bóc tách boxes, scores, labels từ kết quả trả về của Ultralytics YOLO."""
+    """Extract normalized ``boxes``, ``scores``, ``labels``, and ``class_ids`` from Ultralytics Results."""
     raw_list = []
     if ultra_results is not None:
         for res in ultra_results:
@@ -69,7 +70,7 @@ def format_results(ultra_results: Any) -> List[Dict[str, Any]]:
 
 
 def save(model: Any, output_dir: str) -> None:
-    """Lưu trọng số theo chuẩn Ultralytics YOLO."""
+    """Save weights using the Ultralytics model ``save()`` method."""
     from klygo import files
     abs_out = files.resolve(output_dir)
     if model is not None and hasattr(model, "save"):
@@ -77,12 +78,12 @@ def save(model: Any, output_dir: str) -> None:
 
 
 def reset(model: Any) -> None:
-    """Đưa model Ultralytics về CPU khi reset trạng thái."""
+    """Move an Ultralytics model back to CPU."""
     if model is not None and hasattr(model, "cpu"):
         model.cpu()
 
 
 def unload(model: Any) -> None:
-    """Thu hồi tài nguyên Ultralytics YOLO model."""
+    """Release Ultralytics model accelerator resources."""
     if model is not None and hasattr(model, "cpu"):
         model.cpu()
