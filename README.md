@@ -102,7 +102,7 @@ files.mkdir(workspace)
 settings_path = files.join(workspace, "settings.yaml")
 files.save(settings_path, {"model": {"threshold": 0.4}}, overwrite=True)
 settings = config.load(settings_path)
-config.set(settings, "model.batch", 4)
+settings = config.set(settings, "model.batch", 4)
 
 archive.compress(workspace, "workspace.zip", overwrite=True)
 archive.extract("workspace.zip", output_dir="restored", overwrite=True)
@@ -168,7 +168,7 @@ frame, and streaming information before returning `Detections`.
 ```python
 from klygo import datasets
 
-info = datasets.get_dataset_info("dataset.zip")
+info = datasets.info("dataset.zip")
 flat_path = datasets.unpartition("dataset.zip", "flat-dataset")
 samples = datasets.load(flat_path)
 
