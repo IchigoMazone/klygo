@@ -128,13 +128,13 @@ class CustomKerasDetector(models.Detector):
 
 ---
 
-## 4. Framework Adapter Modules
+## 4. Framework Adapter Modules & Guides
 
-| Adapter Module | Import Path | Optional Extra | Responsibility |
-| :--- | :--- | :--- | :--- |
-| [`common.py`](api/common.md) | `klygo.models.backend.common` | None (lazy) | Unified dispatcher routing all 15 operations to the active adapter. |
-| `huggingface.py` | `klygo.models.backend.huggingface` (`backend.hf`) | `klygo[transformers]` | `BatchFeature` float casting, AMP `autocast`, `ModelOutput` device inspection, `save_pretrained`. |
-| `ultralytics.py` | `klygo.models.backend.ultralytics` (`backend.ul`) | `klygo[ultralytics]` | `Results.boxes` extraction (`xyxy`, `conf`, `cls`), `.save()`. |
-| `torchvision.py` | `klygo.models.backend.torchvision` | `klygo[torchvision]` | `list[Tensor]` device/dtype casting, tensor-to-Python list formatting, `state_dict` saving. |
-| `keras.py` | `klygo.models.backend.keras` (`backend.kerashub`) | `klygo[keras]` | Multi-engine (`torch`/`jax`/`tensorflow`) tensor casting, `KerasHub` `ObjectDetector` resize + `decode_predictions`, `yxyx` $\rightarrow$ `xyxy` conversion, `-1` padding filter. |
-| `torch_runtime.py` | `klygo.models.backend.torch_runtime` | `torch` | Shared CUDA/CPU device detection, `torch.cuda.synchronize`, `torch.cuda.empty_cache`, `torch.amp.autocast`, and `torch.inference_mode`. |
+| Adapter Module | Guide & Reference | Import Path | Optional Extra | Responsibility |
+| :--- | :--- | :--- | :--- | :--- |
+| [`common.py`](api/common.md) | [Common Dispatchers](api/common.md) | `klygo.models.backend.common` | None (lazy) | Unified dispatcher routing all 15 operations to the active adapter. |
+| [`ultralytics.py`](api/ultralytics.md) | [Ultralytics Guide](api/ultralytics.md) | `klygo.models.backend.ultralytics` (`backend.ul`) | `klygo[ultralytics]` | `Results.boxes` extraction (`xyxy`, `conf`, `cls`), `.save()`. |
+| [`huggingface.py`](api/huggingface.md) | [Hugging Face Guide](api/huggingface.md) | `klygo.models.backend.huggingface` (`backend.hf`) | `klygo[transformers]` | `BatchFeature` float casting, AMP `autocast`, `ModelOutput` device inspection, `save_pretrained`. |
+| [`torchvision.py`](api/torchvision.md) | [Torchvision Guide](api/torchvision.md) | `klygo.models.backend.torchvision` | `klygo[torchvision]` | `list[Tensor]` device/dtype casting, tensor-to-Python list formatting, `state_dict` saving. |
+| [`keras.py`](api/keras.md) | [Keras & KerasHub Guide](api/keras.md) | `klygo.models.backend.keras` (`backend.kerashub`) | `klygo[keras]` | Multi-engine (`torch`/`jax`/`tensorflow`) tensor casting, `KerasHub` `ObjectDetector` resize + `decode_predictions`, `yxyx` $\rightarrow$ `xyxy` conversion, `-1` padding filter. |
+| `torch_runtime.py` | *(Shared PyTorch runtime)* | `klygo.models.backend.torch_runtime` | `torch` | Shared CUDA/CPU device detection, `torch.cuda.synchronize`, `torch.cuda.empty_cache`, `torch.amp.autocast`, and `torch.inference_mode`. |
