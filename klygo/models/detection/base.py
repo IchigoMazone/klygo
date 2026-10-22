@@ -53,109 +53,44 @@ class Detector(BaseModel):
             **kwargs,
         )
         self.model: Any = None
+        self.names: Dict[int, Optional[str]] = {}
 
-    def filter_kwargs(self, kwargs: Dict[str, Any], *exclude_keys: Union[str, Sequence[str]]) -> Dict[str, Any]:
-        """
-        Lọc bỏ các key đã xử lý khỏi dictionary kwargs để truyền an toàn các tham số còn lại.
-        Ví dụ: self.filter_kwargs(post_kw, "threshold", "text_threshold", "target_sizes")
-        """
-        exclude_set = set()
-        for item in exclude_keys:
-            if isinstance(item, (tuple, list, set)):
-                exclude_set.update(item)
-            else:
-                exclude_set.add(item)
-        return {k: v for k, v in kwargs.items() if k not in exclude_set}
+    def _prepare_prediction(self, prompt: Optional[List[str]]) -> None:
+        """Prepare backend-specific class state for one prediction call."""
 
     def current_device(self) -> Any:
-        """Device thực tế của model."""
+        """Return the actual device hosting the wrapped model."""
         return common.current_device(self.model, backend=self.backend)
 
     def current_dtype(self) -> Any:
-        """Dtype thực tế của model."""
+        """Return the actual dtype of the wrapped model's parameters."""
         return common.current_dtype(self.model, backend=self.backend)
 
     # =========================================================================
     # BACKEND-AGNOSTIC EXECUTION HOOKS
     # =========================================================================
     def cast_inputs(self, inputs: Any) -> Any:
-        """
-        Tự động cast inputs (floating tensors) lên đúng device và dtype của model.
-        Ủy thác hoàn toàn cho backend tương ứng.
-        """
+        """Cast floating inputs to the model's device and dtype via the active backend."""
         return common.cast_inputs(self.backend, inputs, dev=self.current_device(), dtype=self.current_dtype())
 
     def run_inference(self, inputs: Any, **model_kwargs) -> Any:
-        """
-        Thực thi forward bằng runtime gốc của backend được chọn.
-        Ủy thác hoàn toàn cho backend tương ứng.
-        """
+        """Execute a forward pass using the native runtime of the selected backend."""
         return common.run_inference(self.backend, self.model, inputs, cur_dtype=self.current_dtype(), **model_kwargs)
 
     def get_output_device(self, outputs: Any) -> Any:
-        """
-        Dò tìm device thực tế của kết quả đầu ra (logits, pred_boxes, tensor).
-        Ủy thác hoàn toàn cho backend tương ứng.
-        """
+        """Detect the device of the model's output tensors (logits, pred_boxes, etc.)."""
         return common.get_output_device(self.backend, outputs, default_device=self.current_device())
 
     def sync_device(self, tensor: Any, target_device: Any) -> Any:
-        """
-        Đồng bộ device của một tensor về cùng target_device nếu cần thiết.
-        Ủy thác hoàn toàn cho backend tương ứng.
-        """
+        """Move a tensor to *target_device* when it differs from the current device."""
         return common.sync_device(self.backend, tensor, target_device=target_device)
 
     def format_results(self, raw_outputs: Any) -> List[Dict[str, Any]]:
-        """
-        Chuẩn hóa kết quả thô của backend thành format [{boxes, scores, labels}].
-        Ủy thác hoàn toàn cho backend tương ứng.
-        """
+        """Normalise raw backend output into a list of ``{boxes, scores, labels}`` dicts."""
         return common.format_results(self.backend, raw_outputs)
 
     # =========================================================================
-    # CONVENIENCE HELPERS
-    # =========================================================================
-    def build_detections(
-        self,
-        images: List[PIL.Image.Image],
-        raw_results: List[Dict[str, Any]],
-        **metadata,
-    ) -> List[Detection]:
-        """
-        Chuẩn hóa danh sách kết quả raw [{'scores', 'labels', 'boxes'}] thành List[Detection].
-        Nhận linh hoạt mọi metadata (prompt, threshold, text_threshold, iou, nms, ...) qua **metadata.
-        Ví dụ: self.build_detections(images, raw, prompt=prompt, **post_kw)
-        """
-        results = []
-        for res, img in zip(raw_results, images):
-            boxes = []
-            scores = res.get("scores", [])
-            labels = res.get("labels", [])
-            raw_boxes = res.get("boxes", [])
-            for i, (score, label, box) in enumerate(zip(scores, labels, raw_boxes)):
-                b_list = box.tolist() if hasattr(box, "tolist") else list(box)
-                s_val = float(score.item()) if hasattr(score, "item") else float(score)
-                boxes.append(
-                    Box(
-                        id=i,
-                        label=str(label),
-                        score=round(s_val, 3),
-                        box=[round(float(x), 2) for x in b_list],
-                        parent_image=img,
-                    )
-                )
-            results.append(
-                Detection(
-                    source_image=img,
-                    objects=boxes,
-                    **metadata,
-                )
-            )
-        return results
-
-    # =========================================================================
-    # VONG DOI & BO NHO (Lifecycle & Resource Management)
+    # LIFECYCLE & RESOURCE MANAGEMENT
     # =========================================================================
     def reset(self) -> "Detector":
         self._settings = dict(self._default_settings)
@@ -164,7 +99,7 @@ class Detector(BaseModel):
         return self
 
     def warmup(self) -> None:
-        """Chạy thử 1 lần với ảnh 640x640 để khởi động GPU pipeline trước khi dùng thực."""
+        """Run one dummy forward pass on a 640×640 black image to warm up the GPU pipeline."""
         dummy_img = PIL.Image.new("RGB", (640, 640), color=(100, 100, 100))
         try:
             self.predict(source=dummy_img, prompt=["object"], verbose=False)
@@ -175,10 +110,10 @@ class Detector(BaseModel):
         common.clear_cache(self.backend)
 
     def save(self, output_dir: str) -> None:
-        """
-        Lưu toàn bộ mô hình (Metadata + Python Code + Trọng số) ra thư mục chuẩn Klygo.
-        Mô hình xuất ra có thể được nạp lại hoàn chỉnh qua `models.load(folder)`.
-        Ủy thác hoàn toàn việc lưu trữ cho backend.common.save().
+        """Serialise the model (weights + metadata) to a Klygo-standard output directory.
+
+        The saved folder can be reloaded in full via ``klygo.models.load(folder)``.
+        Serialisation is delegated to :func:`klygo.models.backend.common.save`.
         """
         export_metadata = dict(self.metadata)
         export_metadata["model_id"] = self.model_id
@@ -200,10 +135,7 @@ class Detector(BaseModel):
         )
 
     def unload(self) -> None:
-        """
-        Giải phóng tài nguyên và đưa trạng thái về UNLOADED.
-        Ủy thác hoàn toàn việc thu hồi tài nguyên cho backend.common.unload().
-        """
+        """Release GPU/CPU memory and transition the model state to ``UNLOADED``."""
         common.unload(self.backend, self.model, getattr(self, "processor", None))
         if hasattr(self, "processor"):
             del self.processor
@@ -214,7 +146,7 @@ class Detector(BaseModel):
         self.state = "UNLOADED"
 
     # =========================================================================
-    # AI LIFECYCLE CHUNG CHO DETECTION
+    # BENCHMARK & HELP
     # =========================================================================
     def benchmark(
         self,
@@ -225,7 +157,7 @@ class Detector(BaseModel):
         verbose: bool = True,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Đo đạc và đánh giá hiệu năng suy luận (Latency ms / FPS) của mô hình."""
+        """Measure inference latency (ms) and throughput (FPS) over *iterations* runs."""
         img = source if source is not None else PIL.Image.new("RGB", (640, 640), color=(100, 100, 100))
         prompts = utils.normalize_prompt(prompt or ["object"])
 
@@ -314,7 +246,7 @@ class Detector(BaseModel):
         Console().print(table)
 
     # =========================================================================
-    # ĐỘNG CƠ SUY LUẬN DETECTION HOÀN CHỈNH (predict & forward)
+    # INFERENCE ENGINE (predict & forward)
     # =========================================================================
     def _pack_detection(
         self,
@@ -324,7 +256,7 @@ class Detector(BaseModel):
         lat_ms: float,
         fps_val: float,
     ) -> "Detection":
-        """Chuẩn hóa 1 kết quả thô (dict hoặc Detection) thành Detection đầy đủ."""
+        """Normalise one raw result (dict or Detection) into a fully-populated Detection."""
         from klygo import media
         if isinstance(image, media.LazyImage):
             final_image = image
@@ -341,11 +273,26 @@ class Detector(BaseModel):
             b_list = det.get("boxes", [])
             s_list = det.get("scores", [1.0] * len(b_list))
             l_list = det.get("labels", ["object"] * len(b_list))
+            c_list = det.get("class_ids", range(len(b_list)))
             box_objs = [
-                Box(id=i, label=str(l), score=float(s), box=b, parent_image=final_image)
-                for i, (b, s, l) in enumerate(zip(b_list, s_list, l_list))
+                Box(
+                    id=i,
+                    class_id=int(class_id),
+                    label=l,
+                    score=float(s),
+                    box=b,
+                    parent_image=final_image,
+                )
+                for i, (b, s, l, class_id) in enumerate(
+                    zip(b_list, s_list, l_list, c_list)
+                )
             ]
-            det = Detection(source_image=final_image, objects=box_objs, image_frame_index=actual_frame_index)
+            det = Detection(
+                source_image=final_image,
+                objects=box_objs,
+                image_frame_index=actual_frame_index,
+                names=self.names,
+            )
         else:
             det.source_image = final_image
             for b in det.objects:
@@ -368,7 +315,7 @@ class Detector(BaseModel):
         images: List[PIL.Image.Image],
         prompt: Union[str, List[str]],
     ) -> List[Detection]:
-        """Thực thi forward pass trên mô hình bên dưới."""
+        """Execute one forward pass on the wrapped model."""
         mod_kw = dict(self.metadata.get("model", {}))
         if hasattr(self, "model") and callable(self.model):
             return self.model(images, prompt=prompt, **mod_kw)
@@ -416,12 +363,15 @@ class Detector(BaseModel):
         stream: bool = False,
         **kwargs,
     ) -> Union[Detections, Any]:
-        """
-        Thực thi nhận diện đối tượng trên ảnh, video hoặc folder.
-        Nếu stream=True, trả về Generator[Detection] (Chống tràn RAM video lớn).
-        Nếu stream=False, trả về Detections (RAM tiêu chuẩn).
+        """Run object detection on images, video, directories, or streams.
+
+        When ``stream=True`` returns a lazy :class:`~klygo.outputs.Detections`
+        generator to avoid loading large videos into memory at once.
+        When ``stream=False`` (default) collects all frames into a
+        :class:`~klygo.outputs.Detections` list before returning.
         """
         target_prompt = utils.normalize_prompt(prompt) if prompt is not None else None
+        self._prepare_prediction(target_prompt)
         actual_batch = max(1, int(batch))
 
         base_metadata = dict(self.metadata)
@@ -430,9 +380,9 @@ class Detector(BaseModel):
 
         infer_context = common.inference_context(self.backend)
 
-        # ==========================================
-        # LUỒNG STREAMING (CHỐNG TRÀN RAM)
-        # ==========================================
+        # ------------------------------------------
+        # STREAMING path (lazy generator, low RAM)
+        # ------------------------------------------
         if stream:
             images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames, stream=True)
 
@@ -480,12 +430,12 @@ class Detector(BaseModel):
                 total_frames=total_count,
             )
 
-        # ==========================================
-        # LUỒNG TIÊU CHUẨN (LƯU VÀO RAM Detections)
-        # ==========================================
+        # ------------------------------------------
+        # STANDARD path (collect all frames into RAM)
+        # ------------------------------------------
         images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames, stream=False)
         if not images:
-            return Detections(frames=[], source_type="list", fps=30.0)
+            return Detections(frames=[], source_type="list", fps=30.0, names=self.names)
 
         with infer_context, utils.suppress_warnings():
             if is_single:
@@ -499,7 +449,7 @@ class Detector(BaseModel):
                 lat_ms = round((t_end - t_start) * 1000, 2)
                 fps_val = round(1000.0 / max(0.001, lat_ms), 1)
                 det = self._pack_detection(dets[0], images[0], 0, lat_ms, fps_val)
-                return Detections(frames=[det], source_type="image", fps=30.0)
+                return Detections(frames=[det], source_type="image", fps=30.0, names=self.names)
 
             frame_results = []
             with ProgressBar(total=len(images), desc="Predict", unit="frame", verbose=verbose, colour="cyan") as pbar:
@@ -519,4 +469,9 @@ class Detector(BaseModel):
                         frame_results.append(self._pack_detection(det, img, i + idx, lat_per_frame, fps_val))
                     pbar.update(len(batch_imgs))
 
-            return Detections(frames=frame_results, source_type="video" if not is_single else "image", fps=30.0)
+            return Detections(
+                frames=frame_results,
+                source_type="video" if not is_single else "image",
+                fps=30.0,
+                names=self.names,
+            )

@@ -57,7 +57,7 @@ class BaseModel(ABC):
 
     @property
     def backend(self) -> str:
-        """Dò tìm backend tự động từ self._backend, os.environ, self.model hoặc metadata."""
+        """Auto-detect backend from ``self._backend``, ``KLYGO_BACKEND`` env var, ``self.model``, or metadata."""
         if getattr(self, "_backend", None):
             return self._backend
         import os
@@ -84,12 +84,12 @@ class BaseModel(ABC):
             self.metadata["backend"] = value
 
     def suppress_warnings(self):
-        """Context manager / Helper tắt mọi cảnh báo."""
+        """Delegate to :func:`klygo.models.utils.suppress_warnings` to silence noisy framework warnings."""
         from . import utils
         return utils.suppress_warnings()
 
     # =========================================================================
-    # GUARD: Chặn thao tác khi model đã UNLOADED
+    # GUARD: Block public method calls after the model has been UNLOADED
     # =========================================================================
     def __getattribute__(self, name: str) -> Any:
         attr = super().__getattribute__(name)
@@ -103,7 +103,7 @@ class BaseModel(ABC):
             return attr
         if state == 'UNLOADED' and name not in ('reset', 'unload', 'info', 'help', 'supports', 'methods'):
             raise InvalidStateError(
-                "Mo hinh '{}' da bi UNLOADED. Khong the goi '{}'.".format(model_id, name)
+                "Model '{}' is UNLOADED. Cannot call '{}'.".format(model_id, name)
             )
         return attr
 
@@ -179,7 +179,7 @@ class BaseModel(ABC):
 
     @property
     def config(self) -> Any:
-        """Trả về config của inner model nếu có, fallback về Klygo settings."""
+        """Return the inner model's ``config`` if available, otherwise fall back to Klygo ``_settings``."""
         model = object.__getattribute__(self, "__dict__").get("model")
         if model is not None and hasattr(model, "config") and model.config is not None:
             return model.config
@@ -205,7 +205,7 @@ class BaseModel(ABC):
         self._settings = dict(value)
 
     # =========================================================================
-    # HOP DONG (Abstract)
+    # ABSTRACT CONTRACT
     # =========================================================================
     @abstractmethod
     def predict(self, *args, **kwargs):
