@@ -2,12 +2,16 @@
 
 import unittest
 import hashlib
+import importlib
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from klygo import files
+
+
+download_module = importlib.import_module("klygo.files.download")
 
 
 class TestDownload(unittest.TestCase):
@@ -116,7 +120,7 @@ class TestDownload(unittest.TestCase):
             self.assertEqual(list(root.iterdir()), [target])
 
             with patch("urllib.request.urlopen", side_effect=[OSError("offline"), Response(b"remote")]) as opener:
-                with patch("klygo.files.download.time.sleep"):
+                with patch.object(download_module.time, "sleep"):
                     files.download(
                         "https://example.test/model.bin", root,
                         overwrite=True, verbose=False, retries=1,
