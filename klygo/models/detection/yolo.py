@@ -38,6 +38,9 @@ class YOLODetect(Detector):
 
         if prompt:
             requested = [prompt] if isinstance(prompt, str) else list(prompt)
+            unknown = [label for label in requested if label not in self.names.values()]
+            if unknown:
+                raise ValueError(f"Unknown YOLO classes: {unknown}; use labels from model.names")
             class_ids = utils.invert(self.names)
             classes = [class_ids[name] for name in requested]
 
@@ -56,7 +59,7 @@ class YOLODetect(Detector):
         return outputs.build_detections(
             images,
             self.format_results(results),
-            metadata={"prompt": prompt, **post_config},
+            metadata={"prompt": prompt, "classes": classes, **post_config},
             names=self.names,
         )
 

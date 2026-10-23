@@ -190,3 +190,72 @@ class TestDetectOutputs(unittest.TestCase):
     def test_aliases_resolve_to_canonical_classes(self):
         self.assertIs(outputs.detect.Boxes, outputs.detect.Crops)
         self.assertIs(outputs.detect.DetectionResult, outputs.detect.Detection)
+
+    def test_detections_class_ids_and_frame_deletion_sync(self):
+        source = Image.new("RGB", (40, 30), "white")
+        box1 = outputs.detect.Box(0, "car", 0.9, [0, 0, 10, 10], class_id=1)
+        box2 = outputs.detect.Box(1, "person", 0.8, [10, 10, 20, 20], class_id=0)
+        f1 = outputs.detect.Detection(source, [box1], names={0: "person", 1: "car"}, image_frame_index=0)
+        f2 = outputs.detect.Detection(source, [box2], names={0: "person", 1: "car"}, image_frame_index=1)
+        results = outputs.detect.Detections([f1, f2], names={0: "person", 1: "car"})
+
+        self.assertEqual(results.class_ids, [[1], [0]])
+        self.assertEqual(results.unique_class_ids, [1, 0])
+        self.assertEqual(results.active_names, {0: "person", 1: "car"})
+        self.assertEqual(results.unique_labels, ["car", "person"])
+
+        # Delete frame 0 containing 'car' (class_id=1)
+        del results[0]
+
+        self.assertEqual(results.class_ids, [0])
+        self.assertEqual(results.unique_class_ids, [0])
+        self.assertEqual(results.active_names, {0: "person"})
+        self.assertEqual(results.unique_labels, ["person"])
+        self.assertEqual(results.names, {0: "person", 1: "car"})
+        self.assertEqual(results[0][0].class_id, 0)
+        self.assertEqual(results[0][0].label, "person")
+
+    def test_detections_reindex_and_remove_frame_with_reindex(self):
+        source = Image.new("RGB", (40, 30), "white")
+        f0 = outputs.detect.Detection(source, [outputs.detect.Box(0, "car", 0.9, [0, 0, 10, 10])], image_frame_index=0)
+        f10 = outputs.detect.Detection(source, [outputs.detect.Box(0, "person", 0.8, [10, 10, 20, 20])], image_frame_index=10)
+        f20 = outputs.detect.Detection(source, [outputs.detect.Box(0, "dog", 0.7, [20, 20, 30, 30])], image_frame_index=20)
+        results = outputs.detect.Detections([f0, f10, f20])
+
+        # Test remove_frame with reindex=True
+        cleaned = results.remove_frame(0, reindex=True)
+        self.assertEqual(cleaned[0].frame_index, 0)
+        self.assertEqual(cleaned[1].frame_index, 1)
+
+        # Test explicit reindex with custom start
+        results.reindex(start=5)
+        self.assertEqual(results[0].frame_index, 5)
+        self.assertEqual(results[1].frame_index, 6)
+        self.assertEqual(results[2].frame_index, 7)
+
+    def test_box_reindexing_and_drop_with_reindex(self):
+        source = Image.new("RGB", (40, 30), "white")
+        b0 = outputs.detect.Box(0, "car", 0.9, [0, 0, 10, 10], class_id=1)
+        b1 = outputs.detect.Box(1, "person", 0.8, [10, 10, 20, 20], class_id=0)
+        b2 = outputs.detect.Box(2, "dog", 0.7, [20, 20, 30, 30], class_id=2)
+        frame = outputs.detect.Detection(source, [b0, b1, b2])
+
+        # Drop 'car' with reindex=True -> person becomes id 0, dog becomes id 1
+        dropped = frame.drop(labels=["car"], reindex=True)
+        self.assertEqual(len(dropped), 2)
+        self.assertEqual(dropped[0].id, 0)
+        self.assertEqual(dropped[0].label, "person")
+        self.assertEqual(dropped[1].id, 1)
+        self.assertEqual(dropped[1].label, "dog")
+
+        # In-place box reindex on Detection
+        del frame[0]
+        frame.reindex(start=10)
+        self.assertEqual(frame[0].id, 10)
+        self.assertEqual(frame[1].id, 11)
+
+        # Batch box reindex across Detections
+        results = outputs.detect.Detections([frame])
+        results.reindex_boxes(start=0)
+        self.assertEqual(results[0][0].id, 0)
+        self.assertEqual(results[0][1].id, 1)

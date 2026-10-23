@@ -188,3 +188,19 @@ class TestMedia(unittest.TestCase):
         copied_p = self.tmp_path / "copied.png"
         cp_res = media.copy(png_p, copied_p, overwrite=True)
         assert cp_res.exists()
+
+    def test_stream_counts_validation(self):
+        img_dir = self.tmp_path / "stream_val_images"
+        img_dir.mkdir()
+        Image.new("RGB", (10, 10), "red").save(img_dir / "0.jpg")
+
+        with self.assertRaises(TypeError):
+            media.MediaStream(img_dir, sample_rate=True)
+        with self.assertRaises(TypeError):
+            media.MediaStream(img_dir, sample_rate="2")
+        with self.assertRaises(ValueError):
+            media.MediaStream(img_dir, sample_rate=0)
+        with self.assertRaises(TypeError):
+            media.MediaStream(img_dir, max_frames=True)
+        with self.assertRaises(ValueError):
+            media.MediaStream(img_dir, max_frames=0)

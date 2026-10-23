@@ -94,36 +94,64 @@ def _resolve_class(class_path: str, search_dir: Optional[str] = None) -> Any:
     )
 
 
+def _normalize_model_name(name: Any) -> Any:
+    """Normalize model identifier between official Hugging Face/hub notation and Klygo aliases."""
+    if isinstance(name, os.PathLike):
+        name = str(name)
+    if not isinstance(name, str):
+        return name
+    clean = name.strip().replace("\\", "/")
+    if clean in (
+        "nvidia/LocateAnything-3B",
+        "nvidia/locate-anything-3b",
+        "locate-anything",
+        "locateanything",
+    ):
+        return "locate-anything"
+    if clean.startswith("IDEA-Research/"):
+        return clean.removeprefix("IDEA-Research/")
+    if clean.startswith("ultralytics/"):
+        clean = clean.removeprefix("ultralytics/")
+    if not clean.endswith(".pt") and (clean.startswith("yolo") or "-world" in clean):
+        return f"{clean}.pt"
+    return clean
+
+
 @lru_cache(maxsize=128)
-def _resolve(name: str) -> Optional[Dict[str, Any]]:
+def _resolve(name: Any) -> Optional[Dict[str, Any]]:
     """Resolve a registered model identifier or wildcard pattern with an LRU cache."""
+    if isinstance(name, os.PathLike):
+        name = str(name)
+    normalized = _normalize_model_name(name) if isinstance(name, (str, os.PathLike)) else name
     registry = _get_registry()
-    entry = registry.get(name)
-    if entry and "*" not in name:
+    entry = registry.get(normalized) or registry.get(name)
+    if entry and "*" not in str(normalized):
         return dict(entry)
 
-    for pattern, base_entry in registry.items():
-        if fnmatch.fnmatch(name, pattern):
-            entry = dict(base_entry)
-            option = entry.pop("option", {})
-            for key, override_cfg in option.items():
-                if key in name:
-                    override = dict(override_cfg)
-                    if "details" in override:
-                        merged_details = dict(entry.get("details", {}))
-                        merged_details.update(dict(override.pop("details")))
-                        entry["details"] = merged_details
-                    entry.update(override)
-                    break
+    lookup_names = [normalized] if normalized == name else [normalized, name]
+    for lookup in lookup_names:
+        for pattern, base_entry in registry.items():
+            if fnmatch.fnmatch(str(lookup), pattern):
+                entry = dict(base_entry)
+                option = entry.pop("option", {})
+                for key, override_cfg in option.items():
+                    if key in str(lookup) or key in str(name):
+                        override = dict(override_cfg)
+                        if "details" in override:
+                            merged_details = dict(entry.get("details", {}))
+                            merged_details.update(dict(override.pop("details")))
+                            entry["details"] = merged_details
+                        entry.update(override)
+                        break
 
-            num_params = entry.get(
-                "num_params",
-                dict(entry.get("details", {})).get("num_params"),
-            )
-            if num_params is None:
-                return None
+                num_params = entry.get(
+                    "num_params",
+                    dict(entry.get("details", {})).get("num_params"),
+                )
+                if num_params is None:
+                    continue
 
-            return entry
+                return entry
     return None
 
 

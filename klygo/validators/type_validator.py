@@ -45,4 +45,49 @@ def validate_type(
         )
 
 
-__all__ = ["validate_type"]
+def validate_count(
+    value: object,
+    name: str,
+    minimum: int = 1,
+) -> None:
+    """Raise ``TypeError`` or ``ValueError`` when an argument is not a valid count.
+
+    A valid count must be an integer (excluding boolean values) greater than or
+    equal to ``minimum``.
+
+    Parameters
+    ----------
+    value : object
+        Argument to check.
+    name : str
+        Argument name included in the error message.
+    minimum : int, default 1
+        Minimum acceptable integer value.
+
+    Returns
+    -------
+    None
+        Successful validation has no return value.
+
+    Raises
+    ------
+    TypeError
+        If ``value`` is not an integer or is a boolean.
+    ValueError
+        If ``value`` is less than ``minimum``.
+
+    Examples
+    --------
+    >>> from klygo import validators
+    >>> validators.validate_count(10, "batch") is None
+    True
+    >>> validators.validate_count(0, "warmup", minimum=0) is None
+    True
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{name} must be int, got {type(value).__name__}")
+    if value < minimum:
+        raise ValueError(f"{name} must be an integer >= {minimum}")
+
+
+__all__ = ["validate_type", "validate_count"]

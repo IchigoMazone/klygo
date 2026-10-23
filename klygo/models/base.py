@@ -7,11 +7,13 @@ Hardware management is deferred to the underlying backend model.
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from contextvars import ContextVar
+import os
 from typing import Dict, Any, Optional, List, Mapping
 
 from box import Box
 
 from .errors import InvalidStateError
+from . import utils
 
 __all__ = ["BaseModel"]
 
@@ -31,8 +33,6 @@ class BaseModel(ABC):
         task: Optional[str] = None,
         **kwargs,
     ) -> None:
-
-        from . import utils
         utils.suppress_ai_warnings()
 
         self.state: str = "LOADING"
@@ -60,7 +60,6 @@ class BaseModel(ABC):
         """Auto-detect backend from ``self._backend``, ``KLYGO_BACKEND`` env var, ``self.model``, or metadata."""
         if getattr(self, "_backend", None):
             return self._backend
-        import os
         env_backend = os.environ.get("KLYGO_BACKEND")
         if env_backend:
             return env_backend
@@ -85,7 +84,6 @@ class BaseModel(ABC):
 
     def suppress_warnings(self):
         """Delegate to :func:`klygo.models.utils.suppress_warnings` to silence noisy framework warnings."""
-        from . import utils
         return utils.suppress_warnings()
 
     # =========================================================================
@@ -139,6 +137,10 @@ class BaseModel(ABC):
         table.add_row("State", str(self.state))
         table.add_row("Flags", ", ".join(self.flags) if self.flags else "(None)")
         table.add_row("Settings", str(self.settings))
+        if hasattr(type(self), "predict_config"):
+            table.add_row("Device", str(self.device) if self.state != "UNLOADED" else "unloaded")
+            table.add_row("Dtype", str(self.dtype) if self.state != "UNLOADED" else "unloaded")
+            table.add_row("Predict Configuration", str(self.predict_config))
         if self.params:
             table.add_row("Parameters", ", ".join(f"{k}={v}" for k, v in self.params.items()))
         Console().print(table)
@@ -154,7 +156,6 @@ class BaseModel(ABC):
 
     @metadata.setter
     def metadata(self, value: Mapping[str, Any]) -> None:
-        from . import utils
         self._metadata = Box(utils.normalize_metadata(value))
 
     @contextmanager
@@ -218,7 +219,4 @@ class BaseModel(ABC):
     @abstractmethod
     def help(self) -> None:
         raise NotImplementedError
-
-
-
 

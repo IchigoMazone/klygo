@@ -4,6 +4,7 @@ LAYER 3: Explicit model & processor configuration; ``forward()`` is concise than
 """
 
 from typing import Any, List, Dict, Union
+from collections.abc import Mapping
 import PIL.Image
 
 try:
@@ -30,6 +31,7 @@ class GroundingDinoDetect(Detector):
             **kwargs,
         )
         self._result_names = {}
+        self._active_prompt = None
 
         model_config = dict(self.metadata["model"])
         processor_config = dict(self.metadata["processor"])
@@ -45,28 +47,23 @@ class GroundingDinoDetect(Detector):
                 self.model.to("cpu")
             self.model.eval()
 
-    def _prepare_prediction(self, prompt: List[str]) -> None:
-        prompt = [
-            str(name).strip().rstrip(".").lower()
-            for name in (prompt or [])
-            if str(name).strip().rstrip(".")
-        ]
-        self.names = {index: name for index, name in enumerate(prompt)}
-        self._result_names = dict(self.names)
-
     def forward(
         self,
         images: List[PIL.Image.Image],
         prompt: Union[str, List[str]],
     ) -> List[Detection]:
+
+        if not prompt:
+            raise ValueError("Grounding DINO requires a non-empty text prompt; use reset() to clear saved state")
+
         model_config = dict(self.metadata["model"])
         processor_config = dict(self.metadata["processor"])
         post_config = dict(self.metadata["post"])
 
         # 2. In-place preprocessing (Grounding DINO-specific prompt formatting)
-        raw_prompt = [prompt] if isinstance(prompt, str) else list(prompt) if prompt else []
-        text_str = ". ".join([str(p).strip().rstrip(".").lower() for p in raw_prompt if str(p).strip()]) + "."
-        text_batch = [text_str] * len(images) if text_str != "." else None
+        prompt_list = [prompt] if isinstance(prompt, str) else list(prompt)
+        text_str = ". ".join(prompt_list) + "."
+        text_batch = [text_str] * len(images)
 
         inputs = self.processor(
             images=images,
@@ -77,7 +74,9 @@ class GroundingDinoDetect(Detector):
         inputs = self.cast_inputs(inputs)
 
         # 3. Inference (AMP + automatic GPU sync via backend helpers)
-        outputs = self.run_inference(inputs, **model_config)
+        loading_keys = ["device_map", "torch_dtype", "dtype", "low_cpu_mem_usage", "cache_dir",
+                        "revision", "local_files_only", "trust_remote_code", "token"]
+        outputs = self.run_inference(inputs, **utils.exclude_keys(model_config, loading_keys))
 
         # 4. Grounding DINO postprocessing
         thresh = post_config.get("threshold", 0.25)
@@ -86,7 +85,7 @@ class GroundingDinoDetect(Detector):
         # Only sync 'input_ids' to the output device when needed (Multi-GPU).
         # Never copy large 'pixel_values' tensors; that would waste PCIe bandwidth and VRAM.
         target_dev = self.get_output_device(outputs)
-        raw_input_ids = inputs.get("input_ids") if isinstance(inputs, dict) else None
+        raw_input_ids = inputs.get("input_ids") if isinstance(inputs, Mapping) else None
         input_ids = self.sync_device(raw_input_ids, target_device=target_dev)
 
         with self.suppress_warnings():

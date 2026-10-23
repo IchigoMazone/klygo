@@ -51,13 +51,23 @@ def set_output_metadata_path(metadata: dict, destination: str | Path) -> None:
 def publish_output(staging: Path, destination: Path, temporary_root: Path) -> None:
     """Install a finished output, restoring the previous one on rename failure."""
     backup = files.join(temporary_root, "previous")
+    target_dest = files.join(files.resolve(files.parent(destination)), files.name(destination))
     if files.exists(destination):
-        files.rename(destination, files.resolve(backup))
+        try:
+            files.rename(destination, files.resolve(backup))
+        except (PermissionError, OSError):
+            files.move(destination, files.resolve(backup), overwrite=True)
     try:
-        files.rename(staging, files.join(files.resolve(files.parent(destination)), files.name(destination)))
+        try:
+            files.rename(staging, target_dest)
+        except (PermissionError, OSError):
+            files.move(staging, target_dest, overwrite=True)
     except BaseException:
         if files.exists(backup):
-            files.rename(backup, files.join(files.resolve(files.parent(destination)), files.name(destination)))
+            try:
+                files.rename(backup, target_dest)
+            except (PermissionError, OSError):
+                files.move(backup, target_dest, overwrite=True)
         raise
 
 

@@ -8,10 +8,21 @@
       "library": "ultralytics",
       "num_params": "Unknown"
     },
-    "flags": {"model": false, "post": true},
+    "flags": {
+      "model": false,
+      "post": true
+    },
     "priority": {
-      "model": ["device", "imgsz", "half", "max_det"],
-      "post": ["threshold", "iou"]
+      "model": [
+        "device",
+        "imgsz",
+        "half",
+        "max_det"
+      ],
+      "post": [
+        "threshold",
+        "iou"
+      ]
     },
     "model": {},
     "post": {
@@ -45,6 +56,72 @@
       }
     }
   },
+  "yolov8?.pt": {
+    "class": "klygo.models.detection.YOLODetect",
+    "details": {
+      "name": "YOLO",
+      "task": "Object-Detection",
+      "backend": "Ultralytics",
+      "library": "ultralytics",
+      "num_params": null
+    },
+    "flags": {
+      "model": false,
+      "post": true
+    },
+    "priority": {
+      "model": [
+        "device",
+        "imgsz",
+        "half",
+        "classes",
+        "max_det",
+        "nms",
+        "agnostic_nms"
+      ],
+      "post": [
+        "threshold",
+        "iou"
+      ]
+    },
+    "model": {},
+    "post": {
+      "threshold": 0.25,
+      "iou": 0.7
+    },
+    "option": {
+      "yolov8n.pt": {
+        "details": {
+          "num_params": "3.2M"
+        },
+        "model_id": "yolov8n.pt"
+      },
+      "yolov8s.pt": {
+        "details": {
+          "num_params": "11.2M"
+        },
+        "model_id": "yolov8s.pt"
+      },
+      "yolov8m.pt": {
+        "details": {
+          "num_params": "25.9M"
+        },
+        "model_id": "yolov8m.pt"
+      },
+      "yolov8l.pt": {
+        "details": {
+          "num_params": "43.7M"
+        },
+        "model_id": "yolov8l.pt"
+      },
+      "yolov8x.pt": {
+        "details": {
+          "num_params": "68.2M"
+        },
+        "model_id": "yolov8x.pt"
+      }
+    }
+  },
   "yolo11?.pt": {
     "class": "klygo.models.detection.YOLODetect",
     "details": {
@@ -54,10 +131,24 @@
       "library": "ultralytics",
       "num_params": null
     },
-    "flags": {"model": false, "post": true},
+    "flags": {
+      "model": false,
+      "post": true
+    },
     "priority": {
-      "model": ["device", "imgsz", "half", "classes", "max_det", "nms", "agnostic_nms"],
-      "post": ["threshold", "iou"]
+      "model": [
+        "device",
+        "imgsz",
+        "half",
+        "classes",
+        "max_det",
+        "nms",
+        "agnostic_nms"
+      ],
+      "post": [
+        "threshold",
+        "iou"
+      ]
     },
     "model": {},
     "post": {
@@ -66,23 +157,33 @@
     },
     "option": {
       "yolo11n.pt": {
-        "details": {"num_params": "2.6M"},
+        "details": {
+          "num_params": "2.6M"
+        },
         "model_id": "yolo11n.pt"
       },
       "yolo11s.pt": {
-        "details": {"num_params": "9.4M"},
+        "details": {
+          "num_params": "9.4M"
+        },
         "model_id": "yolo11s.pt"
       },
       "yolo11m.pt": {
-        "details": {"num_params": "20.1M"},
+        "details": {
+          "num_params": "20.1M"
+        },
         "model_id": "yolo11m.pt"
       },
       "yolo11l.pt": {
-        "details": {"num_params": "25.3M"},
+        "details": {
+          "num_params": "25.3M"
+        },
         "model_id": "yolo11l.pt"
       },
       "yolo11x.pt": {
-        "details": {"num_params": "56.9M"},
+        "details": {
+          "num_params": "56.9M"
+        },
         "model_id": "yolo11x.pt"
       }
     }
@@ -96,10 +197,24 @@
       "library": "ultralytics",
       "num_params": null
     },
-    "flags": {"model": false, "post": true},
+    "flags": {
+      "model": false,
+      "post": true
+    },
     "priority": {
-      "model": ["device", "imgsz", "half", "classes", "max_det", "nms", "agnostic_nms"],
-      "post": ["threshold", "iou"]
+      "model": [
+        "device",
+        "imgsz",
+        "half",
+        "classes",
+        "max_det",
+        "nms",
+        "agnostic_nms"
+      ],
+      "post": [
+        "threshold",
+        "iou"
+      ]
     },
     "model": {},
     "post": {
@@ -108,30 +223,40 @@
     },
     "option": {
       "yolo26n.pt": {
-        "details": {"num_params": "2.4M"},
+        "details": {
+          "num_params": "2.4M"
+        },
         "model_id": "yolo26n.pt"
       },
       "yolo26s.pt": {
-        "details": {"num_params": "9.5M"},
+        "details": {
+          "num_params": "9.5M"
+        },
         "model_id": "yolo26s.pt"
       },
       "yolo26m.pt": {
-        "details": {"num_params": "20.4M"},
+        "details": {
+          "num_params": "20.4M"
+        },
         "model_id": "yolo26m.pt"
       },
       "yolo26l.pt": {
-        "details": {"num_params": "24.8M"},
+        "details": {
+          "num_params": "24.8M"
+        },
         "model_id": "yolo26l.pt"
       },
       "yolo26x.pt": {
-        "details": {"num_params": "55.7M"},
+        "details": {
+          "num_params": "55.7M"
+        },
         "model_id": "yolo26x.pt"
       }
     }
   },
   "locate-anything": {
     "class": "klygo.models.detection.LocateAnythingDetect",
-    "model_id": "",
+    "model_id": "nvidia/LocateAnything-3B",
     "details": {
       "name": "Locate Anything",
       "task": "Object-Detection",
@@ -139,15 +264,31 @@
       "library": "transformers",
       "num_params": "3B"
     },
-    "flags": {"model": false, "processor": true, "post": true},
-    "priority": {
-      "post": ["threshold", "text_threshold"]
+    "flags": {
+      "model": false,
+      "generation": true
     },
-    "model": {},
-    "processor": {},
-    "post": {
-      "threshold": 0.25,
-      "text_threshold": 0.3
+    "priority": {
+      "generation": [
+        "generation_mode",
+        "max_new_tokens",
+        "temperature",
+        "top_p",
+        "repetition_penalty",
+        "do_sample"
+      ]
+    },
+    "model": {
+      "trust_remote_code": false,
+      "revision": "c32291ca5e996f5a7a485845b4f57a233936bba0"
+    },
+    "generation": {
+      "generation_mode": "hybrid",
+      "max_new_tokens": 8192,
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "repetition_penalty": 1.1,
+      "do_sample": false
     }
   },
   "grounding-dino-*": {
@@ -159,11 +300,24 @@
       "library": "transformers",
       "num_params": null
     },
-    "flags": {"model": false, "processor": true, "post": true},
+    "flags": {
+      "model": false,
+      "processor": true,
+      "post": true
+    },
     "priority": {
-      "model": ["device_map", "torch_dtype", "low_cpu_mem_usage"],
-      "processor": ["size"],
-      "post": ["threshold", "text_threshold"]
+      "model": [
+        "device_map",
+        "torch_dtype",
+        "low_cpu_mem_usage"
+      ],
+      "processor": [
+        "size"
+      ],
+      "post": [
+        "threshold",
+        "text_threshold"
+      ]
     },
     "model": {},
     "processor": {},
@@ -173,11 +327,15 @@
     },
     "option": {
       "base": {
-        "details": {"num_params": "232M"},
+        "details": {
+          "num_params": "232M"
+        },
         "model_id": "IDEA-Research/grounding-dino-base"
       },
       "tiny": {
-        "details": {"num_params": "172M"},
+        "details": {
+          "num_params": "172M"
+        },
         "model_id": "IDEA-Research/grounding-dino-tiny"
       }
     }

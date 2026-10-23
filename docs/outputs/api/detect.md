@@ -43,7 +43,7 @@ Represent single bounding boxes, object crop collections, single-frame detection
 1. **`Box`**: Represents one detected object in `[xmin, ymin, xmax, ymax]` pixel coordinates. `Box.id` is the frame-local index, `Box.class_id` indexes the class registry (stored in `box.metadata["class_id"]`), and `Box.uid` is a stable identifier preserved across functional copies (`with_label`, `with_score`, `with_pad`, `with_box`, `with_metadata`, `translate`, `scale`, `clip`). When `parent_image` is set, `.image` and `.crop(pad=...)` lazily crop the sub-image bounded to image dimensions.
 2. **`Crops`**: Sequence container of `Box` objects supporting indexing, slicing, iteration, concatenation (`+`), filtering (`filter`, `select`, `drop`, `relabel`), sorting (`sort`), grouping (`group_by`), mapping (`map`), and classification dataset export (`export`, `save`). `Crops.names` returns the sparse `{class_id: label}` dictionary referenced by its boxes.
 3. **`Detection`**: Binds a list of `Box` objects to `source_image`, deduplicating any colliding `Box.id` values and linking every box's `parent_image` to `source_image`. Provides geometry and postprocessing helpers (`select`, `drop`, `relabel`, `filter_score`, `clip`, `remove_invalid`, `nms`, `top`, `pipe`, `restore`), visualization (`plot`, `draw`, `show`, `save`, `to_array`, `to_numpy`, `to_bgr`), and serialization (`export`, `to_dict`). `Detection.names` returns the sparse class mapping present in that frame.
-4. **`Detections`**: Manages a sequence of `Detection` frames in memory or lazily as a stream (`stream=True` or non-list iterable). Supports positive indexing and slicing on streams, frame-level transformations (`map`, `map_boxes`, `select`, `relabel`, `drop`, `filter_score`, `clip`, `remove_invalid`, `nms`, `top`, `pipe`, `restore`), random-access frame editing (`get_frame`, `replace_frame`, `update_frame`, `remove_frame`), context-manager resource cleanup (`with results:` / `close()`), and batch export (`save`, `export`, `crop`, `to_dict`). `Detections.names` returns the complete sorted `{class_id: label}` registry across the collection.
+4. **`Detections`**: Manages a sequence of `Detection` frames in memory or lazily as a stream (`stream=True` or non-list iterable). Supports positive indexing and slicing on streams, frame-level transformations (`map`, `map_boxes`, `select`, `relabel`, `drop`, `filter_score`, `clip`, `remove_invalid`, `nms`, `top`, `pipe`, `restore`), atomic frame re-prediction via [`repredict(model, index=None, **kwargs)`](#repredict), frame editing (`get_frame`, `replace_frame`, `update_frame`, `remove_frame`, `results[index] = frame`), context-manager resource cleanup (`with results:` / `close()`), and batch export (`save`, `export`, `crop`, `to_dict`). `Detections.names` returns the complete canonical `{class_id: label}` vocabulary across the collection, while `Detections.active_names` returns only the classes currently present in active boxes. Multi-model class ID collisions are automatically resolved by allocating new canonical IDs while preserving the native ID in `box.metadata["native_class_id"]`.
 
 For backward compatibility, `detect` also exports aliases: `CropResult`, `DetectedObject`, and `CroppedObject` (`Box`); `Boxes` and `CropResults` (`Crops`); `DetectionResult` (`Detection`); and `DetectionResults` and `PreviewResult` (`Detections`).
 
@@ -80,6 +80,24 @@ For backward compatibility, `detect` also exports aliases: `CropResult`, `Detect
   - `total_frames`: `int | None`, default `None` — known frame count for streams.
   - `names`: `Mapping[int, Any] | Sequence[Any] | None`, default `None` — base class vocabulary.
 
+### `repredict`
+
+```python
+results.repredict(model, index=None, **kwargs) -> Detections
+```
+
+Re-run a detector for all frames, one collection position, or a list/tuple of
+positions. Negative positions are supported for materialized collections and
+duplicate positions are evaluated once in first-request order. The method
+returns the same `Detections` instance.
+
+Klygo validates every selected source image and all returned frames before it
+commits any replacement. It preserves each original frame's `frame_index` and
+source identity, records the replacement inference metadata, and reconciles
+native class IDs with the collection's stable canonical registry. `stream`,
+`vid_stride`, and `max_frames` are rejected; call `to_list()` explicitly before
+mutating a finite stream.
+
 ## Returns
 
 Instances of `Box`, `Crops`, `Detection`, or `Detections` representing the corresponding level of the detection hierarchy.
@@ -91,7 +109,8 @@ Instances of `Box`, `Crops`, `Detection`, or `Detections` representing the corre
 - `Box.clip()` raises `ValueError` if `image_size` is omitted and `parent_image` has no `.size`.
 - `Detection.restore()` raises `ValueError` if `target` is not `"transformed"` or `"original"`, or if the source image has no file path.
 - `Detections` in streaming mode raises `IndexError` for negative integer indices or out-of-range stream indices, and `ValueError` for non-positive slice steps or negative slice bounds.
-- Concatenating `Detections` (`+`) or accessing `Detections.names` raises `ValueError` when the same `class_id` maps to conflicting labels across frames.
+- Passing invalid index types or out-of-range bounds to `repredict()` raises `TypeError` or `IndexError` before inference; mid-run failures leave original frames and registry unchanged.
+- Class ID collisions between different models are reconciled automatically without overwriting existing mappings.
 
 ## Example
 

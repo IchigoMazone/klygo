@@ -6,7 +6,7 @@ __all__ = ["show_image"]
 
 
 def _is_notebook() -> bool:
-    """Kiểm tra môi trường có phải là Jupyter Notebook / Colab / Kaggle hay không."""
+    """Check whether the active runtime environment is Jupyter Notebook / Colab / Kaggle."""
     try:
         from IPython import get_ipython
         ip = get_ipython()
@@ -58,7 +58,7 @@ def show_image(
     else:
         pil_img = image
 
-    # 1. Nếu chỉ định width -> scale tỉ lệ ảnh
+    # 1. Proportional resize if width is specified
     if width is not None and width > 0:
         w_orig, h_orig = pil_img.size
         if w_orig > 0:
@@ -66,7 +66,7 @@ def show_image(
             new_h = max(1, int(h_orig * scale))
             pil_img = pil_img.resize((width, new_h), PIL.Image.Resampling.BILINEAR)
 
-    # 2. Xử lý backend hiển thị
+    # 2. Display backend dispatch
     if backend == "auto":
         if _is_notebook():
             try:
@@ -75,7 +75,7 @@ def show_image(
                 return
             except Exception:
                 pass
-        # Desktop mặc định
+        # Default desktop viewer
         pil_img.show(title=title)
         return
 

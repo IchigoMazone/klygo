@@ -19,11 +19,9 @@ class TestPartition(unittest.TestCase):
 
     def test_partition_and_repartition(self):
         print("Testing partition and repartition success paths...")
-        temp_out = "test_partition_out"
-        if os.path.exists(temp_out):
-            shutil.rmtree(temp_out)
+        with tempfile.TemporaryDirectory() as td:
+            temp_out = os.path.join(td, "test_partition_out")
 
-        try:
             # 1. Partition ZIP to folder
             partition(
                 source="test/data.zip",
@@ -62,10 +60,6 @@ class TestPartition(unittest.TestCase):
             assert data2["train"] == "images/train"
             assert data2["val"] == "images/val"
             assert "test" not in data2
-
-        finally:
-            if os.path.exists(temp_out):
-                shutil.rmtree(temp_out)
 
     def test_partition_validation_errors(self):
         print("Testing partition validation errors...")

@@ -13,25 +13,30 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
 
 ## Contract
 
-`Detector` subclasses [`models.BaseModel`](BaseModel.md) and sets `task="Object-Detection"`. Concrete detectors (such as `YOLODetect`, `YOLOWorldDetect`, `GroundingDinoDetect`, or application-defined subclasses for Torchvision Faster R-CNN and KerasHub RT-DETR / D-FINE) implement `forward(images, prompt=None)` while inheriting the full Klygo detection lifecycle:
+`Detector` subclasses [`models.BaseModel`](BaseModel.md) and sets `task="Object-Detection"`. Concrete detectors (such as `YOLODetect`, `YOLOWorldDetect`, `GroundingDinoDetect`, `LocateAnythingDetect`, or application-defined subclasses for Torchvision Faster R-CNN and KerasHub RT-DETR / D-FINE) implement `forward(images, prompt=None)` while inheriting the full Klygo detection lifecycle:
 
-1. **Multi-Backend Dispatch Helpers (delegated to [`klygo.models.backend.common`](../backend/api/common.md))**:
-   - `self.current_device` / `self.current_dtype`: Query the active device and dtype of `self.model` via `common.current_device()` and `common.current_dtype()`.
+1. **Persistent Prediction Configuration & Public Properties**:
+   - `self.device`: Query the active accelerator device of `self.model` via `common.current_device()`.
+   - `self.dtype`: Query the active numeric dtype of `self.model` via `common.current_dtype()`.
+   - `self.predict_config`: Independent, defensive `deepcopy` snapshot of effective inference options (such as `prompt`, `threshold`, `iou`). External mutation of the returned dictionary does not mutate model state.
+   - Persistent settings: `predict()` automatically retains configured `prompt`, `threshold`, and `iou` across successive calls. Passing `prompt=None` clears the remembered prompt and restores default vocabulary; calling `reset()` clears all remembered overrides. Execution controls (`batch`, `vid_stride`, `max_frames`, `stream`, `verbose`) are never persisted.
+2. **Multi-Backend Dispatch Helpers (delegated to [`klygo.models.backend.common`](../backend/api/common.md))**:
    - `self.cast_inputs(inputs, dev=None, dtype=None)`: Cast floating-point tensors to the model's device and dtype while preserving integer tensors (`input_ids`) via `common.cast_inputs()`.
    - `self.run_inference(inputs, **model_kwargs)`: Execute forward pass via `common.run_inference()` on the active backend adapter (`Hugging Face`, `Ultralytics`, `Torchvision`, or `Keras`).
    - `self.get_output_device(outputs)` / `self.sync_device(tensor, target_device)`: Inspect output device and synchronize multi-GPU tensors via `common.get_output_device()` and `common.sync_device()`.
    - `self.format_results(raw_outputs)`: Normalize framework-native predictions into `list[dict[str, Any]]` with `"boxes"` (`xyxy`), `"scores"`, `"labels"`, and `"class_ids"` via `common.format_results()`, ready to pass straight into [`outputs.build_detections(images, formatted, names=self.names)`](../../outputs/api/build_detections.md).
    - See the [`klygo.models.backend` & `common` Guide](../backend/README.md) for direct usage of all 15 `common` functions.
-2. **Inference Engine (`predict`)**:
+3. **Inference Engine (`predict`)**:
    - Resolves single images, lists of images, directories, or video streams through `klygo.media`.
-   - Applies call-local parameter overrides (`**kwargs`) validated against `metadata.flags` and `metadata.priority` without mutating default model settings.
+   - Applies call-local parameter overrides (`**kwargs`) validated against `metadata.flags` and `metadata.priority`.
    - Automatically restores bounding-box coordinates to original image dimensions when inputs carry a `klygo.preprocessing` transformation trace.
    - Supports `stream=True` to return a lazy `klygo.outputs.Detections` generator that processes long videos in bounded memory.
-3. **Lifecycle & Benchmarking**:
+4. **Lifecycle & Isolated Benchmarking**:
    - `warmup()`: Run a single 640×640 dummy inference pass to initialize GPU kernels.
-   - `benchmark(source=None, num_runs=50, warmup=5)`: Measure mean/min/max latency (ms), throughput (FPS), and parameter count inside the backend's inference context with accelerator synchronization.
-   - `save(output_dir)`: Export `klygo.json` metadata, custom `model.py` source (for custom classes), and backend weights.
-   - `reset()` / `unload()`: Move weights to CPU, clear GPU caches, and transition `state` to `"UNLOADED"`.
+   - `benchmark(source=None, iterations=10, warmup=3, verbose=True, **kwargs)`: Measure mean latency (ms), throughput (FPS), device, and dtype inside accelerator synchronization. Temporary overrides apply only during the benchmark run and are safely restored on completion or failure.
+   - `save(output_dir)`: Export `klygo.json` metadata, custom `model.py` source (for custom classes), tokenizer (when present), and backend weights.
+   - `reset()`: Clear remembered predict configuration, restore default model settings, and reset backend class state.
+   - `unload()`: Move weights to CPU, release model and processor/tokenizer references, clear GPU caches, and transition `state` to `"UNLOADED"`.
 
 ## Parameters
 
@@ -40,15 +45,18 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
 - `model_id`: `str | None`, default `None` — model identifier or weight path.
 - `**kwargs`: `Any` — forwarded to `BaseModel.__init__`.
 
-## Key Methods
+## Key Methods and Properties
 
-- `predict(source, prompt=None, step=1, max_frames=None, batch_size=1, stream=False, verbose=False, **kwargs) -> Detections`: Run object detection on images or video frames.
-- `forward(images, prompt=None) -> list[Detection]`: Execute one batch forward pass on a list of `PIL.Image.Image` instances.
-- `benchmark(source=None, num_runs=50, warmup=5, verbose=True, **kwargs) -> dict[str, Any]`: Measure latency and FPS.
+- `device`: Read-only property returning active accelerator device (e.g., `torch.device("cpu")`).
+- `dtype`: Read-only property returning active data type (e.g., `torch.float32`).
+- `predict_config`: Read-only defensive snapshot dictionary of remembered inference parameters.
+- `predict(source, prompt=None, batch=1, vid_stride=1, max_frames=None, stream=False, verbose=False, **kwargs) -> Detections`: Run object detection on images or video frames.
+- `forward(images, prompt=None) -> list[Detection]`: Pure inference hook implemented by subclasses on a batch of `PIL.Image.Image` instances.
+- `benchmark(source=None, iterations=10, warmup=3, verbose=True, **kwargs) -> dict[str, Any]`: Measure latency and FPS in isolation without mutating persistent model settings.
 - `warmup() -> None`: Warm up the accelerator pipeline on a 640×640 image.
-- `save(output_dir: str) -> None`: Persist metadata, custom wrapper code, and model weights.
-- `reset() -> None`: Move model to CPU and reset settings to defaults.
-- `unload() -> None`: Release model references, clear accelerator caches, and set `state = "UNLOADED"`.
+- `save(output_dir: str) -> None`: Persist metadata, custom wrapper code, tokenizer, and model weights.
+- `reset() -> None`: Restore default settings, clear remembered prediction configuration, and reset backend vocabulary.
+- `unload() -> None`: Release model and processor references, clear accelerator caches, and set `state = "UNLOADED"`.
 - `help() -> None`: Display a Rich guide covering parameters and usage.
 
 ## Returns

@@ -16,12 +16,11 @@ class FakeJaxDevice:
         return "gpu:0"
 
 
-class BenchmarkHarness:
+class BenchmarkHarness(Detector):
     """Minimal object exercising Detector.benchmark without model loading."""
 
-    backend = "KerasHub"
-    model_id = "fake-model"
-    task = "object-detection"
+    def __init__(self):
+        super().__init__(backend="Custom", model_id="fake-model")
 
     def current_device(self):
         return "/GPU:0"
@@ -29,8 +28,8 @@ class BenchmarkHarness:
     def current_dtype(self):
         return "float32"
 
-    def predict(self, **kwargs):
-        return {"boxes": []}
+    def forward(self, images, prompt=None):
+        return [{"boxes": []} for _ in images]
 
 
 class TestBackendRuntimeDispatch(unittest.TestCase):
@@ -94,7 +93,7 @@ class TestBackendRuntimeDispatch(unittest.TestCase):
                 verbose=False,
             )
         self.assertEqual(report["device"], "/GPU:0")
-        self.assertEqual(synchronize.call_count, 3)
+        self.assertEqual(synchronize.call_count, 4)
         self.assertEqual(synchronize.call_args_list[0].kwargs["device"], "/GPU:0")
 
 

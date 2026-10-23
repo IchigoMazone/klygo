@@ -12,6 +12,11 @@ Local Tutorial Notebooks (`tutorials/models/`, 1-to-1 with `klygo/models/` submo
 - [`Document_Models_Metadata.ipynb`](../../tutorials/models/Document_Models_Metadata.ipynb) (`klygo/models/metadata.py`)
 - [`Document_Models_Utils.ipynb`](../../tutorials/models/Document_Models_Utils.ipynb) (`klygo/models/utils.py` & `klygo/models/errors.py`)
 
+Focused guides:
+
+- [Persistent detector configuration and atomic output replacement](detector-output-refactor.md)
+- [NVIDIA Locate Anything adapter](locate-anything.md)
+
 ---
 
 ## 1. 3-Tier Architecture & Multi-Backend Matrix
@@ -26,7 +31,7 @@ Local Tutorial Notebooks (`tutorials/models/`, 1-to-1 with `klygo/models/` submo
 2. **Layer 2 — Task Engine ([`Detector`](api/Detector.md) in `detection/base.py` & [`backend.common`](backend/README.md))**:
    Implements the complete object-detection pipeline (`predict()`, streaming video/image generators via `stream=True`, coordinate restoration when paired with `klygo.preprocessing`, `warmup()`, `benchmark()`, `save()`, `reset()`, and `unload()`) and delegates low-level tensor/device operations to [`klygo.models.backend.common`](backend/api/common.md).
 3. **Layer 3 — Concrete & Application Wrappers (`detection/*.py` & custom subclasses)**:
-   Built-in registry wrappers (`YOLODetect`, `YOLOWorldDetect`, `GroundingDinoDetect`) or application-owned [`Detector`](api/Detector.md) subclasses implement `forward(images, prompt=None)` using `self.cast_inputs()`, `self.run_inference()`, and `self.format_results()` (or by calling [`klygo.models.backend.common`](backend/api/common.md) directly).
+   Built-in registry wrappers (`YOLODetect`, `YOLOWorldDetect`, `GroundingDinoDetect`, `LocateAnythingDetect`) or application-owned [`Detector`](api/Detector.md) subclasses implement `forward(images, prompt=None)` using `self.cast_inputs()`, `self.run_inference()`, and `self.format_results()` (or by calling [`klygo.models.backend.common`](backend/api/common.md) directly).
 
 See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](backend/README.md) and [`common` API Reference](backend/api/common.md) for all 15 unified backend functions (`backend_family`, `current_device`, `current_dtype`, `is_accelerator_available`, `inference_context`, `synchronize`, `clear_cache`, `cast_inputs`, `run_inference`, `get_output_device`, `sync_device`, `format_results`, `save`, `reset`, `unload`).
 
@@ -35,7 +40,7 @@ See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](back
 | Backend Family | Dedicated Guide | `backend` Identifier | Upstream Libraries | Representative Models | Built-in / Adapter Capabilities |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Ultralytics** | [Ultralytics Guide](backend/api/ultralytics.md) | `"Ultralytics"` | `ultralytics`, `torch` | YOLOv8, YOLOv9, YOLOv10, YOLO11, YOLO-World v2 | Built-in `YOLODetect` & `YOLOWorldDetect`, `.pt` direct file loading, open-vocabulary `set_classes` |
-| **Hugging Face / PyTorch** | [Hugging Face Guide](backend/api/huggingface.md) | `"Hugging Face"` / `"PyTorch"` | `transformers`, `torch` | Grounding DINO, DETR, RT-DETR, custom `nn.Module` | Built-in `GroundingDinoDetect`, AMP `autocast`, `BatchFeature` float casting, multi-GPU `sync_device` |
+| **Hugging Face / PyTorch** | [Hugging Face Guide](backend/api/huggingface.md) | `"Hugging Face"` / `"PyTorch"` | `transformers`, `torch` | Grounding DINO, Locate Anything, DETR, RT-DETR, custom `nn.Module` | Built-in `GroundingDinoDetect` and optional CUDA-only `LocateAnythingDetect`, AMP `autocast`, `BatchFeature` float casting, multi-GPU `sync_device` |
 | **Torchvision** | [Torchvision Guide](backend/api/torchvision.md) | `"Torchvision"` | `torchvision`, `torch` | Faster R-CNN (`fasterrcnn_mobilenet_v3_large_fpn`), RetinaNet, FCOS, SSD | List-of-tensor `cast_inputs`, `run_inference`, and `format_results` (`boxes`, `scores`, `labels`) |
 | **Keras 3 / KerasHub** | [Keras & KerasHub Guide](backend/api/keras.md) | `"Keras"` / `"KerasHub"` | `keras`, `keras-hub` | D-FINE / RT-DETR (`dfine_small_coco`), RetinaNet, custom `keras.Model` | Native `KERAS_BACKEND=torch`/`jax`/`tensorflow` support, `ObjectDetector` aspect-preserving resize & `decode_predictions`, automatic `yxyx` $\rightarrow$ `xyxy` conversion |
 
@@ -50,7 +55,7 @@ See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](back
 
 | I want to... | Recommended API | Key Parameters / Example |
 | :--- | :--- | :--- |
-| **Load a built-in registered model by name** | [`load()`](api/load.md) | `detector = models.load("yolov8n")` |
+| **Load a built-in registered model by name** | [`load()`](api/load.md) | `detector = models.load("yolov8n.pt")` |
 | **Load a local Ultralytics `.pt` checkpoint directly** | [`load()`](api/load.md) | `detector = models.load("weights/yolov8n.pt", threshold=0.35)` |
 | **Load a saved Klygo model directory (`klygo.json`)** | [`load()`](api/load.md) | `detector = models.load("artifacts/saved_detector")` |
 | **Load a model from a persisted `klygo.config` file** | [`load()`](api/load.md) | `detector = models.load(config.load("model.yaml"))` |
@@ -62,9 +67,12 @@ See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](back
 | **Bind `model_id`, class, and parameter values** | [`configure()`](api/configure.md) | `cfg = models.configure("coco-v1", metadata=schema, implementation=MyDetector, threshold=0.5)` |
 | **Build a custom multi-backend detector** | [`Detector`](api/Detector.md) | `class MyDetector(models.Detector): def forward(self, images, prompt=None): ...` |
 | **Pack formatted backend dicts into `Detection` frames** | [`outputs.build_detections()`](../outputs/api/build_detections.md) | `outputs.build_detections(images, self.format_results(raw), names=self.names)` |
-| **Run batch detection on images, folders, or videos** | [`Detector.predict()`](api/Detector.md) | `dets = detector.predict("images/", threshold=0.4)` |
-| **Stream large videos lazily without filling RAM** | [`Detector.predict()`](api/Detector.md) | `for frame_det in detector.predict("traffic.mp4", stream=True, step=2): ...` |
-| **Measure model latency (ms) and throughput (FPS)** | [`Detector.benchmark()`](api/Detector.md) | `stats = detector.benchmark("sample.jpg", num_runs=50, warmup=5)` |
+| **Run batch detection on images, folders, or videos** | [`Detector.predict()`](api/Detector.md) | `dets = detector.predict("images/", prompt=["person"], threshold=0.4)` |
+| **Inspect remembered effective inference settings** | [`Detector.predict_config`](api/Detector.md) | `cfg = detector.predict_config  # {'prompt': ['person'], 'threshold': 0.4}` |
+| **Inspect hardware device and model data type** | [`Detector.device`](api/Detector.md) / [`dtype`](api/Detector.md) | `print(detector.device, detector.dtype)` |
+| **Stream large videos lazily without filling RAM** | [`Detector.predict()`](api/Detector.md) | `for frame_det in detector.predict("traffic.mp4", stream=True, vid_stride=2): ...` |
+| **Measure model latency (ms) and throughput in isolation** | [`Detector.benchmark()`](api/Detector.md) | `stats = detector.benchmark("sample.jpg", iterations=10, warmup=3)` |
+| **Clear remembered prompt or restore defaults** | [`Detector.predict()`](api/Detector.md) / [`reset()`](api/Detector.md) | `detector.predict(img, prompt=None)` or `detector.reset()` |
 | **Export a self-contained model bundle to disk** | [`Detector.save()`](api/Detector.md) | `detector.save("exported_model/")` |
 | **Release GPU/CPU memory and lock the instance** | [`Detector.unload()`](api/Detector.md) | `detector.unload()  # Subsequent predict() raises InvalidStateError` |
 | **Set or inspect the default backend environment** | [`set_backend()`](api/set_backend.md) / [`get_backend()`](api/get_backend.md) | `models.set_backend("Keras", engine="torch")` |

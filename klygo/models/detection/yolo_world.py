@@ -31,13 +31,12 @@ class YOLOWorldDetect(Detector):
         images: List[PIL.Image.Image],
         prompt: Optional[List[str]] = None,
     ) -> List[Detection]:
-        if prompt is not None:
-            classes = [prompt] if isinstance(prompt, str) else prompt
-            self.model.set_classes(
-                [str(name).strip() for name in classes if str(name).strip()]
-            )
 
+        classes = list(self.original_names.values()) if prompt is None else list(prompt)
+        if list(self.model.names.values()) != classes:
+            self.model.set_classes(classes)
         self.names = dict(self.model.names)
+
         model_config = dict(self.metadata["model"])
         post_config = dict(self.metadata["post"])
 

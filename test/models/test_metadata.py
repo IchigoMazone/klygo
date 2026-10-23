@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 
 import PIL.Image
 
-from klygo import Config, models
+from klygo import Config, files, models
 from klygo.models import utils
 from klygo.models.detection.base import Detector
 from klygo.models.load import _resolve
@@ -406,6 +406,28 @@ class TestModelMetadata(unittest.TestCase):
 
         self.assertIsNone(_resolve("yolo11n-seg.pt"))
         self.assertIsNone(_resolve("yolo26n-cls.pt"))
+
+    def test_official_and_short_name_aliases(self):
+        cases = [
+            ("ultralytics/yolo11n.pt", "yolo11n.pt"),
+            ("yolo11n", "yolo11n.pt"),
+            ("yolo11n.pt", "yolo11n.pt"),
+            (files.path("ultralytics/yolo11n.pt"), "yolo11n.pt"),
+            (files.path("yolo11n.pt"), "yolo11n.pt"),
+            ("IDEA-Research/grounding-dino-base", "IDEA-Research/grounding-dino-base"),
+            ("grounding-dino-base", "IDEA-Research/grounding-dino-base"),
+            (files.path("IDEA-Research/grounding-dino-base"), "IDEA-Research/grounding-dino-base"),
+            ("nvidia/LocateAnything-3B", "nvidia/LocateAnything-3B"),
+            ("locate-anything", "nvidia/LocateAnything-3B"),
+            (files.path("nvidia/LocateAnything-3B"), "nvidia/LocateAnything-3B"),
+            ("ultralytics/yolov8n.pt", "yolov8n.pt"),
+            ("yolov8n", "yolov8n.pt"),
+        ]
+        for name, expected_id in cases:
+            with self.subTest(name=str(name)):
+                entry = _resolve(name)
+                self.assertIsNotNone(entry, f"Could not resolve {name}")
+                self.assertEqual(entry["model_id"], expected_id)
 
     def test_load_configures_registry_entries_through_the_canonical_pipeline(self):
         load_module = importlib.import_module("klygo.models.load")

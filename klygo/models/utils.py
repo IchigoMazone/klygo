@@ -348,6 +348,9 @@ def resolve_images(
             )
             is_single = raw_stream.source_type == "image"
             return raw_stream, is_single
+        elif hasattr(source, "shape") and getattr(source, "ndim", 0) in (2, 3):
+            raw_stream = [source]
+            total_frames = 1
         elif hasattr(source, "__iter__") and not isinstance(source, (list, tuple)):
             raw_stream = source
             total_frames = getattr(source, "total_frames", None)
@@ -377,6 +380,8 @@ def resolve_images(
         if isinstance(source, (str, Path)):
             is_single = files.extension(str(source)).lower() not in media.VIDEO_SUFFIXES
         elif isinstance(source, PIL.Image.Image):
+            is_single = True
+        elif hasattr(source, "shape") and getattr(source, "ndim", 0) in (2, 3):
             is_single = True
 
         return _build_generator(), is_single
@@ -438,6 +443,14 @@ def normalize_prompt(text_prompt: Union[str, List[str]]) -> List[str]:
     """Normalize a text prompt string or sequence into a non-empty ``List[str]``."""
     from klygo.validators import validate_type
     validate_type(text_prompt, (str, list, tuple), "prompt")
-    if isinstance(text_prompt, str):
-        return [text_prompt.strip()]
-    return [str(p).strip() for p in text_prompt if str(p).strip()]
+    values = [text_prompt] if isinstance(text_prompt, str) else list(text_prompt)
+    normalized = []
+    for value in values:
+        validate_type(value, str, "prompt label")
+        if not value.strip():
+            raise ValueError("prompt labels must not be empty or whitespace")
+        if value.strip() not in normalized:
+            normalized.append(value.strip())
+    if not normalized:
+        raise ValueError("prompt must contain at least one label; use None to clear it")
+    return normalized

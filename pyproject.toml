@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "klygo"
 version = "2.1.0"
 description = "Unified high-performance Python toolkit for file operations, archives, configuration, dataset management, and zero-shot object detection pipelines."
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "Trinh Nhu Nhat (IchigoMazone)", email = "nhattrinh2702@gmail.com" }
 ]
@@ -27,6 +28,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+locate-anything = [
+    "torch>=2.7,<3.0",
+    "transformers==4.57.1",
+    "accelerate>=1.5.2",
+    "torchvision>=0.22,<1.0",
+    "peft",
+    "decord==0.6.0",
+    "lmdb>=1.7.5",
+    "timm>=1.0.11",
+]
 torch = [
     "torch>=2.7,<3.0",
 ]

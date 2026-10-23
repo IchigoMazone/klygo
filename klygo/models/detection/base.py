@@ -5,17 +5,29 @@ via media.load, batching loop, progress bar tracking, external timing, hardware 
 export, and benchmark workflows.
 """
 
+from contextlib import contextmanager
+from copy import copy, deepcopy
+import math
+import statistics
+from threading import RLock
 import time
-from typing import Dict, Any, Optional, Union, Sequence, List
+from typing import Any, Dict, List, Optional, Sequence, Union
 import PIL.Image
 
 from klygo.models.base import BaseModel
 from klygo.models import utils
 from klygo.models.backend import common
-from klygo.outputs.detect import Detections, Detection, Box
+from klygo.outputs.detect import Box, Detection, Detections
 from klygo.utils.progress import ProgressBar
+from klygo import validators
 
 __all__ = ["Detector"]
+
+_UNSET = object()
+_LOADING_OPTIONS = {
+    "token", "use_auth_token", "trust_remote_code", "cache_dir", "revision",
+    "local_files_only", "low_cpu_mem_usage", "device_map", "torch_dtype", "dtype",
+}
 
 
 def _materialize_model_images(images: Sequence[Any]) -> List[PIL.Image.Image]:
@@ -32,11 +44,28 @@ def _materialize_model_images(images: Sequence[Any]) -> List[PIL.Image.Image]:
     return prepared
 
 
+def _values_match(left: Any, right: Any) -> bool:
+    """Compare configuration values without leaking array truth-value errors."""
+    try:
+        comparison = left == right
+    except Exception:
+        return False
+    if isinstance(comparison, bool):
+        return comparison
+    try:
+        reducer = getattr(comparison, "all", None)
+        if callable(reducer):
+            comparison = reducer()
+        return bool(comparison)
+    except (TypeError, ValueError, RuntimeError):
+        return False
+
+
 class Detector(BaseModel):
     """Backend-neutral detector wrapper for image and video prediction.
 
-    Concrete subclasses implement ``forward`` and can use the inherited
-    batching, result packaging, and backend-dispatch methods.
+    Concrete subclasses implement ``forward`` and inherit batching, streaming,
+    caching, lifecycle hooks, and backend dispatch.
     """
 
     def __init__(
@@ -54,67 +83,161 @@ class Detector(BaseModel):
         )
         self.model: Any = None
         self.names: Dict[int, Optional[str]] = {}
-
-    def _prepare_prediction(self, prompt: Optional[List[str]]) -> None:
-        """Prepare backend-specific class state for one prediction call."""
-
-    def current_device(self) -> Any:
-        """Return the actual device hosting the wrapped model."""
-        return common.current_device(self.model, backend=self.backend)
-
-    def current_dtype(self) -> Any:
-        """Return the actual dtype of the wrapped model's parameters."""
-        return common.current_dtype(self.model, backend=self.backend)
+        self._predict_config = {"prompt": None}
+        self._prediction_lock = RLock()
 
     # =========================================================================
-    # BACKEND-AGNOSTIC EXECUTION HOOKS
+    # 1. CORE INFERENCE API (predict, __call__, forward)
     # =========================================================================
-    def cast_inputs(self, inputs: Any) -> Any:
-        """Cast floating inputs to the model's device and dtype via the active backend."""
-        return common.cast_inputs(self.backend, inputs, dev=self.current_device(), dtype=self.current_dtype())
 
-    def run_inference(self, inputs: Any, **model_kwargs) -> Any:
-        """Execute a forward pass using the native runtime of the selected backend."""
-        return common.run_inference(self.backend, self.model, inputs, cur_dtype=self.current_dtype(), **model_kwargs)
+    def predict(
+        self,
+        source: Any,
+        prompt: Any = _UNSET,
+        batch: int = 1,
+        vid_stride: int = 1,
+        max_frames: Optional[int] = None,
+        verbose: bool = True,
+        stream: bool = False,
+        **kwargs,
+    ) -> Detections:
+        """Predict with remembered inference options and independent result metadata.
 
-    def get_output_device(self, outputs: Any) -> Any:
-        """Detect the device of the model's output tensors (logits, pred_boxes, etc.)."""
-        return common.get_output_device(self.backend, outputs, default_device=self.current_device())
+        Omitted prompt reuses the previous prompt; explicit None clears it.
+        Execution controls are never remembered. Lazy streams capture their
+        configuration at invocation, including across interleaved predictions.
+        """
+        validators.validate_count(batch, "batch")
+        validators.validate_count(vid_stride, "vid_stride")
+        if max_frames is not None:
+            validators.validate_count(max_frames, "max_frames")
+        validators.validate_type(verbose, bool, "verbose")
+        validators.validate_type(stream, bool, "stream")
 
-    def sync_device(self, tensor: Any, target_device: Any) -> Any:
-        """Move a tensor to *target_device* when it differs from the current device."""
-        return common.sync_device(self.backend, tensor, target_device=target_device)
+        with self._prediction_lock:
+            metadata, prompts = self._resolve_prediction(prompt, kwargs)
+            images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames, stream=stream)
+            previous = self._snapshot_prediction_state()
+            try:
+                with self._use_metadata(metadata):
+                    self._prepare_prediction(prompts)
+                if not stream:
+                    frames = []
+                    with ProgressBar(total=len(images), desc="Predict", unit="frame", verbose=verbose, colour="cyan") as progress:
+                        for offset in range(0, len(images), batch):
+                            part = images[offset:offset + batch]
+                            frames.extend(self._infer_batch(part, prompts, metadata, offset * vid_stride, vid_stride))
+                            progress.update(len(part))
+                    result = Detections(
+                        frames,
+                        source_type="image" if is_single else "video",
+                        fps=getattr(images, "fps", 30.0),
+                        names=self.names,
+                    )
+            except Exception:
+                self._restore_prediction_state(previous)
+                raise
 
-    def format_results(self, raw_outputs: Any) -> List[Dict[str, Any]]:
-        """Normalise raw backend output into a list of ``{boxes, scores, labels}`` dicts."""
-        return common.format_results(self.backend, raw_outputs)
+            self._remember_prediction(metadata, prompts)
+            if not stream:
+                return result
+
+            names = deepcopy(self.names)
+            total = getattr(images, "total_frames", None)
+            if total is None and hasattr(images, "__len__"):
+                total = len(images)
+
+        def generate():
+            import itertools
+            iterator = iter(images)
+            offset = 0
+            try:
+                while True:
+                    part = list(itertools.islice(iterator, batch))
+                    if not part:
+                        break
+                    with self._prediction_lock:
+                        if self.state == "UNLOADED":
+                            from klygo.models.errors import InvalidStateError
+                            raise InvalidStateError("Cannot consume a stream after model unload")
+                        current = self._snapshot_prediction_state()
+                        try:
+                            frames = self._infer_batch(part, prompts, metadata, offset * vid_stride, vid_stride)
+                        finally:
+                            self._restore_prediction_state(current)
+                    yield from frames
+                    offset += len(part)
+            finally:
+                close = getattr(iterator, "close", None)
+                if callable(close):
+                    close()
+
+        return Detections(
+            generate(),
+            source_type="image" if is_single else "video",
+            fps=getattr(images, "fps", 30.0),
+            stream=True,
+            total_frames=total,
+            names=names,
+        )
+
+    def __call__(self, source: Any, *args, **kwargs) -> Union[Detections, Any]:
+        """Run :meth:`predict` using callable model syntax."""
+        return self.predict(source, *args, **kwargs)
+
+    def forward(
+        self,
+        images: List[PIL.Image.Image],
+        prompt: Optional[List[str]] = None,
+    ) -> List[Detection]:
+        """Execute model forward pass. Subclasses implement this method."""
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement 'forward(self, images, prompt=None)'"
+        )
 
     # =========================================================================
-    # LIFECYCLE & RESOURCE MANAGEMENT
+    # 2. PROPERTIES, LIFECYCLE & BENCHMARK
     # =========================================================================
+
+    @property
+    def device(self) -> Any:
+        """Return the backend's current device without caching or coercion."""
+        return self.current_device()
+
+    @property
+    def dtype(self) -> Any:
+        """Return the backend's current dtype (for example, torch.dtype or str)."""
+        return self.current_dtype()
+
+    @property
+    def predict_config(self) -> Dict[str, Any]:
+        """Return an independent snapshot of defaults and remembered overrides."""
+        with self._prediction_lock:
+            metadata, prompt = self._resolve_prediction(_UNSET, {}, validate=False)
+            return self._config_snapshot(metadata, prompt)
+
     def reset(self) -> "Detector":
-        self._settings = dict(self._default_settings)
-        common.reset(self.backend, self.model, getattr(self, "processor", None))
-        self.state = "READY"
+        """Restore default settings and prompt state, and reset backend resources."""
+        with self._prediction_lock:
+            self._reset_prediction_state()
+            common.reset(self.backend, self.model, getattr(self, "processor", None))
+            self._settings = deepcopy(self._default_settings)
+            self._predict_config = {"prompt": None}
+            if self.state != "UNLOADED":
+                self.state = "READY"
         return self
 
     def warmup(self) -> None:
-        """Run one dummy forward pass on a 640×640 black image to warm up the GPU pipeline."""
+        """Warm up with current settings without remembering temporary changes."""
         dummy_img = PIL.Image.new("RGB", (640, 640), color=(100, 100, 100))
-        try:
-            self.predict(source=dummy_img, prompt=["object"], verbose=False)
-        except Exception:
-            pass
+        self.benchmark(dummy_img, iterations=1, warmup=0, verbose=False)
 
     def clear_cache(self) -> None:
+        """Release unused backend memory blocks."""
         common.clear_cache(self.backend)
 
     def save(self, output_dir: str) -> None:
-        """Serialise the model (weights + metadata) to a Klygo-standard output directory.
-
-        The saved folder can be reloaded in full via ``klygo.models.load(folder)``.
-        Serialisation is delegated to :func:`klygo.models.backend.common.save`.
-        """
+        """Serialise the model (weights + metadata) to a Klygo-standard directory."""
         export_metadata = dict(self.metadata)
         export_metadata["model_id"] = self.model_id
         export_metadata["flags"] = dict(
@@ -133,10 +256,15 @@ class Detector(BaseModel):
             class_module=self.__class__.__module__,
             processor=getattr(self, "processor", None),
         )
+        if hasattr(self, "tokenizer") and self.tokenizer is not None and hasattr(self.tokenizer, "save_pretrained"):
+            self.tokenizer.save_pretrained(output_dir)
 
     def unload(self) -> None:
-        """Release GPU/CPU memory and transition the model state to ``UNLOADED``."""
+        """Release GPU/CPU memory and transition model state to ``UNLOADED``."""
         common.unload(self.backend, self.model, getattr(self, "processor", None))
+        if hasattr(self, "tokenizer"):
+            del self.tokenizer
+            self.tokenizer = None
         if hasattr(self, "processor"):
             del self.processor
             self.processor = None
@@ -145,70 +273,71 @@ class Detector(BaseModel):
             self.model = None
         self.state = "UNLOADED"
 
-    # =========================================================================
-    # BENCHMARK & HELP
-    # =========================================================================
     def benchmark(
         self,
         source: Optional[Any] = None,
-        prompt: Optional[Union[str, List[str]]] = None,
+        prompt: Any = _UNSET,
         iterations: int = 20,
         warmup: int = 5,
         verbose: bool = True,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Measure inference latency (ms) and throughput (FPS) over *iterations* runs."""
-        img = source if source is not None else PIL.Image.new("RGB", (640, 640), color=(100, 100, 100))
-        prompts = utils.normalize_prompt(prompt or ["object"])
+        """Measure prepared-input pipeline latency without persisting overrides."""
+        validators.validate_count(iterations, "iterations")
+        validators.validate_count(warmup, "warmup", minimum=0)
+        validators.validate_type(verbose, bool, "verbose")
+        if any(key in kwargs for key in ("stream", "batch", "vid_stride", "max_frames")):
+            raise ValueError("benchmark accepts inference options, not stream or sampling controls")
 
-        for _ in range(warmup):
-            self.predict(source=img, prompt=prompts, verbose=False, **kwargs)
+        img = source if source is not None else PIL.Image.new("RGB", (640, 640))
+        if hasattr(img, "__next__") or getattr(img, "is_stream", False) or type(img).__name__ == "MediaStream":
+            raise ValueError("Materialize a finite benchmark source before calling benchmark")
 
-        latencies = []
-        cur_dev = self.current_device()
-        cur_dt = self.current_dtype()
-        common.synchronize(self.backend, device=cur_dev)
+        with self._prediction_lock:
+            metadata, prompts = self._resolve_prediction(prompt, kwargs)
+            images, _ = utils.resolve_images(img, stream=False)
+            if not images:
+                raise ValueError("benchmark source must contain at least one image")
+            cur_dev, cur_dt = self.device, self.dtype
+            latencies = []
+            with self._isolated_prediction_state():
+                for _ in range(warmup):
+                    self._infer_batch(images, prompts, metadata)
+                for _ in range(iterations):
+                    common.synchronize(self.backend, device=cur_dev)
+                    start = time.perf_counter()
+                    result = self._infer_batch(images, prompts, metadata)
+                    common.synchronize(self.backend, device=cur_dev, value=result)
+                    latencies.append(time.perf_counter() - start)
 
-        for _ in range(iterations):
-            t_start = time.perf_counter()
-            result = self.predict(source=img, prompt=prompts, verbose=False, **kwargs)
-            common.synchronize(self.backend, device=cur_dev, value=result)
-            t_end = time.perf_counter()
-            latencies.append(t_end - t_start)
-
-        avg_lat = (sum(latencies) / len(latencies)) if latencies else 0.0
-        fps = (1.0 / avg_lat) if avg_lat > 0 else 0.0
-        w_dim, h_dim = (img.width, img.height) if isinstance(img, PIL.Image.Image) else (640, 640)
-
-        report = {
-            "model_id": self.model_id,
-            "backend": self.backend,
-            "device": str(cur_dev),
-            "dtype": str(cur_dt).replace("torch.", ""),
-            "image_size": f"{w_dim}x{h_dim}",
-            "iterations": iterations,
-            "warmup": warmup,
-            "latency_avg_ms": round(avg_lat * 1000, 2),
-            "fps": round(fps, 1),
-        }
-
-        if verbose:
-            from rich.console import Console
-            from rich.table import Table
-
-            table = Table(title=f"Model Benchmark: {self.model_id}")
-            table.add_column("Metric", style="cyan", no_wrap=True)
-            table.add_column("Value", style="green")
-            table.add_row("Model ID", str(report["model_id"]))
-            table.add_row("Backend / Task", f"{report['backend']} / {self.task}")
-            table.add_row("Device / Dtype", f"{report['device']} / {report['dtype']}")
-            table.add_row("Image Size", str(report["image_size"]))
-            table.add_row("Iterations / Warmup", f"{report['iterations']} (warmup: {report['warmup']})")
-            table.add_row("Average Latency", f"{report['latency_avg_ms']} ms / frame")
-            table.add_row("Throughput", f"{report['fps']} FPS")
-            Console().print(table)
-
-        return report
+            average = statistics.mean(latencies)
+            report = {
+                "model_id": self.model_id,
+                "backend": self.backend,
+                "device": str(cur_dev),
+                "dtype": str(cur_dt).replace("torch.", ""),
+                "image_size": f"{images[0].width}x{images[0].height}",
+                "iterations": iterations,
+                "warmup": warmup,
+                "latency_avg_ms": round(average * 1000, 2),
+                "latency_median_ms": round(statistics.median(latencies) * 1000, 2),
+                "latency_p95_ms": round(sorted(latencies)[math.ceil(0.95 * iterations) - 1] * 1000, 2),
+                "fps": round(len(images) / average, 1) if average else 0.0,
+                "images_per_iteration": len(images),
+                "measurement_scope": "prepared-input pipeline per iteration; media resolution excluded",
+                "throughput_unit": "images/second",
+                "predict_config": self._config_snapshot(metadata, prompts),
+            }
+            if verbose:
+                from rich.console import Console
+                from rich.table import Table
+                table = Table(title=f"Model Benchmark: {self.model_id}")
+                table.add_column("Metric", style="cyan")
+                table.add_column("Value", style="green")
+                for key, value in report.items():
+                    table.add_row(key, str(value))
+                Console().print(table)
+            return report
 
     def help(self) -> None:
         """Display standardized usage guide and parameters for the model."""
@@ -218,260 +347,225 @@ class Detector(BaseModel):
         table = Table(title=f"Model Help & Usage: {self.model_id}")
         table.add_column("Command / Method", style="cyan", no_wrap=True)
         table.add_column("Description", style="green")
-
-        table.add_row(
-            "predict(source, prompt, ...)",
-            "Perform object detection on images, videos, directories, or streams via klygo.media.load.",
-        )
-        table.add_row(
-            "benchmark(iterations=20, warmup=5)",
-            "Evaluate inference latency (ms) and throughput (FPS).",
-        )
-        table.add_row(
-            "info()",
-            "Print model architecture, backend, state, and active settings in a table.",
-        )
+        table.add_row("predict(source, prompt, ...)", "Perform detection on images, videos, directories, or streams.")
+        table.add_row("benchmark(iterations=20, warmup=5)", "Evaluate inference latency (ms) and throughput (FPS).")
+        table.add_row("info()", "Print architecture, backend, state, and active settings in a table.")
 
         settings_dict = self.settings
         has_params = any(bool(v) for v in settings_dict.values()) if isinstance(settings_dict, dict) else False
         if has_params:
-            param_lines = []
-            for group_name, group_val in settings_dict.items():
-                if isinstance(group_val, dict) and group_val:
-                    for k, v in group_val.items():
-                        param_lines.append(f"{k}={v} (group: {group_name})")
+            param_lines = [f"{k}={v} (group: {g})" for g, val in settings_dict.items() if isinstance(val, dict) for k, v in val.items()]
             if param_lines:
                 table.add_row("Custom Parameters", "\n".join(param_lines))
-
         Console().print(table)
 
     # =========================================================================
-    # INFERENCE ENGINE (predict & forward)
+    # 3. BACKEND EXECUTION DELEGATES
     # =========================================================================
-    def _pack_detection(
-        self,
-        det: Any,
-        image: Any,
-        frame_index: int,
-        lat_ms: float,
-        fps_val: float,
-    ) -> "Detection":
+
+    def current_device(self) -> Any:
+        """Return the actual device hosting the wrapped model."""
+        return common.current_device(self.model, backend=self.backend)
+
+    def current_dtype(self) -> Any:
+        """Return the actual dtype of the wrapped model's parameters."""
+        return common.current_dtype(self.model, backend=self.backend)
+
+    def cast_inputs(self, inputs: Any) -> Any:
+        """Cast floating inputs to the model's device and dtype via the active backend."""
+        return common.cast_inputs(self.backend, inputs, dev=self.current_device(), dtype=self.current_dtype())
+
+    def run_inference(self, inputs: Any, **model_kwargs) -> Any:
+        """Execute a forward pass using the native runtime of the selected backend."""
+        return common.run_inference(self.backend, self.model, inputs, cur_dtype=self.current_dtype(), **model_kwargs)
+
+    def get_output_device(self, outputs: Any) -> Any:
+        """Detect the device of the model's output tensors."""
+        return common.get_output_device(self.backend, outputs, default_device=self.current_device())
+
+    def sync_device(self, tensor: Any, target_device: Any) -> Any:
+        """Move a tensor to target_device when it differs from the current device."""
+        return common.sync_device(self.backend, tensor, target_device=target_device)
+
+    def format_results(self, raw_outputs: Any) -> List[Dict[str, Any]]:
+        """Normalise raw backend output into a list of {boxes, scores, labels} dicts."""
+        return common.format_results(self.backend, raw_outputs)
+
+    # =========================================================================
+    # 4. INTERNAL STATE & BATCH INFERENCE HELPERS
+    # =========================================================================
+
+    def _infer_batch(self, images: List[Any], prompt: Any, metadata: Dict[str, Any], offset: int = 0, frame_step: int = 1) -> List[Detection]:
+        with self._prediction_lock, self._use_metadata(metadata), common.inference_context(self.backend):
+            self._prepare_prediction(prompt)
+            start = time.perf_counter()
+            raw = list(self.forward(images=_materialize_model_images(images), prompt=deepcopy(prompt)))
+            elapsed = (time.perf_counter() - start) * 1000 / max(1, len(images))
+            if len(raw) != len(images):
+                raise ValueError("forward() must return exactly one result per input image")
+
+            frames = []
+            for index, (result, image) in enumerate(zip(raw, images)):
+                validators.validate_type(result, (dict, Detection), "forward result")
+                if isinstance(result, Detection):
+                    original = result
+                    result = copy(original)
+                    result.objects = [copy(box) for box in original.objects]
+                    for box in result.objects:
+                        box.box = list(box.box)
+                        box.metadata = deepcopy(box.metadata)
+                    result.config = deepcopy(original.config)
+                    result._all_names = dict(original._all_names)
+                    result.__dict__.pop("_collection_registry", None)
+
+                frame = self._pack_detection(result, image, offset + index * frame_step, round(elapsed, 2), round(1000 / max(elapsed, 0.001), 1))
+                config = deepcopy(dict(metadata.get("post", {})))
+                config.update(deepcopy(frame.config))
+                config.update({
+                    "prompt": deepcopy(prompt),
+                    "predict_config": self._config_snapshot(metadata, prompt),
+                    "model_id": self.model_id,
+                    "backend": self.backend,
+                    "source_path": frame.source_path,
+                    "frame_index": frame.frame_index,
+                    "image_frame_index": frame.image_frame_index,
+                })
+                frame.config = config
+                frames.append(frame)
+            return frames
+
+    def _pack_detection(self, det: Any, image: Any, frame_index: int, lat_ms: float, fps_val: float) -> Detection:
         """Normalise one raw result (dict or Detection) into a fully-populated Detection."""
         from klygo import media
-        if isinstance(image, media.LazyImage):
-            final_image = image
-            img_path = str(image.path)
-        else:
-            img_path = getattr(image, "path", getattr(image, "filename", None))
-            final_image = media.LazyImage(img_path) if img_path is not None else image
-
-        actual_frame_index = getattr(final_image, "frame_index", None)
-        if actual_frame_index is None:
-            actual_frame_index = frame_index
+        img_path = str(image.path) if isinstance(image, media.LazyImage) else getattr(image, "path", getattr(image, "filename", None))
+        final_image = image if isinstance(image, media.LazyImage) else (media.LazyImage(img_path) if img_path is not None else image)
+        actual_idx = getattr(final_image, "frame_index", frame_index)
 
         if isinstance(det, dict):
-            b_list = det.get("boxes", [])
-            s_list = det.get("scores", [1.0] * len(b_list))
-            l_list = det.get("labels", ["object"] * len(b_list))
-            c_list = det.get("class_ids", range(len(b_list)))
+            b_list, s_list = det.get("boxes", []), det.get("scores", [1.0] * len(det.get("boxes", [])))
+            l_list, c_list = det.get("labels", ["object"] * len(b_list)), det.get("class_ids", range(len(b_list)))
             box_objs = [
-                Box(
-                    id=i,
-                    class_id=int(class_id),
-                    label=l,
-                    score=float(s),
-                    box=b,
-                    parent_image=final_image,
-                )
-                for i, (b, s, l, class_id) in enumerate(
-                    zip(b_list, s_list, l_list, c_list)
-                )
+                Box(id=i, class_id=int(c), label=l, score=float(s), box=b, parent_image=final_image)
+                for i, (b, s, l, c) in enumerate(zip(b_list, s_list, l_list, c_list))
             ]
-            det = Detection(
-                source_image=final_image,
-                objects=box_objs,
-                image_frame_index=actual_frame_index,
-                names=self.names,
-            )
+            det = Detection(source_image=final_image, objects=box_objs, image_frame_index=actual_idx, names=self.names)
         else:
             det.source_image = final_image
             for b in det.objects:
                 b.parent_image = final_image
 
-        if hasattr(final_image, "url") and final_image.url:
-            det._source_path = str(getattr(final_image, "path", final_image.url))
-            det._url = final_image.url
-        elif img_path is not None:
-            det._source_path = str(img_path)
-            det._url = str(img_path)
-
-        det.image_frame_index = actual_frame_index
-        det.frame_index = actual_frame_index
+        det._source_path = str(getattr(final_image, "path", getattr(final_image, "url", img_path))) if (img_path or hasattr(final_image, "url")) else None
+        det._url = getattr(final_image, "url", str(img_path) if img_path else None)
+        det.image_frame_index = det.frame_index = actual_idx
         det.speed = {"inference": lat_ms, "fps": fps_val}
         return det
 
-    def forward(
-        self,
-        images: List[PIL.Image.Image],
-        prompt: Union[str, List[str]],
-    ) -> List[Detection]:
-        """Execute one forward pass on the wrapped model."""
-        mod_kw = dict(self.metadata.get("model", {}))
-        if hasattr(self, "model") and callable(self.model):
-            return self.model(images, prompt=prompt, **mod_kw)
-        return []
+    def _resolve_prediction(self, prompt: Any, kwargs: Dict[str, Any], *, validate: bool = True) -> Any:
+        base = deepcopy(dict(self._metadata))
+        base.update(deepcopy(self.settings))
+        saved = {k: v for k, v in self._predict_config.items() if k != "prompt"}
+        base = utils.resolve_metadata(base, saved, runtime=True)
+        resolved = utils.resolve_metadata(base, kwargs, runtime=True)
+        effective_prompt = deepcopy(self._predict_config["prompt"]) if prompt is _UNSET else self._normalize_prediction_prompt(prompt)
+        if validate:
+            self._validate_prediction(resolved, effective_prompt)
+        return resolved, effective_prompt
 
-    def __call__(self, source: Any, *args, **kwargs) -> Union[Detections, Any]:
-        """Run :meth:`predict` using callable model syntax.
+    def _remember_prediction(self, metadata: Dict[str, Any], prompt: Any) -> None:
+        base = deepcopy(dict(self._metadata))
+        base.update(deepcopy(self.settings))
+        defaults = utils.parameter_groups(base)
+        remembered = {"prompt": deepcopy(prompt)}
+        for group in utils.runtime_groups(metadata):
+            changed = {
+                k: deepcopy(v) for k, v in metadata[group].items()
+                if not (k in defaults[group] and _values_match(v, defaults[group][k]))
+            }
+            if changed:
+                remembered[group] = changed
+        self._predict_config = remembered
 
-        ``model(source, ...)`` and ``model.predict(source, ...)`` are exactly
-        equivalent. This rule applies to every input type accepted by
-        :meth:`predict`, so callable dispatch never changes according to the
-        type of ``source``. Call ``model.model(...)`` explicitly when direct
-        access to the wrapped framework model is required.
+    def _config_snapshot(self, metadata: Dict[str, Any], prompt: Any) -> Dict[str, Any]:
+        groups = utils.parameter_groups(metadata)
+        priority = utils.normalize_priority(groups, metadata.get("priority"))
+        result = {"prompt": deepcopy(prompt)}
+        for group, values in groups.items():
+            for key, value in values.items():
+                if group == "model" and key in _LOADING_OPTIONS:
+                    continue
+                name = key if key in priority.get(group, ()) else f"{group}_{key}"
+                result[name] = deepcopy(value)
+        return result
 
-        Parameters
-        ----------
-        source : object
-            Image, path, URL, video, stream, sequence, or other input accepted
-            by :meth:`predict`.
-        *args : object
-            Additional positional arguments forwarded to :meth:`predict`.
-        **kwargs : object
-            Prediction options and permitted runtime parameter overrides.
+    def _normalize_prediction_prompt(self, prompt: Any) -> Optional[List[str]]:
+        if prompt is None:
+            return None
+        normalized = utils.normalize_prompt(prompt)
+        if self.backend == "Hugging Face":
+            normalized = [name.rstrip(".").strip().lower() for name in normalized]
+        return normalized
 
-        Returns
-        -------
-        klygo.outputs.Detections or object
-            The exact value returned by :meth:`predict`.
+    def _validate_prediction(self, metadata: Dict[str, Any], prompt: Any) -> None:
+        for values in utils.parameter_groups(metadata).values():
+            for name in ("threshold", "iou", "text_threshold"):
+                if name in values:
+                    value = values[name]
+                    validators.validate_type(value, (int, float), name)
+                    if isinstance(value, bool) or not math.isfinite(value) or not 0 <= value <= 1:
+                        raise ValueError(f"{name} must be a finite number between 0 and 1")
+            for name in ("source", "stream", "verbose", "batch", "vid_stride", "max_frames", "output_path"):
+                if name in values:
+                    raise ValueError(f"{name} is an execution control, not a persistent inference option")
 
-        Examples
-        --------
-        >>> results = model("image.jpg", threshold=0.4)
-        >>> streamed = model("video.mp4", stream=True)
-        """
-        return self.predict(source, *args, **kwargs)
+    def _snapshot_prediction_state(self) -> Dict[str, Any]:
+        state = {name: deepcopy(getattr(self, name)) for name in ("names", "_result_names", "_active_prompt") if hasattr(self, name)}
+        if hasattr(getattr(self, "model", None), "names"):
+            state["native_names"] = dict(self.model.names)
+        return state
 
-    def predict(
-        self,
-        source: Any,
-        prompt: Optional[Union[str, List[str]]] = None,
-        batch: int = 1,
-        vid_stride: int = 1,
-        max_frames: Optional[int] = None,
-        verbose: bool = True,
-        stream: bool = False,
-        **kwargs,
-    ) -> Union[Detections, Any]:
-        """Run object detection on images, video, directories, or streams.
+    def _restore_prediction_state(self, state: Dict[str, Any]) -> None:
+        for name, value in state.items():
+            if name != "native_names":
+                setattr(self, name, deepcopy(value))
+        if "native_names" in state and hasattr(getattr(self, "model", None), "set_classes"):
+            native = state["native_names"]
+            if dict(self.model.names) != native:
+                self.model.set_classes(list(native.values()))
 
-        When ``stream=True`` returns a lazy :class:`~klygo.outputs.Detections`
-        generator to avoid loading large videos into memory at once.
-        When ``stream=False`` (default) collects all frames into a
-        :class:`~klygo.outputs.Detections` list before returning.
-        """
-        target_prompt = utils.normalize_prompt(prompt) if prompt is not None else None
-        self._prepare_prediction(target_prompt)
-        actual_batch = max(1, int(batch))
+    @contextmanager
+    def _isolated_prediction_state(self):
+        state = self._snapshot_prediction_state()
+        try:
+            yield
+        finally:
+            try:
+                self._restore_prediction_state(state)
+            except Exception as error:
+                raise RuntimeError("Failed to restore backend inference state") from error
 
-        base_metadata = dict(self.metadata)
-        base_metadata.update({name: dict(values) for name, values in self.settings.items()})
-        runtime_metadata = utils.resolve_metadata(base_metadata, kwargs, runtime=True)
+    def _reset_prediction_state(self) -> None:
+        """Restore wrapper-specific prompt state without requiring a valid query."""
+        if hasattr(self, "original_names") and hasattr(getattr(self, "model", None), "set_classes"):
+            self.model.set_classes(list(self.original_names.values()))
+            self.names = dict(self.original_names)
+        elif self.backend == "Hugging Face":
+            self.names = {}
+            self._result_names = {}
+            self._active_prompt = None
 
-        infer_context = common.inference_context(self.backend)
+    def _prepare_prediction(self, prompt: Optional[List[str]]) -> None:
+        """Prepare backend-specific class state for one prediction call."""
+        if hasattr(getattr(self, "model", None), "set_classes") and hasattr(self, "original_names"):
+            classes = list(self.original_names.values()) if prompt is None else list(prompt)
+            if list(self.model.names.values()) != classes:
+                self.model.set_classes(classes)
+            self.names = dict(self.model.names)
+        elif self.backend == "Hugging Face" and prompt is not None:
+            if prompt != getattr(self, "_active_prompt", None):
+                self.names = {index: name for index, name in enumerate(prompt or ())}
+                self._result_names = dict(self.names)
+                self._active_prompt = list(prompt) if prompt else None
 
-        # ------------------------------------------
-        # STREAMING path (lazy generator, low RAM)
-        # ------------------------------------------
-        if stream:
-            images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames, stream=True)
-
-            total_count = None
-            if hasattr(images, "total_frames") and images.total_frames is not None:
-                total_count = images.total_frames
-            elif hasattr(images, "__len__"):
-                try:
-                    total_count = len(images)
-                except Exception:
-                    pass
-
-            def _stream_generator():
-                import itertools
-                iterator = iter(images)
-                idx_offset = 0
-                with infer_context, utils.suppress_warnings():
-                    while True:
-                        batch_imgs = list(itertools.islice(iterator, actual_batch))
-                        if not batch_imgs:
-                            break
-
-                        t_start = time.perf_counter()
-                        with self._use_metadata(runtime_metadata):
-                            dets = self.forward(
-                                images=_materialize_model_images(batch_imgs),
-                                prompt=target_prompt,
-                            )
-                        t_end = time.perf_counter()
-
-                        lat_per_frame = round(((t_end - t_start) * 1000) / len(batch_imgs), 2)
-                        fps_val = round(1000.0 / max(0.001, lat_per_frame), 1)
-
-                        for idx, det in enumerate(dets):
-                            img = batch_imgs[idx] if idx < len(batch_imgs) else batch_imgs[0]
-                            yield self._pack_detection(det, img, idx_offset + idx, lat_per_frame, fps_val)
-
-                        idx_offset += len(batch_imgs)
-
-            return Detections(
-                frames=_stream_generator(),
-                source_type="video" if not is_single else "image",
-                fps=getattr(images, "fps", 30.0),
-                stream=True,
-                total_frames=total_count,
-            )
-
-        # ------------------------------------------
-        # STANDARD path (collect all frames into RAM)
-        # ------------------------------------------
-        images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames, stream=False)
-        if not images:
-            return Detections(frames=[], source_type="list", fps=30.0, names=self.names)
-
-        with infer_context, utils.suppress_warnings():
-            if is_single:
-                t_start = time.perf_counter()
-                with self._use_metadata(runtime_metadata):
-                    dets = self.forward(
-                        images=_materialize_model_images(images),
-                        prompt=target_prompt,
-                    )
-                t_end = time.perf_counter()
-                lat_ms = round((t_end - t_start) * 1000, 2)
-                fps_val = round(1000.0 / max(0.001, lat_ms), 1)
-                det = self._pack_detection(dets[0], images[0], 0, lat_ms, fps_val)
-                return Detections(frames=[det], source_type="image", fps=30.0, names=self.names)
-
-            frame_results = []
-            with ProgressBar(total=len(images), desc="Predict", unit="frame", verbose=verbose, colour="cyan") as pbar:
-                for i in range(0, len(images), actual_batch):
-                    batch_imgs = images[i : i + actual_batch]
-                    t_start = time.perf_counter()
-                    with self._use_metadata(runtime_metadata):
-                        dets = self.forward(
-                            images=_materialize_model_images(batch_imgs),
-                            prompt=target_prompt,
-                        )
-                    t_end = time.perf_counter()
-                    lat_per_frame = round(((t_end - t_start) * 1000) / len(batch_imgs), 2)
-                    fps_val = round(1000.0 / max(0.001, lat_per_frame), 1)
-                    for idx, det in enumerate(dets):
-                        img = batch_imgs[idx] if idx < len(batch_imgs) else batch_imgs[0]
-                        frame_results.append(self._pack_detection(det, img, i + idx, lat_per_frame, fps_val))
-                    pbar.update(len(batch_imgs))
-
-            return Detections(
-                frames=frame_results,
-                source_type="video" if not is_single else "image",
-                fps=30.0,
-                names=self.names,
-            )
+    @staticmethod
+    def _validate_count(value: Any, name: str, minimum: int = 1) -> None:
+        validators.validate_count(value, name, minimum)
