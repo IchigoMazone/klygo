@@ -1,8 +1,59 @@
-# klygo
+# Klygo
 
-Thư viện Python hỗ trợ xử lý ZIP, quản lý dataset YOLO, đọc/ghi cấu hình và ảnh, nhận diện vật thể zero-shot, crop và trực quan hóa kết quả.
+Klygo is a composable Python toolkit for files, archives, configuration,
+media, datasets, and object-detection workflows. It provides small public APIs
+that can be used independently and shared result types that let the modules
+work together.
 
-## Cài đặt
+Klygo supports Python 3.10 and newer.
+
+## Design
+
+- `files`, `archive`, `config`, and `media` own storage and input handling.
+- `preprocessing` transforms images while retaining coordinate history.
+- `models` supplies a backend-neutral `Detector` lifecycle and optional
+  integrations for Hugging Face, Ultralytics, Torchvision, and KerasHub.
+- `outputs` converts normalized predictions into `Box`, `Detection`, and
+  `Detections` objects.
+- `postprocessing` transforms those results independently of the model.
+- `datasets` loads, inspects, and restructures existing YOLO-style datasets.
+
+```text
+files / archives / images / videos
+                 │
+                 ▼
+       media + preprocessing
+                 │
+                 ▼
+      Detector and model backend
+                 │
+                 ▼
+     normalized prediction mappings
+                 │
+                 ▼
+       outputs.build_detections
+                 │
+                 ▼
+          postprocessing
+```
+
+A concrete detector owns its framework model through `detector.model`.
+Calling `detector(source, ...)` runs the Klygo prediction lifecycle; calling
+`detector.model(...)` accesses the framework API directly. Model-specific
+`forward()` implementations perform inference and normalize results, while
+postprocessing remains a separate workflow step.
+
+## Installation
+
+Clone the repository and install it in editable mode:
+
+```bash
+git clone https://github.com/IchigoMazone/klygo.git
+cd klygo
+pip install -e .
+```
+
+With `uv`:
 
 ```bash
 git clone https://github.com/IchigoMazone/klygo.git
@@ -10,98 +61,172 @@ cd klygo
 uv sync
 ```
 
-## Các package
+Install only the optional integrations required by your workflow:
 
-- `klygo.archive`: nén, giải nén, tìm kiếm, kiểm tra, chỉnh sửa, gộp và chia ZIP.
-- `klygo.config`: quản lý cấu hình đa định dạng với dot-notation.
-- `klygo.datasets`: partition, repartition, unpartition, merge, split và remap dataset YOLO.
-- `klygo.files`: bộ công cụ 22 hàm thao tác file/thư mục, hỗ trợ 14 định dạng dữ liệu (YAML, JSON, TOML, CSV, INI, ENV, XML, Pickle...).
-- `klygo.media`: xử lý và tải/lưu tập tin hình ảnh và truyền thông.
-- `klygo.models`: nạp và chạy mô hình nhận diện trên ảnh, thư mục ảnh và video.
-- `klygo.outputs`: kiểu kết quả chuẩn hóa `Box`, `Detection`, `Detections` và `Crops`.
-- `klygo.visual`: hiển thị ảnh, vẽ bounding box và thống kê dataset.
+| Integration | pip | uv |
+| --- | --- | --- |
+| Hugging Face Transformers | `pip install "klygo[transformers]"` | `uv add "klygo[transformers]"` |
+| Ultralytics | `pip install "klygo[ultralytics]"` | `uv add "klygo[ultralytics]"` |
+| Torchvision | `pip install "klygo[torchvision]"` | `uv add "klygo[torchvision]"` |
+| KerasHub | `pip install "klygo[keras-hub]"` | `uv add "klygo[keras-hub]"` |
+| All model integrations | `pip install "klygo[models]"` | `uv add "klygo[models]"` |
+| PyTorch runtime only | `pip install "klygo[torch]"` | `uv add "klygo[torch]"` |
+| 7z archives | `pip install "klygo[py7zr]"` | `uv add "klygo[py7zr]"` |
+| RAR archives | `pip install "klygo[rarfile]"` | `uv add "klygo[rarfile]"` |
 
-## Sử dụng nhanh
+Inside an existing `uv` environment, the equivalent direct installer commands
+are:
 
-### Archive
-
-```python
-import klygo.archive as ar
-
-ar.compress("dataset", "dataset.zip", overwrite=True)
-ar.extract("dataset.zip", output_dir="extracted", overwrite=True)
-files = ar.search("dataset.zip", "images/*.jpg")
+```bash
+uv pip install "klygo[transformers]"
+uv pip install "klygo[ultralytics]"
+uv pip install "klygo[torchvision]"
+uv pip install "klygo[keras-hub]"
+uv pip install "klygo[models]"
 ```
 
-### Dataset YOLO
+KerasHub can run through TensorFlow, JAX, or PyTorch by selecting
+`KERAS_BACKEND`. Install `klygo[keras-hub,torch]` when using its PyTorch
+backend.
+
+## Quick start
+
+### Files, configuration, and archives
 
 ```python
-import klygo.datasets as ds
+from klygo import archive, config, files
 
-ds.partition(
-    source="raw_dataset.zip",
-    target="dataset",
-    ratios=(0.8, 0.1, 0.1),
-    overwrite=True,
-)
+workspace = files.path("workspace")
+files.mkdir(workspace)
 
-info = ds.get_dataset_info("dataset")
-print(info)
+settings_path = files.join(workspace, "settings.yaml")
+files.save(settings_path, {"model": {"threshold": 0.4}}, overwrite=True)
+settings = config.load(settings_path)
+settings = config.set(settings, "model.batch", 4)
+
+archive.compress(workspace, "workspace.zip", overwrite=True)
+archive.extract("workspace.zip", output_dir="restored", overwrite=True)
 ```
 
-### File, Cấu hình & Truyền thông
+### Detection and postprocessing
 
 ```python
-import klygo.files as files
-import klygo.media as media
-import klygo.config as config
-from klygo.config import Config
+from klygo import models, postprocessing
 
-cfg = config.load("config.yaml")
-data = files.load("data.json")
-files.save("output.env", {"PORT": "8080"}, overwrite=True)
-pil_images = media.load("dataset/images", backend="pil")
+detector = models.load("grounding-dino-tiny")
+results = detector("street.jpg", prompt=["car", "person"])
+
+cleaned = postprocessing.compose(
+    postprocessing.threshold(0.4),
+    postprocessing.clip(),
+    postprocessing.nms(iou=0.5),
+)(results)
+
+cleaned[0].show()
 ```
 
-### Model và kết quả nhận diện
+`prompt` is normalized before `forward()` and is shared by every image in a
+batch. Ordinary YOLO models map prompt names to checkpoint class IDs for
+filtering. YOLO-World models use the prompt as their active vocabulary and retain
+`original_names` as a snapshot of the vocabulary loaded from the checkpoint.
+Advanced Ultralytics operations remain available through `detector.model`.
 
-```python
-from klygo import models
-
-model = models.load("grounding-dino-tiny")
-results = model.predict("traffic.mp4", prompt="car. person.", stream=True)
-
-# Xử lý tuần tự để không giữ toàn bộ video trong RAM.
-for frame in results:
-    print(frame.labels, frame.scores)
-
-# Dự đoán lại và lưu video đã vẽ bounding box.
-model.predict(
-    "traffic.mp4",
-    prompt="car. person.",
-    stream=True,
-).save("detected.mp4")
-```
-
-### Visualize
+### Build output objects from a custom backend
 
 ```python
 from PIL import Image
-from klygo import visual
 
-image = Image.open("traffic.jpg")
-annotated = visual.draw_bboxes(
-    image,
-    boxes=[[20, 20, 180, 160]],
-    labels=["car"],
-    scores=[0.95],
+from klygo import outputs
+
+image = Image.new("RGB", (640, 480))
+frames = outputs.build_detections(
+    [image],
+    [{
+        "boxes": [[40, 50, 240, 300]],
+        "scores": [0.93],
+        "labels": ["person"],
+        "class_ids": [0],
+    }],
+    metadata={"backend": "custom"},
+    names={0: "person"},
 )
-visual.show_image(annotated, title="Detected objects")
+
+print(frames[0].labels)
+print(frames[0].names)
 ```
 
-## Quy ước đường dẫn
+`Box.id` identifies a box inside its frame, while `Box.class_id` indexes
+`names`. `results.names` contains the complete result vocabulary;
+`results[index].names` contains only classes present in that frame.
 
-- `source`: file hoặc thư mục đầu vào.
-- `*_path`: đường dẫn file.
-- `*_dir`: đường dẫn thư mục.
-- `target`: file hoặc thư mục đầu ra linh hoạt.
+`outputs.build_detections()` expects one normalized prediction mapping per
+image and returns `list[Detection]`. `Detector.predict()` adds timing, source,
+frame, and streaming information before returning `Detections`.
+
+### Load and restructure a dataset
+
+```python
+from klygo import datasets
+
+info = datasets.info("dataset.zip")
+flat_path = datasets.unpartition("dataset.zip", "flat-dataset")
+samples = datasets.load(flat_path)
+
+print(info["classes"])
+print(samples.total_objects)
+```
+
+Dataset transformations expect a YOLO-style dataset root or a supported
+archive containing one. Dataset generation from model predictions belongs to
+the output workflow rather than `klygo.datasets`.
+
+### Remove consumed options
+
+```python
+from klygo import utils
+
+options = {"threshold": 0.4, "dtype": "float16", "device": "cuda"}
+model_options = utils.exclude_keys(options, ["dtype", "device"])
+```
+
+`exclude_keys()` returns a shallow copy and never mutates the source mapping.
+
+## Modules
+
+| Module | Responsibility | Documentation |
+| --- | --- | --- |
+| `klygo.files` | Paths, filesystem operations, downloads, and structured-data I/O | [Guide](docs/files/README.md) |
+| `klygo.archive` | Create, inspect, extract, convert, split, and merge archives | [Guide](docs/archive/README.md) |
+| `klygo.config` | Hierarchical configuration and model metadata | [Guide](docs/config/README.md) |
+| `klygo.media` | Lazy image and video loading, conversion, streaming, and saving | [Guide](docs/media/README.md) |
+| `klygo.preprocessing` | Lazy image transforms, metrics, and coordinate restoration | [Guide](docs/preprocessing/README.md) |
+| `klygo.models` | Detector lifecycle, metadata, loading, and backend hooks | [Guide](docs/models/README.md) |
+| `klygo.outputs` | Structured detection results and normalized-result construction | [Guide](docs/outputs/README.md) |
+| `klygo.postprocessing` | Backend-independent detection transformations | [Guide](docs/postprocessing/README.md) |
+| `klygo.datasets` | Load, inspect, partition, merge, split, and relabel datasets | [Guide](docs/datasets/README.md) |
+| `klygo.visual` | Display images, boxes, and dataset statistics | [Guide](docs/visual/README.md) |
+| `klygo.utils` | Shared formatting, mapping, and progress helpers | [Guide](docs/utils/README.md) |
+| `klygo.validators` | Reusable runtime validation | [Guide](docs/validators/README.md) |
+
+The [documentation index](docs/README.md) links API references, runnable
+examples, and Colab tutorials. Cross-module workflows live in
+[`examples/integration`](examples/integration) with supporting guides in
+[`docs/integration`](docs/integration/README.md).
+
+## Development
+
+Run the standard-library test suite:
+
+```bash
+python -m unittest discover -s test -t . -p "test*.py"
+```
+
+Audit public APIs, examples, documentation, and tutorials:
+
+```bash
+python .agents/skills/klygo-module-guides/scripts/audit_public_api.py --all
+```
+
+Runtime datasets, downloaded weights, generated reports, and other artifacts
+belong outside source, test, example, documentation, and tutorial directories.
+Repository ignore rules keep those generated assets out of version control.

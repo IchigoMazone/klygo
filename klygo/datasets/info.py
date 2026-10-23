@@ -1,88 +1,96 @@
-import random
-import shutil
+"""Inspect YOLO dataset structure and annotation coverage."""
+
+from os import PathLike
 from pathlib import Path
 from typing import Any
 
-from klygo.archive import extract
-from klygo.utils.dataset import (
-    _find_dataset_root,
-    _read_class_names,
-    _scan_dataset_files,
-)
+from klygo import files
+
+from ._structure import read_class_map, scan_dataset_files, validate_dataset_format
+from ._workspace import open_dataset
 
 
-def get_dataset_info(source: str | Path) -> dict[str, Any]:
+def info(
+    source: str | PathLike[str],
+    format: str = "yolo",
+    verbose: bool = False,
+) -> dict[str, Any]:
+    """Return structural statistics for a YOLO dataset.
+
+    Parameters
+    ----------
+    source : str or os.PathLike[str]
+        Dataset directory or supported archive.
+    format : str, default='yolo'
+        Dataset format to inspect. Currently only ``'yolo'`` is supported.
+    verbose : bool, default=False
+        Print the dataset statistics as a Rich table while returning the dictionary.
+
+    Returns
+    -------
+    dict
+        Ordered class names and their numeric IDs, class count, image/label
+        totals, unlabeled image count, and counts grouped by ``train``,
+        ``val``, ``test``, or ``raw``.
+
+    Raises
+    ------
+    TypeError
+        If ``format`` is not a string.
+    ValueError
+        If ``format`` is not supported or ``data.yaml`` does not define class names.
+    FileNotFoundError
+        If the source or its ``images`` directory is missing.
+
+    Examples
+    --------
+    >>> from klygo import datasets
+    >>> stats = datasets.info("dataset")
+    >>> stats["total_images"] >= stats["total_labels"]
+    True
     """
-    Tác dụng:
-    - Lấy thông tin thống kê của dataset
+    validate_dataset_format(format)
+    with open_dataset(source, verbose=False) as root:
+        class_map = read_class_map(root)
+        pairs = scan_dataset_files(files.join(root, "images"), files.join(root, "labels"))
+        split_counts: dict[str, int] = {}
+        for _, _, relative_image, _ in pairs:
+            split = relative_image.parts[0] if len(relative_image.parts) > 1 else "raw"
+            if split not in {"train", "val", "test"}:
+                split = "raw"
+            split_counts[split] = split_counts.get(split, 0) + 1
 
-    Đầu vào:
-    - source: File hoặc thư mục đầu vào
-
-    Đầu ra:
-    - Kết quả xử lý của hàm
-
-    Ngoại lệ:
-    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-
-    Nguồn: TrinhNhuNhat_12072026.
-    """
-    source = Path(source)
-    if not source.exists():
-        raise FileNotFoundError(f"Source not found: {source}")
-
-    is_zip = source.is_file()
-    temp_extract_dir = None
-
-    if is_zip:
-        temp_extract_dir = source.parent / f".temp_info_extract_{random.randint(1000, 9999)}"
-        if temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
-        extract(
-            archive_path=source,
-            output_dir=temp_extract_dir,
-            overwrite=True,
-            verbose=False,
-        )
-        src_base = _find_dataset_root(temp_extract_dir)
-    else:
-        src_base = source
-
-    try:
-        classes = _read_class_names(src_base, temp_extract_dir)
-
-        images_dir = src_base / "images"
-        labels_dir = src_base / "labels"
-
-        if not images_dir.exists():
-            raise FileNotFoundError("images directory not found in dataset")
-
-        pairs = _scan_dataset_files(images_dir, labels_dir)
-
-        total_images = len(pairs)
-        total_labels = sum(1 for p in pairs if p[1] is not None)
-        unlabeled_images = total_images - total_labels
-
-        # Analyze split structure
-        split_counts = {}
-        for img_path, lbl_path, rel_img, rel_lbl in pairs:
-            parts = rel_img.parts
-            if len(parts) > 1 and parts[0] in ["train", "val", "test"]:
-                split_name = parts[0]
-            else:
-                split_name = "raw"
-            split_counts[split_name] = split_counts.get(split_name, 0) + 1
-
-        info = {
-            "classes": classes,
-            "nc": len(classes),
-            "total_images": total_images,
+        total_labels = sum(label is not None for _, label, _, _ in pairs)
+        result = {
+            "classes": list(class_map.values()),
+            "class_ids": list(class_map),
+            "nc": max(class_map, default=-1) + 1,
+            "total_images": len(pairs),
             "total_labels": total_labels,
-            "unlabeled_images": unlabeled_images,
-            "splits": split_counts
+            "unlabeled_images": len(pairs) - total_labels,
+            "splits": split_counts,
         }
-    finally:
-        if temp_extract_dir and temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
 
-    return info
+        if verbose:
+            from rich.console import Console
+            from rich.table import Table
+
+            source_name = files.name(source)
+            table = Table(title=f"Dataset Information: {source_name}")
+            table.add_column("Property", style="cyan", no_wrap=True)
+            table.add_column("Value", style="green")
+            table.add_row("Classes", ", ".join(result["classes"]) if result["classes"] else "(None)")
+            table.add_row("Class Count", str(result["nc"]))
+            table.add_row("Total Images", str(result["total_images"]))
+            table.add_row("Total Labels", str(result["total_labels"]))
+            table.add_row("Unlabeled Images", str(result["unlabeled_images"]))
+            for split_name, count in result["splits"].items():
+                table.add_row(f"Split ({split_name})", str(count))
+            Console().print(table)
+
+        return result
+
+
+get_dataset_info = info
+
+__all__ = ["info", "get_dataset_info"]

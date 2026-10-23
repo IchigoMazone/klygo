@@ -1,44 +1,23 @@
-from typing import Any
-from pathlib import Path
+import math
+import os
 
+from klygo import files
 from klygo.validators import validate_type
 
 class Partition:
 
     def __init__(
         self,
-        source: str | Path,
-        target: str | Path,
-        ratios: tuple[float],
+        source: str | os.PathLike[str],
+        target: str | os.PathLike[str],
+        ratios: tuple[float, ...],
         overwrite: bool,
         verbose: bool,
     ) -> None:
 
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - source: File hoặc thư mục đầu vào
-        - target: File hoặc thư mục đầu ra
-        - ratios: Tham số ratios của hàm
-        - overwrite: Trạng thái cho phép ghi đè
-        - verbose: Trạng thái hiển thị tiến trình
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Ngoại lệ:
-        - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-        - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-        - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
-        validate_type(source, (str, Path), "source")
-        validate_type(target, (str, Path), "target")
+        """Validate and normalize partition arguments."""
+        validate_type(source, (str, os.PathLike), "source")
+        validate_type(target, (str, os.PathLike), "target")
         validate_type(ratios, tuple, "ratios")
         validate_type(overwrite, bool, "overwrite")
         validate_type(verbose, bool, "verbose")
@@ -47,13 +26,15 @@ class Partition:
             raise TypeError(
                 "ratios must be a tuple of floats."
             )
+        if not all(math.isfinite(x) and 0.0 <= x <= 1.0 for x in ratios):
+            raise ValueError("ratios must contain finite values between 0 and 1")
 
-        source = Path(source)
-        target = Path(target)
+        source = files.path(source)
+        target = files.path(target)
 
-        if not source.exists():
+        if not files.exists(source):
             raise FileNotFoundError(f"source does not exist: {source}")
-        if target.exists() and not overwrite:
+        if files.exists(target) and not overwrite:
             raise FileExistsError(f"target already exists: {target}")
         if not (1 <= len(ratios) and len(ratios) <= 3):
             raise ValueError(f"ratios len must contain between 1 and 3 values: {len(ratios)}")
@@ -89,52 +70,31 @@ class Repartition(Partition):
 class Merge:
     def __init__(
         self,
-        sources: list,
-        output_path: str | Path,
+        sources: list[str | os.PathLike[str]],
+        output_path: str | os.PathLike[str],
         overwrite: bool,
         verbose: bool,
     ) -> None:
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - sources: Danh sách file hoặc thư mục đầu vào
-        - output_path: Đường dẫn file đầu ra
-        - overwrite: Trạng thái cho phép ghi đè
-        - verbose: Trạng thái hiển thị tiến trình
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Ngoại lệ:
-        - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-        - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-        - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
+        """Validate and normalize merge arguments."""
         validate_type(sources, list, "sources")
-        validate_type(output_path, (str, Path), "output_path")
+        validate_type(output_path, (str, os.PathLike), "output_path")
         validate_type(overwrite, bool, "overwrite")
         validate_type(verbose, bool, "verbose")
 
-        if not all(isinstance(x, (str, Path)) for x in sources):
-            raise TypeError("sources must be a list of strings or Path objects.")
+        if not all(isinstance(x, (str, os.PathLike)) for x in sources):
+            raise TypeError("sources must be a list of strings or path-like objects.")
 
-        sources = [Path(s) for s in sources]
-        output_path = Path(output_path)
+        sources = [files.path(s) for s in sources]
+        output_path = files.path(output_path)
 
         for src in sources:
-            if not src.exists():
+            if not files.exists(src):
                 raise FileNotFoundError(f"source does not exist: {src}")
 
         if not str(output_path).lower().endswith(".zip"):
             raise ValueError("output_path must end with '.zip'")
 
-        if output_path.exists() and not overwrite:
+        if files.exists(output_path) and not overwrite:
             raise FileExistsError(f"output_path already exists: {output_path}")
 
         self.sources = sources
@@ -146,46 +106,25 @@ class Merge:
 class Split:
     def __init__(
         self,
-        source: str | Path,
-        output_dir: str | Path,
+        source: str | os.PathLike[str],
+        output_dir: str | os.PathLike[str],
         by_class: bool = False,
-        class_groups: list = None,
-        ratios: tuple = None,
+        class_groups: list[list[str]] | None = None,
+        ratios: tuple[float, ...] | None = None,
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - source: File hoặc thư mục đầu vào
-        - output_dir: Đường dẫn thư mục đầu ra
-        - by_class: Tham số by_class của hàm
-        - class_groups: Tham số class_groups của hàm
-        - ratios: Tham số ratios của hàm
-        - overwrite: Trạng thái cho phép ghi đè
-        - verbose: Trạng thái hiển thị tiến trình
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Ngoại lệ:
-        - TypeError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-        - ValueError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-        - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
-        validate_type(source, (str, Path), "source")
-        validate_type(output_dir, (str, Path), "output_dir")
+        """Validate and normalize split arguments."""
+        validate_type(source, (str, os.PathLike), "source")
+        validate_type(output_dir, (str, os.PathLike), "output_dir")
         validate_type(by_class, bool, "by_class")
         validate_type(overwrite, bool, "overwrite")
         validate_type(verbose, bool, "verbose")
 
         if class_groups is not None:
             validate_type(class_groups, list, "class_groups")
+            if not class_groups or any(not group for group in class_groups):
+                raise ValueError("class_groups must contain non-empty groups")
             for group in class_groups:
                 validate_type(group, list, "each group in class_groups")
                 if not all(isinstance(x, str) for x in group):
@@ -195,77 +134,61 @@ class Split:
             validate_type(ratios, tuple, "ratios")
             if not all(isinstance(x, float) for x in ratios):
                 raise TypeError("ratios must be a tuple of floats.")
+            if not all(math.isfinite(x) and 0.0 <= x <= 1.0 for x in ratios):
+                raise ValueError("ratios must contain finite values between 0 and 1")
             if len(ratios) < 2:
                 raise ValueError("ratios must contain at least 2 values.")
             if abs(sum(ratios) - 1.0) > 1e-4:
                 raise ValueError("The sum of ratios must equal 1.0.")
 
-        self.source = Path(source)
-        self.output_dir = Path(output_dir)
+        self.source = files.path(source)
+        self.output_dir = files.path(output_dir)
         self.by_class = by_class
         self.class_groups = class_groups
         self.ratios = ratios
         self.overwrite = overwrite
         self.verbose = verbose
 
-        if not self.source.exists():
+        if not files.exists(self.source):
             raise FileNotFoundError(f"source does not exist: {self.source}")
 
-        if self.output_dir.exists() and not self.output_dir.is_dir():
+        if files.exists(self.output_dir) and not files.is_dir(self.output_dir):
             raise ValueError(
                 f"output_dir must be a directory, got file: {self.output_dir}"
             )
 
         if not self.by_class and self.class_groups is None and self.ratios is None:
             raise ValueError("Must specify either by_class=True, class_groups, or ratios.")
+        if sum((self.by_class, self.class_groups is not None, self.ratios is not None)) != 1:
+            raise ValueError("exactly one split strategy must be specified")
 
 
 class RemapClasses:
     def __init__(
         self,
-        source: str | Path,
-        target: str | Path,
+        source: str | os.PathLike[str],
+        target: str | os.PathLike[str],
         class_map: dict,
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
-        """
-        Tác dụng:
-        - Khởi tạo đối tượng và kiểm tra các tham số ban đầu
-
-        Đầu vào:
-        - self: Đối tượng hiện tại
-        - source: File hoặc thư mục đầu vào
-        - target: File hoặc thư mục đầu ra
-        - class_map: Tham số class_map của hàm
-        - overwrite: Trạng thái cho phép ghi đè
-        - verbose: Trạng thái hiển thị tiến trình
-
-        Đầu ra:
-        - Không trả về dữ liệu
-
-        Ngoại lệ:
-        - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-        - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-
-        Nguồn: TrinhNhuNhat_12072026.
-        """
-        validate_type(source, (str, Path), "source")
-        validate_type(target, (str, Path), "target")
+        """Validate and normalize remapclasses arguments."""
+        validate_type(source, (str, os.PathLike), "source")
+        validate_type(target, (str, os.PathLike), "target")
         validate_type(class_map, dict, "class_map")
         validate_type(overwrite, bool, "overwrite")
         validate_type(verbose, bool, "verbose")
 
-        self.source = Path(source)
-        self.target = Path(target)
+        self.source = files.path(source)
+        self.target = files.path(target)
         self.class_map = class_map
         self.overwrite = overwrite
         self.verbose = verbose
 
-        if not self.source.exists():
+        if not files.exists(self.source):
             raise FileNotFoundError(f"source does not exist: {self.source}")
 
-        if self.target.exists() and not self.overwrite:
+        if files.exists(self.target) and not self.overwrite:
             raise FileExistsError(
                 f"target already exists: {self.target}"
             )

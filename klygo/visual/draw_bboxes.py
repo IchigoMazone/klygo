@@ -5,7 +5,9 @@ import PIL.ImageDraw
 import PIL.ImageFont
 import numpy as np
 
-# Bảng 20 mã màu Hex chuẩn đẹp của Ultralytics YOLOv8 / YOLOv11
+__all__ = ["draw_bboxes"]
+
+# Standard 20-color hex palette from Ultralytics YOLOv8 / YOLOv11
 ULTRALYTICS_HEX = (
     "042aff", "0bdfdf", "ff9700", "ff4477", "b644ff", "074799",
     "00a36c", "9e0059", "ff0054", "ff5400", "ffbd00", "2b9348",
@@ -18,7 +20,7 @@ ULTRALYTICS_PALETTE = [
 
 
 def _get_palette_color(idx: int) -> tuple:
-    """Lấy màu phân biệt cố định theo index của class từ bảng màu YOLO."""
+    """Return a distinct palette color deterministically by class index."""
     return ULTRALYTICS_PALETTE[idx % len(ULTRALYTICS_PALETTE)]
 
 
@@ -36,26 +38,36 @@ def draw_bboxes(
     show_scores: bool = True,
     **kwargs,
 ) -> Union[PIL.Image.Image, np.ndarray]:
-    """
-    Tác dụng:
-    - Vẽ bounding box và nhãn tên theo chuẩn đồ họa chuyên nghiệp Ultralytics YOLO (2-Pass Rendering).
-    - Tự động phân chia bảng 20 màu độc lập cho từng class.
-    - Badge nhãn nổi bật chữ trắng trên nền màu, tự động canh lề và chống đè chéo.
+    """Draw bounding boxes and optional captions on a copy of an image.
 
-    Đầu vào:
-    - image: Ảnh PIL hoặc mảng NumPy
-    - bboxes: Danh sách bounding box theo định dạng [xmin, ymin, xmax, ymax]
-    - labels: Danh sách nhãn của các bounding box
-    - scores: Danh sách điểm tin cậy của các bounding box
-    - thickness / line_width: Độ dày nét vẽ viền box
-    - font_size: Cỡ chữ nhãn
-    - box_color: Màu viền box cố định (nếu muốn override màu mặc định)
-    - text_color: Màu chữ nhãn
-    - show_labels: Có hiển thị tên nhãn hay không
-    - show_scores: Có hiển thị điểm tin cậy hay không
+    Parameters
+    ----------
+    image : PIL.Image.Image or numpy.ndarray
+        Source image. NumPy images use RGB channel order.
+    bboxes : list of four-number sequences
+        Boxes in ``[xmin, ymin, xmax, ymax]`` pixel coordinates.
+    labels : list of str, optional
+        Class labels, matched to boxes by position.
+    scores : list of float, optional
+        Confidence values, matched to boxes by position.
+    thickness, line_width : int, optional
+        Border width. ``line_width`` takes precedence.
+    font_size : int, optional
+        Caption font size.
+    box_color, text_color : tuple of int, optional
+        RGB overrides for the box and caption text.
+    show_labels, show_scores : bool
+        Whether to include labels and scores in captions.
 
-    Đầu ra:
-    - Ảnh PIL.Image hoặc NumPy đã vẽ Bounding Box hoàn chỉnh.
+    Returns
+    -------
+    PIL.Image.Image or numpy.ndarray
+        Annotated copy in the same representation as ``image``.
+
+    Notes
+    -----
+    Labels receive stable colors from a 20-color palette within one call.
+    Extra ``width`` in ``kwargs`` is a legacy border-width fallback.
     """
     is_np = isinstance(image, np.ndarray)
     if is_np:
@@ -69,11 +81,11 @@ def draw_bboxes(
     draw = PIL.ImageDraw.Draw(annotated)
     w_img, h_img = annotated.size
 
-    # 1. Tính toán độ dày viền & cỡ chữ tự động theo tỉ lệ kích thước ảnh
+    # 1. Compute dynamic line width and font size proportional to image dimensions
     actual_lw = line_width or thickness or kwargs.get("width") or max(round(sum(annotated.size) / 2 * 0.003), 2)
     actual_fs = font_size or max(round(sum(annotated.size) / 2 * 0.025), 12)
 
-    # 2. Nạp Font chữ hệ thống hỗ trợ UTF-8
+    # 2. Load system TrueType font supporting UTF-8 characters
     font = None
     for font_name in ["arial.ttf", "DejaVuSans.ttf", "calibri.ttf", "SegoeUI.ttf"]:
         try:
@@ -84,7 +96,7 @@ def draw_bboxes(
     if font is None:
         font = PIL.ImageFont.load_default()
 
-    # 3. Tạo ánh xạ nhãn -> màu cố định từ bảng màu Ultralytics Palette
+    # 3. Map unique labels to stable palette colors
     all_labels = labels or []
     unique_labels = list(dict.fromkeys([str(l) for l in all_labels]))
     label_to_color = {
@@ -92,14 +104,14 @@ def draw_bboxes(
         for i, l in enumerate(unique_labels)
     }
 
-    # 4. PASS 1: Vẽ toàn bộ tất cả khung chữ nhật BBox trước
+    # 4. Pass 1: Render bounding box rectangles first
     for idx, box in enumerate(bboxes):
         lbl = str(all_labels[idx]) if idx < len(all_labels) else "object"
         color = label_to_color.get(lbl, (255, 56, 56) if box_color is None else box_color)
         xmin, ymin, xmax, ymax = map(float, box)
         draw.rectangle([xmin, ymin, xmax, ymax], outline=color, width=actual_lw)
 
-    # 5. PASS 2: Vẽ toàn bộ Badge nhãn chữ lên trên cùng
+    # 5. Pass 2: Render label badges on top to prevent rectangle occlusion
     occupied_badges = []
     for idx, box in enumerate(bboxes):
         lbl = str(all_labels[idx]) if idx < len(all_labels) else ""

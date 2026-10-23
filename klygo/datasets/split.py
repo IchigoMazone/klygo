@@ -1,241 +1,192 @@
+"""Split one dataset into class-based or ratio-based archives."""
+
+from __future__ import annotations
+
 import random
-import shutil
+import re
+from os import PathLike
 from pathlib import Path
 
-from klygo.validators.datasets import Split as DatasetSplit
-from klygo.archive import extract
-from klygo.files import save
-from klygo.utils.dataset import (
-    _find_dataset_root,
-    _read_class_names,
-    _safe_copy,
-    _scan_dataset_files,
+from klygo import config, files
+from klygo.validators.datasets import Split
+
+from ._structure import (
+    copy_entry,
+    flattened_name,
+    read_class_map,
+    remap_label_file,
+    scan_dataset_files,
+    validate_dataset_format,
 )
+from ._workspace import dataset_workspace, open_dataset, write_output
+
+
+def _archive_name(group: list[str], index: int) -> str:
+    if len(group) != 1:
+        return f"split_group_{index}.zip"
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", group[0]).strip("._") or f"class_{index}"
+    return f"split_{safe_name}.zip"
+
+
+def _write_split_metadata(workspace: Path, names: list[str] | dict[int, str]) -> None:
+    class_count = max(names, default=-1) + 1 if isinstance(names, dict) else len(names)
+    config.save(
+        files.join(workspace, "data.yaml"),
+        {
+            "train": "images",
+            "nc": class_count,
+            "names": names,
+        },
+        overwrite=True,
+        verbose=False,
+    )
 
 
 def split(
-    source: str | Path,
-    output_dir: str | Path,
+    source: str | PathLike[str],
+    output_dir: str | PathLike[str],
+    format: str = "yolo",
     by_class: bool = False,
     class_groups: list[list[str]] | None = None,
-    ratios: tuple[float] | None = None,
+    ratios: tuple[float, ...] | None = None,
     overwrite: bool = False,
     verbose: bool = True,
-) -> None:
+) -> list[Path]:
+    """Split a YOLO dataset into multiple ZIP archives.
 
+    Exactly one strategy is selected: ``by_class=True`` creates one archive
+    per class, ``class_groups`` creates one archive per named group, and
+    ``ratios`` creates randomized parts using a deterministic seed.
+
+    Parameters
+    ----------
+    source : str or os.PathLike[str]
+        Dataset directory or supported archive.
+    output_dir : str or os.PathLike[str]
+        Directory receiving split archives.
+    format : str, default='yolo'
+        Dataset format to split. Currently only ``'yolo'`` is supported.
+    by_class : bool, default=False
+        Create one archive for every class.
+    class_groups : list[list[str]] or None, default=None
+        Explicit class-name groups.
+    ratios : tuple of float or None, default=None
+        Two or more ratios whose sum is one.
+    overwrite : bool, default=False
+        Replace existing split archives.
+    verbose : bool, default=True
+        Display archive progress.
+
+    Returns
+    -------
+    list[pathlib.Path]
+        Archives created in deterministic order.
+
+    Raises
+    ------
+    TypeError
+        If ``format`` is not a string.
+    ValueError
+        If ``format`` is not supported, or the split strategy, class groups, or ratios are invalid.
+    FileNotFoundError
+        If the source dataset or its images directory is missing.
+    FileExistsError
+        If a split archive exists and ``overwrite`` is false.
+
+    Examples
+    --------
+    >>> from klygo import datasets
+    >>> outputs = datasets.split("dataset", "parts", ratios=(0.8, 0.2))
     """
-    Tác dụng:
-    - Chia dữ liệu thành nhiều phần theo cấu hình
+    validate_dataset_format(format)
+    params = Split(source, output_dir, by_class, class_groups, ratios, overwrite, verbose)
+    files.mkdir(params.output_dir)
+    created: list[Path] = []
 
-    Đầu vào:
-    - source: File hoặc thư mục đầu vào
-    - output_dir: Đường dẫn thư mục đầu ra
-    - by_class: Tham số by_class của hàm
-    - class_groups: Tham số class_groups của hàm
-    - ratios: Tham số ratios của hàm
-    - overwrite: Trạng thái cho phép ghi đè
-    - verbose: Trạng thái hiển thị tiến trình
+    with open_dataset(params.source, verbose=False) as root:
+        class_map = read_class_map(root)
+        names = list(class_map.values())
+        pairs = scan_dataset_files(files.join(root, "images"), files.join(root, "labels"))
 
-    Đầu ra:
-    - Không trả về dữ liệu
+        if params.class_groups is not None or params.by_class:
+            groups = params.class_groups or [[name] for name in names]
+            unknown = [name for group in groups for name in group if name not in names]
+            if unknown:
+                raise ValueError(f"Unknown classes in class_groups: {tuple(unknown)}")
 
-    Ngoại lệ:
-    - FileNotFoundError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
-    - FileExistsError: Phát sinh khi dữ liệu hoặc thao tác không hợp lệ
+            archive_names: list[str] = []
+            used_names: set[str] = set()
+            for index, group in enumerate(groups):
+                name = _archive_name(group, index)
+                if name.casefold() in used_names:
+                    name = f"{files.stem(name)}_{index}.zip"
+                archive_names.append(name)
+                used_names.add(name.casefold())
 
-    Nguồn: TrinhNhuNhat_12072026.
-    """
-    params = DatasetSplit(
-        source=source,
-        output_dir=output_dir,
-        by_class=by_class,
-        class_groups=class_groups,
-        ratios=ratios,
-        overwrite=overwrite,
-        verbose=verbose
-    )
+            for index, (group, archive_name) in enumerate(zip(groups, archive_names)):
+                destination = files.join(params.output_dir, archive_name)
+                if files.exists(destination) and not params.overwrite:
+                    raise FileExistsError(f"split file already exists: {destination}")
+                selected_ids = {old_id for old_id, name in class_map.items() if name in group}
+                id_map = {old_id: group.index(class_map[old_id]) for old_id in selected_ids}
 
-    params.output_dir.mkdir(parents=True, exist_ok=True)
+                with dataset_workspace("split-class") as workspace:
+                    copied = 0
+                    for image_path, label_path, relative_image, _ in pairs:
+                        if label_path is None:
+                            continue
+                        image_name = flattened_name(relative_image)
+                        output_label = files.join(workspace, "labels", files.with_extension(image_name, ".txt"))
+                        kept = remap_label_file(
+                            label_path,
+                            output_label,
+                            id_map,
+                            allowed_ids=selected_ids,
+                        )
+                        if kept == 0:
+                            files.remove(output_label, missing_ok=True)
+                            continue
+                        copy_entry(image_path, files.join(workspace, "images", image_name))
+                        copied += 1
 
-    is_zip = params.source.is_file()
-    temp_extract_dir = None
-
-    # 1. Source handling (extract if ZIP)
-    if is_zip:
-        temp_extract_dir = params.output_dir / f".temp_split_extract_{random.randint(1000, 9999)}"
-        if temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
-        extract(
-            archive_path=params.source,
-            output_dir=temp_extract_dir,
-            overwrite=True,
-            verbose=False
-        )
-        src_base = _find_dataset_root(temp_extract_dir)
-    else:
-        src_base = params.source
-
-    images_src = src_base / "images"
-    labels_src = src_base / "labels"
-
-    if not images_src.exists():
-        if temp_extract_dir and temp_extract_dir.exists():
-            shutil.rmtree(temp_extract_dir)
-        raise FileNotFoundError(f"images directory not found under {src_base}")
-
-    source_names = _read_class_names(src_base, temp_extract_dir)
-
-    # 2. Scan all image-label pairs
-    pairs_info = _scan_dataset_files(images_src, labels_src)
-    pairs = [(p[0], p[1]) for p in pairs_info]
-
-    # 3. Mode selection
-    if params.class_groups is not None or params.by_class:
-        # MODE 1: Split by Class
-        if params.class_groups is not None:
-            groups = params.class_groups
+                    if copied:
+                        _write_split_metadata(workspace, group)
+                        created.append(
+                            write_output(
+                                workspace,
+                                destination,
+                                overwrite=params.overwrite,
+                                verbose=params.verbose,
+                            )
+                        )
         else:
-            groups = [[name] for name in source_names]
+            shuffled = list(pairs)
+            random.Random(42).shuffle(shuffled)
+            cursor = 0
+            for index, ratio in enumerate(params.ratios or ()):
+                end = len(shuffled) if index == len(params.ratios) - 1 else cursor + int(len(shuffled) * ratio)
+                selected = shuffled[cursor:end]
+                cursor = end
+                destination = files.join(params.output_dir, f"split_part_{index}.zip")
+                if files.exists(destination) and not params.overwrite:
+                    raise FileExistsError(f"split file already exists: {destination}")
 
-        # Overwrite check
-        for idx, group in enumerate(groups):
-            if len(group) == 1:
-                zip_name = f"split_{group[0]}.zip"
-            else:
-                zip_name = f"split_group_{idx}.zip"
-            zip_dest = params.output_dir / zip_name
-            if zip_dest.exists() and not params.overwrite:
-                if temp_extract_dir and temp_extract_dir.exists():
-                    shutil.rmtree(temp_extract_dir)
-                raise FileExistsError(f"split file already exists: {zip_dest}")
+                with dataset_workspace("split-ratio") as workspace:
+                    for image_path, label_path, relative_image, _ in selected:
+                        image_name = flattened_name(relative_image)
+                        copy_entry(image_path, files.join(workspace, "images", image_name))
+                        if label_path is not None:
+                            copy_entry(label_path, files.join(workspace, "labels", files.with_extension(image_name, ".txt")))
+                    _write_split_metadata(workspace, class_map)
+                    created.append(
+                        write_output(
+                            workspace,
+                            destination,
+                            overwrite=params.overwrite,
+                            verbose=params.verbose,
+                        )
+                    )
+    return created
 
-        # Process each class group
-        for idx, group in enumerate(groups):
-            if len(group) == 1:
-                zip_name = f"split_{group[0]}.zip"
-            else:
-                zip_name = f"split_group_{idx}.zip"
-            zip_dest = params.output_dir / zip_name
 
-            workspace = params.output_dir / f".temp_split_workspace_{random.randint(1000, 9999)}"
-            if workspace.exists():
-                shutil.rmtree(workspace)
-            img_dest_dir = workspace / "images"
-            lbl_dest_dir = workspace / "labels"
-            img_dest_dir.mkdir(parents=True, exist_ok=True)
-            lbl_dest_dir.mkdir(parents=True, exist_ok=True)
-
-            copied_count = 0
-
-            for img, lbl in pairs:
-                if lbl and lbl.exists() and lbl.is_file():
-                    with open(lbl, "r", encoding="utf-8", errors="ignore") as f:
-                        lines = f.readlines()
-
-                    matched_lines = []
-                    for line in lines:
-                        parts = line.strip().split()
-                        if parts:
-                            local_id = int(parts[0])
-                            if local_id < len(source_names):
-                                class_name = source_names[local_id]
-                                if class_name in group:
-                                    new_id = group.index(class_name)
-                                    parts[0] = str(new_id)
-                                    matched_lines.append(" ".join(parts) + "\n")
-
-                    if matched_lines:
-                        _safe_copy(img, img_dest_dir / img.name)
-                        with open(lbl_dest_dir / f"{img.stem}.txt", "w", encoding="utf-8") as f_out:
-                            f_out.writelines(matched_lines)
-                        copied_count += 1
-
-            if copied_count > 0:
-                yaml_data = {
-                    "path": "/content/data",
-                    "train": "images/train",
-                    "val": "images/val",
-                    "nc": len(group),
-                    "names": group
-                }
-                save(workspace / "data.yaml", yaml_data, overwrite=True, verbose=False)
-
-                from zipfile import ZipFile, ZIP_DEFLATED
-                with ZipFile(zip_dest, mode="w", compression=ZIP_DEFLATED) as zf:
-                    all_files = sorted(f for f in workspace.rglob("*") if f.is_file())
-                    for file in all_files:
-                        arcname = file.relative_to(workspace)
-                        zf.write(file, arcname=arcname)
-
-            if workspace.exists():
-                shutil.rmtree(workspace)
-
-            if verbose:
-                print(f"Created class split ZIP: {zip_dest.name} with {copied_count} image(s)")
-
-    else:
-        # MODE 2: Split by Ratio
-        # Overwrite check
-        for idx in range(len(params.ratios)):
-            zip_name = f"split_part_{idx}.zip"
-            zip_dest = params.output_dir / zip_name
-            if zip_dest.exists() and not params.overwrite:
-                if temp_extract_dir and temp_extract_dir.exists():
-                    shutil.rmtree(temp_extract_dir)
-                raise FileExistsError(f"split file already exists: {zip_dest}")
-
-        rng = random.Random(42)
-        rng.shuffle(pairs)
-
-        total = len(pairs)
-        start_idx = 0
-
-        for idx, ratio in enumerate(params.ratios):
-            zip_name = f"split_part_{idx}.zip"
-            zip_dest = params.output_dir / zip_name
-
-            if idx == len(params.ratios) - 1:
-                end_idx = total
-            else:
-                end_idx = start_idx + int(total * ratio)
-
-            split_pairs = pairs[start_idx:end_idx]
-            start_idx = end_idx
-
-            workspace = params.output_dir / f".temp_split_workspace_{random.randint(1000, 9999)}"
-            if workspace.exists():
-                shutil.rmtree(workspace)
-            img_dest_dir = workspace / "images"
-            lbl_dest_dir = workspace / "labels"
-            img_dest_dir.mkdir(parents=True, exist_ok=True)
-            lbl_dest_dir.mkdir(parents=True, exist_ok=True)
-
-            for img, lbl in split_pairs:
-                _safe_copy(img, img_dest_dir / img.name)
-                if lbl and lbl.exists() and lbl.is_file():
-                    _safe_copy(lbl, lbl_dest_dir / lbl.name)
-
-            yaml_data = {
-                "path": "/content/data",
-                "train": "images/train",
-                "val": "images/val",
-                "nc": len(source_names),
-                "names": source_names
-            }
-            save(workspace / "data.yaml", yaml_data, overwrite=True, verbose=False)
-
-            from zipfile import ZipFile, ZIP_DEFLATED
-            with ZipFile(zip_dest, mode="w", compression=ZIP_DEFLATED) as zf:
-                all_files = sorted(f for f in workspace.rglob("*") if f.is_file())
-                for file in all_files:
-                    arcname = file.relative_to(workspace)
-                    zf.write(file, arcname=arcname)
-
-            if workspace.exists():
-                shutil.rmtree(workspace)
-
-            if verbose:
-                print(f"Created ratio split ZIP: {zip_name} with {len(split_pairs)} image(s)")
-
-    if temp_extract_dir and temp_extract_dir.exists():
-        shutil.rmtree(temp_extract_dir)
+__all__ = ["split"]

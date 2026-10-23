@@ -1,0 +1,4 @@
+interface:
+  display_name: "Klygo Module Guides"
+  short_description: "Build tested Klygo API documentation and tutorials"
+  default_prompt: "Use $klygo-module-guides to complete and document a Klygo module."

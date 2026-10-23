@@ -26,10 +26,6 @@ def _check_archive_path(archive_path: Path) -> None:
         )
 
 
-# Alias for backward compatibility
-_check_zip_path = _check_archive_path
-
-
 class Compress:
 
     COMPRESS_FORMATS = {

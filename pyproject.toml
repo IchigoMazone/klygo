@@ -1,12 +1,17 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "klygo"
-version = "2.0.20"
-description = "Python utilities for archive, config and zero-shot detection"
+version = "2.1.0"
+description = "Unified high-performance Python toolkit for file operations, archives, configuration, dataset management, and zero-shot object detection pipelines."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Trinh Nhu Nhat (IchigoMazone)", email = "nhattrinh2702@gmail.com" }
+]
 requires-python = ">=3.10,<4.0"
 
 dependencies = [
@@ -16,12 +21,52 @@ dependencies = [
     "pydantic>=2.0",
     "python-box>=7.0",
     "pyyaml>=6.0",
-    "ruamel-yaml>=0.18",
     "tomlkit>=0.13",
-    "torch>=2.7,<3.0",
     "tqdm>=4.66",
-    "transformers>=4.50,<6.0",
     "matplotlib>=3.5",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+locate-anything = [
+    "torch>=2.7,<3.0",
+    "transformers==4.57.1",
+    "accelerate>=1.5.2",
+    "torchvision>=0.22,<1.0",
+    "peft",
+    "decord==0.6.0",
+    "lmdb>=1.7.5",
+    "timm>=1.0.11",
+]
+torch = [
+    "torch>=2.7,<3.0",
+]
+transformers = [
+    "torch>=2.7,<3.0",
+    "transformers>=4.50,<6.0",
+]
+ultralytics = [
+    "ultralytics",
+]
+torchvision = [
+    "torch>=2.7,<3.0",
+    "torchvision>=0.22,<1.0",
+]
+keras-hub = [
+    "keras-hub",
+]
+models = [
+    "torch>=2.7,<3.0",
+    "transformers>=4.50,<6.0",
+    "ultralytics",
+    "torchvision>=0.22,<1.0",
+    "keras-hub",
+]
+py7zr = [
+    "py7zr",
+]
+rarfile = [
+    "rarfile",
 ]
 
 [tool.setuptools.packages.find]

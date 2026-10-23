@@ -1,0 +1,65 @@
+# `files.rename`
+
+```python
+files.rename(path, new_name_or_path, overwrite=False)
+```
+
+Rename a filesystem entry or move it to an explicit path.
+
+## Contract
+
+A single path component is interpreted relative to the source parent. The default no-overwrite path refuses a concurrently created destination. Overwriting moves the old destination to a backup before renaming and restores it if renaming fails. Relocating a relative symlink to another directory is rejected because it would change its referent; use `move()` for that case.
+
+Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
+
+## Parameters
+
+- `path`: `str | os.PathLike[str]` — filesystem path to inspect or operate on.
+- `new_name_or_path`: `str | os.PathLike[str]` — basename or explicit destination.
+- `overwrite`: `bool` — permit replacing an existing target.
+
+## Returns
+
+A `pathlib.Path` representing the result.
+
+## Errors and edge cases
+
+Raises `FileNotFoundError` for a missing source, `FileExistsError` when replacement is disabled, and `ValueError` for overlapping paths. If rollback fails, the error names the retained backup path.
+
+## AI usage guidance
+
+Prefer the public form `from klygo import files` followed by `files.rename(...)`. Do not import private helpers or reproduce this behavior with direct `os`/`shutil` calls inside Klygo.
+
+## Example
+
+See [`rename.py`](../../../examples/files/rename.py) for an executable example.
+
+## Tests
+
+See [`test_rename.py`](../../../test/files/test_rename.py) for the executable behavioral contract.
+
+## Complete executable example
+
+```python
+"""Executable example for klygo.files.rename."""
+
+from tempfile import TemporaryDirectory
+from klygo import files
+
+with TemporaryDirectory() as directory:
+    source = files.path(directory) / "draft.txt"
+    files.save(source, "done", verbose=False)
+    renamed = files.rename(source, "final.txt")
+    print(renamed)
+
+
+# Additional cases
+# A full destination path can move and rename in one operation.
+with TemporaryDirectory() as directory:
+    root = files.path(directory)
+    source = root / "a.txt"
+    files.save(source, "item", verbose=False)
+    destination = root / "nested" / "b.txt"
+    files.mkdir(files.parent(destination))
+    assert files.rename(source, destination) == destination
+```

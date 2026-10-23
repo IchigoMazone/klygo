@@ -1,50 +1,291 @@
-"""
-Các lớp kết quả đầu ra chuẩn hóa cho nhận diện đối tượng (`klygo.outputs.detect`).
-
-Hệ thống phân cấp 4 tầng:
-- Box        : 1 BBox / 1 vật thể
-- Crops      : Tập hợp các ảnh con đã cắt (alias: Boxes)
-- Detection  : Kết quả nhận diện trên 1 ảnh / 1 frame
-- Detections : Kết quả nhận diện toàn bộ video / folder
-"""
+"""Represent one box, one image, or a sequence of detection results."""
 
 import os
 import datetime
-from typing import List, Dict, Any, Optional, Union, Callable, Iterable
+import uuid
+from copy import deepcopy
+from typing import List, Dict, Any, Optional, Union, Callable, Iterable, Mapping, Sequence
 import PIL.Image
 import numpy as np
 
-from klygo import files, media, visual
+from klygo import files, media, visual, validators
+
+
+ClassName = Optional[str]
+Names = Dict[int, ClassName]
+
+
+def _normalize_label(value: Any) -> ClassName:
+    """Return a clean class name, using ``None`` for blank labels."""
+    if value is None:
+        return None
+    label = str(value).strip()
+    return label or None
+
+
+def _normalize_names(value: Optional[Union[Mapping[int, Any], Sequence[Any]]]) -> Names:
+    """Normalize a mapping or sequence into an integer-keyed class registry."""
+    if value is None:
+        return {}
+    items = value.items() if isinstance(value, Mapping) else enumerate(value)
+    return {int(class_id): _normalize_label(label) for class_id, label in items}
+
+
+def _next_class_id(names: Mapping[int, ClassName]) -> int:
+    return max(names, default=-1) + 1
+
+
+def _class_id_for_label(names: Names, label: ClassName) -> int:
+    for class_id, known_label in names.items():
+        if known_label == label:
+            return class_id
+    class_id = _next_class_id(names)
+    names[class_id] = label
+    return class_id
+
+
+def _subset_names(objects: Iterable["Box"], names: Mapping[int, ClassName]) -> Names:
+    class_ids = {item.class_id for item in objects}
+    return {class_id: names.get(class_id) for class_id in sorted(class_ids)}
+
+
+def _register_box(names: Names, item: "Box") -> None:
+    """Register a box class, remapping label edits without changing box identity."""
+    native_id = item.class_id
+    if not item._class_id_explicit or (native_id in names and names[native_id] != item.label):
+        item.class_id = _class_id_for_label(names, item.label)
+    else:
+        names.setdefault(native_id, item.label)
+    if native_id != item.class_id:
+        item.metadata.setdefault("native_class_id", native_id)
+    item.metadata["class_id"] = item.class_id
+    item._class_id_explicit = True
+
+
+def _canonical_id(names: Names, label: ClassName, preferred=None) -> int:
+    for class_id, existing in names.items():
+        if existing == label:
+            return class_id
+    if preferred is not None:
+        validators.validate_type(preferred, int, "class_id")
+        if isinstance(preferred, bool) or preferred < 0:
+            raise ValueError("class_id must be a non-negative integer")
+    class_id = preferred if preferred is not None and preferred not in names else _next_class_id(names)
+    names[class_id] = label
+    return class_id
+
+
+def _copy_frame(frame: "Detection", original=None) -> "Detection":
+    validators.validate_type(frame, Detection, "frame")
+    source = frame.source_image if original is None else original.source_image
+    copied = Detection(source, [box._copy(parent_image=source) for box in frame.objects],
+                       speed=deepcopy(frame.speed), image_frame_index=frame.image_frame_index,
+                       config=deepcopy(frame.config), names=frame._all_names)
+    copied.frame_index = frame.frame_index
+    copied.timestamp = frame.timestamp
+    copied._source_path, copied._url = frame.source_path, frame.url
+    if original is not None:
+        copied.frame_index, copied.image_frame_index = original.frame_index, original.image_frame_index
+        copied._source_path, copied._url = original.source_path, original.url
+        copied.config.update(frame_index=original.frame_index, image_frame_index=original.image_frame_index,
+                             source_path=original.source_path)
+    return copied
+
+
+def _stage_frames(frames, registry, owner):
+    """Validate and reconcile without changing caller-owned frames or registries."""
+    staged = []
+    for frame in frames:
+        validators.validate_type(frame, Detection, "frame")
+        for class_id, label in frame._all_names.items():
+            _canonical_id(registry, label, class_id)
+        ids = []
+        for box in frame.objects:
+            validators.validate_type(box, Box, "box")
+            ids.append(_canonical_id(registry, box.label, box.class_id))
+        owned = getattr(frame, "_collection_registry", None)
+        if (owned is not None and owned is not owner) or any(box.class_id != cid for box, cid in zip(frame.objects, ids)):
+            frame = _copy_frame(frame)
+            for box, class_id in zip(frame.objects, ids):
+                if box.class_id != class_id:
+                    box.metadata.setdefault("native_class_id", box.class_id)
+                box.class_id = class_id
+                box.metadata["class_id"] = class_id
+        staged.append(frame)
+    return staged
+
+
+def _plain_list(value: Any, name: str) -> list[Any]:
+    """Convert tensor-like prediction fields to ordinary Python lists."""
+    if hasattr(value, "detach"):
+        value = value.detach()
+    if hasattr(value, "cpu"):
+        value = value.cpu()
+    if hasattr(value, "tolist"):
+        value = value.tolist()
+    try:
+        return list(value)
+    except TypeError as exc:
+        raise TypeError(f"prediction {name!r} must be a sequence") from exc
+
+
+def build_detections(
+    images: Sequence[Any],
+    predictions: Sequence[Mapping[str, Any]],
+    *,
+    metadata: Optional[Mapping[str, Any]] = None,
+    names: Optional[Union[Mapping[int, Any], Sequence[Any]]] = None,
+) -> List["Detection"]:
+    """Build one :class:`Detection` per image from normalized predictions.
+
+    Each prediction must provide equally sized ``boxes``, ``scores``, and
+    ``labels`` sequences. Optional ``class_ids`` become ``Box.class_id`` values;
+    ``Box.id`` always identifies a box within its frame. Labels missing from
+    ``names`` are appended to the result registry in first-seen order.
+    """
+    image_list = list(images)
+    prediction_list = list(predictions)
+    if len(image_list) != len(prediction_list):
+        raise ValueError("images and predictions must have the same length")
+    if metadata is not None and not isinstance(metadata, Mapping):
+        raise TypeError("metadata must be a mapping or None")
+
+    registry = _normalize_names(names)
+    results: List[Detection] = []
+    for image, prediction in zip(image_list, prediction_list):
+        if not isinstance(prediction, Mapping):
+            raise TypeError("each prediction must be a mapping")
+        boxes = _plain_list(prediction.get("boxes", []), "boxes")
+        scores = _plain_list(prediction.get("scores", []), "scores")
+        labels_value = prediction.get("text_labels", prediction.get("labels", []))
+        labels = _plain_list(labels_value, "labels")
+        class_ids_value = prediction.get("class_ids")
+        class_ids = None if class_ids_value is None else _plain_list(class_ids_value, "class_ids")
+
+        lengths = {len(boxes), len(scores), len(labels)}
+        if len(lengths) != 1:
+            raise ValueError("prediction boxes, scores, and labels must have the same length")
+        if class_ids is not None and len(class_ids) != len(boxes):
+            raise ValueError("prediction class_ids must match the number of boxes")
+
+        objects = []
+        for index, (coordinates, score, label) in enumerate(zip(boxes, scores, labels)):
+            coordinates = _plain_list(coordinates, "box")
+            if len(coordinates) != 4:
+                raise ValueError("each prediction box must contain four coordinates")
+            label_text = _normalize_label(label)
+            if class_ids is None:
+                class_id = _class_id_for_label(registry, label_text)
+            else:
+                raw_class_id = class_ids[index]
+                if hasattr(raw_class_id, "item"):
+                    raw_class_id = raw_class_id.item()
+                class_id = int(raw_class_id)
+                if class_id not in registry:
+                    registry[class_id] = label_text
+                elif registry[class_id] != label_text:
+                    raise ValueError(
+                        f"class ID {class_id} maps to both "
+                        f"{registry[class_id]!r} and {label_text!r}"
+                    )
+            if hasattr(score, "item"):
+                score = score.item()
+            objects.append(
+                Box(
+                    id=index,
+                    class_id=class_id,
+                    label=label_text,
+                    score=round(float(score), 3),
+                    box=[round(float(value), 2) for value in coordinates],
+                    parent_image=image,
+                )
+            )
+        results.append(
+            Detection(
+                source_image=image,
+                objects=objects,
+                config=deepcopy(dict(metadata or {})),
+                names=registry,
+            )
+        )
+    for result in results:
+        result._all_names = dict(registry)
+    return results
 
 
 # =============================================================================
-# 1. CẤP HẠT NHÂN: Box - Đại diện cho 1 BBox / 1 Vật thể
+# 1. ATOMIC ENTITY: Box - Single bounding box detection
 # =============================================================================
 class Box:
-    """
-    Đại diện cho một vật thể / một Bounding Box / một ảnh con đã cắt.
-    detections[0][0] == detection[0] == crops[0] == box
+    """Represent one detected object and its optional lazy image crop.
+
+    Parameters
+    ----------
+    id : int
+        Frame-local box ID.
+    label : str or None
+        Human-readable class label.
+    score : float
+        Confidence score.
+    box : list of float
+        Pixel coordinates in XYXY order.
+    parent_image : PIL.Image.Image, optional
+        Source image for lazy cropping.
+    pad : int
+        Crop padding in pixels.
+    uid : str, optional
+        Stable object identifier; generated when omitted.
+    metadata : dict, optional
+        Extra object attributes.
+    class_id : int, optional
+        Class ID used to look up ``label`` in a result's ``names`` mapping.
     """
 
     def __init__(
         self,
         id: int,
-        label: str,
+        label: ClassName,
         score: float,
         box: List[float],
         parent_image: Optional[PIL.Image.Image] = None,
         pad: int = 0,
+        uid: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        *,
+        class_id: Optional[int] = None,
     ) -> None:
         self.id = int(id)
-        self.label = str(label)
+        supplied_metadata = dict(metadata or {})
+        self._class_id_explicit = class_id is not None or "class_id" in supplied_metadata
+        self.metadata = supplied_metadata
+        legacy_class_id = self.metadata.get("class_id", id)
+        self.class_id = int(legacy_class_id if class_id is None else class_id)
+        self.metadata["class_id"] = self.class_id
+        self.label = _normalize_label(label)
         self.score = float(score)
         self.box = [float(x) for x in box]  # [xmin, ymin, xmax, ymax]
         self.parent_image = parent_image
         self.pad = int(pad)
+        self.uid = str(uid or uuid.uuid4().hex)
+
+    def _copy(self, **changes: Any) -> "Box":
+        values = {
+            "id": self.id,
+            "class_id": self.class_id,
+            "label": self.label,
+            "score": self.score,
+            "box": list(self.box),
+            "parent_image": self.parent_image,
+            "pad": self.pad,
+            "uid": self.uid,
+            "metadata": deepcopy(self.metadata),
+        }
+        values.update(changes)
+        return Box(**values)
 
     @property
     def image(self) -> Optional[PIL.Image.Image]:
-        """Lazy Cropping: Cắt ảnh con chính xác từ ảnh mẹ theo tọa độ pixel."""
+        """Crop sub-image from parent image using bounding box pixel coordinates."""
         if self.parent_image is None:
             return None
         w, h = self.parent_image.size
@@ -58,22 +299,22 @@ class Box:
 
     @property
     def width(self) -> float:
-        """Chiều rộng pixel của BBox."""
+        """Bounding box pixel width."""
         return max(0.0, self.box[2] - self.box[0])
 
     @property
     def height(self) -> float:
-        """Chiều cao pixel của BBox."""
+        """Bounding box pixel height."""
         return max(0.0, self.box[3] - self.box[1])
 
     @property
     def area(self) -> float:
-        """Diện tích pixel (width * height)."""
+        """Bounding box pixel area (width * height)."""
         return self.width * self.height
 
     @property
     def aspect_ratio(self) -> float:
-        """Tỉ lệ khung hình (width / height)."""
+        """Bounding box aspect ratio (width / height)."""
         return round(self.width / max(1.0, self.height), 4)
 
     @property
@@ -106,84 +347,140 @@ class Box:
 
     @property
     def size(self) -> tuple:
-        """Kích thước (width, height) của ảnh con."""
+        """Sub-image dimensions (width, height)."""
         img = self.image
         return img.size if img else (int(self.width), int(self.height))
 
     @property
     def confidence(self) -> float:
-        """Alias của score."""
+        """Alias for score."""
         return self.score
 
-    def with_label(self, new_label: str) -> "Box":
-        """Tạo bản sao mới với nhãn được đổi."""
-        return Box(self.id, str(new_label), self.score, self.box, self.parent_image, self.pad)
+    def with_label(self, new_label: ClassName) -> "Box":
+        """Return a new copy with an updated label."""
+        return self._copy(label=_normalize_label(new_label))
 
     def with_score(self, new_score: float) -> "Box":
-        """Tạo bản sao mới với điểm số được đổi."""
-        return Box(self.id, self.label, float(new_score), self.box, self.parent_image, self.pad)
+        """Return a new copy with an updated score."""
+        return self._copy(score=float(new_score))
 
     def with_pad(self, pad: int) -> "Box":
-        """Tạo bản sao mới với độ dày đệm viền pad mới."""
-        return Box(self.id, self.label, self.score, self.box, self.parent_image, int(pad))
+        """Return a new copy with an updated crop padding."""
+        return self._copy(pad=int(pad))
+
+    def with_box(self, coordinates: Iterable[float]) -> "Box":
+        """Return a new copy with updated XYXY coordinates."""
+        values = [float(value) for value in coordinates]
+        if len(values) != 4:
+            raise ValueError("coordinates must contain exactly four XYXY values")
+        return self._copy(box=values)
+
+    def with_metadata(self, **metadata: Any) -> "Box":
+        """Return a new copy with merged metadata."""
+        merged = dict(self.metadata)
+        merged.update(metadata)
+        return self._copy(metadata=merged)
+
+    def translate(self, dx: float = 0, dy: float = 0) -> "Box":
+        """Translate the bounding box by the specified pixel offsets."""
+        return self.with_box([
+            self.xmin + float(dx),
+            self.ymin + float(dy),
+            self.xmax + float(dx),
+            self.ymax + float(dy),
+        ])
+
+    def scale(self, factor: float) -> "Box":
+        """Scale the bounding box around its center."""
+        value = float(factor)
+        if value < 0:
+            raise ValueError("factor must be greater than or equal to 0")
+        half_width = self.width * value / 2
+        half_height = self.height * value / 2
+        return self.with_box([
+            self.center_x - half_width,
+            self.center_y - half_height,
+            self.center_x + half_width,
+            self.center_y + half_height,
+        ])
+
+    def clip(self, image_size: Optional[tuple] = None) -> "Box":
+        """Clamp box coordinates within (width, height) image bounds."""
+        size = image_size or getattr(self.parent_image, "size", None)
+        if size is None:
+            raise ValueError("image_size is required when parent_image has no size")
+        width, height = map(float, size[:2])
+        return self.with_box([
+            min(max(self.xmin, 0.0), width),
+            min(max(self.ymin, 0.0), height),
+            min(max(self.xmax, 0.0), width),
+            min(max(self.ymax, 0.0), height),
+        ])
 
     def crop(self, pad: Optional[int] = None) -> Optional[PIL.Image.Image]:
-        """Cắt ảnh con với đệm viền tùy chọn."""
+        """Crop sub-image with optional padding override."""
         if pad is not None and pad != self.pad:
             return self.with_pad(pad).image
         return self.image
 
     def show(self, width: Optional[int] = None) -> None:
-        """Hiển thị ảnh con trên màn hình hoặc notebook."""
+        """Display sub-image on screen or in notebook."""
         img = self.image
         if img:
             visual.show_image(img, width=width)
 
     def save(self, output_path: str) -> None:
-        """Lưu ảnh con ra đĩa thông qua klygo.media.save."""
+        """Save cropped sub-image to disk via klygo.media.save."""
         img = self.image
         if img:
             media.save(output_path, img, overwrite=True, verbose=False)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Xuất thông tin Box sang JSON Key-Value."""
+        """Export Box properties to a dictionary."""
         return {
             "id": self.id,
+            "class_id": self.class_id,
+            "uid": self.uid,
             "label": self.label,
             "score": round(self.score, 4),
             "box": [round(x, 2) for x in self.box],
             "width": round(self.width, 2),
             "height": round(self.height, 2),
             "area": round(self.area, 2),
+            "metadata": dict(self.metadata),
         }
 
     def __repr__(self) -> str:
         coords = [round(x, 1) for x in self.box]
-        return f"Box(id={self.id}, label='{self.label}', score={self.score:.2f}, box={coords})"
+        return (
+            f"Box(id={self.id}, class_id={self.class_id}, label={self.label!r}, "
+            f"score={self.score:.2f}, box={coords})"
+        )
 
 
 # =============================================================================
-# 2. CẤP TẬP HỢP ẢNH CON: Crops
+# 2. CROPS LEVEL: Crops - Collection of object crops
 # =============================================================================
 class Crops:
-    """
-    Tập hợp tất cả các ảnh con (Crops) đã cắt từ 1 hoặc nhiều ảnh.
-    crops[0] == box
-    """
+    """Hold a sequence of :class:`Box` objects and their source image."""
 
     def __init__(
         self,
         crops: List[Box],
         source_image: Optional[PIL.Image.Image] = None,
         pad: int = 0,
+        names: Optional[Union[Mapping[int, Any], Sequence[Any]]] = None,
     ) -> None:
         self.crops = crops
         self.source_image = source_image
         self.pad = int(pad)
+        self._all_names = _normalize_names(names)
+        for crop in self.crops:
+            _register_box(self._all_names, crop)
 
     def __getitem__(self, index: Union[int, slice]) -> Union[Box, "Crops"]:
         if isinstance(index, slice):
-            return Crops(self.crops[index], self.source_image, self.pad)
+            return Crops(self.crops[index], self.source_image, self.pad, self._all_names)
         return self.crops[index]
 
     def __setitem__(self, index: Union[int, slice], value: Any) -> None:
@@ -216,19 +513,34 @@ class Crops:
 
     def __add__(self, other: "Crops") -> "Crops":
         if not isinstance(other, Crops):
-            raise TypeError(f"Không thể cộng Crops với kiểu {type(other)}")
-        return Crops(list(self.crops) + list(other.crops), self.source_image, self.pad)
+            raise TypeError(f"Cannot concatenate Crops with type {type(other)}")
+        names = dict(self._all_names)
+        names.update(other._all_names)
+        return Crops(list(self.crops) + list(other.crops), self.source_image, self.pad, names)
 
     def __iter__(self):
         return iter(self.crops)
 
     @property
+    def names(self) -> Names:
+        """Return the sparse class mapping referenced by these crops."""
+        return _subset_names(self.crops, self._all_names)
+
+    @property
+    def ids(self) -> List[int]:
+        return [crop.id for crop in self.crops]
+
+    @property
+    def class_ids(self) -> List[int]:
+        return [crop.class_id for crop in self.crops]
+
+    @property
     def images(self) -> List[PIL.Image.Image]:
-        """Danh sách toàn bộ các đối tượng ảnh con PIL.Image thuần túy."""
+        """Pure PIL.Image object sequence for all valid crops."""
         return [c.image for c in self.crops if c.image is not None]
 
     @property
-    def labels(self) -> List[str]:
+    def labels(self) -> List[ClassName]:
         return [c.label for c in self.crops]
 
     @property
@@ -248,7 +560,7 @@ class Crops:
         return len(self.crops)
 
     @property
-    def unique_labels(self) -> List[str]:
+    def unique_labels(self) -> List[ClassName]:
         seen = set()
         out = []
         for c in self.crops:
@@ -258,56 +570,94 @@ class Crops:
         return out
 
     @property
-    def label_counts(self) -> Dict[str, int]:
-        counts: Dict[str, int] = {}
+    def label_counts(self) -> Dict[ClassName, int]:
+        counts: Dict[ClassName, int] = {}
         for c in self.crops:
             counts[c.label] = counts.get(c.label, 0) + 1
         return counts
 
     def filter(self, fn: Callable[[Box], bool]) -> "Crops":
-        """Lọc tập ảnh con bằng Lambda -> Trả về Crops mới."""
-        filtered = [c for c in self.crops if fn(c)]
-        return Crops(filtered, self.source_image, self.pad)
+        """Filter crops using a predicate callable returning a new Crops instance."""
+        from klygo import postprocessing as post
+        return post.select(self, where=fn)
+
+    def select(
+        self,
+        *,
+        ids: Optional[Iterable[int]] = None,
+        class_ids: Optional[Iterable[int]] = None,
+        uids: Optional[Iterable[str]] = None,
+        labels: Optional[Iterable[ClassName]] = None,
+        where: Optional[Callable[[Box], bool]] = None,
+    ) -> "Crops":
+        """Select crops by box identity, class, label, or predicate."""
+        from klygo import postprocessing as post
+        return post.select(
+            self,
+            ids=ids,
+            class_ids=class_ids,
+            uids=uids,
+            labels=labels,
+            where=where,
+        )
+
+    def drop(self, **selectors: Any) -> "Crops":
+        """Drop crops matching the supplied selectors."""
+        from klygo import postprocessing as post
+        return post.drop(self, **selectors)
+
+    def relabel(self, label: Any, **selectors: Any) -> "Crops":
+        """Relabel matching crops while preserving box identities."""
+        from klygo import postprocessing as post
+        return post.relabel(self, label, **selectors)
 
     def sort(
         self,
         key: Optional[Callable[[Box], Any]] = None,
         reverse: bool = True,
     ) -> "Crops":
-        """Sắp xếp tập ảnh con bằng Lambda -> Trả về Crops mới."""
+        """Sort crops using a key callable returning a new Crops instance."""
         sort_fn = key or (lambda c: c.score)
-        return Crops(sorted(self.crops, key=sort_fn, reverse=reverse), self.source_image, self.pad)
+        return Crops(
+            sorted(self.crops, key=sort_fn, reverse=reverse),
+            self.source_image,
+            self.pad,
+            self._all_names,
+        )
 
     def group_by(
         self,
         key: Optional[Callable[[Box], Any]] = None,
     ) -> Dict[Any, "Crops"]:
-        """Gom nhóm các ảnh con theo Class hoặc điều kiện."""
+        """Group crops by class or key callable."""
         key_fn = key or (lambda c: c.label)
         groups: Dict[Any, List[Box]] = {}
         for c in self.crops:
             groups.setdefault(key_fn(c), []).append(c)
-        return {k: Crops(v, self.source_image, self.pad) for k, v in groups.items()}
+        return {k: Crops(v, self.source_image, self.pad, self._all_names) for k, v in groups.items()}
 
     def map(
         self,
         fn: Union[Dict[str, str], Callable[[Box], Any]],
     ) -> "Crops":
-        """Biến đổi dữ liệu ảnh con bằng Dict đổi nhãn hoặc Lambda."""
+        """Transform crop objects using a label mapping dict or callback."""
         mapped = []
-        for i, c in enumerate(self.crops):
+        names = dict(self._all_names)
+        for c in self.crops:
             if isinstance(fn, dict):
-                mapped.append(Box(i, fn.get(c.label, c.label), c.score, c.box, c.parent_image, c.pad))
+                label = _normalize_label(fn.get(c.label, c.label))
+                mapped.append(c._copy(label=label, class_id=_class_id_for_label(names, label)))
             elif callable(fn):
                 res = fn(c)
                 if isinstance(res, Box):
                     mapped.append(res)
                 elif isinstance(res, str):
-                    mapped.append(Box(i, res, c.score, c.box, c.parent_image, c.pad))
-        return Crops(mapped, self.source_image, self.pad)
+                    label = _normalize_label(res)
+                    mapped.append(c._copy(label=label, class_id=_class_id_for_label(names, label)))
+        return Crops(mapped, self.source_image, self.pad, names)
 
     def show(self, limit: Optional[int] = None, cell_size: int = 200) -> None:
-        """Hiển thị tập ảnh con trên màn hình hoặc notebook."""
+        """Display crops on screen or in a notebook."""
         items = self.images[:limit] if limit else self.images
         for img in items:
             visual.show_image(img, width=cell_size)
@@ -317,32 +667,30 @@ class Crops:
         output_path: str,
         format: str = "classification",
     ) -> None:
-        """
-        Tự động xuất toàn bộ ảnh con thành Bộ Dữ Liệu Phân Loại Ảnh (Classification Dataset)
-        dùng klygo.files và klygo.media.
-        """
+        """Export all crops as a directory-based image classification dataset."""
         files.mkdir(output_path)
         class_counters: Dict[str, int] = {}
         for crop in self.crops:
             if crop.image:
                 label_clean = str(crop.label).strip().replace(" ", "_") or "unlabeled"
-                class_dir = os.path.join(output_path, label_clean)
+                class_dir = files.join(output_path, label_clean)
                 files.mkdir(class_dir)
                 idx = class_counters.get(label_clean, 0)
-                file_path = os.path.join(class_dir, f"{label_clean}_{idx:05d}.jpg")
+                file_path = files.join(class_dir, f"{label_clean}_{idx:05d}.jpg")
                 media.save(file_path, crop.image, overwrite=True, verbose=False)
                 class_counters[label_clean] = idx + 1
 
     def save(self, output_dir: str, by_class: bool = True) -> List[str]:
-        """Lưu toàn bộ ảnh con ra thư mục."""
+        """Save all cropped sub-images to a directory."""
         self.export(output_dir, format="classification" if by_class else "flat")
-        return [os.path.join(output_dir, str(c.label)) for c in self.crops]
+        return [str(files.join(output_dir, str(c.label))) for c in self.crops]
 
     def to_dict(self) -> Dict[str, Any]:
-        """Xuất thông tin tập ảnh con sang JSON Key-Value."""
+        """Export crops metadata and properties to a dictionary."""
         return {
             "total_crops": len(self.crops),
             "pad": self.pad,
+            "names": dict(self.names),
             "unique_labels": self.unique_labels,
             "label_counts": self.label_counts,
             "crops": [c.to_dict() for c in self.crops],
@@ -359,14 +707,10 @@ class Crops:
 
 
 # =============================================================================
-# 3. CẤP 1 BỨC ẢNH / 1 FRAME: Detection
+# 3. FRAME LEVEL: Detection - Single image or video frame result
 # =============================================================================
 class Detection:
-    """
-    Đầu ra chuẩn hóa chứa tất cả kết quả nhận diện của một bức ảnh / 1 frame.
-    detections[0] == detection
-    detection[0] == box
-    """
+    """Hold the boxes and source image for one image or video frame."""
 
     def __init__(
         self,
@@ -375,25 +719,41 @@ class Detection:
         speed: Optional[dict] = None,
         image_frame_index: int = 0,
         config: Optional[Dict[str, Any]] = None,
+        names: Optional[Union[Mapping[int, Any], Sequence[Any]]] = None,
         **kwargs,
     ) -> None:
         self._source_image = None
         self._source_path = None
         self._url = None
-        self.objects = objects  # Danh sách các Box
+        self.objects = list(objects)
+        for item in self.objects:
+            validators.validate_type(item, Box, "box")
+        used_ids = set()
+        next_id = 0
+        for item in self.objects:
+            if item.id in used_ids:
+                while next_id in used_ids:
+                    next_id += 1
+                item.id = next_id
+            used_ids.add(item.id)
+            next_id = max(next_id, item.id + 1)
+
+        self._all_names = _normalize_names(names)
+        for item in self.objects:
+            _register_box(self._all_names, item)
         self.source_image = source_image
         self.speed = speed or {"preprocess": 0.0, "inference": 0.0, "postprocess": 0.0, "total": 0.0}
         self.image_frame_index = image_frame_index
         self.frame_index = image_frame_index
         self.timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
-        # Cấu hình động tự do (Open Configuration)
-        self.config: Dict[str, Any] = dict(config or {})
-        self.config.update(kwargs)
+        # Dynamic open configuration
+        self.config: Dict[str, Any] = deepcopy(dict(config or {}))
+        self.config.update(deepcopy(kwargs))
 
     @property
     def source_image(self) -> Any:
-        """Ảnh gốc tương ứng với kết quả nhận diện (hỗ trợ đọc hoặc gán lại ảnh mới)."""
+        """Source image associated with detection result."""
         return self._source_image
 
     @source_image.setter
@@ -412,7 +772,7 @@ class Detection:
 
     @property
     def url(self) -> Optional[str]:
-        """URL hoặc đường dẫn tệp ảnh gốc."""
+        """Source image URL or file path."""
         return self._url
 
     @url.setter
@@ -421,7 +781,7 @@ class Detection:
             raise TypeError(f"Replacement URL must be a valid file path or URL string, got {type(new_url)}")
         self._url = str(new_url)
         self._source_path = self._url
-        # Tự động nạp Zero-RAM LazyImage từ URL mới và đồng bộ parent_image
+        # Synchronize LazyImage from replacement URL and update parent references
         if self._source_image is not None and isinstance(self._source_image, media.LazyImage) and self._source_image.frame_index is not None:
             self._source_image = media.LazyImage(
                 self._url,
@@ -437,7 +797,7 @@ class Detection:
 
     @property
     def source_path(self) -> Optional[str]:
-        """Đường dẫn tệp ảnh gốc."""
+        """Source image file path."""
         return self._source_path
 
     @source_path.setter
@@ -450,7 +810,7 @@ class Detection:
 
     @property
     def metadata(self) -> Dict[str, Any]:
-        """Dictionary metadata và tham số cấu hình của frame."""
+        """Frame metadata dictionary and configuration options."""
         return self.config
 
     @property
@@ -476,7 +836,7 @@ class Detection:
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __getitem__(self, index: Union[int, slice]) -> Union[Box, "Detection"]:
-        """🎯 detection[0] trả về 'Box', detection[m:n] trả về 'Detection' con."""
+        """Return Box at index or a sub-Detection on slice."""
         if isinstance(index, slice):
             return Detection(
                 self.source_image,
@@ -484,42 +844,55 @@ class Detection:
                 self.speed,
                 self.image_frame_index,
                 config=self.config,
+                names=self._all_names,
             )
         return self.objects[index]
 
+    def _commit_objects(self, objects):
+        registry = dict(self._all_names)
+        prepared = []
+        seen_objects, used_ids = set(), set()
+        for item in objects:
+            validators.validate_type(item, Box, "box")
+            if id(item) in seen_objects or (item.parent_image is not None and item.parent_image is not self.source_image):
+                item = item._copy()
+            seen_objects.add(id(item))
+            class_id = _canonical_id(registry, item.label, item.class_id)
+            box_id = item.id if item.id not in used_ids else max(used_ids, default=-1) + 1
+            used_ids.add(box_id)
+            prepared.append((item, class_id, box_id))
+        # No mutation occurs until the complete candidate list is valid.
+        for item, class_id, box_id in prepared:
+            if item.class_id != class_id:
+                item.metadata.setdefault("native_class_id", item.class_id)
+            item.class_id, item.id = class_id, box_id
+            item.metadata["class_id"] = class_id
+            item.parent_image = self.source_image
+        self._all_names.update(registry)
+        self.objects = [item for item, _, _ in prepared]
+
     def __setitem__(self, index: Union[int, slice], value: Any) -> None:
-        if isinstance(value, Box):
-            value.parent_image = self.source_image
-        elif isinstance(value, (list, tuple)):
-            for item in value:
-                if isinstance(item, Box):
-                    item.parent_image = self.source_image
-        self.objects[index] = value
+        items = list(self.objects)
+        items[index] = value
+        self._commit_objects(items)
 
     def __delitem__(self, index: Union[int, slice]) -> None:
         del self.objects[index]
 
     def append(self, crop: Box) -> None:
-        if isinstance(crop, Box):
-            crop.parent_image = self.source_image
-        self.objects.append(crop)
+        self._commit_objects([*self.objects, crop])
 
     def extend(self, other: Union[List[Box], "Detection", Crops]) -> None:
         items = other.objects if isinstance(other, Detection) else (other.crops if isinstance(other, Crops) else list(other))
-        for c in items:
-            if isinstance(c, Box):
-                c.parent_image = self.source_image
-            self.objects.append(c)
-        for i, c in enumerate(self.objects):
-            c.id = i
+        self._commit_objects([*self.objects, *items])
 
     def pop(self, index: int = -1) -> Box:
         return self.objects.pop(index)
 
     def insert(self, index: int, crop: Box) -> None:
-        if isinstance(crop, Box):
-            crop.parent_image = self.source_image
-        self.objects.insert(index, crop)
+        items = list(self.objects)
+        items.insert(index, crop)
+        self._commit_objects(items)
 
     def remove(self, crop: Box) -> None:
         self.objects.remove(crop)
@@ -532,33 +905,51 @@ class Detection:
 
     def __add__(self, other: "Detection") -> "Detection":
         if not isinstance(other, Detection):
-            raise TypeError(f"Không thể cộng Detection với kiểu {type(other)}")
+            raise TypeError(f"Cannot concatenate Detection with type {type(other)}")
         return Detection(
             self.source_image,
             list(self.objects) + list(other.objects),
             self.speed,
             self.image_frame_index,
             config=self.config,
+            names=self._all_names,
         )
 
     def __iter__(self):
         return iter(self.objects)
 
     @property
+    def names(self) -> Names:
+        """Return the sparse class mapping referenced by this frame."""
+        return _subset_names(self.objects, self._all_names)
+
+    @property
+    def ids(self) -> List[int]:
+        return [item.id for item in self.objects]
+
+    @property
+    def class_ids(self) -> List[int]:
+        return [item.class_id for item in self.objects]
+
+    @property
+    def unique_class_ids(self) -> List[int]:
+        return list(dict.fromkeys(self.class_ids))
+
+    @property
     def boxes(self) -> List[List[float]]:
-        """Danh sách tọa độ pixel tuyệt đối [xmin, ymin, xmax, ymax]."""
+        """List of absolute pixel coordinates [xmin, ymin, xmax, ymax]."""
         return [c.box for c in self.objects]
 
     @property
     def normalized_boxes(self) -> List[List[float]]:
-        """Danh sách tọa độ chuẩn hóa tỉ lệ trong khoảng [0.0, 1.0]."""
+        """List of normalized coordinates scaled to [0.0, 1.0]."""
         w, h = self.source_image.size
         if w > 0 and h > 0:
             return [[round(b[0] / w, 4), round(b[1] / h, 4), round(b[2] / w, 4), round(b[3] / h, 4)] for b in self.boxes]
         return []
 
     @property
-    def labels(self) -> List[str]:
+    def labels(self) -> List[ClassName]:
         return [c.label for c in self.objects]
 
     @property
@@ -570,7 +961,7 @@ class Detection:
         return len(self.objects)
 
     @property
-    def unique_labels(self) -> List[str]:
+    def unique_labels(self) -> List[ClassName]:
         seen = set()
         out = []
         for c in self.objects:
@@ -580,16 +971,16 @@ class Detection:
         return out
 
     @property
-    def label_counts(self) -> Dict[str, int]:
-        counts: Dict[str, int] = {}
+    def label_counts(self) -> Dict[ClassName, int]:
+        counts: Dict[ClassName, int] = {}
         for c in self.objects:
             counts[c.label] = counts.get(c.label, 0) + 1
         return counts
 
     @property
     def crops(self) -> Crops:
-        """Tự động cắt toàn bộ các vật thể -> Trả về Crops."""
-        return Crops(self.objects, self.source_image)
+        """Crop all detected objects into a Crops collection."""
+        return Crops(self.objects, self.source_image, names=self._all_names)
 
     @property
     def summary(self) -> Dict[str, Any]:
@@ -622,22 +1013,223 @@ class Detection:
         return self.source_image.size
 
     def filter(self, fn: Callable[[Box], bool]) -> "Detection":
-        """Lọc các box bằng Lambda -> Trả về Detection mới."""
-        filtered = [c for c in self.objects if fn(c)]
-        return Detection(self.source_image, filtered, self.speed, self.image_frame_index, config=self.config)
+        """Filter boxes using a predicate callback returning a new Detection."""
+        from klygo import postprocessing as post
+        return post.select(self, where=fn)
+
+    def select(
+        self,
+        *,
+        ids: Optional[Iterable[int]] = None,
+        class_ids: Optional[Iterable[int]] = None,
+        uids: Optional[Iterable[str]] = None,
+        labels: Optional[Iterable[ClassName]] = None,
+        where: Optional[Callable[[Box], bool]] = None,
+    ) -> "Detection":
+        """Select boxes matching ID, UID, label, or predicate."""
+        from klygo import postprocessing as post
+        return post.select(
+            self,
+            ids=ids,
+            class_ids=class_ids,
+            uids=uids,
+            labels=labels,
+            where=where,
+        )
+
+    def map_boxes(self, function: Callable[[Box], Optional[Box]]) -> "Detection":
+        """Transform each box or return None to exclude it."""
+        from klygo import postprocessing as post
+        return post.map_boxes(self, function)
+
+    def relabel(
+        self,
+        label: Any,
+        *,
+        ids: Optional[Iterable[int]] = None,
+        class_ids: Optional[Iterable[int]] = None,
+        uids: Optional[Iterable[str]] = None,
+        labels: Optional[Iterable[ClassName]] = None,
+        where: Optional[Callable[[Box], bool]] = None,
+    ) -> "Detection":
+        """Relabel matching boxes without mutating existing objects."""
+        from klygo import postprocessing as post
+        return post.relabel(
+            self,
+            label,
+            ids=ids,
+            class_ids=class_ids,
+            uids=uids,
+            labels=labels,
+            where=where,
+        )
+
+    def drop(
+        self,
+        *,
+        ids: Optional[Iterable[int]] = None,
+        class_ids: Optional[Iterable[int]] = None,
+        uids: Optional[Iterable[str]] = None,
+        labels: Optional[Iterable[ClassName]] = None,
+        where: Optional[Callable[[Box], bool]] = None,
+        reindex: bool = False,
+    ) -> "Detection":
+        """Drop matching boxes.
+
+        Parameters
+        ----------
+        reindex : bool, default False
+            Whether to re-index the remaining box IDs sequentially from 0.
+        """
+        validators.validate_type(reindex, bool, "reindex")
+        from klygo import postprocessing as post
+        dropped = post.drop(
+            self,
+            ids=ids,
+            class_ids=class_ids,
+            uids=uids,
+            labels=labels,
+            where=where,
+        )
+        if reindex:
+            dropped.reindex()
+        return dropped
+
+    def reindex(self, start: int = 0) -> "Detection":
+        """Re-index all box identifiers sequentially starting from ``start``.
+
+        Parameters
+        ----------
+        start : int, default 0
+            Initial ID value for the first box.
+
+        Returns
+        -------
+        Detection
+            This same Detection instance with continuous box IDs.
+        """
+        validators.validate_count(start, "start", minimum=0)
+        for idx, box in enumerate(self.objects, start=start):
+            box.id = idx
+        return self
+
+    def filter_score(self, minimum: float) -> "Detection":
+        """Retain boxes with confidence score >= minimum."""
+        from klygo import postprocessing as post
+        return post.filter_score(self, minimum)
+
+    def clip(self, image_size: Optional[tuple] = None) -> "Detection":
+        from klygo import postprocessing as post
+        return post.clip_boxes(self, image_size)
+
+    def remove_invalid(self, min_area: float = 0) -> "Detection":
+        from klygo import postprocessing as post
+        return post.remove_invalid_boxes(self, min_area)
+
+    def nms(self, iou: float = 0.5, class_agnostic: bool = False) -> "Detection":
+        from klygo import postprocessing as post
+        return post.suppress(self, iou=iou, class_agnostic=class_agnostic)
+
+    def top(self, count: int) -> "Detection":
+        from klygo import postprocessing as post
+        return post.top_boxes(self, count)
+
+    def pipe(self, *operations: Callable[[Any], Any]) -> "Detection":
+        """Apply postprocessing callables sequentially."""
+        from klygo import postprocessing as post
+        return post.apply(self, *operations)
 
     def sort(
         self,
         key: Optional[Callable[[Box], Any]] = None,
         reverse: bool = True,
     ) -> "Detection":
-        """Sắp xếp các box bằng Lambda."""
+        """Sort boxes using a key callback."""
         sort_fn = key or (lambda c: c.score)
-        return Detection(self.source_image, sorted(self.objects, key=sort_fn, reverse=reverse), self.speed, self.image_frame_index, config=self.config)
+        return Detection(
+            self.source_image,
+            sorted(self.objects, key=sort_fn, reverse=reverse),
+            self.speed,
+            self.image_frame_index,
+            config=self.config,
+            names=self._all_names,
+        )
 
     def crop(self, pad: int = 0) -> Crops:
-        """Cắt toàn bộ vật thể kèm đệm viền."""
-        return Crops(self.objects, self.source_image, pad=pad)
+        """Crop all detected objects with padding."""
+        return Crops(self.objects, self.source_image, pad=pad, names=self._all_names)
+
+    def restore(self, target: str = "original", inplace: bool = False) -> "Detection":
+        """Restore detection to transformed or original RGB image space.
+
+        ``target="transformed"`` keeps boxes unchanged while reverting color
+        transforms. ``target="original"`` maps boxes back to source coordinates.
+        """
+        from klygo import preprocessing
+
+        target = str(target).lower()
+        if target not in ("transformed", "original"):
+            raise ValueError("target must be 'transformed' or 'original'")
+
+        current_image = self.source_image
+        source_path = getattr(current_image, "path", None) or self.source_path
+        if source_path is None:
+            raise ValueError("Cannot restore a Detection whose source image has no path")
+
+        # Recreate the source proxy without copying its preprocessing pipeline.
+        source_image = media.LazyImage(
+            source_path,
+            backend=getattr(current_image, "backend", "pil"),
+            frame_index=getattr(current_image, "frame_index", None),
+            reader=getattr(current_image, "reader", None),
+        )
+
+        operations = list(getattr(current_image, "_preprocessing_ops", ()))
+        trace = preprocessing.get_trace(current_image)
+        if operations and not trace and hasattr(current_image, "to_pil"):
+            # Normally inference already materialized the image. This also makes
+            # restore reliable for manually-created Detection objects.
+            current_image.to_pil(cache=False)
+            trace = preprocessing.get_trace(current_image)
+
+        if target == "transformed":
+            geometry = [operation for operation in operations if operation.changes_geometry]
+            restored_image = preprocessing.compose(geometry)(source_image) if geometry else source_image
+            restored_boxes = [list(box) for box in self.boxes]
+        else:
+            restored_image = source_image
+            restored_boxes = preprocessing.restore_boxes(self.boxes, trace) if trace else [list(box) for box in self.boxes]
+
+        if inplace:
+            self.source_image = restored_image
+            for item, coordinates in zip(self.objects, restored_boxes):
+                item.box = [float(value) for value in coordinates]
+                item.parent_image = restored_image
+            return self
+
+        restored_objects = [
+            Box(
+                id=item.id,
+                label=item.label,
+                score=item.score,
+                box=coordinates,
+                parent_image=restored_image,
+                pad=item.pad,
+                uid=item.uid,
+                metadata=item.metadata,
+            )
+            for item, coordinates in zip(self.objects, restored_boxes)
+        ]
+        restored = Detection(
+            source_image=restored_image,
+            objects=restored_objects,
+            speed=dict(self.speed),
+            image_frame_index=self.image_frame_index,
+            config=dict(self.config),
+            names=self._all_names,
+        )
+        restored.timestamp = self.timestamp
+        return restored
 
     def plot(
         self,
@@ -646,7 +1238,7 @@ class Detection:
         scores: bool = True,
         **kwargs,
     ) -> PIL.Image.Image:
-        """Vẽ bounding box và nhãn lên ảnh sử dụng klygo.visual.draw_bboxes."""
+        """Draw bounding boxes and captions onto the image."""
         return visual.draw_bboxes(
             image=self.source_image,
             bboxes=self.boxes,
@@ -658,11 +1250,14 @@ class Detection:
     draw = plot
 
     def to_array(self, bgr: bool = False, annotated: bool = True, **kwargs) -> np.ndarray:
-        """
-        Chuyển đổi ảnh kết quả nhận diện sang mảng NumPy ndarray.
-        - bgr=True: Chuyển sang hệ màu BGR chuẩn OpenCV để hiển thị trực tiếp bằng cv2.imshow.
-        - annotated=True (mặc định): Trả về ảnh đã vẽ Bounding Box.
-        - annotated=False: Trả về ảnh gốc dạng ndarray.
+        """Convert detection result image into a NumPy ndarray.
+
+        Parameters
+        ----------
+        bgr : bool, default False
+            Convert channels to BGR order for OpenCV compatibility.
+        annotated : bool, default True
+            Render bounding boxes onto the image before conversion.
         """
         img = self.plot(**kwargs) if annotated else self.source_image
         if hasattr(img, "to_array"):
@@ -674,40 +1269,41 @@ class Detection:
         return arr
 
     def to_numpy(self, bgr: bool = False, annotated: bool = True, **kwargs) -> np.ndarray:
-        """Alias cho to_array()."""
+        """Alias for to_array()."""
         return self.to_array(bgr=bgr, annotated=annotated, **kwargs)
 
     def to_bgr(self, annotated: bool = True, **kwargs) -> np.ndarray:
-        """Trả về mảng NumPy hệ màu BGR để hiển thị trực tiếp bằng cv2.imshow."""
+        """Return BGR NumPy array for direct use with cv2.imshow."""
         return self.to_array(bgr=True, annotated=annotated, **kwargs)
 
     def __array__(self, dtype=None) -> np.ndarray:
-        """Hỗ trợ tự động chuyển đổi khi gọi np.array(det)."""
+        """Support automatic conversion via np.array(detection)."""
         arr = self.to_array(annotated=True)
         if dtype is not None:
             return arr.astype(dtype)
         return arr
 
     def save(self, output_path: str, line_width: Optional[int] = None, **kwargs) -> None:
-        """Vẽ và lưu trực tiếp ảnh nhận diện ra đĩa bằng klygo.media.save."""
+        """Draw and save the annotated image via klygo.media.save."""
         annotated = self.plot(line_width=line_width, **kwargs)
         media.save(output_path, annotated, overwrite=True, verbose=False)
 
     def show(self, line_width: Optional[int] = None, width: Optional[int] = None, **kwargs) -> None:
-        """Vẽ và hiển thị ảnh nhận diện bằng klygo.visual.show_image."""
+        """Draw and display the annotated image via klygo.visual.show_image."""
         annotated = self.plot(line_width=line_width, **kwargs)
         visual.show_image(annotated, width=width)
 
-    def export(self, output_path: str, format: str = "yolo", classes: Optional[List[str]] = None) -> None:
-        """Xuất file nhãn YOLO (.txt) hoặc JSON sử dụng klygo.files.save."""
+    def export(self, output_path: str, format: str = "yolo", classes: Optional[Union[List[str], Names]] = None) -> None:
+        """Export YOLO labels with stable class IDs, or serialize a JSON result."""
         if format.lower() == "yolo":
             w, h = self.source_image.size
-            unique_classes = classes if classes is not None else sorted(list(set(self.labels)))
+            class_map = self._all_names if classes is None else _normalize_names(classes)
+            label_ids = {label: class_id for class_id, label in class_map.items()}
             lines = []
             for c in self.objects:
-                if c.label not in unique_classes:
+                if c.label not in label_ids:
                     continue
-                cid = unique_classes.index(c.label)
+                cid = c.class_id if classes is None else label_ids[c.label]
                 cx = (c.box[0] + c.box[2]) / 2.0 / w
                 cy = (c.box[1] + c.box[3]) / 2.0 / h
                 bw = (c.box[2] - c.box[0]) / w
@@ -720,7 +1316,7 @@ class Detection:
             files.save(output_path, self.to_dict(), verbose=False)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Xuất toàn bộ kết quả về dạng dict chuẩn COCO/Roboflow."""
+        """Export detection results as a dictionary."""
         d = {
             "image_format": self.image_format,
             "image_mode": self.image_mode,
@@ -729,6 +1325,7 @@ class Detection:
             "timestamp": self.timestamp,
             "objects": [c.to_dict() for c in self.objects],
             "speed": self.speed,
+            "names": dict(self.names),
         }
         if self.source_path is not None:
             d["source_path"] = self.source_path
@@ -747,7 +1344,7 @@ class Detection:
         return summary
 
     def close(self) -> None:
-        """Giải phóng tài nguyên media proxy nếu có."""
+        """Release media proxy resources if held."""
         img = getattr(self, "_source_image", None)
         if img is not None and hasattr(img, "reader") and img.reader is not None:
             try:
@@ -758,15 +1355,10 @@ class Detection:
 
 
 # =============================================================================
-# 4. CẤP TOÀN BỘ VIDEO / FOLDER: Detections
+# 4. COLLECTION LEVEL: Detections - Multi-frame collection or stream
 # =============================================================================
 class Detections:
-    """
-    Tập hợp tất cả các Detection của toàn bộ Video / Folder ảnh.
-    detections[0] == detection
-    detections[0][0] == box
-    Hỗ trợ đồng nhất cả chế độ In-Memory (danh sách) lẫn Stream (tiết kiệm RAM chống tràn bộ nhớ).
-    """
+    """Hold image-level detections in memory or consume them as a stream."""
 
     def __init__(
         self,
@@ -776,22 +1368,55 @@ class Detections:
         output_path: Optional[str] = None,
         stream: bool = False,
         total_frames: Optional[int] = None,
+        names: Optional[Union[Mapping[int, Any], Sequence[Any]]] = None,
     ) -> None:
         self.is_stream = bool(stream) or (not isinstance(frames, (list, tuple)) and hasattr(frames, "__iter__"))
         self.source_type = source_type
         self.fps = float(fps) if fps else 30.0
         self.output_path = output_path
         self.total_frames = total_frames
+        self._base_names = {}
+        for class_id, label in _normalize_names(names).items():
+            _canonical_id(self._base_names, label, class_id)
         self._stream_cache: List[Detection] = []
 
         if self.is_stream:
-            self._iterator = iter(frames) if frames is not None else iter(())
+            self._iterator = self._reconciled_stream(iter(frames) if frames is not None else iter(()))
             self._frames: List[Detection] = []
         else:
-            self._frames = list(frames) if frames is not None else []
+            self._frames = []
+            self._commit_frames(list(frames) if frames is not None else [])
             self._iterator = None
             if self.total_frames is None:
                 self.total_frames = len(self._frames)
+
+    def _commit_frames(self, frames):
+        registry = dict(self._base_names)
+        staged = _stage_frames(frames, registry, self._base_names)
+        self._base_names.update(registry)
+        for frame in staged:
+            frame._all_names = self._base_names
+            frame._collection_registry = self._base_names
+        self._frames = staged
+        self.total_frames = len(staged)
+
+    def _reconciled_stream(self, iterator):
+        try:
+            for frame in iterator:
+                registry = dict(self._base_names)
+                frame = _stage_frames([frame], registry, self._base_names)[0]
+                self._base_names.update(registry)
+                frame._all_names = self._base_names
+                frame._collection_registry = self._base_names
+                yield frame
+        finally:
+            close = getattr(iterator, "close", None)
+            if callable(close):
+                close()
+
+    def _require_materialized(self):
+        if self.is_stream:
+            raise ValueError("Call to_list() on a finite stream before mutation; this requires memory for every frame")
 
     @property
     def frames(self) -> List[Detection]:
@@ -801,12 +1426,8 @@ class Detections:
 
     @frames.setter
     def frames(self, value: Any) -> None:
-        if self.is_stream and not isinstance(value, (list, tuple)):
-            self._iterator = iter(value)
-        else:
-            self._frames = list(value) if value is not None else []
-            self.is_stream = False
-            self.total_frames = len(self._frames)
+        self._require_materialized()
+        self._commit_frames(list(value) if value is not None else [])
 
     @property
     def results(self) -> List[Detection]:
@@ -837,43 +1458,8 @@ class Detections:
                     raise ValueError("Negative slice indices are not supported on streaming Detections. Use to_list() first.")
 
                 def _slice_gen():
-                    idx = 0
-                    while True:
-                        if start is not None and idx < start:
-                            try:
-                                if idx < len(self._stream_cache):
-                                    _ = self._stream_cache[idx]
-                                else:
-                                    _ = next(self._iterator)
-                                idx += 1
-                                continue
-                            except StopIteration:
-                                break
-
-                        if stop is not None and idx >= stop:
-                            break
-
-                        offset = idx if start is None else (idx - start)
-                        if offset % step == 0:
-                            try:
-                                if idx < len(self._stream_cache):
-                                    det = self._stream_cache[idx]
-                                else:
-                                    det = next(self._iterator)
-                                    self._stream_cache.append(det)
-                                yield det
-                            except StopIteration:
-                                break
-                        else:
-                            try:
-                                if idx < len(self._stream_cache):
-                                    _ = self._stream_cache[idx]
-                                else:
-                                    det = next(self._iterator)
-                                    self._stream_cache.append(det)
-                            except StopIteration:
-                                break
-                        idx += 1
+                    import itertools
+                    yield from itertools.islice(iter(self), start or 0, stop, step)
 
                 new_total = None
                 if self.total_frames is not None:
@@ -891,61 +1477,294 @@ class Detections:
                     self.output_path,
                     stream=True,
                     total_frames=new_total,
+                    names=self.names,
                 )
             raise TypeError(f"Invalid index type: {type(index)}")
 
         if isinstance(index, slice):
-            return Detections(self._frames[index], self.source_type, self.fps, self.output_path)
+            return Detections(
+                self._frames[index],
+                self.source_type,
+                self.fps,
+                self.output_path,
+                names=self.names,
+            )
         return self._frames[index]
 
     def map(self, func: Callable[[Detection], Any]) -> "Detections":
-        """
-        Áp dụng hàm biến đổi func lên từng Detection frame.
-        Hỗ trợ cả In-Memory lẫn Stream.
-        """
+        """Apply a transform function to each Detection frame across memory or streams."""
         if self.is_stream:
             def _map_gen():
                 for f in self:
                     yield func(f)
-            return Detections(_map_gen(), self.source_type, self.fps, self.output_path, stream=True, total_frames=self.total_frames)
+            return Detections(
+                _map_gen(),
+                self.source_type,
+                self.fps,
+                self.output_path,
+                stream=True,
+                total_frames=self.total_frames,
+                names=self.names,
+            )
         mapped = [func(f) for f in self._frames]
-        return Detections(mapped, self.source_type, self.fps, self.output_path)
+        return Detections(mapped, self.source_type, self.fps, self.output_path, names=self.names)
+
+    def map_boxes(self, function: Callable[[Box], Optional[Box]]) -> "Detections":
+        return self.map(lambda frame: frame.map_boxes(function))
+
+    def select(self, **selectors: Any) -> "Detections":
+        return self.map(lambda frame: frame.select(**selectors))
+
+    def relabel(self, label: Any, **selectors: Any) -> "Detections":
+        return self.map(lambda frame: frame.relabel(label, **selectors))
+
+    def drop(self, **selectors: Any) -> "Detections":
+        return self.map(lambda frame: frame.drop(**selectors))
+
+    def filter_score(self, minimum: float) -> "Detections":
+        return self.map(lambda frame: frame.filter_score(minimum))
+
+    def clip(self, image_size: Optional[tuple] = None) -> "Detections":
+        return self.map(lambda frame: frame.clip(image_size))
+
+    def remove_invalid(self, min_area: float = 0) -> "Detections":
+        return self.map(lambda frame: frame.remove_invalid(min_area))
+
+    def nms(self, iou: float = 0.5, class_agnostic: bool = False) -> "Detections":
+        return self.map(lambda frame: frame.nms(iou=iou, class_agnostic=class_agnostic))
+
+    def top(self, count: int) -> "Detections":
+        return self.map(lambda frame: frame.top(count))
+
+    def pipe(self, *operations: Callable[[Any], Any]) -> "Detections":
+        from klygo import postprocessing as post
+        return post.apply(self, *operations)
+
+    def get_frame(self, frame_index: int) -> Detection:
+        """Retrieve a Detection frame by its source frame_index."""
+        target = int(frame_index)
+        for frame in self:
+            if frame.frame_index == target:
+                return frame
+        raise KeyError(f"Frame {target} does not exist")
+
+    def replace_frame(self, frame_index: int, result: Detection) -> "Detections":
+        """Return a new collection with one frame replaced."""
+        if not isinstance(result, Detection):
+            raise TypeError("result must be a Detection")
+        target = int(frame_index)
+        if not self.is_stream and not any(frame.frame_index == target for frame in self._frames):
+            raise KeyError(f"Frame {target} does not exist")
+        return self.map(lambda frame: _copy_frame(result, frame) if frame.frame_index == target else frame)
+
+    def update_frame(self, frame_index: int, function: Callable[[Detection], Detection]) -> "Detections":
+        """Update a specific frame via callback."""
+        if not callable(function):
+            raise TypeError("function must be callable")
+        target = int(frame_index)
+        if not self.is_stream and not any(frame.frame_index == target for frame in self._frames):
+            raise KeyError(f"Frame {target} does not exist")
+
+        def update(frame: Detection) -> Detection:
+            if frame.frame_index != target:
+                return frame
+            value = function(_copy_frame(frame))
+            if not isinstance(value, Detection):
+                raise TypeError("update_frame function must return Detection")
+            return _copy_frame(value, frame)
+
+        return self.map(update)
+
+    def remove_frame(self, frame_index: int, reindex: bool = False) -> "Detections":
+        """Return a new collection excluding the specified frame_index.
+
+        Parameters
+        ----------
+        frame_index : int
+            Target source frame index to exclude.
+        reindex : bool, default False
+            Whether to re-index the remaining frames sequentially starting from 0.
+
+        Returns
+        -------
+        Detections
+            New collection excluding the target frame.
+        """
+        validators.validate_type(reindex, bool, "reindex")
+        target = int(frame_index)
+        filtered = self.filter(lambda frame: frame.frame_index != target)
+        if reindex and not filtered.is_stream:
+            filtered.reindex()
+        return filtered
+
+    def reindex(self, start: int = 0) -> "Detections":
+        """Re-index all frame positions sequentially starting from ``start``.
+
+        Parameters
+        ----------
+        start : int, default 0
+            Initial index value for the first frame.
+
+        Returns
+        -------
+        Detections
+            This collection with updated continuous frame indices.
+        """
+        validators.validate_count(start, "start", minimum=0)
+        self._require_materialized()
+        for idx, frame in enumerate(self._frames, start=start):
+            frame.frame_index = idx
+            frame.image_frame_index = idx
+            frame.config["frame_index"] = idx
+            frame.config["image_frame_index"] = idx
+        return self
+
+    def reindex_boxes(self, start: int = 0) -> "Detections":
+        """Re-index box IDs sequentially starting from ``start`` across all frames.
+
+        Parameters
+        ----------
+        start : int, default 0
+            Initial ID value for the first box in each frame.
+
+        Returns
+        -------
+        Detections
+            This collection with continuous box IDs in every frame.
+        """
+        validators.validate_count(start, "start", minimum=0)
+        self._require_materialized()
+        for frame in self.frames:
+            frame.reindex(start=start)
+        return self
+
+    def restore(self, target: str = "original") -> "Detections":
+        """Restore image and coordinates across all frames."""
+        return self.map(lambda frame: frame.restore(target=target))
 
     def __setitem__(self, index: Union[int, slice], value: Any) -> None:
-        if self.is_stream:
-            self.to_list()
-        self._frames[index] = value
+        self._require_materialized()
+        candidates = list(self._frames)
+        if isinstance(index, slice):
+            values = list(value)
+            positions = list(range(len(candidates)))[index]
+            if len(positions) != len(values):
+                raise ValueError("Frame slice replacement must preserve length; use insert/extend/delete to resize")
+            replacements = [_copy_frame(frame, candidates[position]) for position, frame in zip(positions, values)]
+            candidates[index] = replacements
+        else:
+            if isinstance(index, bool):
+                raise TypeError("Frame index must be an integer, not bool")
+            candidates[index] = _copy_frame(value, candidates[index])
+        self._commit_frames(candidates)
 
     def __delitem__(self, index: Union[int, slice]) -> None:
-        if self.is_stream:
-            self.to_list()
+        self._require_materialized()
         del self._frames[index]
+        self.total_frames = len(self._frames)
 
     def append(self, frame: Detection) -> None:
-        if self.is_stream:
-            self.to_list()
-        self._frames.append(frame)
-        self.total_frames = len(self._frames)
+        self._require_materialized()
+        self._commit_frames([*self._frames, frame])
 
     def extend(self, other: Union[List[Detection], "Detections"]) -> None:
-        if self.is_stream:
-            self.to_list()
-        items = other.frames if isinstance(other, Detections) else list(other)
-        self._frames.extend(items)
-        self.total_frames = len(self._frames)
+        self._require_materialized()
+        if isinstance(other, Detections):
+            other._require_materialized()
+        self._commit_frames([*self._frames, *list(other)])
 
     def pop(self, index: int = -1) -> Detection:
-        if self.is_stream:
-            self.to_list()
-        res = self._frames.pop(index)
+        self._require_materialized()
+        result = self._frames.pop(index)
         self.total_frames = len(self._frames)
-        return res
+        return result
 
     def insert(self, index: int, frame: Detection) -> None:
-        if self.is_stream:
-            self.to_list()
-        self._frames.insert(index, frame)
-        self.total_frames = len(self._frames)
+        self._require_materialized()
+        candidates = list(self._frames)
+        candidates.insert(index, frame)
+        self._commit_frames(candidates)
+
+    def clear(self) -> None:
+        self._require_materialized()
+        self._frames.clear()
+        self.total_frames = 0
+
+    def repredict(self, model, index=None, **kwargs) -> "Detections":
+        """Atomically replace selected positions with predictions from ``model``.
+
+        Parameters
+        ----------
+        model : object
+            An object exposing callable ``predict(source, **kwargs)``.
+        index : int, list of int, tuple of int, or None
+            Collection positions, including negative indices. Duplicates are
+            removed in request order. None selects all frames.
+        **kwargs : object
+            Prediction options; streaming and frame sampling are not supported.
+
+        Returns
+        -------
+        Detections
+            This same collection, with new inference metadata and old frame identity.
+
+        Raises
+        ------
+        TypeError
+            If the model, indices, or returned detections have invalid types.
+        IndexError
+            If any position is outside the collection.
+        ValueError
+            If a stream is not explicitly materialized, a source is missing,
+            or the model returns the wrong number of frames.
+
+        Notes
+        -----
+        Predicts all selected images in request order and commits only after
+        complete validation. Empty selections are a no-op. Call to_list() on
+        finite streams explicitly; memory use grows with the number of frames.
+        The model's own remembered configuration follows its predict contract.
+        """
+        self._require_materialized()
+        if not callable(getattr(model, "predict", None)):
+            raise TypeError("model must expose a callable predict method")
+        if index is None:
+            requested = list(range(len(self._frames)))
+        elif isinstance(index, (list, tuple)):
+            requested = list(index)
+        else:
+            requested = [index]
+        positions = []
+        for position in requested:
+            validators.validate_type(position, int, "index")
+            if isinstance(position, bool):
+                raise TypeError("index must not be bool")
+            if position < 0:
+                position += len(self._frames)
+            if not 0 <= position < len(self._frames):
+                raise IndexError("repredict index out of range")
+            if position not in positions:
+                positions.append(position)
+        if any(key in kwargs for key in ("stream", "vid_stride", "max_frames")):
+            raise ValueError("repredict does not accept stream or frame-sampling controls")
+        if not positions:
+            return self
+        originals = [self._frames[position] for position in positions]
+        if any(frame.source_image is None for frame in originals):
+            raise ValueError("Every selected frame must have a source image")
+        predicted = model.predict([frame.source_image for frame in originals], **kwargs)
+        if not isinstance(predicted, (Detections, list, tuple)):
+            raise TypeError("predict must return Detections or a sequence of Detection")
+        if isinstance(predicted, Detections) and predicted.is_stream:
+            raise ValueError("repredict requires materialized prediction results")
+        predicted = list(predicted)
+        if len(predicted) != len(positions):
+            raise ValueError("predict must return exactly one Detection per selected frame")
+        candidates = list(self._frames)
+        for position, original, frame in zip(positions, originals, predicted):
+            candidates[position] = _copy_frame(frame, original)
+        self._commit_frames(candidates)
+        return self
 
     def __len__(self) -> int:
         if self.is_stream:
@@ -953,7 +1772,7 @@ class Detections:
         return len(self._frames)
 
     def to_list(self) -> List[Detection]:
-        """Chuyển toàn bộ các frame của stream thành list chuẩn trong bộ nhớ."""
+        """Materialize all stream frames into a standard in-memory list."""
         if self.is_stream:
             items = list(self)
             self._frames = items
@@ -964,8 +1783,14 @@ class Detections:
 
     def __add__(self, other: "Detections") -> "Detections":
         if not isinstance(other, Detections):
-            raise TypeError(f"Không thể cộng Detections với kiểu {type(other)}")
-        return Detections(list(self) + list(other), self.source_type, self.fps, self.output_path)
+            raise TypeError(f"Cannot concatenate Detections with type {type(other)}")
+        return Detections(
+            list(self) + list(other),
+            self.source_type,
+            self.fps,
+            self.output_path,
+            names=self.names,
+        )
 
     def __iter__(self):
         if self.is_stream:
@@ -985,12 +1810,28 @@ class Detections:
             yield from iter(self._frames)
 
     @property
+    def names(self) -> Names:
+        """Return the full canonical vocabulary, including historical classes.
+
+        For lazy streams, only consumed frames contribute. Use active_names for
+        labels referenced by current boxes; this property never consumes input.
+        """
+        return dict(sorted(self._base_names.items()))
+
+    @property
+    def active_names(self) -> Names:
+        """Return classes present in current (or already consumed) frames."""
+        target = self._stream_cache if self.is_stream else self._frames
+        active = {box.class_id for frame in target for box in frame.objects}
+        return {key: value for key, value in self.names.items() if key in active}
+
+    @property
     def total_objects(self) -> int:
         target = self._frames if not self.is_stream else self._stream_cache
         return sum(len(f) for f in target)
 
     @property
-    def unique_labels(self) -> List[str]:
+    def unique_labels(self) -> List[ClassName]:
         seen = set()
         out = []
         target = self._frames if not self.is_stream else self._stream_cache
@@ -1002,8 +1843,8 @@ class Detections:
         return out
 
     @property
-    def label_counts(self) -> Dict[str, int]:
-        counts: Dict[str, int] = {}
+    def label_counts(self) -> Dict[ClassName, int]:
+        counts: Dict[ClassName, int] = {}
         target = self._frames if not self.is_stream else self._stream_cache
         for f in target:
             for l in f.labels:
@@ -1012,7 +1853,7 @@ class Detections:
 
     @property
     def boxes(self) -> Any:
-        """Danh sách bounding boxes. Với ảnh đơn trả về list các box [x1, y1, x2, y2]."""
+        """Bounding boxes sequence across frames or for a single image."""
         if len(self) == 1:
             return self[0].boxes
         target = self._frames if not self.is_stream else self._stream_cache
@@ -1020,7 +1861,7 @@ class Detections:
 
     @property
     def labels(self) -> Any:
-        """Danh sách nhãn. Với ảnh đơn trả về list các nhãn string."""
+        """Labels sequence across frames or for a single image."""
         if len(self) == 1:
             return self[0].labels
         target = self._frames if not self.is_stream else self._stream_cache
@@ -1028,15 +1869,36 @@ class Detections:
 
     @property
     def scores(self) -> Any:
-        """Danh sách điểm tin cậy. Với ảnh đơn trả về list các score float."""
+        """Confidence scores across frames or for a single image."""
         if len(self) == 1:
             return self[0].scores
         target = self._frames if not self.is_stream else self._stream_cache
         return [f.scores for f in target]
 
     @property
+    def class_ids(self) -> Any:
+        """Class IDs sequence across frames or for a single image."""
+        if len(self) == 1:
+            return self[0].class_ids
+        target = self._frames if not self.is_stream else self._stream_cache
+        return [f.class_ids for f in target]
+
+    @property
+    def unique_class_ids(self) -> List[int]:
+        """Unique class IDs currently present in active frames."""
+        target = self._frames if not self.is_stream else self._stream_cache
+        seen = set()
+        out = []
+        for f in target:
+            for cid in f.class_ids:
+                if cid not in seen:
+                    seen.add(cid)
+                    out.append(cid)
+        return out
+
+    @property
     def url(self) -> Optional[str]:
-        """URL của ảnh (với kết quả ảnh đơn) hoặc đường dẫn xuất video."""
+        """Source image URL or exported video path."""
         if len(self) == 1:
             return self[0].url
         return self.output_path
@@ -1046,7 +1908,7 @@ class Detections:
         if len(self) == 1:
             self[0].url = new_url
         else:
-            raise ValueError("Không thể gán 1 URL duy nhất cho nhiều frame kết quả. Hãy gán url cho từng frame results[i].url = 'path'")
+            raise ValueError("Cannot assign a single URL to multiple result frames. Assign url to individual frames via results[i].url = 'path'")
 
     @property
     def count(self) -> int:
@@ -1054,12 +1916,12 @@ class Detections:
 
     @property
     def images(self) -> List[PIL.Image.Image]:
-        """CẢNH BÁO: Tạo list toàn bộ ảnh render. Sẽ tốn RAM nếu video quá dài!"""
+        """Render annotated images for all frames as an in-memory list."""
         target = self.to_list() if self.is_stream else self._frames
         return [f.plot() for f in target]
 
     def iter_images(self, **kwargs):
-        """Generator sinh ảnh đã vẽ Box từng frame một (chống tràn RAM)."""
+        """Generate annotated images frame-by-frame with bounded memory use."""
         for f in self:
             yield f.plot(**kwargs)
 
@@ -1069,9 +1931,16 @@ class Detections:
                 for f in self:
                     if fn(f):
                         yield f
-            return Detections(_gen(), self.source_type, self.fps, self.output_path, stream=True)
+            return Detections(
+                _gen(),
+                self.source_type,
+                self.fps,
+                self.output_path,
+                stream=True,
+                names=self.names,
+            )
         filtered = [f for f in self._frames if fn(f)]
-        return Detections(filtered, self.source_type, self.fps, self.output_path)
+        return Detections(filtered, self.source_type, self.fps, self.output_path, names=self.names)
 
     def sort(
         self,
@@ -1079,97 +1948,101 @@ class Detections:
         reverse: bool = True,
     ) -> "Detections":
         sort_fn = key or (lambda f: len(f))
-        return Detections(sorted(self.frames, key=sort_fn, reverse=reverse), self.source_type, self.fps, self.output_path)
+        return Detections(
+            sorted(self.frames, key=sort_fn, reverse=reverse),
+            self.source_type,
+            self.fps,
+            self.output_path,
+            names=self.names,
+        )
 
     def crop(self, output_path: Optional[str] = None, pad: int = 0) -> Crops:
         all_crops: List[Box] = []
         for f in self.frames:
             all_crops.extend(f.crop(pad=pad).crops)
-        crops_obj = Crops(all_crops, pad=pad)
+        crops_obj = Crops(all_crops, pad=pad, names=self.names)
         if output_path:
             crops_obj.export(output_path, format="classification")
         return crops_obj
 
     def export(self, output_path: str, format: str = "yolo") -> None:
-        """Xuất toàn bộ Video thành Flat YOLO Dataset hoặc JSON sử dụng klygo.files và klygo.media."""
+        """Export all frames as a flat YOLO dataset or JSON file."""
         from klygo import files, media
         if format.lower() == "yolo":
-            img_dir = os.path.join(output_path, "images")
-            lbl_dir = os.path.join(output_path, "labels")
+            img_dir = files.join(output_path, "images")
+            lbl_dir = files.join(output_path, "labels")
             files.mkdir(img_dir)
             files.mkdir(lbl_dir)
 
-            classes = sorted(self.unique_labels)
+            self._require_materialized()
+            classes = self.names
             for idx, res in enumerate(self.frames):
                 img_name = f"frame_{idx:05d}.jpg"
                 lbl_name = f"frame_{idx:05d}.txt"
-                media.save(os.path.join(img_dir, img_name), res.source_image, overwrite=True, verbose=False)
-                res.export(os.path.join(lbl_dir, lbl_name), format="yolo", classes=classes)
+                media.save(files.join(img_dir, img_name), res.source_image, overwrite=True, verbose=False)
+                res.export(files.join(lbl_dir, lbl_name), format="yolo", classes=classes)
 
-            # Ghi file data.yaml qua klygo.files.save
+            # Write data.yaml configuration via klygo.files.save
             yaml_data = {
-                "path": os.path.abspath(output_path),
+                "path": str(files.resolve(output_path)),
                 "train": "images",
                 "val": "images",
-                "names": {i: name for i, name in enumerate(classes)},
+                "names": classes,
             }
-            files.save(os.path.join(output_path, "data.yaml"), yaml_data, verbose=False)
+            files.save(files.join(output_path, "data.yaml"), yaml_data, verbose=False)
         elif format.lower() == "json":
             files.save(output_path, self.to_dict(), verbose=False)
 
     def save(self, output_path: str, fps: Optional[float] = None, **kwargs) -> str:
-        """Lưu toàn bộ video hoặc thư mục ảnh thành phẩm đã vẽ Bounding Box."""
+        """Save annotated video or image folder with rendered bounding boxes."""
         target_fps = fps if fps is not None else self.fps
         p_str = str(output_path).lower()
         is_video = p_str.endswith((".mp4", ".avi", ".mov", ".mkv", ".webm"))
 
         if self.source_type == "video" or is_video:
-            final_path = output_path if is_video else os.path.join(output_path, "annotated_video.mp4")
-            # Sử dụng iter_images (Generator) thay vì self.images (List) để chống OOM RAM.
+            final_path = output_path if is_video else str(files.join(output_path, "annotated_video.mp4"))
+            # Use iter_images generator instead of self.images to bound memory consumption.
             media.save_video(final_path, self.iter_images(**kwargs), fps=target_fps, overwrite=True, verbose=False)
             self.output_path = final_path
             return final_path
         else:
             files.mkdir(output_path)
             for idx, res in enumerate(self.frames, 1):
-                img_path = os.path.join(output_path, f"annotated_{idx:05d}.jpg")
+                img_path = files.join(output_path, f"annotated_{idx:05d}.jpg")
                 res.save(img_path, **kwargs)
             self.output_path = output_path
             return output_path
 
     def draw(self, **kwargs) -> List[PIL.Image.Image]:
-        """Vẽ bounding box lên tất cả các frame và trả về danh sách ảnh PIL."""
+        """Draw bounding boxes onto all frames and return a list of PIL images."""
         return [f.draw(**kwargs) for f in self.frames]
 
     def plot(self, **kwargs) -> Union[PIL.Image.Image, List[PIL.Image.Image]]:
-        """Vẽ bounding box lên ảnh. Với ảnh đơn trả về PIL Image, với video/danh sách trả về List."""
+        """Render bounding boxes onto image(s). Returns a single Image or a list."""
         if len(self) == 1:
             return self[0].plot(**kwargs)
         return [f.plot(**kwargs) for f in self.frames]
 
     def to_array(self, bgr: bool = False, annotated: bool = True, **kwargs) -> Union[np.ndarray, List[np.ndarray]]:
-        """
-        Chuyển đổi ảnh thành mảng NumPy ndarray.
-        - Với ảnh đơn: Trả về trực tiếp mảng np.ndarray dạng [H, W, C].
-        - Với nhiều frame/video: Trả về danh sách các mảng np.ndarray.
-        - bgr=True: Chuyển sang hệ màu BGR chuẩn OpenCV để đưa thẳng vào cv2.imshow / cv2.imwrite.
-        - annotated=True (mặc định): Trả về ảnh đã vẽ Bounding Box.
-        - annotated=False: Trả về ảnh gốc dạng ndarray.
+        """Convert images to NumPy ndarray representations.
+
+        Returns a single [H, W, C] array for a single image, or a list of arrays
+        for multi-frame results.
         """
         if len(self) == 1:
             return self[0].to_array(bgr=bgr, annotated=annotated, **kwargs)
         return [f.to_array(bgr=bgr, annotated=annotated, **kwargs) for f in self]
 
     def to_numpy(self, bgr: bool = False, annotated: bool = True, **kwargs) -> Union[np.ndarray, List[np.ndarray]]:
-        """Alias cho to_array()."""
+        """Alias for to_array()."""
         return self.to_array(bgr=bgr, annotated=annotated, **kwargs)
 
     def to_bgr(self, annotated: bool = True, **kwargs) -> Union[np.ndarray, List[np.ndarray]]:
-        """Trả về mảng NumPy hệ màu BGR chuẩn OpenCV để hiển thị trực tiếp bằng cv2.imshow."""
+        """Return BGR NumPy array for direct use with cv2.imshow."""
         return self.to_array(bgr=True, annotated=annotated, **kwargs)
 
     def __array__(self, dtype=None) -> np.ndarray:
-        """Hỗ trợ tự động chuyển đổi khi gọi np.array(results)."""
+        """Support automatic conversion via np.array(results)."""
         if len(self) == 1:
             return self[0].__array__(dtype=dtype)
         arr_list = [f.to_array(annotated=True) for f in self]
@@ -1183,7 +2056,7 @@ class Detections:
         return res
 
     def show(self, limit: Optional[int] = 5) -> None:
-        """Xem trước các frame đầu tiên bằng klygo.visual.show_image."""
+        """Display previews of initial frames via klygo.visual.show_image."""
         if self.is_stream:
             display_items = []
             max_cnt = limit if limit is not None else 5
@@ -1198,7 +2071,7 @@ class Detections:
             res.show()
 
     def to_dict(self) -> Dict[str, Any]:
-        """Xuất cấu trúc Key-Value chuẩn toàn bộ video."""
+        """Export standardized collection metadata and frame detections as a dictionary."""
         return {
             "source_type": self.source_type,
             "total_frames": len(self),
@@ -1210,7 +2083,11 @@ class Detections:
         }
 
     def close(self) -> None:
-        """Giải phóng toàn bộ tài nguyên VideoReader / OpenCV nếu có."""
+        """Close a pending iterator and owned frame resources."""
+        iterator = getattr(self, "_iterator", None)
+        close = getattr(iterator, "close", None)
+        if callable(close):
+            close()
         for f in (getattr(self, "_frames", []) or []):
             if hasattr(f, "close"):
                 f.close()
@@ -1235,7 +2112,7 @@ class Detections:
 
 
 # =============================================================================
-# ALIASES TƯƠNG THÍCH NGƯỢC
+# BACKWARD-COMPATIBLE ALIASES
 # =============================================================================
 CropResult = Box
 DetectedObject = Box
@@ -1245,3 +2122,9 @@ CropResults = Crops
 DetectionResult = Detection
 DetectionResults = Detections
 PreviewResult = Detections
+
+__all__ = [
+    "build_detections", "Box", "Crops", "Detection", "Detections",
+    "CropResult", "DetectedObject", "CroppedObject", "Boxes",
+    "CropResults", "DetectionResult", "DetectionResults", "PreviewResult",
+]
