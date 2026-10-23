@@ -1,5 +1,7 @@
 # Klygo
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/IchigoMazone/klygo)
+
 Klygo is a composable Python toolkit for files, archives, configuration,
 media, datasets, and object-detection workflows. It provides small public APIs
 that can be used independently and shared result types that let the modules
