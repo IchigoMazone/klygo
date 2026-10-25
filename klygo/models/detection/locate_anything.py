@@ -302,7 +302,7 @@ class LocateAnythingDetect(Detector):
         )
 
         for frame, answers in zip(frames, raw_answers):
-            frame.config["raw_answers"] = answers
+            frame.metadata["raw_answers"] = answers
             for box in frame:
                 box.metadata.update(score_kind="presence_only", native_score=None)
 

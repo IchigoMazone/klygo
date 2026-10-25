@@ -1,82 +1,63 @@
-"""Composable, lazy-safe operations for normalized Klygo detection results."""
-
-from __future__ import annotations
-
+"""Composable in-place operations for detection results."""
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Iterator, Optional
 
-
 @dataclass(frozen=True)
 class Operation:
-    """A named transformation applied to one ``Detection``."""
-
+    """Name one in-place result operation."""
     name: str
-    function: Callable[[Any], Any]
-
-    def __call__(self, result: Any) -> Any:
-        return self.function(result)
-
-    def __repr__(self) -> str:
-        return f"Operation({self.name})"
-
+    function: Callable[[Any], None]
+    def __call__(self, result: Any) -> None:
+        self.function(result)
 
 class Pipeline:
-    """Ordered result transformations; video streams remain lazy."""
-
-    def __init__(self, operations: Iterable[Callable[[Any], Any]]) -> None:
-        flattened = []
+    """Apply ordered operations to the same result object."""
+    def __init__(self, operations: Iterable[Callable[[Any], None]]) -> None:
+        items = []
         for operation in operations:
-            if isinstance(operation, Pipeline):
-                flattened.extend(operation.operations)
-            elif callable(operation):
-                flattened.append(operation)
-            else:
-                raise TypeError("Every postprocessing operation must be callable")
-        self.operations = tuple(flattened)
-
-    def _apply_detection(self, result: Any) -> Any:
-        current = result
-        for operation in self.operations:
-            current = operation(current)
-        return current
-
-    def __call__(self, result: Any) -> Any:
-        from klygo.outputs.detect import Detections
-
+            if isinstance(operation, Pipeline): items.extend(operation.operations)
+            elif callable(operation): items.append(operation)
+            else: raise TypeError("Every postprocessing operation must be callable")
+        self.operations = tuple(items)
+    def __call__(self, result: Any) -> None:
+        if not self.operations:
+            return
+        from klygo.outputs import Detection, Detections
+        if isinstance(result, Detection):
+            draft = result._clone()
+            for operation in self.operations:
+                operation(draft)
+            result._registry = dict(draft._registry)
+            result._commit([box._clone() for box in draft], "pipeline")
+            return
         if isinstance(result, Detections):
-            return result.map(self._apply_detection)
-        return self._apply_detection(result)
+            draft = Detections(
+                [frame._clone() for frame in result],
+                metadata=result.metadata,
+                names=result._registry,
+            )
+            for operation in self.operations:
+                operation(draft)
+            result._registry = dict(draft._registry)
+            result._commit([frame._clone() for frame in draft], "pipeline")
+            return
+        for operation in self.operations:
+            operation(result)
+    def __iter__(self) -> Iterator[Callable[[Any], None]]: return iter(self.operations)
+    def __len__(self) -> int: return len(self.operations)
 
-    def __iter__(self) -> Iterator[Callable[[Any], Any]]:
-        return iter(self.operations)
-
-    def __len__(self) -> int:
-        return len(self.operations)
-
-    def __repr__(self) -> str:
-        names = [getattr(item, "name", getattr(item, "__name__", type(item).__name__)) for item in self.operations]
-        return f"Pipeline({', '.join(names)})"
-
-
-def compose(*operations: Callable[[Any], Any]) -> Pipeline:
-    """Build a reusable pipeline from variadic callables or one iterable."""
-    if len(operations) == 1 and not callable(operations[0]):
-        operations = tuple(operations[0])
+def compose(*operations: Callable[[Any], None]) -> Pipeline:
+    """Build an in-place pipeline."""
+    if len(operations) == 1 and not callable(operations[0]): operations = tuple(operations[0])
     return Pipeline(operations)
 
+def apply(result: Any, *operations: Callable[[Any], None]) -> None:
+    """Apply operations to one result object."""
+    compose(*operations)(result)
 
-def apply(result: Any, *operations: Callable[[Any], Any]) -> Any:
-    """Apply one or more operations to ``Detection`` or ``Detections``."""
-    if not operations:
-        return result
-    return compose(*operations)(result)
-
-
-def custom(function: Callable[[Any], Any], name: Optional[str] = None) -> Operation:
-    """Wrap an ordinary Python callable as a named operation."""
-    if not callable(function):
-        raise TypeError("function must be callable")
+def custom(function: Callable[[Any], None], name: Optional[str] = None) -> Operation:
+    """Wrap a custom in-place operation."""
+    if not callable(function): raise TypeError("function must be callable")
     return Operation(name or getattr(function, "__name__", "custom"), function)
-
 
 __all__ = ["Operation", "Pipeline", "compose", "apply", "custom"]

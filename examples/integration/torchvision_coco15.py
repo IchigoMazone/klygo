@@ -62,7 +62,7 @@ def evaluate(dataset_root=None, artifact_root=None):
     if not set(CLASSES).issubset(set(metadata.names)):
         raise ValueError("COCO15 class map does not include the assigned classes")
     truth = datasets.load(dataset_root, format="yolo", verbose=False)
-    by_id = {files.stem(frame.config["relative_path"]): frame for frame in truth}
+    by_id = {files.stem(frame.metadata["relative_path"]): frame for frame in truth}
     architecture = "ssdlite320_mobilenet_v3_large"
     weights = get_model_weights(architecture).COCO_V1
     module = get_model(architecture, weights=weights, weights_backbone=None)
@@ -72,23 +72,23 @@ def evaluate(dataset_root=None, artifact_root=None):
     try:
         for label in CLASSES:
             positive = next(key for key, frame in sorted(by_id.items())
-                            if any(box.label == label for box in frame.objects))
+                            if any(box.label == label for box in frame))
             negative = next(key for key, frame in sorted(by_id.items())
-                            if all(box.label != label for box in frame.objects))
+                            if all(box.label != label for box in frame))
             for image_id in (positive, negative):
                 image = media.load(files.join(dataset_root, "images", f"{image_id}.jpg"), verbose=False)[0]
                 prepared = preprocessing.auto_orient()(image)
                 predicted = model.predict(prepared, prompt=label, verbose=False)[0]
                 if not isinstance(predicted, outputs.detect.Detection):
                     raise TypeError("Torchvision did not return a Klygo Detection")
-                predicted = postprocessing.apply(
+                postprocessing.apply(
                     predicted, postprocessing.threshold(0.25), postprocessing.nms(0.5)
                 )
-                predicted = postprocessing.select(predicted, labels=[label])
-                actual = [box for box in by_id[image_id].objects if box.label == label]
+                postprocessing.select(predicted, labels=[label])
+                actual = [box for box in by_id[image_id] if box.label == label]
                 unmatched = set(range(len(actual)))
                 tp = fp = 0
-                for box in sorted(predicted.objects, key=lambda item: item.score, reverse=True):
+                for box in sorted(predicted, key=lambda item: item.score, reverse=True):
                     overlap, index = max(
                         ((postprocessing.box_iou(box, actual[i]), i) for i in unmatched),
                         default=(0.0, -1),

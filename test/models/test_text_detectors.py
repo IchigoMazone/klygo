@@ -88,8 +88,8 @@ class TestGroundingDino(unittest.TestCase):
         self.model(self.image, prompt="bird", threshold=.7, verbose=False)
         self.assertEqual([item.labels for item in stream], [["dog"], ["dog"]])
         self.assertEqual(self.model.names, {0: "bird"})
-        self.assertEqual(first[0].text_prompt, ["dog", "cat"])
-        self.assertEqual(first[0].threshold, .5)
+        self.assertEqual(first[0].metadata["prompt"], ["dog", "cat"])
+        self.assertEqual(first[0].metadata["threshold"], .5)
 
     def test_missing_prompt_clear_and_reset_have_explicit_errors(self):
         with self.assertRaisesRegex(ValueError, "requires"):
@@ -139,19 +139,19 @@ class TestLocateAnything(unittest.TestCase):
         self.assertEqual(self.loader.call_args.kwargs["revision"], "c32291ca5e996f5a7a485845b4f57a233936bba0")
         image = Image.new("RGB", (200, 100))
         result = model(image, prompt=["person", "car"], verbose=False)[0]
-        self.assertEqual(result.boxes, [[20., 20., 140., 80.]] * 2)
+        self.assertEqual(result.boxes, [(20., 20., 140., 80.)] * 2)
         self.assertEqual(result.labels, ["person", "car"])
-        self.assertFalse(result.config["confidence_available"])
+        self.assertFalse(result.metadata["confidence_available"])
         self.assertEqual(result[0].metadata["score_kind"], "presence_only")
         self.assertIsNone(result[0].metadata["native_score"])
         for call in self.native.generation:
             self.assertTrue(call["use_cache"])
             self.assertEqual(call["input_ids"].dtype, torch.int64)
         self.assertIn("person.", self.processor.calls[0]["text"][0])
-        before = deepcopy(result.config)
+        before = deepcopy(result.metadata)
         model(image, max_new_tokens=32, verbose=False)
         self.assertEqual(model.predict_config["max_new_tokens"], 32)
-        self.assertEqual(result.config, before)
+        self.assertEqual(result.metadata, before)
 
     def test_empty_malformed_coordinates_and_options(self):
         model = self.make_model()

@@ -4,56 +4,39 @@
 postprocessing.threshold(minimum)
 ```
 
-Build a named [`Operation`](Operation.md) that keeps boxes whose confidence score is at least `minimum`.
-
-## Contract
-
-Returns `Operation("threshold", lambda result: filter_score(result, minimum))`, which wraps [`postprocessing.filter_score()`](filter_score.md) for declarative use inside [`compose()`](compose.md), [`Pipeline`](Pipeline.md), or [`apply()`](apply.md):
-- Calling the returned `Operation` on a `Detection`, `Detections`, or `Crops` retains all boxes with `box.score >= float(minimum)` without mutating the input.
-- When included in a [`Pipeline`](Pipeline.md) and applied to a `Detections` stream, the threshold operation is attached lazily via `Detections.map(...)`.
-
-## Parameters
-
-- `minimum`: `float` — inclusive minimum confidence score required for a box to be retained.
+Creates an `Operation` that applies `filter_score`.
 
 ## Returns
 
-`Operation` — frozen `Operation(threshold)` callable.
+`Operation`.
 
-## Errors and edge cases
+## Errors
 
-Raises `TypeError` or `ValueError` when invoked if `minimum` cannot be converted to `float`, or `TypeError("result must be Crops, Detection, or Detections")` if the target `result` is not a supported detection container.
+Raises `TypeError` for unsupported result or argument types. Numeric operations raise `ValueError` when a limit is outside its documented range. Mutation is validated before commit.
 
 ## Example
 
-See [`threshold.py`](../../../examples/postprocessing/threshold.py) for a standalone runnable script.
-
-## Complete executable example
+See [`threshold.py`](../../../examples/postprocessing/threshold.py).
 
 ```python
-"""Create a reusable score-threshold Operation and use it standalone or in a Pipeline."""
+from klygo import outputs, postprocessing as post
 
-from PIL import Image
-from klygo import postprocessing as post
-from klygo.outputs.detect import Box, Detection
-
-image = Image.new("RGB", (100, 80), "white")
-frame = Detection(
-    image,
+frame = outputs.Detection(
     [
-        Box(0, "cat", 0.9, [-5, 0, 50, 50]),
-        Box(0, "cat", 0.8, [0, 0, 48, 48]),
-        Box(1, "dog", 0.4, [60, 10, 90, 60]),
+        outputs.Box([-2, 0, 30, 30], label="cat", score=0.9, class_id=0),
+        outputs.Box([0, 0, 28, 28], label="cat", score=0.8, class_id=0),
+        outputs.Box([32, 5, 48, 35], label="dog", score=0.4, class_id=1),
     ],
+    source_id="example",
+    image_size=(50, 40),
+    names={0: "cat", 1: "dog"},
 )
 
-step = post.threshold(0.5)
-assert isinstance(step, post.Operation) and step.name == "threshold"
-
-filtered = step(frame)
-assert filtered.labels == ["cat", "cat"]
-
-pipeline = post.compose(step, post.top(1))
-assert pipeline(frame).labels == ["cat"]
-print(filtered.labels)
+operation = post.threshold(0.5)
+operation(frame)
+print(frame.labels)
 ```
+
+## Tests
+
+See [`test_postprocessing.py`](../../../test/postprocessing/test_postprocessing.py).

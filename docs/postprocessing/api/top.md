@@ -4,57 +4,39 @@
 postprocessing.top(count)
 ```
 
-Build a named [`Operation`](Operation.md) that retains at most the highest-scoring `count` boxes per frame.
-
-## Contract
-
-Returns `Operation("top", lambda result: top_boxes(result, count))`, wrapping [`postprocessing.top_boxes()`](top_boxes.md) as a composable pipeline stage for [`compose()`](compose.md), [`Pipeline`](Pipeline.md), and [`apply()`](apply.md):
-- Sorts each frame's boxes by descending `box.score` and keeps at most `int(count)` boxes.
-- Typically placed at the end of a postprocessing pipeline (after [`clip()`](clip.md), [`remove_invalid()`](remove_invalid.md), [`threshold()`](threshold.md), and [`nms()`](nms.md)) to cap the maximum number of detections emitted per frame.
-
-## Parameters
-
-- `count`: `int` — non-negative maximum number of highest-scoring boxes to retain per frame.
+Creates an `Operation` that applies `top_boxes`.
 
 ## Returns
 
-`Operation` — frozen `Operation(top)` callable.
+`Operation`.
 
-## Errors and edge cases
+## Errors
 
-Raises `ValueError("count must be greater than or equal to 0")` when invoked if `int(count) < 0`, or `TypeError("result must be Crops, Detection, or Detections")` if the target `result` is not a supported detection container.
+Raises `TypeError` for unsupported result or argument types. Numeric operations raise `ValueError` when a limit is outside its documented range. Mutation is validated before commit.
 
 ## Example
 
-See [`top.py`](../../../examples/postprocessing/top.py) for a standalone runnable script.
-
-## Complete executable example
+See [`top.py`](../../../examples/postprocessing/top.py).
 
 ```python
-"""Build a top-K Operation and combine it with threshold and NMS stages."""
+from klygo import outputs, postprocessing as post
 
-from PIL import Image
-from klygo import postprocessing as post
-from klygo.outputs.detect import Box, Detection
-
-image = Image.new("RGB", (100, 80), "white")
-frame = Detection(
-    image,
+frame = outputs.Detection(
     [
-        Box(0, "cat", 0.9, [-5, 0, 50, 50]),
-        Box(0, "cat", 0.8, [0, 0, 48, 48]),
-        Box(1, "dog", 0.4, [60, 10, 90, 60]),
+        outputs.Box([-2, 0, 30, 30], label="cat", score=0.9, class_id=0),
+        outputs.Box([0, 0, 28, 28], label="cat", score=0.8, class_id=0),
+        outputs.Box([32, 5, 48, 35], label="dog", score=0.4, class_id=1),
     ],
+    source_id="example",
+    image_size=(50, 40),
+    names={0: "cat", 1: "dog"},
 )
 
-top_two = post.top(2)
-assert isinstance(top_two, post.Operation) and top_two.name == "top"
-
-result = top_two(frame)
-assert result.labels == ["cat", "cat"]
-assert [b.score for b in result] == [0.9, 0.8]
-
-pipeline = post.compose(post.clip(), post.nms(0.5), post.top(1))
-assert pipeline(frame).labels == ["cat"]
-print(result.labels)
+operation = post.top(1)
+operation(frame)
+print(frame.labels)
 ```
+
+## Tests
+
+See [`test_postprocessing.py`](../../../test/postprocessing/test_postprocessing.py).

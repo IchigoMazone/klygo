@@ -48,15 +48,15 @@ class TestCOCO15Workflow(unittest.TestCase):
         results = datasets.load(DATASET, format="yolo", verbose=False)
         self.assertEqual(len(results), 128)
         self.assertEqual(
-            sum(len(frame.objects) for frame in results),
+            sum(len(frame) for frame in results),
             sum(item["boxes"] for item in self.manifest["classes"]),
         )
         self.assertEqual(
-            {box.label for frame in results for box in frame.objects},
+            {box.label for frame in results for box in frame},
             {name for _, name in CLASSES},
         )
         self.assertEqual(
-            {box.metadata["class_id"] for frame in results for box in frame.objects},
+            {box.metadata["class_id"] for frame in results for box in frame},
             set(range(15)),
         )
 

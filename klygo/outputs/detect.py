@@ -1,2130 +1,803 @@
-"""Represent one box, one image, or a sequence of detection results."""
+"""Three-level object-detection result containers."""
 
-import os
-import datetime
-import uuid
+from __future__ import annotations
+
 from copy import deepcopy
-from typing import List, Dict, Any, Optional, Union, Callable, Iterable, Mapping, Sequence
-import PIL.Image
-import numpy as np
+from hashlib import sha1
+import math
+import uuid
+from typing import Any, Callable, Iterable, Iterator, Mapping, Optional, Sequence
 
-from klygo import files, media, visual, validators
+from klygo import files, validators
 
-
-ClassName = Optional[str]
-Names = Dict[int, ClassName]
-
-
-def _normalize_label(value: Any) -> ClassName:
-    """Return a clean class name, using ``None`` for blank labels."""
-    if value is None:
-        return None
-    label = str(value).strip()
-    return label or None
+Names = dict[int, str]
+Identity = tuple[str, int]
 
 
-def _normalize_names(value: Optional[Union[Mapping[int, Any], Sequence[Any]]]) -> Names:
-    """Normalize a mapping or sequence into an integer-keyed class registry."""
+def _label(value: Any) -> str:
+    result = "" if value is None else str(value).strip()
+    if not result:
+        raise ValueError("label must be a non-empty string")
+    return result
+
+
+def _score(value: Any) -> float:
+    result = float(value)
+    if not math.isfinite(result) or not 0 <= result <= 1:
+        raise ValueError("score must be a finite number between 0 and 1")
+    return result
+
+
+def _coords(value: Iterable[Any]) -> tuple[float, float, float, float]:
+    try:
+        result = tuple(float(item) for item in value)
+    except (TypeError, ValueError) as error:
+        raise TypeError("box must contain four numeric coordinates") from error
+    if len(result) != 4:
+        raise ValueError("box must contain exactly four coordinates")
+    if not all(math.isfinite(item) for item in result):
+        raise ValueError("box coordinates must be finite")
+    if result[2] <= result[0] or result[3] <= result[1]:
+        raise ValueError("box must have positive width and height")
+    return result
+
+
+def _size(value: Any) -> tuple[int, int]:
+    try:
+        width, height = value
+    except (TypeError, ValueError) as error:
+        raise TypeError("image_size must contain width and height") from error
+    if isinstance(width, bool) or isinstance(height, bool):
+        raise TypeError("image_size values must be integers")
+    result = int(width), int(height)
+    if min(result) <= 0:
+        raise ValueError("image_size values must be positive")
+    return result
+
+
+def _names(value: Optional[Mapping[int, Any] | Sequence[Any]]) -> Names:
     if value is None:
         return {}
     items = value.items() if isinstance(value, Mapping) else enumerate(value)
-    return {int(class_id): _normalize_label(label) for class_id, label in items}
+    result = {}
+    for key, value in items:
+        if isinstance(key, bool) or int(key) < 0:
+            raise ValueError("class IDs must be non-negative integers")
+        result[int(key)] = _label(value)
+    return result
 
 
-def _next_class_id(names: Mapping[int, ClassName]) -> int:
-    return max(names, default=-1) + 1
+def _source(source: Any, source_id: Optional[str]) -> tuple[str, Optional[str]]:
+    path = getattr(source, "path", None) or getattr(source, "filename", None)
+    source_path = str(path) if path else None
+    if source_id is not None:
+        result = str(source_id).strip()
+        if not result:
+            raise ValueError("source_id must be a non-empty string")
+        return result, source_path
+    if source_path:
+        return files.as_posix(files.resolve(source_path)), source_path
+    return f"memory:{uuid.uuid4().hex}", None
 
 
-def _class_id_for_label(names: Names, label: ClassName) -> int:
-    for class_id, known_label in names.items():
-        if known_label == label:
-            return class_id
-    class_id = _next_class_id(names)
-    names[class_id] = label
-    return class_id
-
-
-def _subset_names(objects: Iterable["Box"], names: Mapping[int, ClassName]) -> Names:
-    class_ids = {item.class_id for item in objects}
-    return {class_id: names.get(class_id) for class_id in sorted(class_ids)}
-
-
-def _register_box(names: Names, item: "Box") -> None:
-    """Register a box class, remapping label edits without changing box identity."""
-    native_id = item.class_id
-    if not item._class_id_explicit or (native_id in names and names[native_id] != item.label):
-        item.class_id = _class_id_for_label(names, item.label)
-    else:
-        names.setdefault(native_id, item.label)
-    if native_id != item.class_id:
-        item.metadata.setdefault("native_class_id", native_id)
-    item.metadata["class_id"] = item.class_id
-    item._class_id_explicit = True
-
-
-def _canonical_id(names: Names, label: ClassName, preferred=None) -> int:
-    for class_id, existing in names.items():
-        if existing == label:
-            return class_id
-    if preferred is not None:
-        validators.validate_type(preferred, int, "class_id")
-        if isinstance(preferred, bool) or preferred < 0:
-            raise ValueError("class_id must be a non-negative integer")
-    class_id = preferred if preferred is not None and preferred not in names else _next_class_id(names)
-    names[class_id] = label
-    return class_id
-
-
-def _copy_frame(frame: "Detection", original=None) -> "Detection":
-    validators.validate_type(frame, Detection, "frame")
-    source = frame.source_image if original is None else original.source_image
-    copied = Detection(source, [box._copy(parent_image=source) for box in frame.objects],
-                       speed=deepcopy(frame.speed), image_frame_index=frame.image_frame_index,
-                       config=deepcopy(frame.config), names=frame._all_names)
-    copied.frame_index = frame.frame_index
-    copied.timestamp = frame.timestamp
-    copied._source_path, copied._url = frame.source_path, frame.url
-    if original is not None:
-        copied.frame_index, copied.image_frame_index = original.frame_index, original.image_frame_index
-        copied._source_path, copied._url = original.source_path, original.url
-        copied.config.update(frame_index=original.frame_index, image_frame_index=original.image_frame_index,
-                             source_path=original.source_path)
-    return copied
-
-
-def _stage_frames(frames, registry, owner):
-    """Validate and reconcile without changing caller-owned frames or registries."""
-    staged = []
-    for frame in frames:
-        validators.validate_type(frame, Detection, "frame")
-        for class_id, label in frame._all_names.items():
-            _canonical_id(registry, label, class_id)
-        ids = []
-        for box in frame.objects:
-            validators.validate_type(box, Box, "box")
-            ids.append(_canonical_id(registry, box.label, box.class_id))
-        owned = getattr(frame, "_collection_registry", None)
-        if (owned is not None and owned is not owner) or any(box.class_id != cid for box, cid in zip(frame.objects, ids)):
-            frame = _copy_frame(frame)
-            for box, class_id in zip(frame.objects, ids):
-                if box.class_id != class_id:
-                    box.metadata.setdefault("native_class_id", box.class_id)
-                box.class_id = class_id
-                box.metadata["class_id"] = class_id
-        staged.append(frame)
-    return staged
-
-
-def _plain_list(value: Any, name: str) -> list[Any]:
-    """Convert tensor-like prediction fields to ordinary Python lists."""
-    if hasattr(value, "detach"):
-        value = value.detach()
-    if hasattr(value, "cpu"):
-        value = value.cpu()
+def _list(value: Any, name: str) -> list[Any]:
+    for method in ("detach", "cpu"):
+        if hasattr(value, method):
+            value = getattr(value, method)()
     if hasattr(value, "tolist"):
         value = value.tolist()
     try:
         return list(value)
-    except TypeError as exc:
-        raise TypeError(f"prediction {name!r} must be a sequence") from exc
+    except TypeError as error:
+        raise TypeError(f"{name} must be a sequence") from error
 
 
-def build_detections(
-    images: Sequence[Any],
-    predictions: Sequence[Mapping[str, Any]],
-    *,
-    metadata: Optional[Mapping[str, Any]] = None,
-    names: Optional[Union[Mapping[int, Any], Sequence[Any]]] = None,
-) -> List["Detection"]:
-    """Build one :class:`Detection` per image from normalized predictions.
-
-    Each prediction must provide equally sized ``boxes``, ``scores``, and
-    ``labels`` sequences. Optional ``class_ids`` become ``Box.class_id`` values;
-    ``Box.id`` always identifies a box within its frame. Labels missing from
-    ``names`` are appended to the result registry in first-seen order.
-    """
-    image_list = list(images)
-    prediction_list = list(predictions)
-    if len(image_list) != len(prediction_list):
-        raise ValueError("images and predictions must have the same length")
-    if metadata is not None and not isinstance(metadata, Mapping):
-        raise TypeError("metadata must be a mapping or None")
-
-    registry = _normalize_names(names)
-    results: List[Detection] = []
-    for image, prediction in zip(image_list, prediction_list):
-        if not isinstance(prediction, Mapping):
-            raise TypeError("each prediction must be a mapping")
-        boxes = _plain_list(prediction.get("boxes", []), "boxes")
-        scores = _plain_list(prediction.get("scores", []), "scores")
-        labels_value = prediction.get("text_labels", prediction.get("labels", []))
-        labels = _plain_list(labels_value, "labels")
-        class_ids_value = prediction.get("class_ids")
-        class_ids = None if class_ids_value is None else _plain_list(class_ids_value, "class_ids")
-
-        lengths = {len(boxes), len(scores), len(labels)}
-        if len(lengths) != 1:
-            raise ValueError("prediction boxes, scores, and labels must have the same length")
-        if class_ids is not None and len(class_ids) != len(boxes):
-            raise ValueError("prediction class_ids must match the number of boxes")
-
-        objects = []
-        for index, (coordinates, score, label) in enumerate(zip(boxes, scores, labels)):
-            coordinates = _plain_list(coordinates, "box")
-            if len(coordinates) != 4:
-                raise ValueError("each prediction box must contain four coordinates")
-            label_text = _normalize_label(label)
-            if class_ids is None:
-                class_id = _class_id_for_label(registry, label_text)
-            else:
-                raw_class_id = class_ids[index]
-                if hasattr(raw_class_id, "item"):
-                    raw_class_id = raw_class_id.item()
-                class_id = int(raw_class_id)
-                if class_id not in registry:
-                    registry[class_id] = label_text
-                elif registry[class_id] != label_text:
-                    raise ValueError(
-                        f"class ID {class_id} maps to both "
-                        f"{registry[class_id]!r} and {label_text!r}"
-                    )
-            if hasattr(score, "item"):
-                score = score.item()
-            objects.append(
-                Box(
-                    id=index,
-                    class_id=class_id,
-                    label=label_text,
-                    score=round(float(score), 3),
-                    box=[round(float(value), 2) for value in coordinates],
-                    parent_image=image,
-                )
-            )
-        results.append(
-            Detection(
-                source_image=image,
-                objects=objects,
-                config=deepcopy(dict(metadata or {})),
-                names=registry,
-            )
-        )
-    for result in results:
-        result._all_names = dict(registry)
-    return results
-
-
-# =============================================================================
-# 1. ATOMIC ENTITY: Box - Single bounding box detection
-# =============================================================================
 class Box:
-    """Represent one detected object and its optional lazy image crop.
+    """Represent one mutable object annotation with stable frame-local identity."""
 
-    Parameters
-    ----------
-    id : int
-        Frame-local box ID.
-    label : str or None
-        Human-readable class label.
-    score : float
-        Confidence score.
-    box : list of float
-        Pixel coordinates in XYXY order.
-    parent_image : PIL.Image.Image, optional
-        Source image for lazy cropping.
-    pad : int
-        Crop padding in pixels.
-    uid : str, optional
-        Stable object identifier; generated when omitted.
-    metadata : dict, optional
-        Extra object attributes.
-    class_id : int, optional
-        Class ID used to look up ``label`` in a result's ``names`` mapping.
-    """
+    def __init__(self, box: Iterable[Any], *, label: str, score: float = 1.0,
+                 class_id: Optional[int] = None, uid: Optional[int] = None,
+                 track_id: Optional[int | str] = None,
+                 metadata: Optional[Mapping[str, Any]] = None) -> None:
+        self._owner: Optional[Detection] = None
+        self._uid = self._integer(uid, "uid")
+        self._class_id = self._integer(class_id, "class_id")
+        self._label = _label(label)
+        self._score = _score(score)
+        self._box = _coords(box)
+        self._track_id = self._track(track_id)
+        if metadata is not None and not isinstance(metadata, Mapping):
+            raise TypeError("metadata must be a mapping or None")
+        self._metadata = deepcopy(dict(metadata or {}))
 
-    def __init__(
-        self,
-        id: int,
-        label: ClassName,
-        score: float,
-        box: List[float],
-        parent_image: Optional[PIL.Image.Image] = None,
-        pad: int = 0,
-        uid: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        *,
-        class_id: Optional[int] = None,
-    ) -> None:
-        self.id = int(id)
-        supplied_metadata = dict(metadata or {})
-        self._class_id_explicit = class_id is not None or "class_id" in supplied_metadata
-        self.metadata = supplied_metadata
-        legacy_class_id = self.metadata.get("class_id", id)
-        self.class_id = int(legacy_class_id if class_id is None else class_id)
-        self.metadata["class_id"] = self.class_id
-        self.label = _normalize_label(label)
-        self.score = float(score)
-        self.box = [float(x) for x in box]  # [xmin, ymin, xmax, ymax]
-        self.parent_image = parent_image
-        self.pad = int(pad)
-        self.uid = str(uid or uuid.uuid4().hex)
-
-    def _copy(self, **changes: Any) -> "Box":
-        values = {
-            "id": self.id,
-            "class_id": self.class_id,
-            "label": self.label,
-            "score": self.score,
-            "box": list(self.box),
-            "parent_image": self.parent_image,
-            "pad": self.pad,
-            "uid": self.uid,
-            "metadata": deepcopy(self.metadata),
-        }
-        values.update(changes)
-        return Box(**values)
-
-    @property
-    def image(self) -> Optional[PIL.Image.Image]:
-        """Crop sub-image from parent image using bounding box pixel coordinates."""
-        if self.parent_image is None:
+    @staticmethod
+    def _integer(value: Optional[int], name: str) -> Optional[int]:
+        if value is None:
             return None
-        w, h = self.parent_image.size
-        x1 = max(0, int(self.box[0] - self.pad))
-        y1 = max(0, int(self.box[1] - self.pad))
-        x2 = min(w, int(self.box[2] + self.pad))
-        y2 = min(h, int(self.box[3] + self.pad))
-        if x2 <= x1 or y2 <= y1:
-            return None
-        return self.parent_image.crop((x1, y1, x2, y2))
-
-    @property
-    def width(self) -> float:
-        """Bounding box pixel width."""
-        return max(0.0, self.box[2] - self.box[0])
-
-    @property
-    def height(self) -> float:
-        """Bounding box pixel height."""
-        return max(0.0, self.box[3] - self.box[1])
-
-    @property
-    def area(self) -> float:
-        """Bounding box pixel area (width * height)."""
-        return self.width * self.height
-
-    @property
-    def aspect_ratio(self) -> float:
-        """Bounding box aspect ratio (width / height)."""
-        return round(self.width / max(1.0, self.height), 4)
-
-    @property
-    def xmin(self) -> float:
-        return self.box[0]
-
-    @property
-    def ymin(self) -> float:
-        return self.box[1]
-
-    @property
-    def xmax(self) -> float:
-        return self.box[2]
-
-    @property
-    def ymax(self) -> float:
-        return self.box[3]
-
-    @property
-    def center_x(self) -> float:
-        return (self.box[0] + self.box[2]) / 2.0
-
-    @property
-    def center_y(self) -> float:
-        return (self.box[1] + self.box[3]) / 2.0
-
-    @property
-    def center(self) -> tuple:
-        return (self.center_x, self.center_y)
-
-    @property
-    def size(self) -> tuple:
-        """Sub-image dimensions (width, height)."""
-        img = self.image
-        return img.size if img else (int(self.width), int(self.height))
-
-    @property
-    def confidence(self) -> float:
-        """Alias for score."""
-        return self.score
-
-    def with_label(self, new_label: ClassName) -> "Box":
-        """Return a new copy with an updated label."""
-        return self._copy(label=_normalize_label(new_label))
-
-    def with_score(self, new_score: float) -> "Box":
-        """Return a new copy with an updated score."""
-        return self._copy(score=float(new_score))
-
-    def with_pad(self, pad: int) -> "Box":
-        """Return a new copy with an updated crop padding."""
-        return self._copy(pad=int(pad))
-
-    def with_box(self, coordinates: Iterable[float]) -> "Box":
-        """Return a new copy with updated XYXY coordinates."""
-        values = [float(value) for value in coordinates]
-        if len(values) != 4:
-            raise ValueError("coordinates must contain exactly four XYXY values")
-        return self._copy(box=values)
-
-    def with_metadata(self, **metadata: Any) -> "Box":
-        """Return a new copy with merged metadata."""
-        merged = dict(self.metadata)
-        merged.update(metadata)
-        return self._copy(metadata=merged)
-
-    def translate(self, dx: float = 0, dy: float = 0) -> "Box":
-        """Translate the bounding box by the specified pixel offsets."""
-        return self.with_box([
-            self.xmin + float(dx),
-            self.ymin + float(dy),
-            self.xmax + float(dx),
-            self.ymax + float(dy),
-        ])
-
-    def scale(self, factor: float) -> "Box":
-        """Scale the bounding box around its center."""
-        value = float(factor)
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise TypeError(f"{name} must be an integer or None")
         if value < 0:
-            raise ValueError("factor must be greater than or equal to 0")
-        half_width = self.width * value / 2
-        half_height = self.height * value / 2
-        return self.with_box([
-            self.center_x - half_width,
-            self.center_y - half_height,
-            self.center_x + half_width,
-            self.center_y + half_height,
-        ])
+            raise ValueError(f"{name} must be non-negative")
+        return value
 
-    def clip(self, image_size: Optional[tuple] = None) -> "Box":
-        """Clamp box coordinates within (width, height) image bounds."""
-        size = image_size or getattr(self.parent_image, "size", None)
-        if size is None:
-            raise ValueError("image_size is required when parent_image has no size")
-        width, height = map(float, size[:2])
-        return self.with_box([
-            min(max(self.xmin, 0.0), width),
-            min(max(self.ymin, 0.0), height),
-            min(max(self.xmax, 0.0), width),
-            min(max(self.ymax, 0.0), height),
-        ])
+    @staticmethod
+    def _track(value: Optional[int | str]) -> Optional[int | str]:
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, str))):
+            raise TypeError("track_id must be an integer, string, or None")
+        return value
 
-    def crop(self, pad: Optional[int] = None) -> Optional[PIL.Image.Image]:
-        """Crop sub-image with optional padding override."""
-        if pad is not None and pad != self.pad:
-            return self.with_pad(pad).image
-        return self.image
+    def _notify(self, field: str, before: Any, after: Any) -> None:
+        if self._owner is not None and before != after:
+            self._owner._box_changed(self, field, before, after)
 
-    def show(self, width: Optional[int] = None) -> None:
-        """Display sub-image on screen or in notebook."""
-        img = self.image
-        if img:
-            visual.show_image(img, width=width)
+    def _clone(self) -> "Box":
+        return Box(self.box, label=self.label, score=self.score, class_id=self._class_id,
+                   uid=self._uid, track_id=self.track_id, metadata=self.metadata)
 
-    def save(self, output_path: str) -> None:
-        """Save cropped sub-image to disk via klygo.media.save."""
-        img = self.image
-        if img:
-            media.save(output_path, img, overwrite=True, verbose=False)
+    @property
+    def uid(self) -> int:
+        """Return the stable frame-local UID."""
+        if self._uid is None:
+            raise RuntimeError("box UID has not been assigned by a Detection")
+        return self._uid
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Export Box properties to a dictionary."""
-        return {
-            "id": self.id,
-            "class_id": self.class_id,
-            "uid": self.uid,
-            "label": self.label,
-            "score": round(self.score, 4),
-            "box": [round(x, 2) for x in self.box],
-            "width": round(self.width, 2),
-            "height": round(self.height, 2),
-            "area": round(self.area, 2),
-            "metadata": dict(self.metadata),
-        }
+    @property
+    def label(self) -> str:
+        """Return the read-only class label."""
+        return self._label
+
+    @property
+    def class_id(self) -> int:
+        """Return the internal class ID."""
+        if self._class_id is None:
+            raise RuntimeError("box class ID has not been assigned by a Detection")
+        return self._class_id
+
+    @class_id.setter
+    def class_id(self, value: int) -> None:
+        value = self._integer(value, "class_id")
+        assert value is not None
+        if self._owner is not None and self._owner._registry.get(value) != self.label:
+            raise ValueError("class_id must map to the box label in the owning Detection")
+        before, self._class_id = self._class_id, value
+        self._notify("class_id", before, value)
+
+    @property
+    def score(self) -> float:
+        """Return the confidence score."""
+        return self._score
+
+    @score.setter
+    def score(self, value: float) -> None:
+        value = _score(value)
+        before, self._score = self._score, value
+        self._notify("score", before, value)
+
+    @property
+    def box(self) -> tuple[float, float, float, float]:
+        """Return immutable XYXY coordinates."""
+        return self._box
+
+    @box.setter
+    def box(self, value: Iterable[Any]) -> None:
+        value = _coords(value)
+        before, self._box = self._box, value
+        self._notify("box", before, value)
+
+    @property
+    def track_id(self) -> Optional[int | str]:
+        """Return the optional tracking identity."""
+        return self._track_id
+
+    @track_id.setter
+    def track_id(self, value: Optional[int | str]) -> None:
+        value = self._track(value)
+        before, self._track_id = self._track_id, value
+        self._notify("track_id", before, value)
+
+    @property
+    def metadata(self) -> dict[str, Any]:
+        """Return box metadata."""
+        return self._metadata
+
+    @metadata.setter
+    def metadata(self, value: Mapping[str, Any]) -> None:
+        if not isinstance(value, Mapping):
+            raise TypeError("metadata must be a mapping")
+        value = deepcopy(dict(value))
+        before, self._metadata = self._metadata, value
+        self._notify("metadata", before, value)
+
+    xmin = property(lambda self: self.box[0], doc="Left coordinate.")
+    ymin = property(lambda self: self.box[1], doc="Top coordinate.")
+    xmax = property(lambda self: self.box[2], doc="Right coordinate.")
+    ymax = property(lambda self: self.box[3], doc="Bottom coordinate.")
+    width = property(lambda self: self.xmax - self.xmin, doc="Box width.")
+    height = property(lambda self: self.ymax - self.ymin, doc="Box height.")
+    area = property(lambda self: self.width * self.height, doc="Box area.")
+    aspect_ratio = property(lambda self: self.width / self.height, doc="Width divided by height.")
+    center_x = property(lambda self: (self.xmin + self.xmax) / 2, doc="Horizontal center.")
+    center_y = property(lambda self: (self.ymin + self.ymax) / 2, doc="Vertical center.")
+    center = property(lambda self: (self.center_x, self.center_y), doc="Box center.")
+    size = property(lambda self: (self.width, self.height), doc="Box size.")
+
+    def translate(self, dx: float = 0, dy: float = 0) -> None:
+        """Move coordinates by a finite offset."""
+        dx, dy = float(dx), float(dy)
+        if not math.isfinite(dx) or not math.isfinite(dy):
+            raise ValueError("dx and dy must be finite")
+        self.box = self.xmin + dx, self.ymin + dy, self.xmax + dx, self.ymax + dy
+
+    def scale(self, factor: float) -> None:
+        """Scale coordinates around the box center."""
+        factor = float(factor)
+        if not math.isfinite(factor) or factor <= 0:
+            raise ValueError("factor must be a positive finite number")
+        half_width, half_height = self.width * factor / 2, self.height * factor / 2
+        self.box = (self.center_x - half_width, self.center_y - half_height,
+                    self.center_x + half_width, self.center_y + half_height)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the box."""
+        return {"uid": self.uid, "class_id": self.class_id, "label": self.label,
+                "score": self.score, "box": list(self.box), "track_id": self.track_id,
+                "metadata": deepcopy(self.metadata)}
 
     def __repr__(self) -> str:
-        coords = [round(x, 1) for x in self.box]
-        return (
-            f"Box(id={self.id}, class_id={self.class_id}, label={self.label!r}, "
-            f"score={self.score:.2f}, box={coords})"
-        )
+        return f"Box(uid={self._uid!r}, label={self.label!r}, score={self.score:.3f})"
 
 
-# =============================================================================
-# 2. CROPS LEVEL: Crops - Collection of object crops
-# =============================================================================
-class Crops:
-    """Hold a sequence of :class:`Box` objects and their source image."""
-
-    def __init__(
-        self,
-        crops: List[Box],
-        source_image: Optional[PIL.Image.Image] = None,
-        pad: int = 0,
-        names: Optional[Union[Mapping[int, Any], Sequence[Any]]] = None,
-    ) -> None:
-        self.crops = crops
-        self.source_image = source_image
-        self.pad = int(pad)
-        self._all_names = _normalize_names(names)
-        for crop in self.crops:
-            _register_box(self._all_names, crop)
-
-    def __getitem__(self, index: Union[int, slice]) -> Union[Box, "Crops"]:
-        if isinstance(index, slice):
-            return Crops(self.crops[index], self.source_image, self.pad, self._all_names)
-        return self.crops[index]
-
-    def __setitem__(self, index: Union[int, slice], value: Any) -> None:
-        self.crops[index] = value
-
-    def __delitem__(self, index: Union[int, slice]) -> None:
-        del self.crops[index]
-
-    def append(self, crop: Box) -> None:
-        self.crops.append(crop)
-
-    def extend(self, other: Union[List[Box], "Crops"]) -> None:
-        items = other.crops if isinstance(other, Crops) else list(other)
-        self.crops.extend(items)
-
-    def pop(self, index: int = -1) -> Box:
-        return self.crops.pop(index)
-
-    def insert(self, index: int, crop: Box) -> None:
-        self.crops.insert(index, crop)
-
-    def remove(self, crop: Box) -> None:
-        self.crops.remove(crop)
-
-    def clear(self) -> None:
-        self.crops.clear()
-
-    def __len__(self) -> int:
-        return len(self.crops)
-
-    def __add__(self, other: "Crops") -> "Crops":
-        if not isinstance(other, Crops):
-            raise TypeError(f"Cannot concatenate Crops with type {type(other)}")
-        names = dict(self._all_names)
-        names.update(other._all_names)
-        return Crops(list(self.crops) + list(other.crops), self.source_image, self.pad, names)
-
-    def __iter__(self):
-        return iter(self.crops)
-
-    @property
-    def names(self) -> Names:
-        """Return the sparse class mapping referenced by these crops."""
-        return _subset_names(self.crops, self._all_names)
-
-    @property
-    def ids(self) -> List[int]:
-        return [crop.id for crop in self.crops]
-
-    @property
-    def class_ids(self) -> List[int]:
-        return [crop.class_id for crop in self.crops]
-
-    @property
-    def images(self) -> List[PIL.Image.Image]:
-        """Pure PIL.Image object sequence for all valid crops."""
-        return [c.image for c in self.crops if c.image is not None]
-
-    @property
-    def labels(self) -> List[ClassName]:
-        return [c.label for c in self.crops]
-
-    @property
-    def scores(self) -> List[float]:
-        return [c.score for c in self.crops]
-
-    @property
-    def boxes(self) -> List[List[float]]:
-        return [c.box for c in self.crops]
-
-    @property
-    def areas(self) -> List[float]:
-        return [c.area for c in self.crops]
-
-    @property
-    def count(self) -> int:
-        return len(self.crops)
-
-    @property
-    def unique_labels(self) -> List[ClassName]:
-        seen = set()
-        out = []
-        for c in self.crops:
-            if c.label not in seen:
-                seen.add(c.label)
-                out.append(c.label)
-        return out
-
-    @property
-    def label_counts(self) -> Dict[ClassName, int]:
-        counts: Dict[ClassName, int] = {}
-        for c in self.crops:
-            counts[c.label] = counts.get(c.label, 0) + 1
-        return counts
-
-    def filter(self, fn: Callable[[Box], bool]) -> "Crops":
-        """Filter crops using a predicate callable returning a new Crops instance."""
-        from klygo import postprocessing as post
-        return post.select(self, where=fn)
-
-    def select(
-        self,
-        *,
-        ids: Optional[Iterable[int]] = None,
-        class_ids: Optional[Iterable[int]] = None,
-        uids: Optional[Iterable[str]] = None,
-        labels: Optional[Iterable[ClassName]] = None,
-        where: Optional[Callable[[Box], bool]] = None,
-    ) -> "Crops":
-        """Select crops by box identity, class, label, or predicate."""
-        from klygo import postprocessing as post
-        return post.select(
-            self,
-            ids=ids,
-            class_ids=class_ids,
-            uids=uids,
-            labels=labels,
-            where=where,
-        )
-
-    def drop(self, **selectors: Any) -> "Crops":
-        """Drop crops matching the supplied selectors."""
-        from klygo import postprocessing as post
-        return post.drop(self, **selectors)
-
-    def relabel(self, label: Any, **selectors: Any) -> "Crops":
-        """Relabel matching crops while preserving box identities."""
-        from klygo import postprocessing as post
-        return post.relabel(self, label, **selectors)
-
-    def sort(
-        self,
-        key: Optional[Callable[[Box], Any]] = None,
-        reverse: bool = True,
-    ) -> "Crops":
-        """Sort crops using a key callable returning a new Crops instance."""
-        sort_fn = key or (lambda c: c.score)
-        return Crops(
-            sorted(self.crops, key=sort_fn, reverse=reverse),
-            self.source_image,
-            self.pad,
-            self._all_names,
-        )
-
-    def group_by(
-        self,
-        key: Optional[Callable[[Box], Any]] = None,
-    ) -> Dict[Any, "Crops"]:
-        """Group crops by class or key callable."""
-        key_fn = key or (lambda c: c.label)
-        groups: Dict[Any, List[Box]] = {}
-        for c in self.crops:
-            groups.setdefault(key_fn(c), []).append(c)
-        return {k: Crops(v, self.source_image, self.pad, self._all_names) for k, v in groups.items()}
-
-    def map(
-        self,
-        fn: Union[Dict[str, str], Callable[[Box], Any]],
-    ) -> "Crops":
-        """Transform crop objects using a label mapping dict or callback."""
-        mapped = []
-        names = dict(self._all_names)
-        for c in self.crops:
-            if isinstance(fn, dict):
-                label = _normalize_label(fn.get(c.label, c.label))
-                mapped.append(c._copy(label=label, class_id=_class_id_for_label(names, label)))
-            elif callable(fn):
-                res = fn(c)
-                if isinstance(res, Box):
-                    mapped.append(res)
-                elif isinstance(res, str):
-                    label = _normalize_label(res)
-                    mapped.append(c._copy(label=label, class_id=_class_id_for_label(names, label)))
-        return Crops(mapped, self.source_image, self.pad, names)
-
-    def show(self, limit: Optional[int] = None, cell_size: int = 200) -> None:
-        """Display crops on screen or in a notebook."""
-        items = self.images[:limit] if limit else self.images
-        for img in items:
-            visual.show_image(img, width=cell_size)
-
-    def export(
-        self,
-        output_path: str,
-        format: str = "classification",
-    ) -> None:
-        """Export all crops as a directory-based image classification dataset."""
-        files.mkdir(output_path)
-        class_counters: Dict[str, int] = {}
-        for crop in self.crops:
-            if crop.image:
-                label_clean = str(crop.label).strip().replace(" ", "_") or "unlabeled"
-                class_dir = files.join(output_path, label_clean)
-                files.mkdir(class_dir)
-                idx = class_counters.get(label_clean, 0)
-                file_path = files.join(class_dir, f"{label_clean}_{idx:05d}.jpg")
-                media.save(file_path, crop.image, overwrite=True, verbose=False)
-                class_counters[label_clean] = idx + 1
-
-    def save(self, output_dir: str, by_class: bool = True) -> List[str]:
-        """Save all cropped sub-images to a directory."""
-        self.export(output_dir, format="classification" if by_class else "flat")
-        return [str(files.join(output_dir, str(c.label))) for c in self.crops]
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Export crops metadata and properties to a dictionary."""
-        return {
-            "total_crops": len(self.crops),
-            "pad": self.pad,
-            "names": dict(self.names),
-            "unique_labels": self.unique_labels,
-            "label_counts": self.label_counts,
-            "crops": [c.to_dict() for c in self.crops],
-        }
-
-    def __repr__(self) -> str:
-        summary = f"Crops: {len(self.crops)} crops"
-        if len(self.crops) > 0:
-            details = ", ".join([f"{c.label} ({c.score:.2f})" for c in self.crops[:5]])
-            if len(self.crops) > 5:
-                details += ", ..."
-            summary += f" [{details}]"
-        return summary
-
-
-# =============================================================================
-# 3. FRAME LEVEL: Detection - Single image or video frame result
-# =============================================================================
 class Detection:
-    """Hold the boxes and source image for one image or video frame."""
+    """Contain annotations and source identity for one image or video frame."""
 
-    def __init__(
-        self,
-        source_image: PIL.Image.Image,
-        objects: List[Box],
-        speed: Optional[dict] = None,
-        image_frame_index: int = 0,
-        config: Optional[Dict[str, Any]] = None,
-        names: Optional[Union[Mapping[int, Any], Sequence[Any]]] = None,
-        **kwargs,
-    ) -> None:
-        self._source_image = None
-        self._source_path = None
-        self._url = None
-        self.objects = list(objects)
-        for item in self.objects:
-            validators.validate_type(item, Box, "box")
-        used_ids = set()
-        next_id = 0
-        for item in self.objects:
-            if item.id in used_ids:
-                while next_id in used_ids:
-                    next_id += 1
-                item.id = next_id
-            used_ids.add(item.id)
-            next_id = max(next_id, item.id + 1)
+    def __init__(self, boxes: Optional[Iterable[Box]] = None, *, source_id: Optional[str] = None,
+                 frame_index: int = 0, source_path: Optional[str] = None,
+                 image_size: Optional[tuple[int, int]] = None, source: Any = None,
+                 metadata: Optional[Mapping[str, Any]] = None,
+                 names: Optional[Mapping[int, Any] | Sequence[Any]] = None) -> None:
+        if isinstance(frame_index, bool) or not isinstance(frame_index, int):
+            raise TypeError("frame_index must be an integer")
+        if frame_index < 0:
+            raise ValueError("frame_index must be non-negative")
+        self._source_id, inferred_path = _source(source, source_id)
+        self._frame_index = frame_index
+        self._source_path = str(source_path) if source_path is not None else inferred_path
+        self._image_size = _size(image_size or getattr(source, "size", None))
+        self._source = source
+        if metadata is not None and not isinstance(metadata, Mapping):
+            raise TypeError("metadata must be a mapping or None")
+        self.metadata = deepcopy(dict(metadata or {}))
+        self._registry = _names(names)
+        self._boxes: list[Box] = []
+        self._uid_map: dict[int, Box] = {}
+        self._next_uid = 0
+        self._owner: Optional[Detections] = None
+        self._commit(list(boxes or ()), None)
 
-        self._all_names = _normalize_names(names)
-        for item in self.objects:
-            _register_box(self._all_names, item)
-        self.source_image = source_image
-        self.speed = speed or {"preprocess": 0.0, "inference": 0.0, "postprocess": 0.0, "total": 0.0}
-        self.image_frame_index = image_frame_index
-        self.frame_index = image_frame_index
-        self.timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-
-        # Dynamic open configuration
-        self.config: Dict[str, Any] = deepcopy(dict(config or {}))
-        self.config.update(deepcopy(kwargs))
-
-    @property
-    def source_image(self) -> Any:
-        """Source image associated with detection result."""
-        return self._source_image
-
-    @source_image.setter
-    def source_image(self, img: Any) -> None:
-        self._source_image = img
-        raw_path = getattr(img, "path", None)
-        if raw_path is None:
-            raw_path = getattr(img, "filename", None)
-        
-        if raw_path is not None:
-            self._source_path = str(raw_path)
-            self._url = self._source_path
-        if hasattr(self, "objects"):
-            for c in self.objects:
-                c.parent_image = img
+    identity = property(lambda self: (self.source_id, self.frame_index), doc="Stable frame identity.")
+    source_id = property(lambda self: self._source_id, doc="Stable source identity.")
+    frame_index = property(lambda self: self._frame_index, doc="Frame number in the source.")
+    source_path = property(lambda self: self._source_path, doc="Optional physical source path.")
+    image_size = property(lambda self: self._image_size, doc="Original width and height.")
+    count = property(lambda self: len(self), doc="Current box count.")
+    empty = property(lambda self: not self._boxes, doc="Whether the frame is empty.")
+    has_objects = property(lambda self: bool(self._boxes), doc="Whether the frame has boxes.")
+    boxes = property(lambda self: [box.box for box in self], doc="Coordinates in current order.")
+    scores = property(lambda self: [box.score for box in self], doc="Scores in current order.")
+    labels = property(lambda self: [box.label for box in self], doc="Labels in current order.")
+    class_ids = property(lambda self: [box.class_id for box in self], doc="Class IDs in current order.")
+    uids = property(lambda self: [box.uid for box in self], doc="UIDs in current order.")
+    unique_labels = property(lambda self: list(dict.fromkeys(self.labels)), doc="Unique labels.")
+    unique_class_ids = property(lambda self: list(dict.fromkeys(self.class_ids)), doc="Unique class IDs.")
+    names = property(
+        lambda self: {box.class_id: box.label for box in self},
+        doc="Active class IDs mapped to labels.",
+    )
 
     @property
-    def url(self) -> Optional[str]:
-        """Source image URL or file path."""
-        return self._url
-
-    @url.setter
-    def url(self, new_url: Union[str, os.PathLike]) -> None:
-        if not isinstance(new_url, (str, os.PathLike)):
-            raise TypeError(f"Replacement URL must be a valid file path or URL string, got {type(new_url)}")
-        self._url = str(new_url)
-        self._source_path = self._url
-        # Synchronize LazyImage from replacement URL and update parent references
-        if self._source_image is not None and isinstance(self._source_image, media.LazyImage) and self._source_image.frame_index is not None:
-            self._source_image = media.LazyImage(
-                self._url,
-                frame_index=self._source_image.frame_index,
-                reader=self._source_image.reader,
-                backend=self._source_image.backend,
-            )
-        else:
-            self._source_image = media.LazyImage(self._url)
-        if hasattr(self, "objects"):
-            for c in self.objects:
-                c.parent_image = self._source_image
-
-    @property
-    def source_path(self) -> Optional[str]:
-        """Source image file path."""
-        return self._source_path
-
-    @source_path.setter
-    def source_path(self, new_path: Optional[Union[str, os.PathLike]]) -> None:
-        if new_path is None:
-            self._source_path = None
-            self._url = None
-        else:
-            self.url = new_path
-
-    @property
-    def metadata(self) -> Dict[str, Any]:
-        """Frame metadata dictionary and configuration options."""
-        return self.config
-
-    @property
-    def text_prompt(self) -> Optional[Union[str, List[str]]]:
-        return self.config.get("text_prompt", self.config.get("prompt"))
-
-    @property
-    def threshold(self) -> Optional[float]:
-        return self.config.get("threshold", self.config.get("conf"))
-
-    @property
-    def conf(self) -> Optional[float]:
-        return self.threshold
-
-    @property
-    def text_threshold(self) -> Optional[float]:
-        return self.config.get("text_threshold")
-
-    def __getattr__(self, name: str) -> Any:
-        cfg = object.__getattribute__(self, "__dict__").get("config", {})
-        if name in cfg:
-            return cfg[name]
-        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
-
-    def __getitem__(self, index: Union[int, slice]) -> Union[Box, "Detection"]:
-        """Return Box at index or a sub-Detection on slice."""
-        if isinstance(index, slice):
-            return Detection(
-                self.source_image,
-                self.objects[index],
-                self.speed,
-                self.image_frame_index,
-                config=self.config,
-                names=self._all_names,
-            )
-        return self.objects[index]
-
-    def _commit_objects(self, objects):
-        registry = dict(self._all_names)
-        prepared = []
-        seen_objects, used_ids = set(), set()
-        for item in objects:
-            validators.validate_type(item, Box, "box")
-            if id(item) in seen_objects or (item.parent_image is not None and item.parent_image is not self.source_image):
-                item = item._copy()
-            seen_objects.add(id(item))
-            class_id = _canonical_id(registry, item.label, item.class_id)
-            box_id = item.id if item.id not in used_ids else max(used_ids, default=-1) + 1
-            used_ids.add(box_id)
-            prepared.append((item, class_id, box_id))
-        # No mutation occurs until the complete candidate list is valid.
-        for item, class_id, box_id in prepared:
-            if item.class_id != class_id:
-                item.metadata.setdefault("native_class_id", item.class_id)
-            item.class_id, item.id = class_id, box_id
-            item.metadata["class_id"] = class_id
-            item.parent_image = self.source_image
-        self._all_names.update(registry)
-        self.objects = [item for item, _, _ in prepared]
-
-    def __setitem__(self, index: Union[int, slice], value: Any) -> None:
-        items = list(self.objects)
-        items[index] = value
-        self._commit_objects(items)
-
-    def __delitem__(self, index: Union[int, slice]) -> None:
-        del self.objects[index]
-
-    def append(self, crop: Box) -> None:
-        self._commit_objects([*self.objects, crop])
-
-    def extend(self, other: Union[List[Box], "Detection", Crops]) -> None:
-        items = other.objects if isinstance(other, Detection) else (other.crops if isinstance(other, Crops) else list(other))
-        self._commit_objects([*self.objects, *items])
-
-    def pop(self, index: int = -1) -> Box:
-        return self.objects.pop(index)
-
-    def insert(self, index: int, crop: Box) -> None:
-        items = list(self.objects)
-        items.insert(index, crop)
-        self._commit_objects(items)
-
-    def remove(self, crop: Box) -> None:
-        self.objects.remove(crop)
-
-    def clear(self) -> None:
-        self.objects.clear()
-
-    def __len__(self) -> int:
-        return len(self.objects)
-
-    def __add__(self, other: "Detection") -> "Detection":
-        if not isinstance(other, Detection):
-            raise TypeError(f"Cannot concatenate Detection with type {type(other)}")
-        return Detection(
-            self.source_image,
-            list(self.objects) + list(other.objects),
-            self.speed,
-            self.image_frame_index,
-            config=self.config,
-            names=self._all_names,
-        )
-
-    def __iter__(self):
-        return iter(self.objects)
-
-    @property
-    def names(self) -> Names:
-        """Return the sparse class mapping referenced by this frame."""
-        return _subset_names(self.objects, self._all_names)
-
-    @property
-    def ids(self) -> List[int]:
-        return [item.id for item in self.objects]
-
-    @property
-    def class_ids(self) -> List[int]:
-        return [item.class_id for item in self.objects]
-
-    @property
-    def unique_class_ids(self) -> List[int]:
-        return list(dict.fromkeys(self.class_ids))
-
-    @property
-    def boxes(self) -> List[List[float]]:
-        """List of absolute pixel coordinates [xmin, ymin, xmax, ymax]."""
-        return [c.box for c in self.objects]
-
-    @property
-    def normalized_boxes(self) -> List[List[float]]:
-        """List of normalized coordinates scaled to [0.0, 1.0]."""
-        w, h = self.source_image.size
-        if w > 0 and h > 0:
-            return [[round(b[0] / w, 4), round(b[1] / h, 4), round(b[2] / w, 4), round(b[3] / h, 4)] for b in self.boxes]
-        return []
-
-    @property
-    def labels(self) -> List[ClassName]:
-        return [c.label for c in self.objects]
-
-    @property
-    def scores(self) -> List[float]:
-        return [c.score for c in self.objects]
-
-    @property
-    def count(self) -> int:
-        return len(self.objects)
-
-    @property
-    def unique_labels(self) -> List[ClassName]:
-        seen = set()
-        out = []
-        for c in self.objects:
-            if c.label not in seen:
-                seen.add(c.label)
-                out.append(c.label)
-        return out
-
-    @property
-    def label_counts(self) -> Dict[ClassName, int]:
-        counts: Dict[ClassName, int] = {}
-        for c in self.objects:
-            counts[c.label] = counts.get(c.label, 0) + 1
-        return counts
-
-    @property
-    def crops(self) -> Crops:
-        """Crop all detected objects into a Crops collection."""
-        return Crops(self.objects, self.source_image, names=self._all_names)
-
-    @property
-    def summary(self) -> Dict[str, Any]:
-        return {
-            "total_objects": len(self.objects),
-            "unique_labels": self.unique_labels,
-            "label_counts": self.label_counts,
-            "image_size": list(self.source_image.size),
-            "speed": self.speed,
-        }
-
-    @property
-    def has_objects(self) -> bool:
-        return len(self.objects) > 0
-
-    @property
-    def empty(self) -> bool:
-        return len(self.objects) == 0
-
-    @property
-    def image_format(self) -> str:
-        return getattr(self.source_image, "format", "JPEG") or "JPEG"
-
-    @property
-    def image_mode(self) -> str:
-        return self.source_image.mode
-
-    @property
-    def image_size(self) -> tuple:
-        return self.source_image.size
-
-    def filter(self, fn: Callable[[Box], bool]) -> "Detection":
-        """Filter boxes using a predicate callback returning a new Detection."""
-        from klygo import postprocessing as post
-        return post.select(self, where=fn)
-
-    def select(
-        self,
-        *,
-        ids: Optional[Iterable[int]] = None,
-        class_ids: Optional[Iterable[int]] = None,
-        uids: Optional[Iterable[str]] = None,
-        labels: Optional[Iterable[ClassName]] = None,
-        where: Optional[Callable[[Box], bool]] = None,
-    ) -> "Detection":
-        """Select boxes matching ID, UID, label, or predicate."""
-        from klygo import postprocessing as post
-        return post.select(
-            self,
-            ids=ids,
-            class_ids=class_ids,
-            uids=uids,
-            labels=labels,
-            where=where,
-        )
-
-    def map_boxes(self, function: Callable[[Box], Optional[Box]]) -> "Detection":
-        """Transform each box or return None to exclude it."""
-        from klygo import postprocessing as post
-        return post.map_boxes(self, function)
-
-    def relabel(
-        self,
-        label: Any,
-        *,
-        ids: Optional[Iterable[int]] = None,
-        class_ids: Optional[Iterable[int]] = None,
-        uids: Optional[Iterable[str]] = None,
-        labels: Optional[Iterable[ClassName]] = None,
-        where: Optional[Callable[[Box], bool]] = None,
-    ) -> "Detection":
-        """Relabel matching boxes without mutating existing objects."""
-        from klygo import postprocessing as post
-        return post.relabel(
-            self,
-            label,
-            ids=ids,
-            class_ids=class_ids,
-            uids=uids,
-            labels=labels,
-            where=where,
-        )
-
-    def drop(
-        self,
-        *,
-        ids: Optional[Iterable[int]] = None,
-        class_ids: Optional[Iterable[int]] = None,
-        uids: Optional[Iterable[str]] = None,
-        labels: Optional[Iterable[ClassName]] = None,
-        where: Optional[Callable[[Box], bool]] = None,
-        reindex: bool = False,
-    ) -> "Detection":
-        """Drop matching boxes.
-
-        Parameters
-        ----------
-        reindex : bool, default False
-            Whether to re-index the remaining box IDs sequentially from 0.
-        """
-        validators.validate_type(reindex, bool, "reindex")
-        from klygo import postprocessing as post
-        dropped = post.drop(
-            self,
-            ids=ids,
-            class_ids=class_ids,
-            uids=uids,
-            labels=labels,
-            where=where,
-        )
-        if reindex:
-            dropped.reindex()
-        return dropped
-
-    def reindex(self, start: int = 0) -> "Detection":
-        """Re-index all box identifiers sequentially starting from ``start``.
-
-        Parameters
-        ----------
-        start : int, default 0
-            Initial ID value for the first box.
-
-        Returns
-        -------
-        Detection
-            This same Detection instance with continuous box IDs.
-        """
-        validators.validate_count(start, "start", minimum=0)
-        for idx, box in enumerate(self.objects, start=start):
-            box.id = idx
-        return self
-
-    def filter_score(self, minimum: float) -> "Detection":
-        """Retain boxes with confidence score >= minimum."""
-        from klygo import postprocessing as post
-        return post.filter_score(self, minimum)
-
-    def clip(self, image_size: Optional[tuple] = None) -> "Detection":
-        from klygo import postprocessing as post
-        return post.clip_boxes(self, image_size)
-
-    def remove_invalid(self, min_area: float = 0) -> "Detection":
-        from klygo import postprocessing as post
-        return post.remove_invalid_boxes(self, min_area)
-
-    def nms(self, iou: float = 0.5, class_agnostic: bool = False) -> "Detection":
-        from klygo import postprocessing as post
-        return post.suppress(self, iou=iou, class_agnostic=class_agnostic)
-
-    def top(self, count: int) -> "Detection":
-        from klygo import postprocessing as post
-        return post.top_boxes(self, count)
-
-    def pipe(self, *operations: Callable[[Any], Any]) -> "Detection":
-        """Apply postprocessing callables sequentially."""
-        from klygo import postprocessing as post
-        return post.apply(self, *operations)
-
-    def sort(
-        self,
-        key: Optional[Callable[[Box], Any]] = None,
-        reverse: bool = True,
-    ) -> "Detection":
-        """Sort boxes using a key callback."""
-        sort_fn = key or (lambda c: c.score)
-        return Detection(
-            self.source_image,
-            sorted(self.objects, key=sort_fn, reverse=reverse),
-            self.speed,
-            self.image_frame_index,
-            config=self.config,
-            names=self._all_names,
-        )
-
-    def crop(self, pad: int = 0) -> Crops:
-        """Crop all detected objects with padding."""
-        return Crops(self.objects, self.source_image, pad=pad, names=self._all_names)
-
-    def restore(self, target: str = "original", inplace: bool = False) -> "Detection":
-        """Restore detection to transformed or original RGB image space.
-
-        ``target="transformed"`` keeps boxes unchanged while reverting color
-        transforms. ``target="original"`` maps boxes back to source coordinates.
-        """
-        from klygo import preprocessing
-
-        target = str(target).lower()
-        if target not in ("transformed", "original"):
-            raise ValueError("target must be 'transformed' or 'original'")
-
-        current_image = self.source_image
-        source_path = getattr(current_image, "path", None) or self.source_path
-        if source_path is None:
-            raise ValueError("Cannot restore a Detection whose source image has no path")
-
-        # Recreate the source proxy without copying its preprocessing pipeline.
-        source_image = media.LazyImage(
-            source_path,
-            backend=getattr(current_image, "backend", "pil"),
-            frame_index=getattr(current_image, "frame_index", None),
-            reader=getattr(current_image, "reader", None),
-        )
-
-        operations = list(getattr(current_image, "_preprocessing_ops", ()))
-        trace = preprocessing.get_trace(current_image)
-        if operations and not trace and hasattr(current_image, "to_pil"):
-            # Normally inference already materialized the image. This also makes
-            # restore reliable for manually-created Detection objects.
-            current_image.to_pil(cache=False)
-            trace = preprocessing.get_trace(current_image)
-
-        if target == "transformed":
-            geometry = [operation for operation in operations if operation.changes_geometry]
-            restored_image = preprocessing.compose(geometry)(source_image) if geometry else source_image
-            restored_boxes = [list(box) for box in self.boxes]
-        else:
-            restored_image = source_image
-            restored_boxes = preprocessing.restore_boxes(self.boxes, trace) if trace else [list(box) for box in self.boxes]
-
-        if inplace:
-            self.source_image = restored_image
-            for item, coordinates in zip(self.objects, restored_boxes):
-                item.box = [float(value) for value in coordinates]
-                item.parent_image = restored_image
-            return self
-
-        restored_objects = [
-            Box(
-                id=item.id,
-                label=item.label,
-                score=item.score,
-                box=coordinates,
-                parent_image=restored_image,
-                pad=item.pad,
-                uid=item.uid,
-                metadata=item.metadata,
-            )
-            for item, coordinates in zip(self.objects, restored_boxes)
-        ]
-        restored = Detection(
-            source_image=restored_image,
-            objects=restored_objects,
-            speed=dict(self.speed),
-            image_frame_index=self.image_frame_index,
-            config=dict(self.config),
-            names=self._all_names,
-        )
-        restored.timestamp = self.timestamp
-        return restored
-
-    def plot(
-        self,
-        line_width: Optional[int] = None,
-        labels: bool = True,
-        scores: bool = True,
-        **kwargs,
-    ) -> PIL.Image.Image:
-        """Draw bounding boxes and captions onto the image."""
-        return visual.draw_bboxes(
-            image=self.source_image,
-            bboxes=self.boxes,
-            labels=self.labels if labels else None,
-            scores=self.scores if scores else None,
-            thickness=line_width or 2,
-        )
-
-    draw = plot
-
-    def to_array(self, bgr: bool = False, annotated: bool = True, **kwargs) -> np.ndarray:
-        """Convert detection result image into a NumPy ndarray.
-
-        Parameters
-        ----------
-        bgr : bool, default False
-            Convert channels to BGR order for OpenCV compatibility.
-        annotated : bool, default True
-            Render bounding boxes onto the image before conversion.
-        """
-        img = self.plot(**kwargs) if annotated else self.source_image
-        if hasattr(img, "to_array"):
-            arr = img.to_array()
-        else:
-            arr = np.array(img)
-        if bgr:
-            return arr[:, :, ::-1]
-        return arr
-
-    def to_numpy(self, bgr: bool = False, annotated: bool = True, **kwargs) -> np.ndarray:
-        """Alias for to_array()."""
-        return self.to_array(bgr=bgr, annotated=annotated, **kwargs)
-
-    def to_bgr(self, annotated: bool = True, **kwargs) -> np.ndarray:
-        """Return BGR NumPy array for direct use with cv2.imshow."""
-        return self.to_array(bgr=True, annotated=annotated, **kwargs)
-
-    def __array__(self, dtype=None) -> np.ndarray:
-        """Support automatic conversion via np.array(detection)."""
-        arr = self.to_array(annotated=True)
-        if dtype is not None:
-            return arr.astype(dtype)
-        return arr
-
-    def save(self, output_path: str, line_width: Optional[int] = None, **kwargs) -> None:
-        """Draw and save the annotated image via klygo.media.save."""
-        annotated = self.plot(line_width=line_width, **kwargs)
-        media.save(output_path, annotated, overwrite=True, verbose=False)
-
-    def show(self, line_width: Optional[int] = None, width: Optional[int] = None, **kwargs) -> None:
-        """Draw and display the annotated image via klygo.visual.show_image."""
-        annotated = self.plot(line_width=line_width, **kwargs)
-        visual.show_image(annotated, width=width)
-
-    def export(self, output_path: str, format: str = "yolo", classes: Optional[Union[List[str], Names]] = None) -> None:
-        """Export YOLO labels with stable class IDs, or serialize a JSON result."""
-        if format.lower() == "yolo":
-            w, h = self.source_image.size
-            class_map = self._all_names if classes is None else _normalize_names(classes)
-            label_ids = {label: class_id for class_id, label in class_map.items()}
-            lines = []
-            for c in self.objects:
-                if c.label not in label_ids:
-                    continue
-                cid = c.class_id if classes is None else label_ids[c.label]
-                cx = (c.box[0] + c.box[2]) / 2.0 / w
-                cy = (c.box[1] + c.box[3]) / 2.0 / h
-                bw = (c.box[2] - c.box[0]) / w
-                bh = (c.box[3] - c.box[1]) / h
-                lines.append(f"{cid} {cx:.6f} {cy:.6f} {bw:.6f} {bh:.6f}\n")
-            from klygo import files
-            files.save(output_path, "".join(lines), verbose=False)
-        elif format.lower() == "json":
-            from klygo import files
-            files.save(output_path, self.to_dict(), verbose=False)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Export detection results as a dictionary."""
-        d = {
-            "image_format": self.image_format,
-            "image_mode": self.image_mode,
-            "image_size": list(self.source_image.size),
-            "image_frame_index": self.image_frame_index,
-            "timestamp": self.timestamp,
-            "objects": [c.to_dict() for c in self.objects],
-            "speed": self.speed,
-            "names": dict(self.names),
-        }
-        if self.source_path is not None:
-            d["source_path"] = self.source_path
-            d["url"] = self.url
-        if self.config:
-            d["config"] = self.config
-        return d
-
-    def __repr__(self) -> str:
-        summary = f"Detection: {len(self.objects)} objects detected"
-        if len(self.objects) > 0:
-            details = ", ".join([f"{c.label} ({c.score:.2f})" for c in self.objects[:5]])
-            if len(self.objects) > 5:
-                details += ", ..."
-            summary += f" [{details}]"
-        return summary
-
-    def close(self) -> None:
-        """Release media proxy resources if held."""
-        img = getattr(self, "_source_image", None)
-        if img is not None and hasattr(img, "reader") and img.reader is not None:
-            try:
-                img.reader.release()
-            except Exception:
-                pass
-            img.reader = None
-
-
-# =============================================================================
-# 4. COLLECTION LEVEL: Detections - Multi-frame collection or stream
-# =============================================================================
-class Detections:
-    """Hold image-level detections in memory or consume them as a stream."""
-
-    def __init__(
-        self,
-        frames: Union[List[Detection], Iterable[Detection]],
-        source_type: str = "video",
-        fps: float = 30.0,
-        output_path: Optional[str] = None,
-        stream: bool = False,
-        total_frames: Optional[int] = None,
-        names: Optional[Union[Mapping[int, Any], Sequence[Any]]] = None,
-    ) -> None:
-        self.is_stream = bool(stream) or (not isinstance(frames, (list, tuple)) and hasattr(frames, "__iter__"))
-        self.source_type = source_type
-        self.fps = float(fps) if fps else 30.0
-        self.output_path = output_path
-        self.total_frames = total_frames
-        self._base_names = {}
-        for class_id, label in _normalize_names(names).items():
-            _canonical_id(self._base_names, label, class_id)
-        self._stream_cache: List[Detection] = []
-
-        if self.is_stream:
-            self._iterator = self._reconciled_stream(iter(frames) if frames is not None else iter(()))
-            self._frames: List[Detection] = []
-        else:
-            self._frames = []
-            self._commit_frames(list(frames) if frames is not None else [])
-            self._iterator = None
-            if self.total_frames is None:
-                self.total_frames = len(self._frames)
-
-    def _commit_frames(self, frames):
-        registry = dict(self._base_names)
-        staged = _stage_frames(frames, registry, self._base_names)
-        self._base_names.update(registry)
-        for frame in staged:
-            frame._all_names = self._base_names
-            frame._collection_registry = self._base_names
-        self._frames = staged
-        self.total_frames = len(staged)
-
-    def _reconciled_stream(self, iterator):
-        try:
-            for frame in iterator:
-                registry = dict(self._base_names)
-                frame = _stage_frames([frame], registry, self._base_names)[0]
-                self._base_names.update(registry)
-                frame._all_names = self._base_names
-                frame._collection_registry = self._base_names
-                yield frame
-        finally:
-            close = getattr(iterator, "close", None)
-            if callable(close):
-                close()
-
-    def _require_materialized(self):
-        if self.is_stream:
-            raise ValueError("Call to_list() on a finite stream before mutation; this requires memory for every frame")
-
-    @property
-    def frames(self) -> List[Detection]:
-        if self.is_stream:
-            return self.to_list()
-        return self._frames
-
-    @frames.setter
-    def frames(self, value: Any) -> None:
-        self._require_materialized()
-        self._commit_frames(list(value) if value is not None else [])
-
-    @property
-    def results(self) -> List[Detection]:
-        return self.frames
-
-    @results.setter
-    def results(self, value: Any) -> None:
-        self.frames = value
-
-    def __getitem__(self, index: Union[int, slice]) -> Union[Detection, "Detections"]:
-        if self.is_stream:
-            if isinstance(index, int):
-                if index < 0:
-                    raise IndexError("Negative indexing is not supported in streaming Detections.")
-                while len(self._stream_cache) <= index:
-                    try:
-                        self._stream_cache.append(next(self._iterator))
-                    except StopIteration:
-                        raise IndexError("Detections stream index out of range")
-                return self._stream_cache[index]
-            elif isinstance(index, slice):
-                start, stop, step = index.start, index.stop, index.step
-                step = 1 if step is None else step
-                if step <= 0:
-                    raise ValueError("Slice step must be positive for streaming Detections")
-
-                if (start is not None and start < 0) or (stop is not None and stop < 0):
-                    raise ValueError("Negative slice indices are not supported on streaming Detections. Use to_list() first.")
-
-                def _slice_gen():
-                    import itertools
-                    yield from itertools.islice(iter(self), start or 0, stop, step)
-
-                new_total = None
-                if self.total_frames is not None:
-                    s_start = 0 if start is None else min(start, self.total_frames)
-                    s_stop = self.total_frames if stop is None else min(stop, self.total_frames)
-                    if s_stop > s_start:
-                        new_total = (s_stop - s_start + step - 1) // step
-                    else:
-                        new_total = 0
-
-                return Detections(
-                    _slice_gen(),
-                    self.source_type,
-                    self.fps / step if step > 1 else self.fps,
-                    self.output_path,
-                    stream=True,
-                    total_frames=new_total,
-                    names=self.names,
-                )
-            raise TypeError(f"Invalid index type: {type(index)}")
-
-        if isinstance(index, slice):
-            return Detections(
-                self._frames[index],
-                self.source_type,
-                self.fps,
-                self.output_path,
-                names=self.names,
-            )
-        return self._frames[index]
-
-    def map(self, func: Callable[[Detection], Any]) -> "Detections":
-        """Apply a transform function to each Detection frame across memory or streams."""
-        if self.is_stream:
-            def _map_gen():
-                for f in self:
-                    yield func(f)
-            return Detections(
-                _map_gen(),
-                self.source_type,
-                self.fps,
-                self.output_path,
-                stream=True,
-                total_frames=self.total_frames,
-                names=self.names,
-            )
-        mapped = [func(f) for f in self._frames]
-        return Detections(mapped, self.source_type, self.fps, self.output_path, names=self.names)
-
-    def map_boxes(self, function: Callable[[Box], Optional[Box]]) -> "Detections":
-        return self.map(lambda frame: frame.map_boxes(function))
-
-    def select(self, **selectors: Any) -> "Detections":
-        return self.map(lambda frame: frame.select(**selectors))
-
-    def relabel(self, label: Any, **selectors: Any) -> "Detections":
-        return self.map(lambda frame: frame.relabel(label, **selectors))
-
-    def drop(self, **selectors: Any) -> "Detections":
-        return self.map(lambda frame: frame.drop(**selectors))
-
-    def filter_score(self, minimum: float) -> "Detections":
-        return self.map(lambda frame: frame.filter_score(minimum))
-
-    def clip(self, image_size: Optional[tuple] = None) -> "Detections":
-        return self.map(lambda frame: frame.clip(image_size))
-
-    def remove_invalid(self, min_area: float = 0) -> "Detections":
-        return self.map(lambda frame: frame.remove_invalid(min_area))
-
-    def nms(self, iou: float = 0.5, class_agnostic: bool = False) -> "Detections":
-        return self.map(lambda frame: frame.nms(iou=iou, class_agnostic=class_agnostic))
-
-    def top(self, count: int) -> "Detections":
-        return self.map(lambda frame: frame.top(count))
-
-    def pipe(self, *operations: Callable[[Any], Any]) -> "Detections":
-        from klygo import postprocessing as post
-        return post.apply(self, *operations)
-
-    def get_frame(self, frame_index: int) -> Detection:
-        """Retrieve a Detection frame by its source frame_index."""
-        target = int(frame_index)
-        for frame in self:
-            if frame.frame_index == target:
-                return frame
-        raise KeyError(f"Frame {target} does not exist")
-
-    def replace_frame(self, frame_index: int, result: Detection) -> "Detections":
-        """Return a new collection with one frame replaced."""
-        if not isinstance(result, Detection):
-            raise TypeError("result must be a Detection")
-        target = int(frame_index)
-        if not self.is_stream and not any(frame.frame_index == target for frame in self._frames):
-            raise KeyError(f"Frame {target} does not exist")
-        return self.map(lambda frame: _copy_frame(result, frame) if frame.frame_index == target else frame)
-
-    def update_frame(self, frame_index: int, function: Callable[[Detection], Detection]) -> "Detections":
-        """Update a specific frame via callback."""
-        if not callable(function):
-            raise TypeError("function must be callable")
-        target = int(frame_index)
-        if not self.is_stream and not any(frame.frame_index == target for frame in self._frames):
-            raise KeyError(f"Frame {target} does not exist")
-
-        def update(frame: Detection) -> Detection:
-            if frame.frame_index != target:
-                return frame
-            value = function(_copy_frame(frame))
-            if not isinstance(value, Detection):
-                raise TypeError("update_frame function must return Detection")
-            return _copy_frame(value, frame)
-
-        return self.map(update)
-
-    def remove_frame(self, frame_index: int, reindex: bool = False) -> "Detections":
-        """Return a new collection excluding the specified frame_index.
-
-        Parameters
-        ----------
-        frame_index : int
-            Target source frame index to exclude.
-        reindex : bool, default False
-            Whether to re-index the remaining frames sequentially starting from 0.
-
-        Returns
-        -------
-        Detections
-            New collection excluding the target frame.
-        """
-        validators.validate_type(reindex, bool, "reindex")
-        target = int(frame_index)
-        filtered = self.filter(lambda frame: frame.frame_index != target)
-        if reindex and not filtered.is_stream:
-            filtered.reindex()
-        return filtered
-
-    def reindex(self, start: int = 0) -> "Detections":
-        """Re-index all frame positions sequentially starting from ``start``.
-
-        Parameters
-        ----------
-        start : int, default 0
-            Initial index value for the first frame.
-
-        Returns
-        -------
-        Detections
-            This collection with updated continuous frame indices.
-        """
-        validators.validate_count(start, "start", minimum=0)
-        self._require_materialized()
-        for idx, frame in enumerate(self._frames, start=start):
-            frame.frame_index = idx
-            frame.image_frame_index = idx
-            frame.config["frame_index"] = idx
-            frame.config["image_frame_index"] = idx
-        return self
-
-    def reindex_boxes(self, start: int = 0) -> "Detections":
-        """Re-index box IDs sequentially starting from ``start`` across all frames.
-
-        Parameters
-        ----------
-        start : int, default 0
-            Initial ID value for the first box in each frame.
-
-        Returns
-        -------
-        Detections
-            This collection with continuous box IDs in every frame.
-        """
-        validators.validate_count(start, "start", minimum=0)
-        self._require_materialized()
-        for frame in self.frames:
-            frame.reindex(start=start)
-        return self
-
-    def restore(self, target: str = "original") -> "Detections":
-        """Restore image and coordinates across all frames."""
-        return self.map(lambda frame: frame.restore(target=target))
-
-    def __setitem__(self, index: Union[int, slice], value: Any) -> None:
-        self._require_materialized()
-        candidates = list(self._frames)
-        if isinstance(index, slice):
-            values = list(value)
-            positions = list(range(len(candidates)))[index]
-            if len(positions) != len(values):
-                raise ValueError("Frame slice replacement must preserve length; use insert/extend/delete to resize")
-            replacements = [_copy_frame(frame, candidates[position]) for position, frame in zip(positions, values)]
-            candidates[index] = replacements
-        else:
-            if isinstance(index, bool):
-                raise TypeError("Frame index must be an integer, not bool")
-            candidates[index] = _copy_frame(value, candidates[index])
-        self._commit_frames(candidates)
-
-    def __delitem__(self, index: Union[int, slice]) -> None:
-        self._require_materialized()
-        del self._frames[index]
-        self.total_frames = len(self._frames)
-
-    def append(self, frame: Detection) -> None:
-        self._require_materialized()
-        self._commit_frames([*self._frames, frame])
-
-    def extend(self, other: Union[List[Detection], "Detections"]) -> None:
-        self._require_materialized()
-        if isinstance(other, Detections):
-            other._require_materialized()
-        self._commit_frames([*self._frames, *list(other)])
-
-    def pop(self, index: int = -1) -> Detection:
-        self._require_materialized()
-        result = self._frames.pop(index)
-        self.total_frames = len(self._frames)
+    def label_counts(self) -> dict[str, int]:
+        """Count boxes by label."""
+        result: dict[str, int] = {}
+        for label in self.labels:
+            result[label] = result.get(label, 0) + 1
         return result
 
-    def insert(self, index: int, frame: Detection) -> None:
-        self._require_materialized()
-        candidates = list(self._frames)
-        candidates.insert(index, frame)
-        self._commit_frames(candidates)
+    def __len__(self) -> int:
+        return len(self._boxes)
+
+    def __iter__(self) -> Iterator[Box]:
+        return iter(self._boxes)
+
+    def __getitem__(self, index: int | slice) -> Box | tuple[Box, ...]:
+        return tuple(self._boxes[index]) if isinstance(index, slice) else self._boxes[index]
+
+    def get_box(self, uid: int) -> Box:
+        """Return a box by stable UID."""
+        try:
+            return self._uid_map[uid]
+        except KeyError as error:
+            raise KeyError(f"box UID {uid} was not found") from error
+
+    def _class(self, label: str, preferred: Optional[int] = None) -> int:
+        found = next((key for key, value in self._registry.items() if value == label), None)
+        if found is not None:
+            return found
+        result = preferred if preferred is not None and preferred not in self._registry else max(self._registry, default=-1) + 1
+        self._registry[result] = label
+        return result
+
+    def _prepare(self, boxes: Iterable[Box]) -> tuple[list[Box], Names, int]:
+        boxes = list(boxes)
+        if any(not isinstance(box, Box) for box in boxes):
+            raise TypeError("every box must be a Box")
+        registry, prepared, used, next_uid = dict(self._registry), [], set(), self._next_uid
+        for incoming in boxes:
+            validators.validate_type(incoming, Box, "box")
+            item = incoming if incoming._owner in (None, self) and incoming not in prepared else incoming._clone()
+            class_id = next((key for key, value in registry.items() if value == item.label), None)
+            if class_id is None:
+                class_id = item._class_id if item._class_id is not None and item._class_id not in registry else max(registry, default=-1) + 1
+                registry[class_id] = item.label
+            uid = item._uid
+            if uid is None or uid in used:
+                while next_uid in used:
+                    next_uid += 1
+                uid, next_uid = next_uid, next_uid + 1
+            used.add(uid)
+            next_uid = max(next_uid, uid + 1)
+            item._uid, item._class_id = uid, class_id
+            prepared.append(item)
+        return prepared, registry, next_uid
+
+    def _commit(self, boxes: Iterable[Box], operation: Optional[str]) -> None:
+        prepared, registry, next_uid = self._prepare(boxes)
+        old = self._boxes
+        for item in old:
+            if item not in prepared:
+                item._owner = None
+        self._boxes, self._registry, self._next_uid = prepared, registry, next_uid
+        self._uid_map = {item.uid: item for item in prepared}
+        for item in prepared:
+            item._owner = self
+        if operation and self._owner is not None:
+            self._owner._changed(self, operation, {"count": len(prepared)})
+
+    def _box_changed(self, box: Box, field: str, before: Any, after: Any) -> None:
+        if self._owner is not None:
+            self._owner._changed(self, "update_box", {"uid": box.uid, "field": field})
+
+    def _signature(self) -> tuple[Any, ...]:
+        return tuple((b.uid, b.label, b.class_id, b.score, b.box, b.track_id, repr(b.metadata)) for b in self)
+
+    def _clone(self, identity: Optional[Identity] = None) -> "Detection":
+        source_id, frame_index = identity or self.identity
+        return Detection([b._clone() for b in self], source_id=source_id, frame_index=frame_index,
+                         source_path=self.source_path, image_size=self.image_size, source=self._source,
+                         metadata=self.metadata, names=self._registry)
+
+    def add_box(self, coordinates: Iterable[Any], *, label: str, score: float = 1.0,
+                track_id: Optional[int | str] = None,
+                metadata: Optional[Mapping[str, Any]] = None) -> None:
+        """Create and append one box."""
+        label = _label(label)
+        self.append(Box(coordinates, label=label, score=score,
+                        class_id=self._class(label), track_id=track_id, metadata=metadata))
+
+    def append(self, box: Box) -> None:
+        """Append one box."""
+        self._commit([*self._boxes, box], "append_box")
+
+    def extend(self, boxes: Iterable[Box]) -> None:
+        """Append boxes atomically."""
+        self._commit([*self._boxes, *list(boxes)], "extend_boxes")
+
+    def insert(self, index: int, box: Box) -> None:
+        """Insert a box by position."""
+        candidates = list(self._boxes); candidates.insert(index, box)
+        self._commit(candidates, "insert_box")
+
+    def replace(self, index: int, box: Box) -> None:
+        """Replace a box while preserving its UID."""
+        validators.validate_type(box, Box, "box")
+        item = box._clone(); item._uid = self._boxes[index].uid
+        candidates = list(self._boxes); candidates[index] = item
+        self._commit(candidates, "replace_box")
+
+    def pop(self, index: int = -1) -> Box:
+        """Remove and return a box by position."""
+        candidates = list(self._boxes); item = candidates.pop(index)
+        self._commit(candidates, "pop_box"); item._owner = None
+        return item
+
+    def remove_box(self, uid: int) -> None:
+        """Remove a box by stable UID."""
+        target = self.get_box(uid)
+        self._commit((box for box in self if box is not target), "remove_box")
 
     def clear(self) -> None:
-        self._require_materialized()
-        self._frames.clear()
-        self.total_frames = 0
+        """Remove every box."""
+        self._commit([], "clear_boxes")
 
-    def repredict(self, model, index=None, **kwargs) -> "Detections":
-        """Atomically replace selected positions with predictions from ``model``.
+    def filter(self, predicate: Callable[[Box], bool]) -> None:
+        """Remove boxes rejected by a predicate."""
+        if not callable(predicate): raise TypeError("predicate must be callable")
+        self._commit([box for box in self if bool(predicate(box))], "filter_boxes")
 
-        Parameters
-        ----------
-        model : object
-            An object exposing callable ``predict(source, **kwargs)``.
-        index : int, list of int, tuple of int, or None
-            Collection positions, including negative indices. Duplicates are
-            removed in request order. None selects all frames.
-        **kwargs : object
-            Prediction options; streaming and frame sampling are not supported.
+    def map(self, function: Callable[[Box], Optional[Box]]) -> None:
+        """Transform boxes atomically using detached drafts."""
+        if not callable(function): raise TypeError("function must be callable")
+        transformed = []
+        for original in self:
+            draft = original._clone(); result = function(draft)
+            result = draft if result is None else result
+            validators.validate_type(result, Box, "mapped box")
+            result._uid = original.uid; transformed.append(result)
+        self._commit(transformed, "map_boxes")
 
-        Returns
-        -------
-        Detections
-            This same collection, with new inference metadata and old frame identity.
+    def drop(self, labels: Iterable[str]) -> None:
+        """Remove boxes with matching labels."""
+        if isinstance(labels, str):
+            labels = (labels,)
+        blocked = {_label(label) for label in labels}
+        self._commit([box for box in self if box.label not in blocked], "drop_labels")
 
-        Raises
-        ------
-        TypeError
-            If the model, indices, or returned detections have invalid types.
-        IndexError
-            If any position is outside the collection.
-        ValueError
-            If a stream is not explicitly materialized, a source is missing,
-            or the model returns the wrong number of frames.
+    def relabel(self, mapping: Mapping[str, str]) -> None:
+        """Rename or merge labels."""
+        if not isinstance(mapping, Mapping): raise TypeError("mapping must be a mapping")
+        mapping = {_label(a): _label(b) for a, b in mapping.items()}
+        items = []
+        for box in self:
+            item = box._clone(); item._label = mapping.get(item.label, item.label); item._class_id = None; items.append(item)
+        self._registry = {}; self._commit(items, "relabel")
 
-        Notes
-        -----
-        Predicts all selected images in request order and commits only after
-        complete validation. Empty selections are a no-op. Call to_list() on
-        finite streams explicitly; memory use grows with the number of frames.
-        The model's own remembered configuration follows its predict contract.
-        """
-        self._require_materialized()
-        if not callable(getattr(model, "predict", None)):
-            raise TypeError("model must expose a callable predict method")
-        if index is None:
-            requested = list(range(len(self._frames)))
-        elif isinstance(index, (list, tuple)):
-            requested = list(index)
-        else:
-            requested = [index]
-        positions = []
-        for position in requested:
-            validators.validate_type(position, int, "index")
-            if isinstance(position, bool):
-                raise TypeError("index must not be bool")
-            if position < 0:
-                position += len(self._frames)
-            if not 0 <= position < len(self._frames):
-                raise IndexError("repredict index out of range")
-            if position not in positions:
-                positions.append(position)
-        if any(key in kwargs for key in ("stream", "vid_stride", "max_frames")):
-            raise ValueError("repredict does not accept stream or frame-sampling controls")
-        if not positions:
-            return self
-        originals = [self._frames[position] for position in positions]
-        if any(frame.source_image is None for frame in originals):
-            raise ValueError("Every selected frame must have a source image")
-        predicted = model.predict([frame.source_image for frame in originals], **kwargs)
-        if not isinstance(predicted, (Detections, list, tuple)):
-            raise TypeError("predict must return Detections or a sequence of Detection")
-        if isinstance(predicted, Detections) and predicted.is_stream:
-            raise ValueError("repredict requires materialized prediction results")
-        predicted = list(predicted)
-        if len(predicted) != len(positions):
-            raise ValueError("predict must return exactly one Detection per selected frame")
-        candidates = list(self._frames)
-        for position, original, frame in zip(positions, originals, predicted):
-            candidates[position] = _copy_frame(frame, original)
-        self._commit_frames(candidates)
-        return self
+    def _resolve_source(self) -> Any:
+        if self._source is not None: return self._source
+        if self.source_path is None: raise RuntimeError("Cannot access frame pixels: source image is unavailable")
+        from klygo import media
+        loaded = media.load(self.source_path, verbose=False)
+        for item in loaded:
+            if len(loaded) == 1 or getattr(item, "frame_index", None) == self.frame_index:
+                self._source = item; return item
+        raise RuntimeError("Cannot access frame pixels: source frame is unavailable")
 
-    def __len__(self) -> int:
-        if self.is_stream:
-            return self.total_frames if self.total_frames is not None else len(self._stream_cache)
-        return len(self._frames)
+    def show(self, mode: str = "default", *, show_scores: bool = True,
+             line_width: Optional[int] = None, font_size: Optional[int] = None,
+             width: Optional[int] = None, title: str = "Detection", backend: str = "auto") -> None:
+        """Display all boxes using default, positional-index, or UID captions."""
+        if mode not in {"default", "index", "uid"}: raise ValueError("mode must be 'default', 'index', or 'uid'")
+        from klygo import visual
+        labels = self.labels if mode == "default" else ([f"[{i}] {b.label}" for i, b in enumerate(self)] if mode == "index" else [f"[uid:{b.uid}] {b.label}" for b in self])
+        annotated = visual.draw_bboxes(self._resolve_source(), self.boxes, labels=labels, scores=self.scores,
+                                       line_width=line_width, font_size=font_size,
+                                       show_labels=True, show_scores=show_scores)
+        visual.show_image(annotated, title=title, width=width, backend=backend)
 
-    def to_list(self) -> List[Detection]:
-        """Materialize all stream frames into a standard in-memory list."""
-        if self.is_stream:
-            items = list(self)
-            self._frames = items
-            self.is_stream = False
-            self.total_frames = len(items)
-            return items
-        return list(self._frames)
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize annotations without decoding pixels."""
+        return {"source_id": self.source_id, "frame_index": self.frame_index,
+                "source_path": self.source_path, "image_size": list(self.image_size),
+                "metadata": deepcopy(self.metadata), "names": self.names,
+                "boxes": [box.to_dict() for box in self]}
 
-    def __add__(self, other: "Detections") -> "Detections":
-        if not isinstance(other, Detections):
-            raise TypeError(f"Cannot concatenate Detections with type {type(other)}")
-        return Detections(
-            list(self) + list(other),
-            self.source_type,
-            self.fps,
-            self.output_path,
-            names=self.names,
-        )
 
-    def __iter__(self):
-        if self.is_stream:
-            idx = 0
-            while True:
-                if idx < len(self._stream_cache):
-                    yield self._stream_cache[idx]
-                else:
-                    try:
-                        item = next(self._iterator)
-                        self._stream_cache.append(item)
-                        yield item
-                    except StopIteration:
-                        break
-                idx += 1
-        else:
-            yield from iter(self._frames)
+class Detections:
+    """Hold an ordered materialized collection of detection frames."""
 
-    @property
-    def names(self) -> Names:
-        """Return the full canonical vocabulary, including historical classes.
+    def __init__(self, frames: Iterable[Detection] = (), *, metadata: Optional[Mapping[str, Any]] = None,
+                 names: Optional[Mapping[int, Any] | Sequence[Any]] = None) -> None:
+        if metadata is not None and not isinstance(metadata, Mapping): raise TypeError("metadata must be a mapping or None")
+        self.metadata = deepcopy(dict(metadata or {})); self._registry = _names(names)
+        self._frames: list[Detection] = []; self._identity_map: dict[Identity, Detection] = {}
+        self._history: list[dict[str, Any]] = []; self._sequence = 0
+        self._commit(list(frames), None); self._total_frames = len(self)
+        self._baseline = {frame.identity: frame._signature() for frame in self}
 
-        For lazy streams, only consumed frames contribute. Use active_names for
-        labels referenced by current boxes; this property never consumes input.
-        """
-        return dict(sorted(self._base_names.items()))
+    def _record(self, operation: str, **details: Any) -> None:
+        self._sequence += 1
+        self._history.append({"sequence_number": self._sequence, "operation": operation, **deepcopy(details)})
 
-    @property
-    def active_names(self) -> Names:
-        """Return classes present in current (or already consumed) frames."""
-        target = self._stream_cache if self.is_stream else self._frames
-        active = {box.class_id for frame in target for box in frame.objects}
-        return {key: value for key, value in self.names.items() if key in active}
+    def _reconcile(self, incoming: Detection, identity: Optional[Identity] = None) -> Detection:
+        validators.validate_type(incoming, Detection, "frame")
+        frame = incoming if incoming._owner in (None, self) else incoming._clone()
+        if identity is not None and frame.identity != identity: frame = frame._clone(identity)
+        for box in frame:
+            found = next((key for key, value in self._registry.items() if value == box.label), None)
+            if found is None:
+                found = box._class_id if box._class_id is not None and box._class_id not in self._registry else max(self._registry, default=-1) + 1
+                self._registry[found] = box.label
+            box._class_id = found
+        frame._registry = dict(self._registry)
+        return frame
 
-    @property
-    def total_objects(self) -> int:
-        target = self._frames if not self.is_stream else self._stream_cache
-        return sum(len(f) for f in target)
-
-    @property
-    def unique_labels(self) -> List[ClassName]:
-        seen = set()
-        out = []
-        target = self._frames if not self.is_stream else self._stream_cache
-        for f in target:
-            for l in f.labels:
-                if l not in seen:
-                    seen.add(l)
-                    out.append(l)
-        return out
-
-    @property
-    def label_counts(self) -> Dict[ClassName, int]:
-        counts: Dict[ClassName, int] = {}
-        target = self._frames if not self.is_stream else self._stream_cache
-        for f in target:
-            for l in f.labels:
-                counts[l] = counts.get(l, 0) + 1
-        return counts
-
-    @property
-    def boxes(self) -> Any:
-        """Bounding boxes sequence across frames or for a single image."""
-        if len(self) == 1:
-            return self[0].boxes
-        target = self._frames if not self.is_stream else self._stream_cache
-        return [f.boxes for f in target]
-
-    @property
-    def labels(self) -> Any:
-        """Labels sequence across frames or for a single image."""
-        if len(self) == 1:
-            return self[0].labels
-        target = self._frames if not self.is_stream else self._stream_cache
-        return [f.labels for f in target]
-
-    @property
-    def scores(self) -> Any:
-        """Confidence scores across frames or for a single image."""
-        if len(self) == 1:
-            return self[0].scores
-        target = self._frames if not self.is_stream else self._stream_cache
-        return [f.scores for f in target]
-
-    @property
-    def class_ids(self) -> Any:
-        """Class IDs sequence across frames or for a single image."""
-        if len(self) == 1:
-            return self[0].class_ids
-        target = self._frames if not self.is_stream else self._stream_cache
-        return [f.class_ids for f in target]
-
-    @property
-    def unique_class_ids(self) -> List[int]:
-        """Unique class IDs currently present in active frames."""
-        target = self._frames if not self.is_stream else self._stream_cache
-        seen = set()
-        out = []
-        for f in target:
-            for cid in f.class_ids:
-                if cid not in seen:
-                    seen.add(cid)
-                    out.append(cid)
-        return out
-
-    @property
-    def url(self) -> Optional[str]:
-        """Source image URL or exported video path."""
-        if len(self) == 1:
-            return self[0].url
-        return self.output_path
-
-    @url.setter
-    def url(self, new_url: Union[str, os.PathLike]) -> None:
-        if len(self) == 1:
-            self[0].url = new_url
-        else:
-            raise ValueError("Cannot assign a single URL to multiple result frames. Assign url to individual frames via results[i].url = 'path'")
-
-    @property
-    def count(self) -> int:
-        return len(self)
-
-    @property
-    def images(self) -> List[PIL.Image.Image]:
-        """Render annotated images for all frames as an in-memory list."""
-        target = self.to_list() if self.is_stream else self._frames
-        return [f.plot() for f in target]
-
-    def iter_images(self, **kwargs):
-        """Generate annotated images frame-by-frame with bounded memory use."""
-        for f in self:
-            yield f.plot(**kwargs)
-
-    def filter(self, fn: Callable[[Any], bool]) -> "Detections":
-        if self.is_stream:
-            def _gen():
-                for f in self:
-                    if fn(f):
-                        yield f
-            return Detections(
-                _gen(),
-                self.source_type,
-                self.fps,
-                self.output_path,
-                stream=True,
-                names=self.names,
-            )
-        filtered = [f for f in self._frames if fn(f)]
-        return Detections(filtered, self.source_type, self.fps, self.output_path, names=self.names)
-
-    def sort(
-        self,
-        key: Optional[Callable[[Detection], Any]] = None,
-        reverse: bool = True,
-    ) -> "Detections":
-        sort_fn = key or (lambda f: len(f))
-        return Detections(
-            sorted(self.frames, key=sort_fn, reverse=reverse),
-            self.source_type,
-            self.fps,
-            self.output_path,
-            names=self.names,
-        )
-
-    def crop(self, output_path: Optional[str] = None, pad: int = 0) -> Crops:
-        all_crops: List[Box] = []
-        for f in self.frames:
-            all_crops.extend(f.crop(pad=pad).crops)
-        crops_obj = Crops(all_crops, pad=pad, names=self.names)
-        if output_path:
-            crops_obj.export(output_path, format="classification")
-        return crops_obj
-
-    def export(self, output_path: str, format: str = "yolo") -> None:
-        """Export all frames as a flat YOLO dataset or JSON file."""
-        from klygo import files, media
-        if format.lower() == "yolo":
-            img_dir = files.join(output_path, "images")
-            lbl_dir = files.join(output_path, "labels")
-            files.mkdir(img_dir)
-            files.mkdir(lbl_dir)
-
-            self._require_materialized()
-            classes = self.names
-            for idx, res in enumerate(self.frames):
-                img_name = f"frame_{idx:05d}.jpg"
-                lbl_name = f"frame_{idx:05d}.txt"
-                media.save(files.join(img_dir, img_name), res.source_image, overwrite=True, verbose=False)
-                res.export(files.join(lbl_dir, lbl_name), format="yolo", classes=classes)
-
-            # Write data.yaml configuration via klygo.files.save
-            yaml_data = {
-                "path": str(files.resolve(output_path)),
-                "train": "images",
-                "val": "images",
-                "names": classes,
-            }
-            files.save(files.join(output_path, "data.yaml"), yaml_data, verbose=False)
-        elif format.lower() == "json":
-            files.save(output_path, self.to_dict(), verbose=False)
-
-    def save(self, output_path: str, fps: Optional[float] = None, **kwargs) -> str:
-        """Save annotated video or image folder with rendered bounding boxes."""
-        target_fps = fps if fps is not None else self.fps
-        p_str = str(output_path).lower()
-        is_video = p_str.endswith((".mp4", ".avi", ".mov", ".mkv", ".webm"))
-
-        if self.source_type == "video" or is_video:
-            final_path = output_path if is_video else str(files.join(output_path, "annotated_video.mp4"))
-            # Use iter_images generator instead of self.images to bound memory consumption.
-            media.save_video(final_path, self.iter_images(**kwargs), fps=target_fps, overwrite=True, verbose=False)
-            self.output_path = final_path
-            return final_path
-        else:
-            files.mkdir(output_path)
-            for idx, res in enumerate(self.frames, 1):
-                img_path = files.join(output_path, f"annotated_{idx:05d}.jpg")
-                res.save(img_path, **kwargs)
-            self.output_path = output_path
-            return output_path
-
-    def draw(self, **kwargs) -> List[PIL.Image.Image]:
-        """Draw bounding boxes onto all frames and return a list of PIL images."""
-        return [f.draw(**kwargs) for f in self.frames]
-
-    def plot(self, **kwargs) -> Union[PIL.Image.Image, List[PIL.Image.Image]]:
-        """Render bounding boxes onto image(s). Returns a single Image or a list."""
-        if len(self) == 1:
-            return self[0].plot(**kwargs)
-        return [f.plot(**kwargs) for f in self.frames]
-
-    def to_array(self, bgr: bool = False, annotated: bool = True, **kwargs) -> Union[np.ndarray, List[np.ndarray]]:
-        """Convert images to NumPy ndarray representations.
-
-        Returns a single [H, W, C] array for a single image, or a list of arrays
-        for multi-frame results.
-        """
-        if len(self) == 1:
-            return self[0].to_array(bgr=bgr, annotated=annotated, **kwargs)
-        return [f.to_array(bgr=bgr, annotated=annotated, **kwargs) for f in self]
-
-    def to_numpy(self, bgr: bool = False, annotated: bool = True, **kwargs) -> Union[np.ndarray, List[np.ndarray]]:
-        """Alias for to_array()."""
-        return self.to_array(bgr=bgr, annotated=annotated, **kwargs)
-
-    def to_bgr(self, annotated: bool = True, **kwargs) -> Union[np.ndarray, List[np.ndarray]]:
-        """Return BGR NumPy array for direct use with cv2.imshow."""
-        return self.to_array(bgr=True, annotated=annotated, **kwargs)
-
-    def __array__(self, dtype=None) -> np.ndarray:
-        """Support automatic conversion via np.array(results)."""
-        if len(self) == 1:
-            return self[0].__array__(dtype=dtype)
-        arr_list = [f.to_array(annotated=True) for f in self]
+    def _prepare(self, frames: Iterable[Detection]) -> list[Detection]:
+        frames = list(frames)
+        if any(not isinstance(frame, Detection) for frame in frames):
+            raise TypeError("every frame must be a Detection")
+        raw_identities = [frame.identity for frame in frames]
+        if len(raw_identities) != len(set(raw_identities)):
+            raise ValueError("duplicate frame identity")
+        registry, result, identities = dict(self._registry), [], set()
         try:
-            res = np.array(arr_list)
+            for incoming in frames:
+                frame = self._reconcile(incoming)
+                if frame.identity in identities: raise ValueError(f"duplicate frame identity: {frame.identity!r}")
+                identities.add(frame.identity); result.append(frame)
         except Exception:
-            res = np.empty(len(arr_list), dtype=object)
-            res[:] = arr_list
-        if dtype is not None:
-            res = res.astype(dtype)
-        return res
+            self._registry = registry; raise
+        return result
 
-    def show(self, limit: Optional[int] = 5) -> None:
-        """Display previews of initial frames via klygo.visual.show_image."""
-        if self.is_stream:
-            display_items = []
-            max_cnt = limit if limit is not None else 5
-            for i in range(max_cnt):
-                try:
-                    display_items.append(self[i])
-                except (IndexError, StopIteration):
-                    break
-        else:
-            display_items = self._frames if limit is None else self._frames[:limit]
-        for res in display_items:
-            res.show()
+    def _synchronize_registry(self) -> None:
+        """Reconcile active labels after direct mutations on owned frames."""
+        labels = list(dict.fromkeys(box.label for frame in self._frames for box in frame))
+        previous = {label: class_id for class_id, label in self._registry.items()}
+        reserved = {previous[label] for label in labels if label in previous}
+        registry: Names = {}
+        used: set[int] = set()
+        next_id = max(self._registry, default=-1) + 1
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Export standardized collection metadata and frame detections as a dictionary."""
+        for label in labels:
+            class_id = previous.get(label)
+            if class_id is None or class_id in used:
+                preferred = next(
+                    (
+                        box.class_id
+                        for frame in self._frames
+                        for box in frame
+                        if box.label == label
+                        and box.class_id not in used
+                        and box.class_id not in reserved
+                    ),
+                    None,
+                )
+                if preferred is None:
+                    while next_id in used or next_id in reserved:
+                        next_id += 1
+                    class_id, next_id = next_id, next_id + 1
+                else:
+                    class_id = preferred
+            registry[class_id] = label
+            used.add(class_id)
+
+        self._registry = registry
+        class_by_label = {label: class_id for class_id, label in registry.items()}
+        for frame in self._frames:
+            frame._registry = dict(registry)
+            for box in frame:
+                box._class_id = class_by_label[box.label]
+
+    def _commit(self, frames: Iterable[Detection], operation: Optional[str]) -> None:
+        prepared = self._prepare(frames)
+        for frame in self._frames:
+            if frame not in prepared: frame._owner = None
+        self._frames = prepared; self._identity_map = {f.identity: f for f in prepared}
+        for frame in prepared: frame._owner = self
+        self._synchronize_registry()
+        if operation: self._record(operation, count=len(prepared))
+
+    def _changed(self, frame: Detection, operation: str, details: Mapping[str, Any]) -> None:
+        if operation != "update_box":
+            self._synchronize_registry()
+        self._record(operation, target_identity=frame.identity, changed_fields=dict(details))
+
+    count = property(lambda self: len(self), doc="Current frame count.")
+    total_frames = property(lambda self: self._total_frames, doc="Initial frame count.")
+    total_objects = property(lambda self: sum(f.count for f in self), doc="Current object count.")
+    names = property(
+        lambda self: {
+            class_id: label
+            for class_id, label in self._registry.items()
+            if any(box.label == label for frame in self for box in frame)
+        },
+        doc="Active collection class IDs mapped to labels.",
+    )
+    history = property(lambda self: tuple(deepcopy(self._history)), doc="Read-only history.")
+    added_frames = property(lambda self: tuple(i for i in self._identity_map if i not in self._baseline), doc="Added identities.")
+    deleted_frames = property(lambda self: tuple(i for i in self._baseline if i not in self._identity_map), doc="Deleted identities.")
+    modified_frames = property(lambda self: tuple(i for i, base in self._baseline.items() if i in self._identity_map and self._identity_map[i]._signature() != base), doc="Modified identities.")
+
+    def __len__(self) -> int: return len(self._frames)
+    def __iter__(self) -> Iterator[Detection]: return iter(self._frames)
+    def __getitem__(self, index: int | slice) -> Detection | tuple[Detection, ...]:
+        return tuple(self._frames[index]) if isinstance(index, slice) else self._frames[index]
+
+    def get_frame(self, frame_index: int, *, source_id: Optional[str] = None) -> Detection:
+        """Return a frame by stable source identity."""
+        if source_id is not None:
+            try: return self._identity_map[(str(source_id), frame_index)]
+            except KeyError as error: raise KeyError("frame identity was not found") from error
+        matches = [f for f in self if f.frame_index == frame_index]
+        if not matches: raise KeyError(f"frame index {frame_index} was not found")
+        if len(matches) > 1: raise ValueError("frame_index is ambiguous; provide source_id")
+        return matches[0]
+
+    def append(self, frame: Detection) -> None:
+        """Append a frame."""
+        validators.validate_type(frame, Detection, "frame")
+        if frame.identity in self._identity_map: raise ValueError("frame identity already exists")
+        self._commit([*self._frames, frame], "append_frame")
+
+    def preview_add(self, frame: Detection) -> dict[str, Any]:
+        """Preview identity and class reconciliation without mutation."""
+        validators.validate_type(frame, Detection, "frame")
+        identity_conflict = frame.identity in self._identity_map
+        preview_frame = frame._clone()
+        if identity_conflict:
+            preview_frame = preview_frame._clone(
+                (f"{frame.source_id}:preview:{uuid.uuid4().hex}", frame.frame_index)
+            )
+
+        draft = Detections(
+            [*[item._clone() for item in self], preview_frame],
+            metadata=self.metadata,
+            names=self._registry,
+        )
+        resolved_frame = draft[-1]
+        existing_labels = set(self.names.values())
+        incoming_ids: dict[str, list[int]] = {}
+        for box in frame:
+            incoming_ids.setdefault(box.label, []).append(box.class_id)
+
+        mapping = {}
+        for label in resolved_frame.unique_labels:
+            resolved_id = next(box.class_id for box in resolved_frame if box.label == label)
+            original_ids = tuple(dict.fromkeys(incoming_ids[label]))
+            mapping[label] = {
+                "incoming_class_ids": original_ids,
+                "resolved_class_id": resolved_id,
+                "remapped": any(class_id != resolved_id for class_id in original_ids),
+            }
+
         return {
-            "source_type": self.source_type,
-            "total_frames": len(self),
-            "fps": self.fps,
-            "total_objects": self.total_objects,
-            "unique_labels": self.unique_labels,
-            "label_counts": self.label_counts,
-            "frames": [f.to_dict() for f in self],
+            "can_add": not identity_conflict,
+            "identity": frame.identity,
+            "identity_conflict": identity_conflict,
+            "new_labels": tuple(
+                label for label in resolved_frame.unique_labels if label not in existing_labels
+            ),
+            "mapping": mapping,
         }
 
-    def close(self) -> None:
-        """Close a pending iterator and owned frame resources."""
-        iterator = getattr(self, "_iterator", None)
-        close = getattr(iterator, "close", None)
-        if callable(close):
-            close()
-        for f in (getattr(self, "_frames", []) or []):
-            if hasattr(f, "close"):
-                f.close()
-        for f in (getattr(self, "_stream_cache", []) or []):
-            if hasattr(f, "close"):
-                f.close()
+    def extend(self, frames: Iterable[Detection]) -> None:
+        """Append frames atomically."""
+        incoming = list(frames)
+        if any(not isinstance(f, Detection) for f in incoming): raise TypeError("every frame must be a Detection")
+        if {f.identity for f in incoming} & set(self._identity_map): raise ValueError("frame identity already exists")
+        self._commit([*self._frames, *incoming], "extend_frames")
 
-    def __enter__(self) -> "Detections":
-        return self
+    def insert(self, index: int, frame: Detection) -> None:
+        """Insert a frame by position."""
+        if frame.identity in self._identity_map: raise ValueError("frame identity already exists")
+        items = list(self._frames); items.insert(index, frame); self._commit(items, "insert_frame")
 
-    def __exit__(self, *args) -> None:
-        self.close()
+    def replace(self, index: int, frame: Detection) -> None:
+        """Replace content while preserving frame identity."""
+        validators.validate_type(frame, Detection, "frame")
+        items = list(self._frames); items[index] = frame._clone(items[index].identity); self._commit(items, "replace_frame")
 
-    def __del__(self) -> None:
-        self.close()
+    def pop(self, index: int = -1) -> Detection:
+        """Remove and return a frame by position."""
+        items = list(self._frames); frame = items.pop(index); self._commit(items, "pop_frame"); frame._owner = None; return frame
 
-    def __repr__(self) -> str:
-        if self.is_stream:
-            cnt_str = f"{self.total_frames} frames" if self.total_frames is not None else "streaming"
-            return f"<Detections (Stream): source_type='{self.source_type}', total={cnt_str}, fps={self.fps}>"
-        return f"<Detections frames={len(self._frames)}, total_objects={self.total_objects}, unique_labels={self.unique_labels}>"
+    def remove_frame(self, frame_index: int, *, source_id: Optional[str] = None) -> None:
+        """Remove a frame by source identity."""
+        target = self.get_frame(frame_index, source_id=source_id)
+        self._commit((f for f in self if f is not target), "remove_frame")
+
+    def clear(self) -> None:
+        """Remove every frame."""
+        self._commit([], "clear_frames")
+
+    def merge(self, other: "Detections") -> None:
+        """Merge another collection, rejecting any identity collision."""
+        validators.validate_type(other, Detections, "other"); self.extend(f._clone() for f in other); self._history[-1]["operation"] = "merge"
+
+    def filter(self, predicate: Callable[[Detection], bool]) -> None:
+        """Remove frames rejected by a predicate."""
+        if not callable(predicate): raise TypeError("predicate must be callable")
+        self._commit([f for f in self if bool(predicate(f))], "filter_frames")
+
+    def map(self, function: Callable[[Detection], Optional[Detection]]) -> None:
+        """Transform frames atomically using detached drafts."""
+        if not callable(function): raise TypeError("function must be callable")
+        transformed = []
+        for original in self:
+            draft = original._clone(); result = function(draft); result = draft if result is None else result
+            validators.validate_type(result, Detection, "mapped frame"); transformed.append(result._clone(original.identity))
+        self._commit(transformed, "map_frames")
+
+    def drop(self, labels: Iterable[str]) -> None:
+        """Remove matching boxes from every frame."""
+        if isinstance(labels, str):
+            labels = (labels,)
+        labels = tuple(labels)
+        drafts = [f._clone() for f in self]
+        for frame in drafts: frame.drop(labels)
+        self._commit(drafts, "drop_labels")
+
+    def relabel(self, mapping: Mapping[str, str]) -> None:
+        """Rename or merge labels across all frames."""
+        drafts = [f._clone() for f in self]
+        for frame in drafts: frame.relabel(mapping)
+        self._registry = {}; self._commit(drafts, "relabel")
+
+    def repredict(self, model: Any, index: Optional[int | Iterable[int]] = None, **options: Any) -> None:
+        """Replace selected predictions while preserving source identities."""
+        indices = list(range(len(self))) if index is None else ([index] if isinstance(index, int) and not isinstance(index, bool) else list(index))
+        normalized = []
+        for item in indices:
+            if isinstance(item, bool) or not isinstance(item, int): raise TypeError("prediction indices must be integers")
+            item = item + len(self) if item < 0 else item
+            if item < 0 or item >= len(self): raise IndexError("prediction index out of range")
+            if item not in normalized: normalized.append(item)
+        if not normalized:
+            return
+        predicted = model.predict([self._frames[i]._resolve_source() for i in normalized], stream=False, **options)
+        validators.validate_type(predicted, Detections, "model prediction")
+        if len(predicted) != len(normalized): raise ValueError("model prediction must return one frame per selected source")
+        items = list(self._frames)
+        for position, fresh in zip(normalized, predicted):
+            original = self._frames[position]; replacement = fresh._clone(original.identity)
+            replacement._source, replacement._source_path, replacement._image_size = original._source, original.source_path, original.image_size
+            items[position] = replacement
+        self._commit(items, "repredict")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize annotations without decoding pixels."""
+        return {"count": self.count, "total_frames": self.total_frames,
+                "total_objects": self.total_objects, "names": self.names,
+                "metadata": deepcopy(self.metadata), "frames": [f.to_dict() for f in self]}
+
+    def export(self, path: str, *, format: str = "yolo", overwrite: bool = False) -> None:
+        """Export annotations without copying source images."""
+        format = str(format).lower()
+        if format == "json": files.save(path, self.to_dict(), overwrite=overwrite, verbose=False); return
+        if format != "yolo": raise ValueError("format must be 'yolo' or 'json'")
+        if files.exists(path) and not overwrite: raise FileExistsError(f"output path already exists: {path}")
+        if files.exists(path): files.remove(path, missing_ok=True)
+        labels_dir = files.join(path, "labels"); files.mkdir(labels_dir)
+        names, manifest = self.names, []; label_ids = {label: key for key, label in names.items()}
+        for position, frame in enumerate(self):
+            width, height = frame.image_size
+            digest = sha1(f"{frame.source_id}:{frame.frame_index}".encode()).hexdigest()[:10]
+            filename = f"frame_{position:06d}_{frame.frame_index}_{digest}.txt"
+            lines = [f"{label_ids[b.label]} {(b.xmin+b.xmax)/2/width:.6f} {(b.ymin+b.ymax)/2/height:.6f} {b.width/width:.6f} {b.height/height:.6f}" for b in frame]
+            files.save(files.join(labels_dir, filename), lines, overwrite=True, verbose=False)
+            manifest.append({"source_id": frame.source_id, "frame_index": frame.frame_index,
+                             "source_path": frame.source_path, "image_size": list(frame.image_size),
+                             "label_file": files.as_posix(files.join("labels", filename))})
+        files.save(files.join(path, "data.yaml"), {"names": names}, overwrite=True, verbose=False)
+        files.save(files.join(path, "manifest.json"), manifest, overwrite=True, verbose=False)
 
 
-# =============================================================================
-# BACKWARD-COMPATIBLE ALIASES
-# =============================================================================
-CropResult = Box
-DetectedObject = Box
-CroppedObject = Box
-Boxes = Crops
-CropResults = Crops
-DetectionResult = Detection
-DetectionResults = Detections
-PreviewResult = Detections
+def build_detections(images: Sequence[Any], predictions: Sequence[Mapping[str, Any]], *,
+                     metadata: Optional[Mapping[str, Any]] = None,
+                     names: Optional[Mapping[int, Any] | Sequence[Any]] = None) -> list[Detection]:
+    """Build one frame per image from normalized backend predictions."""
+    images, predictions, registry = list(images), list(predictions), _names(names)
+    if len(images) != len(predictions): raise ValueError("images and predictions must have the same length")
+    frames = []
+    for position, (image, prediction) in enumerate(zip(images, predictions)):
+        if not isinstance(prediction, Mapping): raise TypeError("each prediction must be a mapping")
+        coords = _list(prediction.get("boxes", []), "boxes")
+        scores = _list(prediction.get("scores", [1.0] * len(coords)), "scores")
+        labels = _list(prediction.get("text_labels", prediction.get("labels", ["object"] * len(coords))), "labels")
+        class_ids = _list(prediction.get("class_ids", [None] * len(coords)), "class_ids")
+        if len({len(coords), len(scores), len(labels), len(class_ids)}) != 1: raise ValueError("boxes, scores, labels, and class_ids must have the same length")
+        boxes, local = [], dict(registry)
+        for uid, (coordinates, score, label, preferred) in enumerate(zip(coords, scores, labels, class_ids)):
+            label = local[label] if isinstance(label, int) and label in local else _label(label)
+            found = next((key for key, value in local.items() if value == label), None)
+            if found is None:
+                preferred = None if preferred is None else int(preferred)
+                found = preferred if preferred is not None and preferred not in local else max(local, default=-1) + 1; local[found] = label
+            boxes.append(Box(coordinates, label=label, score=score, class_id=found, uid=uid))
+        frame_index = getattr(image, "frame_index", None); frame_index = position if frame_index is None else frame_index
+        source_id, source_path = _source(image, None)
+        frames.append(Detection(boxes, source_id=source_id, frame_index=frame_index,
+                                source_path=source_path, image_size=getattr(image, "size", None),
+                                source=image, metadata=deepcopy(dict(metadata or {})), names=local))
+        registry.update(local)
+    return frames
 
-__all__ = [
-    "build_detections", "Box", "Crops", "Detection", "Detections",
-    "CropResult", "DetectedObject", "CroppedObject", "Boxes",
-    "CropResults", "DetectionResult", "DetectionResults", "PreviewResult",
-]
+
+__all__ = ["build_detections", "Box", "Detection", "Detections"]

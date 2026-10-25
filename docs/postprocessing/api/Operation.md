@@ -4,56 +4,39 @@
 postprocessing.Operation(name, function)
 ```
 
-Represent an immutable, named callable transformation applied to a detection result.
-
-## Contract
-
-`Operation` is a frozen `@dataclass(frozen=True)` with two attributes (`name` and `function`). Calling `operation(result)` invokes `self.function(result)` and returns its output directly, while `repr(operation)` formats as `Operation(<name>)` for readable inspection inside a [`Pipeline`](Pipeline.md).
-
-All built-in pipeline stage builders in `klygo.postprocessing` ([`threshold()`](threshold.md), [`clip()`](clip.md), [`remove_invalid()`](remove_invalid.md), [`nms()`](nms.md), [`top()`](top.md), and [`custom()`](custom.md)) return `Operation` instances. You can also instantiate `Operation(name, function)` directly whenever you want explicit control over the operation name and underlying callable.
-
-## Parameters
-
-- `name`: `str` — human-readable identifier displayed in `repr(operation)` and [`Pipeline`](Pipeline.md) summaries.
-- `function`: `Callable[[Any], Any]` — transformation function accepting a `Detection`, `Detections`, or `Crops` result and returning the transformed result.
+Wraps one named in-place operation. Calling it mutates the supplied result and returns `None`.
 
 ## Returns
 
-`Operation` — frozen callable dataclass instance.
+`None`.
 
-## Errors and edge cases
+## Errors
 
-Attempting to mutate `.name` or `.function` after construction raises `dataclasses.FrozenInstanceError`. If `function` is not callable, a `TypeError` is raised when `operation(result)` is invoked or when the `Operation` is validated inside [`custom()`](custom.md).
+Raises `TypeError` for unsupported result or argument types. Numeric operations raise `ValueError` when a limit is outside its documented range. Mutation is validated before commit.
 
 ## Example
 
-See [`Operation.py`](../../../examples/postprocessing/Operation.py) for a standalone runnable script.
-
-## Complete executable example
+See [`Operation.py`](../../../examples/postprocessing/Operation.py).
 
 ```python
-"""Construct and invoke a named postprocessing Operation directly and in a Pipeline."""
+from klygo import outputs, postprocessing as post
 
-from PIL import Image
-from klygo import postprocessing as post
-from klygo.outputs.detect import Box, Detection
-
-image = Image.new("RGB", (100, 80), "white")
-frame = Detection(
-    image,
+frame = outputs.Detection(
     [
-        Box(0, "cat", 0.9, [-5, 0, 50, 50]),
-        Box(0, "cat", 0.8, [0, 0, 48, 48]),
-        Box(1, "dog", 0.4, [60, 10, 90, 60]),
+        outputs.Box([-2, 0, 30, 30], label="cat", score=0.9, class_id=0),
+        outputs.Box([0, 0, 28, 28], label="cat", score=0.8, class_id=0),
+        outputs.Box([32, 5, 48, 35], label="dog", score=0.4, class_id=1),
     ],
+    source_id="example",
+    image_size=(50, 40),
+    names={0: "cat", 1: "dog"},
 )
 
-keep_cats = post.Operation("keep_cats", lambda result: post.select(result, labels=["cat"]))
-assert keep_cats.name == "keep_cats"
-assert repr(keep_cats) == "Operation(keep_cats)"
-
-filtered = keep_cats(frame)
-assert filtered.labels == ["cat", "cat"]
-assert len(frame) == 3  # original Detection is never mutated
-print(filtered.labels)
+operation = post.Operation("keep-confident", lambda value: post.filter_score(value, 0.5))
+operation(frame)
+print(frame.labels)
 ```
+
+## Tests
+
+See [`test_postprocessing.py`](../../../test/postprocessing/test_postprocessing.py).

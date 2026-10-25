@@ -128,12 +128,7 @@ class Detector(BaseModel):
                             part = images[offset:offset + batch]
                             frames.extend(self._infer_batch(part, prompts, metadata, offset * vid_stride, vid_stride))
                             progress.update(len(part))
-                    result = Detections(
-                        frames,
-                        source_type="image" if is_single else "video",
-                        fps=getattr(images, "fps", 30.0),
-                        names=self.names,
-                    )
+                    result = Detections(frames, metadata={"source_type": "image" if is_single else "video", "fps": getattr(images, "fps", 30.0)}, names=self.names)
             except Exception:
                 self._restore_prediction_state(previous)
                 raise
@@ -172,14 +167,7 @@ class Detector(BaseModel):
                 if callable(close):
                     close()
 
-        return Detections(
-            generate(),
-            source_type="image" if is_single else "video",
-            fps=getattr(images, "fps", 30.0),
-            stream=True,
-            total_frames=total,
-            names=names,
-        )
+        return Detections(list(generate()), metadata={"source_type": "image" if is_single else "video", "fps": getattr(images, "fps", 30.0), "requested_total_frames": total}, names=names)
 
     def __call__(self, source: Any, *args, **kwargs) -> Union[Detections, Any]:
         """Run :meth:`predict` using callable model syntax."""
@@ -408,19 +396,11 @@ class Detector(BaseModel):
             for index, (result, image) in enumerate(zip(raw, images)):
                 validators.validate_type(result, (dict, Detection), "forward result")
                 if isinstance(result, Detection):
-                    original = result
-                    result = copy(original)
-                    result.objects = [copy(box) for box in original.objects]
-                    for box in result.objects:
-                        box.box = list(box.box)
-                        box.metadata = deepcopy(box.metadata)
-                    result.config = deepcopy(original.config)
-                    result._all_names = dict(original._all_names)
-                    result.__dict__.pop("_collection_registry", None)
+                    result = result._clone()
 
                 frame = self._pack_detection(result, image, offset + index * frame_step, round(elapsed, 2), round(1000 / max(elapsed, 0.001), 1))
                 config = deepcopy(dict(metadata.get("post", {})))
-                config.update(deepcopy(frame.config))
+                config.update(deepcopy(frame.metadata))
                 config.update({
                     "prompt": deepcopy(prompt),
                     "predict_config": self._config_snapshot(metadata, prompt),
@@ -428,9 +408,9 @@ class Detector(BaseModel):
                     "backend": self.backend,
                     "source_path": frame.source_path,
                     "frame_index": frame.frame_index,
-                    "image_frame_index": frame.image_frame_index,
+                    "image_frame_index": frame.frame_index,
                 })
-                frame.config = config
+                frame.metadata = config
                 frames.append(frame)
             return frames
 
@@ -439,25 +419,27 @@ class Detector(BaseModel):
         from klygo import media
         img_path = str(image.path) if isinstance(image, media.LazyImage) else getattr(image, "path", getattr(image, "filename", None))
         final_image = image if isinstance(image, media.LazyImage) else (media.LazyImage(img_path) if img_path is not None else image)
-        actual_idx = getattr(final_image, "frame_index", frame_index)
+        actual_idx = getattr(final_image, "frame_index", None)
+        actual_idx = int(frame_index if actual_idx is None else actual_idx)
 
         if isinstance(det, dict):
             b_list, s_list = det.get("boxes", []), det.get("scores", [1.0] * len(det.get("boxes", [])))
             l_list, c_list = det.get("labels", ["object"] * len(b_list)), det.get("class_ids", range(len(b_list)))
-            box_objs = [
-                Box(id=i, class_id=int(c), label=l, score=float(s), box=b, parent_image=final_image)
-                for i, (b, s, l, c) in enumerate(zip(b_list, s_list, l_list, c_list))
-            ]
-            det = Detection(source_image=final_image, objects=box_objs, image_frame_index=actual_idx, names=self.names)
+            from klygo import preprocessing
+            trace = preprocessing.get_trace(image)
+            if trace:
+                b_list = preprocessing.restore_boxes(b_list, trace)
+                original_size = getattr(image, "_preprocessing_original_size", None)
+                if original_size is not None:
+                    final_image = media.LazyImage(image.path, frame_index=getattr(image, "frame_index", None))
+            box_objs = [Box(b, uid=i, class_id=int(c), label=l, score=float(s)) for i, (b, s, l, c) in enumerate(zip(b_list, s_list, l_list, c_list))]
+            det = Detection(box_objs, frame_index=actual_idx, image_size=final_image.size, source=final_image, names=self.names)
         else:
-            det.source_image = final_image
-            for b in det.objects:
-                b.parent_image = final_image
-
+            det = Detection([box._clone() for box in det], frame_index=actual_idx,
+                            source_path=img_path, image_size=final_image.size, source=final_image,
+                            metadata=det.metadata, names=det._registry)
         det._source_path = str(getattr(final_image, "path", getattr(final_image, "url", img_path))) if (img_path or hasattr(final_image, "url")) else None
-        det._url = getattr(final_image, "url", str(img_path) if img_path else None)
-        det.image_frame_index = det.frame_index = actual_idx
-        det.speed = {"inference": lat_ms, "fps": fps_val}
+        det.metadata.update({"speed": {"inference": lat_ms, "fps": fps_val}})
         return det
 
     def _resolve_prediction(self, prompt: Any, kwargs: Dict[str, Any], *, validate: bool = True) -> Any:

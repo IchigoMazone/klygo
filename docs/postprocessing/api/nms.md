@@ -4,58 +4,39 @@
 postprocessing.nms(iou=0.5, class_agnostic=False)
 ```
 
-Build a named [`Operation`](Operation.md) that applies score-ordered non-maximum suppression (NMS) to overlapping boxes.
-
-## Contract
-
-Returns `Operation("nms", lambda result: suppress(result, iou, class_agnostic))`, wrapping [`postprocessing.suppress()`](suppress.md) as a reusable pipeline stage for [`compose()`](compose.md), [`Pipeline`](Pipeline.md), and [`apply()`](apply.md):
-- Sorts boxes by descending `box.score` and suppresses lower-scoring boxes whose [`box_iou()`](box_iou.md) with a kept box exceeds `iou`.
-- Suppresses within each `class_id` independently when `class_agnostic=False` (default), or across all classes when `class_agnostic=True`.
-- Preserves lazy evaluation when applied to `Detections` streams.
-
-## Parameters
-
-- `iou`: `float`, default `0.5` — maximum allowed IoU overlap in `[0.0, 1.0]` before suppression.
-- `class_agnostic`: `bool`, default `False` — compare boxes across all classes regardless of `class_id` when `True`.
+Creates an `Operation` that applies `suppress`.
 
 ## Returns
 
-`Operation` — frozen `Operation(nms)` callable.
+`Operation`.
 
-## Errors and edge cases
+## Errors
 
-Raises `ValueError("iou must be between 0 and 1")` when invoked if `iou < 0` or `iou > 1`, or `TypeError("result must be Crops, Detection, or Detections")` for unsupported `result` types.
+Raises `TypeError` for unsupported result or argument types. Numeric operations raise `ValueError` when a limit is outside its documented range. Mutation is validated before commit.
 
 ## Example
 
-See [`nms.py`](../../../examples/postprocessing/nms.py) for a standalone runnable script.
-
-## Complete executable example
+See [`nms.py`](../../../examples/postprocessing/nms.py).
 
 ```python
-"""Build a reusable NMS Operation and apply it standalone or inside a Pipeline."""
+from klygo import outputs, postprocessing as post
 
-from PIL import Image
-from klygo import postprocessing as post
-from klygo.outputs.detect import Box, Detection
-
-image = Image.new("RGB", (100, 80), "white")
-frame = Detection(
-    image,
+frame = outputs.Detection(
     [
-        Box(0, "cat", 0.9, [-5, 0, 50, 50]),
-        Box(0, "cat", 0.8, [0, 0, 48, 48]),
-        Box(1, "dog", 0.4, [60, 10, 90, 60]),
+        outputs.Box([-2, 0, 30, 30], label="cat", score=0.9, class_id=0),
+        outputs.Box([0, 0, 28, 28], label="cat", score=0.8, class_id=0),
+        outputs.Box([32, 5, 48, 35], label="dog", score=0.4, class_id=1),
     ],
+    source_id="example",
+    image_size=(50, 40),
+    names={0: "cat", 1: "dog"},
 )
 
-nms_op = post.nms(iou=0.5)
-assert isinstance(nms_op, post.Operation) and nms_op.name == "nms"
-
-deduped = nms_op(frame)
-assert deduped.labels == ["cat", "dog"]
-
-pipeline = post.compose(post.threshold(0.5), nms_op)
-assert pipeline(frame).labels == ["cat"]
-print(deduped.labels)
+operation = post.nms(iou=0.5)
+operation(frame)
+print(frame.labels)
 ```
+
+## Tests
+
+See [`test_postprocessing.py`](../../../test/postprocessing/test_postprocessing.py).

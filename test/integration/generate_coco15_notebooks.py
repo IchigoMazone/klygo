@@ -95,11 +95,11 @@ def notebook(class_id: int, class_name: str, source_id: int):
         """),
         code("""
         ground_truth = datasets.load(DATASET_ROOT, format="yolo", verbose=False)
-        truth_by_id = {files.stem(frame.config["relative_path"]): frame for frame in ground_truth}
+        truth_by_id = {files.stem(frame.metadata["relative_path"]): frame for frame in ground_truth}
         positive_ids = sorted(image_id for image_id, frame in truth_by_id.items()
-                              if any(box.label == TARGET_CLASS for box in frame.objects))
+                              if any(box.label == TARGET_CLASS for box in frame))
         negative_ids = sorted(image_id for image_id, frame in truth_by_id.items()
-                              if all(box.label != TARGET_CLASS for box in frame.objects))
+                              if all(box.label != TARGET_CLASS for box in frame))
         full_dataset = os.getenv("KLYGO_FULL_DATASET") == "1"
         max_positives = int(os.getenv("KLYGO_MAX_POSITIVES", "4"))
         max_negatives = int(os.getenv("KLYGO_MAX_NEGATIVES", "2"))
@@ -116,10 +116,10 @@ def notebook(class_id: int, class_name: str, source_id: int):
         """),
         code("""
         def score_image(truth, prediction):
-            actual = [box for box in truth.objects if box.label == TARGET_CLASS]
+            actual = [box for box in truth if box.label == TARGET_CLASS]
             remaining = set(range(len(actual)))
             tp = fp = 0
-            for box in sorted(prediction.objects, key=lambda item: item.score, reverse=True):
+            for box in sorted(prediction, key=lambda item: item.score, reverse=True):
                 if box.score < 0.25:
                     continue
                 candidates = [(postprocessing.box_iou(box, actual[index]), index)
@@ -139,10 +139,10 @@ def notebook(class_id: int, class_name: str, source_id: int):
             prepared = preprocessing.auto_orient()(lazy_image)
             result = model.predict(prepared, prompt=[TARGET_CLASS], verbose=False)[0]
             assert isinstance(result, outputs.detect.Detection)
-            filtered = postprocessing.apply(result, postprocessing.threshold(0.25), postprocessing.nms(0.5))
-            filtered = postprocessing.select(filtered, labels=[TARGET_CLASS])
-            tp, fp, fn = score_image(truth_by_id[image_id], filtered)
-            predictions[image_id] = filtered
+            postprocessing.apply(result, postprocessing.threshold(0.25), postprocessing.nms(0.5))
+            postprocessing.select(result, labels=[TARGET_CLASS])
+            tp, fp, fn = score_image(truth_by_id[image_id], result)
+            predictions[image_id] = result
             rows.append({"image_id": image_id, "tp": tp, "fp": fp, "fn": fn,
                          "ground_truth": tp + fn, "predictions": tp + fp})
 

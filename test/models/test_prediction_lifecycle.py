@@ -65,12 +65,12 @@ class TestPredictionLifecycle(unittest.TestCase):
     def test_remember_clear_reset_and_callable(self):
         first = self.model(self.image, prompt=["dog"], threshold=.5, verbose=False)
         second = self.model.predict(self.image, verbose=False)
-        self.assertEqual(second[0].text_prompt, ["dog"])
-        self.assertEqual(second[0].threshold, .5)
+        self.assertEqual(second[0].metadata["prompt"], ["dog"])
+        self.assertEqual(second[0].metadata["threshold"], .5)
         self.model(self.image, threshold=.7, verbose=False)
         self.assertEqual(self.model.predict_config["prompt"], ["dog"])
         self.assertEqual(self.model.predict_config["threshold"], .7)
-        self.assertEqual(first[0].threshold, .5)
+        self.assertEqual(first[0].metadata["threshold"], .5)
         self.model(self.image, prompt=None, verbose=False)
         self.assertIsNone(self.model.predict_config["prompt"])
         self.model.reset()
@@ -119,8 +119,8 @@ class TestPredictionLifecycle(unittest.TestCase):
         stream = self.model([self.image] * 3, prompt="old", threshold=.4, stream=True, batch=2, verbose=False)
         self.model(self.image, prompt="new", threshold=.8, verbose=False)
         frames = list(stream)
-        self.assertEqual([frame.text_prompt for frame in frames], [["old"]] * 3)
-        self.assertEqual([frame.threshold for frame in frames], [.4] * 3)
+        self.assertEqual([frame.metadata["prompt"] for frame in frames], [["old"]] * 3)
+        self.assertEqual([frame.metadata["threshold"] for frame in frames], [.4] * 3)
         self.assertEqual(self.model.predict_config["prompt"], ["new"])
         self.assertEqual(self.model.names, {0: "new"})
 
@@ -155,8 +155,7 @@ class TestPredictionLifecycle(unittest.TestCase):
                 setattr(self.model, attribute, None)
         stream = self.model([self.image], stream=True)
         self.model.unload()
-        with self.assertRaises(models.errors.InvalidStateError):
-            next(iter(stream))
+        self.assertEqual(len(stream), 1)
         output = StringIO()
         with redirect_stdout(output):
             self.model.info()
@@ -173,19 +172,20 @@ class TestPredictionLifecycle(unittest.TestCase):
             self.assertEqual([frame.frame_index for frame in result], [0, 2, 4, 6])
 
     def test_reused_backend_objects_do_not_rewrite_previous_results(self):
-        shared = outputs.detect.Detection(self.image, [], config={"nested": {"values": [1]}})
+        shared = outputs.detect.Detection([], image_size=self.image.size, source=self.image,
+                                          metadata={"nested": {"values": [1]}})
         with patch.object(self.model, "forward", return_value=[shared]):
             first = self.model(self.image, prompt="dog", threshold=.4, verbose=False)
             self.model(self.image, prompt="cat", threshold=.7, verbose=False)
-            shared.config["nested"]["values"].append(2)
-        self.assertEqual(first[0].text_prompt, ["dog"])
-        self.assertEqual(first[0].threshold, .4)
-        self.assertEqual(first[0].config["nested"], {"values": [1]})
+            shared.metadata["nested"]["values"].append(2)
+        self.assertEqual(first[0].metadata["prompt"], ["dog"])
+        self.assertEqual(first[0].metadata["threshold"], .4)
+        self.assertEqual(first[0].metadata["nested"], {"values": [1]})
 
     def test_loading_credentials_are_excluded_from_inference_provenance(self):
         self.model.settings["model"]["token"] = "unit-test-secret"
         result = self.model(self.image, verbose=False)
-        self.assertNotIn("unit-test-secret", repr(result[0].config))
+        self.assertNotIn("unit-test-secret", repr(result[0].metadata))
         self.assertNotIn("unit-test-secret", repr(self.model.predict_config))
 
 
@@ -235,7 +235,7 @@ class TestWrapperLifecycle(unittest.TestCase):
         stream = model([self.image] * 2, prompt="dog", stream=True, verbose=False)
         model(self.image, prompt="cat", verbose=False)
         for frame in stream:
-            self.assertEqual(frame.text_prompt, ["dog"])
+            self.assertEqual(frame.metadata["prompt"], ["dog"])
             self.assertEqual(model.model.names, {0: "cat"})
             self.assertEqual(model.predict_config["prompt"], ["cat"])
 

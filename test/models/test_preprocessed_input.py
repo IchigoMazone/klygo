@@ -45,7 +45,7 @@ class TestPreprocessedInput(unittest.TestCase):
                 with self.subTest(name=name):
                     results = model.predict(source, stream=stream, verbose=False)
                     self.assertEqual(
-                        results[0].restore(target="original").boxes,
-                        [[12.0, 12.0, 18.0, 18.0]],
+                        results[0].boxes,
+                        [(12.0, 12.0, 18.0, 18.0)],
                     )
-                    self.assertIsInstance(results[0].source_image, media.LazyImage)
+                    self.assertIsInstance(results[0]._resolve_source(), media.LazyImage)

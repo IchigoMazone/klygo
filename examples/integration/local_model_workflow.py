@@ -65,7 +65,7 @@ class RealLocalDetector(Detector):
             preds = self.base_detector.predict(img, prompt=prompts, verbose=False)[0]
             # Filter by score threshold
             filtered = [
-                box for box in preds.objects
+                box for box in preds
                 if box.score >= self.confidence and box.label in self.target_classes
             ]
             all_detections.append(Detection(source_image=img, objects=filtered))
@@ -103,18 +103,19 @@ def evaluate_local_detector(
     selected_frames = []
     for label in target_classes:
         matching_frame = next(
-            (f for f in gt_detections if any(obj.label == label for obj in f.objects)),
+            (f for f in gt_detections if any(obj.label == label for obj in f)),
             None,
         )
         if matching_frame and matching_frame not in selected_frames:
             selected_frames.append(matching_frame)
 
     # 5. Run real inference through the local detector
-    input_images = [frame.source_image for frame in selected_frames]
+    input_images = [media.load(frame.source_path, verbose=False)[0] for frame in selected_frames]
     predictions = detector(input_images)
 
     # 6. Postprocessing: Apply Non-Maximum Suppression (NMS)
-    cleaned_predictions = postprocessing.suppress(predictions, iou=0.5)
+    postprocessing.suppress(predictions, iou=0.5)
+    cleaned_predictions = predictions
 
     # 7. Evaluate predictions vs ground-truth annotations using IoU matching
     metrics_per_class = {
@@ -124,8 +125,8 @@ def evaluate_local_detector(
 
     for idx, (gt_frame, pred_frame) in enumerate(zip(selected_frames, cleaned_predictions)):
         for cls in target_classes:
-            gt_boxes = [box for box in gt_frame.objects if box.label == cls]
-            pred_boxes = [box for box in pred_frame.objects if box.label == cls]
+            gt_boxes = [box for box in gt_frame if box.label == cls]
+            pred_boxes = [box for box in pred_frame if box.label == cls]
 
             metrics_per_class[cls]["gt"] += len(gt_boxes)
             metrics_per_class[cls]["pred"] += len(pred_boxes)
@@ -149,11 +150,11 @@ def evaluate_local_detector(
             metrics_per_class[cls]["fn"] += len(unmatched_gt)
 
         # 8. Render visual previews with visual.draw_bboxes
-        if pred_frame.objects:
-            overlay_boxes = [[box.xmin, box.ymin, box.xmax, box.ymax] for box in pred_frame.objects]
-            overlay_labels = [f"Pred: {box.label} ({box.score:.2f})" for box in pred_frame.objects]
+        if pred_frame:
+            overlay_boxes = [[box.xmin, box.ymin, box.xmax, box.ymax] for box in pred_frame]
+            overlay_labels = [f"Pred: {box.label} ({box.score:.2f})" for box in pred_frame]
             rendered = visual.draw_bboxes(
-                gt_frame.source_image,
+                media.load(gt_frame.source_path, verbose=False)[0],
                 overlay_boxes,
                 labels=overlay_labels,
                 thickness=2,

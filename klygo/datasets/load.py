@@ -44,7 +44,7 @@ def _read_boxes(label_path: Path | None, class_map: dict[int, str], image) -> li
             raise ValueError(f"{location}: expected normalized coordinates and positive box dimensions")
         boxes.append(
             Box(
-                id=len(boxes),
+                uid=len(boxes),
                 label=class_map[class_id],
                 score=1.0,
                 box=[
@@ -53,7 +53,7 @@ def _read_boxes(label_path: Path | None, class_map: dict[int, str], image) -> li
                     (cx + box_width / 2) * width,
                     (cy + box_height / 2) * height,
                 ],
-                parent_image=image,
+                class_id=class_id,
                 metadata={"class_id": class_id, "ground_truth": True},
             )
         )
@@ -111,7 +111,7 @@ def load(
     >>> flat = datasets.unpartition("dataset.zip", "flat")
     >>> results = datasets.load(flat, format="yolo", verbose=False)
     >>> results[0].show()
-    >>> crops = results.crop()
+    >>> results[0].show(mode="uid")
     """
     validate_dataset_format(format)
 
@@ -135,17 +135,19 @@ def load(
                 split = original_path.parts[0] if len(original_path.parts) > 1 else "raw"
                 frames.append(
                     Detection(
-                        source_image=image,
-                        objects=boxes,
-                        image_frame_index=index,
-                        dataset_source=str(source_path),
-                        relative_path=files.as_posix(original_path),
-                        split=split if split in {"train", "val", "test"} else "raw",
-                        ground_truth=True,
+                        boxes,
+                        source_id=files.as_posix(original_path),
+                        frame_index=0,
+                        source_path=str(image_path),
+                        image_size=image.size,
+                        source=image,
+                        names=class_map,
+                        metadata={"dataset_source": str(source_path), "relative_path": files.as_posix(original_path),
+                                  "split": split if split in {"train", "val", "test"} else "raw", "ground_truth": True},
                     )
                 )
                 progress.update(1)
-    return Detections(frames, source_type="images")
+    return Detections(frames, metadata={"source_type": "images"}, names=class_map)
 
 
 __all__ = ["load"]

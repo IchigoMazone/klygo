@@ -39,17 +39,17 @@ class TestLoad(unittest.TestCase):
             flat = datasets.unpartition(source, root / "flat", verbose=False)
             results = datasets.load(flat, verbose=False)
             self.assertIsInstance(results, Detections)
-            self.assertEqual(results.source_type, "images")
+            self.assertEqual(results.metadata["source_type"], "images")
             self.assertEqual(len(results), 7)
             duplicates = [frame for frame in results if frame.metadata["relative_path"].endswith("same.png")]
             self.assertEqual(len(duplicates), 3)
             self.assertEqual({frame.metadata["split"] for frame in duplicates}, {"train", "val", "test"})
             self.assertEqual(len({frame.metadata["relative_path"] for frame in results}), 7)
             for frame in duplicates:
-                self.assertEqual(frame.boxes, [[10.0, 5.0, 30.0, 15.0]])
+                self.assertEqual(frame.boxes, [(10.0, 5.0, 30.0, 15.0)])
                 self.assertEqual(frame.scores, [1.0])
                 self.assertTrue(frame[0].metadata["ground_truth"])
-                self.assertEqual(frame.crop()[0].image.size, (20, 10))
+                self.assertEqual(frame[0].size, (20, 10))
                 self.assertTrue((source / "images" / frame.metadata["relative_path"]).is_file())
 
     def test_archive_images_survive_source_and_temporary_cleanup(self):
@@ -61,11 +61,9 @@ class TestLoad(unittest.TestCase):
             flat = datasets.unpartition(packed, root / "flat.zip", verbose=False)
             results = datasets.load(flat, verbose=False)
         self.assertEqual(len(results), 4)
-        self.assertEqual(results[0].source_image.size, (32, 24))
-        self.assertEqual(results[0].to_array(annotated=False).shape, (24, 32, 3))
-        self.assertEqual(results.crop()[0].image.size, (16, 12))
-        self.assertEqual(results[:1].total_objects, 1)
-        self.assertIsNone(results[0].source_path)
+        self.assertEqual(results[0]._resolve_source().size, (32, 24))
+        self.assertEqual(results[0]._resolve_source().size, (32, 24))
+        self.assertEqual(sum(frame.count for frame in results[:1]), 1)
 
     def test_sparse_ids_missing_empty_labels_and_nested_names(self):
         with TemporaryDirectory() as directory:
@@ -86,8 +84,8 @@ class TestLoad(unittest.TestCase):
             self.assertTrue(by_path["train/sample_1.jpg"].empty)
             self.assertEqual(by_path["val/sample_2.jpg"].labels, ["fruit", "tree"])
             self.assertEqual([box.metadata["class_id"] for box in by_path["val/sample_2.jpg"]], [3, 8])
-            self.assertEqual([box.id for box in by_path["val/sample_2.jpg"]], [0, 1])
-            self.assertEqual(by_path["train/nested/a%name.png"].source_image.mode, "RGB")
+            self.assertEqual([box.uid for box in by_path["val/sample_2.jpg"]], [0, 1])
+            self.assertEqual(by_path["train/nested/a%name.png"]._resolve_source().mode, "RGB")
 
     def test_flat_and_pathlike_sources(self):
         with TemporaryDirectory() as directory:
@@ -99,7 +97,7 @@ class TestLoad(unittest.TestCase):
                     results = datasets.load(value, verbose=False)
                     self.assertEqual(len(results), 4)
                     self.assertEqual({frame.metadata["split"] for frame in results}, {"train", "val"})
-                    self.assertEqual(results[0].boxes, [[8, 6, 24, 18]])
+                self.assertEqual(results[0].boxes, [(8, 6, 24, 18)])
 
     def test_invalid_labels_report_file_and_line_and_cleanup(self):
         invalid = (

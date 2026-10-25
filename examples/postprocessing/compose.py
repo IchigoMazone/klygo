@@ -1,15 +1,18 @@
-"""Demonstrate postprocessing.compose."""
+"""Executable example for klygo.postprocessing.compose."""
 
-import sys
+from klygo import outputs, postprocessing as post
 
-# Keep select.py from shadowing Python's standard select module.
-sys.path.pop(0)
+frame = outputs.Detection(
+    [
+        outputs.Box([-2, 0, 30, 30], label="cat", score=0.9, class_id=0),
+        outputs.Box([0, 0, 28, 28], label="cat", score=0.8, class_id=0),
+        outputs.Box([32, 5, 48, 35], label="dog", score=0.4, class_id=1),
+    ],
+    source_id="example",
+    image_size=(50, 40),
+    names={0: "cat", 1: "dog"},
+)
 
-from PIL import Image
-from klygo import postprocessing as post
-from klygo.outputs.detect import Box, Detection
-
-image = Image.new("RGB", (100, 80), "white")
-frame = Detection(image, [Box(0, "cat", 0.9, [-5, 0, 50, 50]), Box(0, "cat", 0.8, [0, 0, 48, 48]), Box(1, "dog", 0.4, [60, 10, 90, 60])])
 pipeline = post.compose(post.threshold(0.5), post.top(1))
-print(pipeline(frame).labels)
+pipeline(frame)
+print(frame.labels)

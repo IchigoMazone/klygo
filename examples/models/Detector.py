@@ -44,8 +44,8 @@ image = Image.new("RGB", (24, 24), "white")
 first = detector(image, prompt=["person"], threshold=0.5, verbose=False)
 second = detector(image, verbose=False)
 print("Remembered configuration:", detector.predict_config)
-print("Original result context:", first[0].config)
-print("Second result context:", second[0].config)
+print("Original result context:", first[0].metadata)
+print("Second result context:", second[0].metadata)
 print("Device / dtype:", detector.device, detector.dtype)
 report = detector.benchmark(
     image,

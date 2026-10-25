@@ -106,44 +106,6 @@ class TestPreprocessing(unittest.TestCase):
         restored = p.restore_boxes([[0, 25, 100, 75]], p.get_trace(processed))
         assert np.allclose(restored[0], [0, 0, 100, 50])
 
-    def test_detection_restore_supports_transformed_and_original_spaces(self):
-        image = media.load(_image_path(self.tmp_path, size=(100, 50)))[0]
-        processed = p.compose([p.resize((40, 20)), p.grayscale()])(image)
-        p.materialize(processed, output="array", cache=False)
-        detection = Detection(
-            source_image=processed,
-            objects=[Box(0, "object", 0.9, [10, 5, 30, 15])],
-        )
-
-        transformed = detection.restore(target="transformed")
-        assert transformed is not detection
-        assert transformed.source_image.size == (40, 20)
-        assert transformed.source_image.to_pil().mode == "RGB"
-        assert transformed.boxes == [[10.0, 5.0, 30.0, 15.0]]
-
-        original = detection.restore(target="original")
-        assert original.source_image.size == (100, 50)
-        assert original.source_image.to_pil().mode == "RGB"
-        assert np.allclose(original.boxes[0], [25, 12.5, 75, 37.5])
-        assert detection.source_image.size == (40, 20)
-
-    def test_detection_restore_can_update_inplace(self):
-        image = media.load(_image_path(self.tmp_path, size=(100, 50)))[0]
-        processed = p.resize((50, 25))(image)
-        p.materialize(processed, output="array", cache=False)
-        detection = Detection(processed, [Box(0, "object", 0.8, [5, 5, 25, 20])])
-
-        returned = detection.restore(target="original", inplace=True)
-
-        assert returned is detection
-        assert detection.source_image.size == (100, 50)
-        assert np.allclose(detection.boxes[0], [10, 10, 50, 40])
-        assert detection.objects[0].parent_image is detection.source_image
-
-        restored_collection = Detections([detection]).restore(target="transformed")
-        assert isinstance(restored_collection, Detections)
-        assert restored_collection[0].source_image.size == (100, 50)
-
     def test_metrics_and_predicates_accept_lazy_image(self):
         image = media.load(_image_path(self.tmp_path))[0]
         condition = p.all_of(

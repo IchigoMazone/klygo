@@ -199,7 +199,8 @@ class LocalTorchvisionDetector(Detector):
         results = outputs.build_detections(images, formatted, names=self.names)
         if prompt:
             requested = [prompt] if isinstance(prompt, str) else list(prompt)
-            return [postprocessing.select(det, labels=requested) for det in results]
+            for detection in results:
+                postprocessing.select(detection, labels=requested)
         return results
 
 
@@ -253,7 +254,8 @@ class LocalKerasDetector(Detector):
         results = outputs.build_detections(images, raw_list, names=self.names)
         if prompt:
             requested = [prompt] if isinstance(prompt, str) else list(prompt)
-            return [postprocessing.select(det, labels=requested) for det in results]
+            for detection in results:
+                postprocessing.select(detection, labels=requested)
         return results
 
 
@@ -270,7 +272,7 @@ def evaluate_model_on_dataset(
     iou_thresh: float = 0.50,
 ) -> Dict[str, Any]:
     """Evaluate a single Detector on positive and negative images for assigned classes."""
-    frames_by_id = {files.stem(f.config["relative_path"]): f for f in dataset_frames}
+    frames_by_id = {files.stem(f.metadata["relative_path"]): f for f in dataset_frames}
     class_stats = {
         cls: {"gt": 0, "pred": 0, "tp": 0, "fp": 0, "fn": 0}
         for cls in assigned_classes
@@ -281,16 +283,16 @@ def evaluate_model_on_dataset(
     for label in assigned_classes:
         # Select 1 representative positive image (with the clearest foreground object) and 1 negative image
         pos_id = max(
-            (k for k, f in frames_by_id.items() if any(b.label == label for b in f.objects)),
+            (k for k, f in frames_by_id.items() if any(b.label == label for b in f)),
             key=lambda k: max(
                 (b.box[2] - b.box[0]) * (b.box[3] - b.box[1])
-                for b in frames_by_id[k].objects
+                for b in frames_by_id[k]
                 if b.label == label
             ),
             default=None,
         )
         neg_id = next(
-            (k for k, f in sorted(frames_by_id.items()) if all(b.label != label for b in f.objects)),
+            (k for k, f in sorted(frames_by_id.items()) if all(b.label != label for b in f)),
             None,
         )
 
@@ -298,21 +300,21 @@ def evaluate_model_on_dataset(
 
         for image_id in test_ids:
             gt_frame = frames_by_id[image_id]
-            gt_boxes = [b for b in gt_frame.objects if b.label == label]
+            gt_boxes = [b for b in gt_frame if b.label == label]
             class_stats[label]["gt"] += len(gt_boxes)
 
-            image = gt_frame.source_image
+            image = media.load(gt_frame.source_path, verbose=False)[0]
             t0 = time.perf_counter()
             pred_det = model.predict(image, prompt=[label], verbose=False)[0]
             latencies.append(time.perf_counter() - t0)
 
             # Apply postprocessing threshold and NMS
-            pred_det = postprocessing.apply(
+            postprocessing.apply(
                 pred_det,
                 postprocessing.threshold(0.35),
                 postprocessing.nms(0.50),
             )
-            pred_boxes = [b for b in pred_det.objects if b.label == label]
+            pred_boxes = [b for b in pred_det if b.label == label]
             class_stats[label]["pred"] += len(pred_boxes)
 
             # Match detections against ground truth using box_iou

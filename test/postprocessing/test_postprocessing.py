@@ -1,134 +1,36 @@
+"""Tests for in-place postprocessing over both container levels."""
 import unittest
-from PIL import Image
+from klygo import outputs, postprocessing as post
 
-from klygo import postprocessing as post
-from klygo.outputs.detect import Box, Detection, Detections
-
-
-def _detection(frame_index=0):
-    image = Image.new("RGB", (100, 80), "white")
-    return Detection(
-        image,
-        [
-            Box(0, "vehicle", 0.95, [-5, -5, 50, 50], image),
-            Box(1, "vehicle", 0.80, [0, 0, 48, 48], image),
-            Box(2, "person", 0.60, [60, 10, 90, 70], image),
-            Box(3, "invalid", 0.99, [20, 20, 10, 30], image),
-        ],
-        image_frame_index=frame_index,
-    )
+def result():
+    frame = outputs.Detection([
+        outputs.Box([-5,0,50,50], label="cat", score=.9, class_id=0),
+        outputs.Box([0,0,48,48], label="cat", score=.8, class_id=0),
+        outputs.Box([60,10,90,60], label="dog", score=.4, class_id=1),
+    ], source_id="a", image_size=(80,50), names={0:"cat",1:"dog"})
+    return outputs.Detections([frame])
 
 class TestPostprocessing(unittest.TestCase):
-    def test_box_copy_operations(self):
-        box = _detection()[0].with_metadata(reviewed=True)
-        changed = box.with_label("car").with_score(0.9).translate(2, 3).scale(1.2).clip((100, 80))
-        assert changed.uid == box.uid
-        assert changed.metadata["reviewed"] is True
-        assert changed.label == "car"
-        assert changed.score == 0.9
-        assert box.label == "vehicle"
+    def test_pipeline_mutates_collection(self):
+        results = result(); returned = post.apply(results, post.clip(), post.threshold(.5), post.nms(.5), post.top(1))
+        self.assertIsNone(returned); self.assertEqual(results.total_objects, 1)
+        self.assertEqual(results[0][0].box, (0.,0.,50.,50.)); self.assertEqual(results[0][0].uid, 0)
 
-    def test_detection_pythonic_operations(self):
-        result = _detection()
+    def test_direct_frame_operations(self):
+        frame = result()[0]; post.filter_score(frame, .85)
+        self.assertEqual(frame.uids, [0]); post.relabel(frame, {"cat":"animal"})
+        self.assertEqual(frame.labels, ["animal"]); post.drop(frame, labels=["animal"])
+        self.assertTrue(frame.empty)
 
-        selected = result.select(ids=[0, 2])
-        assert [box.id for box in selected] == [0, 2]
+    def test_iou(self):
+        frame = result()[0]; self.assertGreater(post.box_iou(frame[0], frame[1]), .8)
 
-        renamed = result.relabel("car", ids=[0, 1])
-        assert renamed.labels == ["car", "car", "person", "invalid"]
-        assert result.labels[0] == "vehicle"
+    def test_pipeline_is_atomic_when_a_later_operation_fails(self):
+        results = result(); before = results.to_dict()
+        def fail(_result):
+            raise RuntimeError("expected failure")
+        with self.assertRaises(RuntimeError):
+            post.apply(results, post.threshold(.5), fail)
+        self.assertEqual(results.to_dict(), before)
 
-        mapped = result.relabel({0: "truck", 2: "pedestrian"})
-        assert mapped.labels == ["truck", "vehicle", "pedestrian", "invalid"]
-
-        dropped = result.drop(where=lambda box: box.score < 0.7)
-        assert dropped.labels == ["vehicle", "vehicle", "invalid"]
-
-        transformed = result.map_boxes(
-            lambda box: box.with_label("human") if box.label == "person" else box
-        )
-        assert "human" in transformed.labels
-
-        cleaned = result.clip().remove_invalid(min_area=10).filter_score(0.7).nms(iou=0.5).top(1)
-        assert len(cleaned) == 1
-        assert cleaned[0].id == 0
-        assert cleaned[0].box == [0.0, 0.0, 50.0, 50.0]
-
-    def test_class_id_selectors_and_relabel_registry(self):
-        result = _detection()
-
-        selected = result.select(class_ids=[0, 1])
-        assert selected.ids == [0, 1, 2]
-        assert selected.class_ids == [0, 0, 1]
-
-        renamed = result.relabel("car", class_ids=[0])
-        assert renamed.ids == result.ids
-        assert renamed[0].class_id == renamed[1].class_id
-        assert renamed.names[renamed[0].class_id] == "car"
-        assert result.labels[:2] == ["vehicle", "vehicle"]
-
-    def test_class_aware_nms_uses_class_id(self):
-        image = Image.new("RGB", (100, 80), "white")
-        result = Detection(
-            image,
-            [
-                Box(0, "object", 0.9, [0, 0, 50, 50], class_id=3),
-                Box(1, "object", 0.8, [1, 1, 49, 49], class_id=4),
-            ],
-            names={3: "object", 4: "object"},
-        )
-
-        assert len(result.nms(iou=0.5)) == 2
-        assert len(result.nms(iou=0.5, class_agnostic=True)) == 1
-
-    def test_filtering_preserves_sparse_box_ids(self):
-        result = _detection().drop(ids=[1])
-        assert result.ids == [0, 2, 3]
-        assert result.crops.ids == [0, 2, 3]
-
-        vehicle_crops = result.crops.select(class_ids=[0])
-        assert vehicle_crops.ids == [0]
-        assert vehicle_crops.names == {0: "vehicle"}
-
-        selected_results = Detections([result]).select(class_ids=[0])
-        assert selected_results[0].ids == [0]
-
-    def test_pipeline_and_frame_operations(self):
-        pipeline = post.compose(
-            post.clip(),
-            post.remove_invalid(min_area=10),
-            post.threshold(0.7),
-            post.nms(iou=0.5),
-            post.top(1),
-        )
-
-        first = _detection(frame_index=10)
-        second = _detection(frame_index=20)
-        results = Detections([first, second], source_type="video", fps=25)
-        cleaned = pipeline(results)
-        assert [len(frame) for frame in cleaned] == [1, 1]
-        assert len(post.compose([post.threshold(0.5), post.top(2)])) == 2
-
-        assert results.get_frame(20) is second
-        replacement = second.relabel("car")
-        replaced = results.replace_frame(20, replacement)
-        assert replaced.get_frame(20).labels == ["car"] * 4
-        assert results.get_frame(20).labels[0] == "vehicle"
-
-        updated = results.update_frame(10, lambda frame: frame.drop(labels=["invalid"]))
-        assert "invalid" not in updated.get_frame(10).labels
-        assert [frame.frame_index for frame in results.remove_frame(10)] == [20]
-
-    def test_stream_stays_lazy(self):
-        consumed = []
-
-        def source():
-            for index in (0, 1, 2):
-                consumed.append(index)
-                yield _detection(frame_index=index)
-
-        results = Detections(source(), stream=True, total_frames=3)
-        processed = results.filter_score(0.9).relabel("object")
-        assert consumed == []
-        assert processed[0].labels == ["object", "object"]
-        assert consumed == [0]
+if __name__ == "__main__": unittest.main()

@@ -1,299 +1,104 @@
-"""Pythonic transformations for ``Box``, ``Detection`` and ``Detections``."""
-
-from __future__ import annotations
-
+"""Backend-neutral, in-place detection postprocessing."""
 import math
-from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence, Tuple, Union
+from typing import Callable, Iterable, Mapping, Optional
+from klygo.outputs.detect import Box, Detection, Detections
 
-from klygo.outputs.detect import Box, Crops, Detection, Detections
-from .core import Operation
+Result = Detection | Detections
 
-Result = Union[Crops, Detection, Detections]
-Predicate = Callable[[Box], bool]
+def _frames(result: Result, function: Callable[[Detection], None]) -> None:
+    if isinstance(result, Detections): result.map(lambda frame: function(frame))
+    elif isinstance(result, Detection): function(result)
+    else: raise TypeError("result must be a Detection or Detections")
 
+def select(result: Result, *, where: Optional[Callable[[Box], bool]] = None,
+           labels: Optional[Iterable[str]] = None, class_ids: Optional[Iterable[int]] = None,
+           uids: Optional[Iterable[int]] = None) -> None:
+    """Keep boxes matching every supplied selector."""
+    ls = None if labels is None else set(labels); cs = None if class_ids is None else set(class_ids); us = None if uids is None else set(uids)
+    def matches(box: Box) -> bool:
+        return ((where is None or bool(where(box))) and (ls is None or box.label in ls) and
+                (cs is None or box.class_id in cs) and (us is None or box.uid in us))
+    _frames(result, lambda frame: frame.filter(matches))
 
-def _copy_detection(result: Detection, boxes: Iterable[Box]) -> Detection:
-    copied = Detection(
-        result.source_image,
-        list(boxes),
-        dict(result.speed),
-        result.image_frame_index,
-        config=dict(result.config),
-        names=result._all_names,
-    )
-    copied.timestamp = result.timestamp
-    copied._source_path = result.source_path
-    copied._url = result.url
-    return copied
+def map_boxes(result: Result, function: Callable[[Box], Optional[Box]]) -> None:
+    """Transform boxes atomically."""
+    _frames(result, lambda frame: frame.map(function))
 
+def relabel(result: Result, mapping: Mapping[str, str]) -> None:
+    """Rename or merge labels."""
+    if isinstance(result, (Detection, Detections)): result.relabel(mapping)
+    else: raise TypeError("result must be a Detection or Detections")
 
-def _map_result(result: Result, function: Callable[[Detection], Detection]) -> Result:
-    if isinstance(result, Crops):
-        frame = Detection(
-            result.source_image,
-            list(result.crops),
-            names=result._all_names,
-        )
-        transformed = function(frame)
-        return Crops(
-            transformed.objects,
-            result.source_image,
-            result.pad,
-            transformed._all_names,
-        )
-    if isinstance(result, Detections):
-        return result.map(function)
-    if isinstance(result, Detection):
-        return function(result)
-    raise TypeError("result must be Crops, Detection, or Detections")
+def drop(result: Result, *, labels: Iterable[str]) -> None:
+    """Remove boxes with matching labels."""
+    if isinstance(result, (Detection, Detections)): result.drop(labels)
+    else: raise TypeError("result must be a Detection or Detections")
 
+def filter_score(result: Result, minimum: float) -> None:
+    """Remove boxes below a score threshold."""
+    minimum = float(minimum); select(result, where=lambda box: box.score >= minimum)
 
-def _matches(
-    box: Box,
-    *,
-    ids: Optional[Iterable[int]] = None,
-    class_ids: Optional[Iterable[int]] = None,
-    uids: Optional[Iterable[str]] = None,
-    labels: Optional[Iterable[str]] = None,
-    where: Optional[Predicate] = None,
-) -> bool:
-    if ids is not None and box.id not in set(ids):
-        return False
-    if class_ids is not None and box.class_id not in set(class_ids):
-        return False
-    if uids is not None and box.uid not in set(uids):
-        return False
-    if labels is not None and box.label not in set(labels):
-        return False
-    return where(box) if where is not None else True
+def clip_boxes(result: Result, image_size: Optional[tuple[int, int]] = None) -> None:
+    """Clip coordinates and discard boxes wholly outside the image."""
+    def clip_frame(frame: Detection) -> None:
+        width, height = image_size or frame.image_size; kept = []
+        for original in frame:
+            values = max(0., original.xmin), max(0., original.ymin), min(float(width), original.xmax), min(float(height), original.ymax)
+            if values[2] <= values[0] or values[3] <= values[1]: continue
+            item = original._clone(); item.box = values; kept.append(item)
+        frame._commit(kept, "clip_boxes")
+    _frames(result, clip_frame)
 
-
-def select(
-    result: Result,
-    *,
-    ids: Optional[Iterable[int]] = None,
-    class_ids: Optional[Iterable[int]] = None,
-    uids: Optional[Iterable[str]] = None,
-    labels: Optional[Iterable[str]] = None,
-    where: Optional[Predicate] = None,
-) -> Result:
-    """Keep boxes matching all supplied selectors."""
-    id_set = set(ids) if ids is not None else None
-    class_id_set = set(class_ids) if class_ids is not None else None
-    uid_set = set(uids) if uids is not None else None
-    label_set = set(labels) if labels is not None else None
-    return _map_result(
-        result,
-        lambda frame: _copy_detection(
-            frame,
-            (
-                box
-                for box in frame
-                if _matches(
-                    box,
-                    ids=id_set,
-                    class_ids=class_id_set,
-                    uids=uid_set,
-                    labels=label_set,
-                    where=where,
-                )
-            ),
-        ),
-    )
-
-
-def map_boxes(result: Result, function: Callable[[Box], Optional[Box]]) -> Result:
-    """Transform every box; returning ``None`` drops that box."""
-    if not callable(function):
-        raise TypeError("function must be callable")
-
-    def transform(frame: Detection) -> Detection:
-        mapped = []
-        for box in frame:
-            value = function(box)
-            if value is None:
-                continue
-            if not isinstance(value, Box):
-                raise TypeError("map_boxes function must return Box or None")
-            mapped.append(value)
-        return _copy_detection(frame, mapped)
-
-    return _map_result(result, transform)
-
-
-def relabel(
-    result: Result,
-    label: Union[str, Mapping[int, str], Callable[[Box], str]],
-    *,
-    ids: Optional[Iterable[int]] = None,
-    class_ids: Optional[Iterable[int]] = None,
-    uids: Optional[Iterable[str]] = None,
-    labels: Optional[Iterable[str]] = None,
-    where: Optional[Predicate] = None,
-) -> Result:
-    """Relabel selected boxes while retaining every unselected box."""
-    id_set = set(ids) if ids is not None else None
-    class_id_set = set(class_ids) if class_ids is not None else None
-    uid_set = set(uids) if uids is not None else None
-    label_set = set(labels) if labels is not None else None
-
-    def rename(box: Box) -> Box:
-        if not _matches(
-            box,
-            ids=id_set,
-            class_ids=class_id_set,
-            uids=uid_set,
-            labels=label_set,
-            where=where,
-        ):
-            return box
-        if isinstance(label, Mapping):
-            new_label = label.get(box.id, box.label)
-        elif callable(label):
-            new_label = label(box)
-        else:
-            new_label = label
-        return box.with_label(new_label)
-
-    return map_boxes(result, rename)
-
-
-def drop(
-    result: Result,
-    *,
-    ids: Optional[Iterable[int]] = None,
-    class_ids: Optional[Iterable[int]] = None,
-    uids: Optional[Iterable[str]] = None,
-    labels: Optional[Iterable[str]] = None,
-    where: Optional[Predicate] = None,
-) -> Result:
-    """Remove boxes matching all supplied selectors."""
-    id_set = set(ids) if ids is not None else None
-    class_id_set = set(class_ids) if class_ids is not None else None
-    uid_set = set(uids) if uids is not None else None
-    label_set = set(labels) if labels is not None else None
-    return map_boxes(
-        result,
-        lambda box: None
-        if _matches(
-            box,
-            ids=id_set,
-            class_ids=class_id_set,
-            uids=uid_set,
-            labels=label_set,
-            where=where,
-        )
-        else box,
-    )
-
-
-def filter_score(result: Result, minimum: float) -> Result:
-    """Keep boxes whose score is at least ``minimum``."""
-    threshold_value = float(minimum)
-    return select(result, where=lambda box: box.score >= threshold_value)
-
-
-def clip_boxes(result: Result, image_size: Optional[Tuple[int, int]] = None) -> Result:
-    """Clip coordinates to the image bounds."""
-    def transform(frame: Detection) -> Detection:
-        size = image_size or frame.image_size
-        return _copy_detection(frame, (box.clip(size) for box in frame))
-    return _map_result(result, transform)
-
-
-def remove_invalid_boxes(result: Result, min_area: float = 0) -> Result:
-    """Remove non-finite, inverted or undersized boxes."""
+def remove_invalid_boxes(result: Result, min_area: float = 0) -> None:
+    """Remove non-finite, inverted, or undersized boxes."""
     minimum = float(min_area)
+    if minimum < 0: raise ValueError("min_area must be non-negative")
+    select(result, where=lambda box: all(math.isfinite(v) for v in box.box) and box.area >= minimum)
 
-    def valid(box: Box) -> bool:
-        return (
-            len(box.box) == 4
-            and all(math.isfinite(value) for value in box.box)
-            and box.xmax > box.xmin
-            and box.ymax > box.ymin
-            and box.area >= minimum
-        )
+def box_iou(first: Box, second: Box) -> float:
+    """Return intersection over union for two boxes."""
+    if not isinstance(first, Box) or not isinstance(second, Box): raise TypeError("first and second must be Box instances")
+    x1, y1, x2, y2 = max(first.xmin, second.xmin), max(first.ymin, second.ymin), min(first.xmax, second.xmax), min(first.ymax, second.ymax)
+    intersection = max(0., x2-x1) * max(0., y2-y1); union = first.area + second.area - intersection
+    return 0. if union <= 0 else intersection / union
 
-    return select(result, where=valid)
-
-
-def box_iou(first: Union[Box, Sequence[float]], second: Union[Box, Sequence[float]]) -> float:
-    """Compute IoU for two XYXY boxes."""
-    a = first.box if isinstance(first, Box) else first
-    b = second.box if isinstance(second, Box) else second
-    ax1, ay1, ax2, ay2 = map(float, a[:4])
-    bx1, by1, bx2, by2 = map(float, b[:4])
-    intersection = max(0.0, min(ax2, bx2) - max(ax1, bx1)) * max(0.0, min(ay2, by2) - max(ay1, by1))
-    area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
-    area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
-    union = area_a + area_b - intersection
-    return intersection / union if union > 0 else 0.0
-
-
-def suppress(result: Result, iou: float = 0.5, class_agnostic: bool = False) -> Result:
+def suppress(result: Result, iou: float = .5, class_agnostic: bool = False) -> None:
     """Apply score-ordered non-maximum suppression."""
-    threshold_value = float(iou)
-    if not 0 <= threshold_value <= 1:
-        raise ValueError("iou must be between 0 and 1")
-
-    def transform(frame: Detection) -> Detection:
-        remaining = sorted(frame.objects, key=lambda box: box.score, reverse=True)
-        kept = []
+    iou = float(iou)
+    if not 0 <= iou <= 1: raise ValueError("iou must be between 0 and 1")
+    def one(frame: Detection) -> None:
+        remaining = sorted(frame, key=lambda box: box.score, reverse=True); kept = []
         while remaining:
-            current = remaining.pop(0)
-            kept.append(current)
-            remaining = [
-                candidate
-                for candidate in remaining
-                if (not class_agnostic and candidate.class_id != current.class_id)
-                or box_iou(current, candidate) <= threshold_value
-            ]
-        return _copy_detection(frame, kept)
+            current = remaining.pop(0); kept.append(current)
+            remaining = [candidate for candidate in remaining if (not class_agnostic and candidate.class_id != current.class_id) or box_iou(current, candidate) <= iou]
+        frame._commit(kept, "nms")
+    _frames(result, one)
 
-    return _map_result(result, transform)
+def top_boxes(result: Result, count: int) -> None:
+    """Keep the highest-scoring boxes per frame."""
+    if isinstance(count, bool) or not isinstance(count, int): raise TypeError("count must be an integer")
+    if count < 0: raise ValueError("count must be non-negative")
+    _frames(result, lambda frame: frame._commit(sorted(frame, key=lambda box: box.score, reverse=True)[:count], "top"))
 
-
-def top_boxes(result: Result, count: int) -> Result:
-    """Keep the highest-scoring ``count`` boxes per frame."""
-    limit = int(count)
-    if limit < 0:
-        raise ValueError("count must be greater than or equal to 0")
-    return _map_result(
-        result,
-        lambda frame: _copy_detection(
-            frame,
-            sorted(frame.objects, key=lambda box: box.score, reverse=True)[:limit],
-        ),
-    )
-
-
-def threshold(minimum: float) -> Operation:
-    """Build an operation that keeps boxes meeting a score threshold."""
+def threshold(minimum: float):
+    """Build a score-threshold operation."""
+    from .core import Operation
     return Operation("threshold", lambda result: filter_score(result, minimum))
-
-
-def clip(image_size: Optional[Tuple[int, int]] = None) -> Operation:
-    """Build an operation that clips box coordinates to image bounds."""
+def clip(image_size: Optional[tuple[int, int]] = None):
+    """Build a clipping operation."""
+    from .core import Operation
     return Operation("clip", lambda result: clip_boxes(result, image_size))
-
-
-def remove_invalid(min_area: float = 0) -> Operation:
-    """Build an operation that removes boxes smaller than ``min_area``."""
+def remove_invalid(min_area: float = 0):
+    """Build an invalid-box removal operation."""
+    from .core import Operation
     return Operation("remove_invalid", lambda result: remove_invalid_boxes(result, min_area))
-
-
-def nms(iou: float = 0.5, class_agnostic: bool = False) -> Operation:
-    """Build a nonmaximum-suppression operation for overlapping boxes."""
+def nms(iou: float = .5, class_agnostic: bool = False):
+    """Build a non-maximum-suppression operation."""
+    from .core import Operation
     return Operation("nms", lambda result: suppress(result, iou, class_agnostic))
-
-
-def top(count: int) -> Operation:
-    """Build an operation retaining the highest-scoring ``count`` boxes."""
+def top(count: int):
+    """Build a top-score operation."""
+    from .core import Operation
     return Operation("top", lambda result: top_boxes(result, count))
 
-
-__all__ = [
-    "select", "map_boxes", "relabel", "drop", "filter_score", "clip_boxes",
-    "remove_invalid_boxes", "box_iou", "suppress", "top_boxes", "threshold",
-    "clip", "remove_invalid", "nms", "top",
-]
+__all__ = ["select", "map_boxes", "relabel", "drop", "filter_score", "clip_boxes", "remove_invalid_boxes", "box_iou", "suppress", "top_boxes", "threshold", "clip", "remove_invalid", "nms", "top"]

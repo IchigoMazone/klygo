@@ -106,5 +106,5 @@ class GroundingDinoDetect(Detector):
             names=self._result_names,
         )
         if results:
-            self._result_names = dict(results[0]._all_names)
+            self._result_names = dict(results[0]._registry)
         return results

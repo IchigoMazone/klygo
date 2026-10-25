@@ -19,5 +19,5 @@ with TemporaryDirectory() as directory:
     print("First image:", results[0].metadata["relative_path"])
     print("Boxes in pixels:", results[0].boxes)
 
-# Pixels remain available after both the flat workspace and source are removed.
-print("First crop size:", results.crop()[0].image.size)
+# Annotation dimensions remain available without decoding source pixels.
+print("First image size:", results[0].image_size)
