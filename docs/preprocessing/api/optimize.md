@@ -6,13 +6,13 @@ Defined in `core.py`.
 preprocessing.optimize(pipeline: 'Union[Operation, Compose]') -> 'Compose'
 ```
 
-Create or execute optimize for an image preprocessing pipeline.
+Return a flattened pipeline while preserving the exact operation order and pixel result.
 
 **Parameters**
 
 - `pipeline` (Union[Operation, Compose]): Operation or composed pipeline to inspect or optimize.
 
-**Returns and effects:** operation, pipeline, predicate, metric, or evaluated image value. Image operations remain deferred when applied to a `media.LazyImage`; calling `materialize` decodes pixels.
+**Returns and effects:** a normalized `Compose` with pixel-equivalent behavior. Image operations remain deferred when applied to a `media.LazyImage`; calling `materialize` decodes pixels.
 
 **Errors:** Non-callable executors, unsupported pipeline items, or invalid inputs raise the relevant `TypeError` or `ValueError`.
 

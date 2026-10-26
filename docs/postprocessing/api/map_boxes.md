@@ -1,14 +1,14 @@
 # `postprocessing.map_boxes`
 
 ```python
-postprocessing.map_boxes(result, function)
+postprocessing.map_boxes(function)
 ```
 
-Runs a transformation on detached box drafts and commits all changes atomically.
+Builds an operation that transforms detached box drafts and commits all changes atomically.
 
 ## Returns
 
-`None`.
+`Operation` — apply it with `result.transform(...)` or include it in `postprocessing.compose(...)`.
 
 ## Errors
 
@@ -32,7 +32,7 @@ frame = outputs.Detection(
     names={0: "cat", 1: "dog"},
 )
 
-post.map_boxes(frame, lambda box: (box.translate(1, 1), box)[1])
+frame.transform(post.map_boxes(lambda box: (box.translate(1, 1), box)[1]))
 print(frame.labels)
 ```
 

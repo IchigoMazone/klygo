@@ -26,6 +26,8 @@ probe
     Inspect image or video metadata.
 to_array, to_tensor, to_pil
     Convert between NumPy, PyTorch, and Pillow representations.
+compose
+    Compose sequential filtering, sampling, and transformation pipelines.
 """
 
 from .operations import (
@@ -41,9 +43,17 @@ from .operations import (
     to_tensor,
     to_pil,
     MediaFrames,
-    MediaStream,
     LazyImage,
     VideoReader,
+    compose,
+    quality,
+    where_quality,
+    motion,
+    where_motion,
+    deduplicate,
+    sample,
+    limit,
+    where,
     IMAGE_SUFFIXES,
     VIDEO_SUFFIXES,
 )
@@ -61,7 +71,7 @@ __all__ = [
     "to_tensor",
     "to_pil",
     "MediaFrames",
-    "MediaStream",
     "LazyImage",
     "VideoReader",
+    "compose",
 ]

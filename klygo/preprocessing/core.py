@@ -93,6 +93,8 @@ class Operation:
     terminal: bool = False
 
     def __call__(self, image: Any) -> Any:
+        if type(image).__name__ == "MediaFrames" and hasattr(image, "transform"):
+            return image.transform(self)
         if _is_lazy_image(image):
             result = _clone_lazy(image)
             result._preprocessing_ops = list(image._preprocessing_ops) + [self]
@@ -188,6 +190,8 @@ class Compose:
         self.operations = tuple(flattened)
 
     def __call__(self, image: Any) -> Any:
+        if type(image).__name__ == "MediaFrames" and hasattr(image, "transform"):
+            return image.transform(self)
         result = image
         for operation in self.operations:
             result = operation(result)
@@ -343,7 +347,10 @@ def register(name: str, executor: Callable[..., Any]) -> None:
     _EXECUTORS[name] = executor
 
 
-def custom(function: Callable[[Any], Any], backend: str = "auto", name: Optional[str] = None, **kwargs: Any) -> Operation:
+def custom(function: Callable[[Any], Any], backend: str = "auto", name: Optional[str] = None,
+           *, changes_geometry: bool = False,
+           inverse: Optional[Callable[[Sequence[float], Dict[str, Any]], Sequence[float]]] = None,
+           **kwargs: Any) -> Operation:
     """Create or execute custom for an image preprocessing pipeline.
 
     Parameters
@@ -354,6 +361,11 @@ def custom(function: Callable[[Any], Any], backend: str = "auto", name: Optional
         Requested pixel backend; auto selects a compatible implementation.
     name : Optional[str]
         Public name used in operation descriptions and traces.
+    changes_geometry : bool
+        Whether the callable changes image coordinates.
+    inverse : callable, optional
+        Restore one ``(x, y)`` point from output to input coordinates. Required
+        when ``changes_geometry`` is true. It receives the point and trace step.
     kwargs : Any
         Value passed to the operation or evaluator.
 
@@ -364,10 +376,17 @@ def custom(function: Callable[[Any], Any], backend: str = "auto", name: Optional
     """
     if not callable(function):
         raise TypeError("function must be callable")
+    if not isinstance(changes_geometry, bool):
+        raise TypeError("changes_geometry must be a boolean")
+    if changes_geometry and not callable(inverse):
+        raise TypeError("inverse must be callable when changes_geometry is true")
+    if inverse is not None and not callable(inverse):
+        raise TypeError("inverse must be callable or None")
     return Operation(
         name=name or getattr(function, "__name__", "custom"),
-        params={"function": function, "kwargs": kwargs},
+        params={"function": function, "kwargs": kwargs, "inverse": inverse},
         backend=backend,
+        changes_geometry=changes_geometry,
     )
 
 
@@ -396,7 +415,7 @@ def inspect(pipeline: Union[Operation, Compose, Any]) -> List[Dict[str, Any]]:
 
 
 def optimize(pipeline: Union[Operation, Compose]) -> Compose:
-    """Create or execute optimize for an image preprocessing pipeline.
+    """Normalize a pipeline without changing its pixel semantics.
 
     Parameters
     ----------
@@ -408,21 +427,34 @@ def optimize(pipeline: Union[Operation, Compose]) -> Compose:
     object
         An operation, pipeline, predicate, metric, or evaluated image result.
     """
-    operations = [pipeline] if isinstance(pipeline, Operation) else list(pipeline.operations)
-    optimized: List[Operation] = []
-    for operation in operations:
-        if optimized and operation.name == "convert_color" and optimized[-1].name == "convert_color":
-            optimized[-1] = operation
-        elif optimized and operation.name == "resize" and optimized[-1].name == "resize":
-            optimized[-1] = operation
-        else:
-            optimized.append(operation)
-    return Compose(optimized)
+    if not isinstance(pipeline, (Operation, Compose)):
+        raise TypeError("pipeline must be an Operation or Compose")
+    # Pixel transforms are generally not algebraically interchangeable. Keep
+    # their exact order until an optimization has a proven equivalence rule.
+    return Compose((pipeline,))
+
+
+def _image_size(value: Any) -> Tuple[int, int]:
+    if isinstance(value, Image.Image):
+        return tuple(value.size)
+    array = _to_array(value)
+    if array.ndim < 2:
+        raise ValueError("custom image output must have at least two dimensions")
+    return int(array.shape[1]), int(array.shape[0])
 
 
 def execute_operation(value: Any, operation: Operation, trace: List[Dict[str, Any]]) -> Any:
     if "function" in operation.params:
-        return operation.params["function"](value, **operation.params.get("kwargs", {}))
+        before = _image_size(value) if operation.changes_geometry else None
+        result = operation.params["function"](value, **operation.params.get("kwargs", {}))
+        if operation.changes_geometry:
+            trace.append({
+                "name": operation.name,
+                "before": before,
+                "after": _image_size(result),
+                "inverse": operation.params["inverse"],
+            })
+        return result
     executor = _EXECUTORS.get(operation.name)
     if executor is None:
         from .transforms import execute_builtin

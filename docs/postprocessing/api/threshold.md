@@ -4,7 +4,7 @@
 postprocessing.threshold(minimum)
 ```
 
-Creates an `Operation` that applies `filter_score`.
+Creates an `Operation` that removes boxes below a score threshold.
 
 ## Returns
 

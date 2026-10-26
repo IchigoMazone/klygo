@@ -32,7 +32,7 @@ frame = outputs.Detection(
     names={0: "cat", 1: "dog"},
 )
 
-operation = post.Operation("keep-confident", lambda value: post.filter_score(value, 0.5))
+operation = post.Operation("keep-confident", post.threshold(0.5))
 operation(frame)
 print(frame.labels)
 ```

@@ -113,6 +113,7 @@ class Detector(BaseModel):
             validators.validate_count(max_frames, "max_frames")
         validators.validate_type(verbose, bool, "verbose")
         validators.validate_type(stream, bool, "stream")
+        stream = stream or bool(getattr(source, "is_stream", False))
 
         with self._prediction_lock:
             metadata, prompts = self._resolve_prediction(prompt, kwargs)
@@ -167,7 +168,16 @@ class Detector(BaseModel):
                 if callable(close):
                     close()
 
-        return Detections(list(generate()), metadata={"source_type": "image" if is_single else "video", "fps": getattr(images, "fps", 30.0), "requested_total_frames": total}, names=names)
+        return Detections(
+            generate(),
+            metadata={
+                "source_type": "image" if is_single else "video",
+                "fps": getattr(images, "fps", 30.0),
+                "requested_total_frames": total,
+            },
+            names=names,
+            stream=True,
+        )
 
     def __call__(self, source: Any, *args, **kwargs) -> Union[Detections, Any]:
         """Run :meth:`predict` using callable model syntax."""
@@ -278,7 +288,7 @@ class Detector(BaseModel):
             raise ValueError("benchmark accepts inference options, not stream or sampling controls")
 
         img = source if source is not None else PIL.Image.new("RGB", (640, 640))
-        if hasattr(img, "__next__") or getattr(img, "is_stream", False) or type(img).__name__ == "MediaStream":
+        if hasattr(img, "__next__") or getattr(img, "is_stream", False):
             raise ValueError("Materialize a finite benchmark source before calling benchmark")
 
         with self._prediction_lock:
@@ -393,17 +403,18 @@ class Detector(BaseModel):
                 raise ValueError("forward() must return exactly one result per input image")
 
             frames = []
+            lat_ms = round(elapsed, 2)
+            fps_val = round(1000 / max(elapsed, 0.001), 1)
+            base_post = dict(metadata.get("post", {}))
+            pred_snapshot = self._config_snapshot(metadata, prompt)
             for index, (result, image) in enumerate(zip(raw, images)):
                 validators.validate_type(result, (dict, Detection), "forward result")
-                if isinstance(result, Detection):
-                    result = result._clone()
-
-                frame = self._pack_detection(result, image, offset + index * frame_step, round(elapsed, 2), round(1000 / max(elapsed, 0.001), 1))
-                config = deepcopy(dict(metadata.get("post", {})))
+                frame = self._pack_detection(result, image, offset + index * frame_step, lat_ms, fps_val)
+                config = deepcopy(base_post)
                 config.update(deepcopy(frame.metadata))
                 config.update({
                     "prompt": deepcopy(prompt),
-                    "predict_config": self._config_snapshot(metadata, prompt),
+                    "predict_config": deepcopy(pred_snapshot),
                     "model_id": self.model_id,
                     "backend": self.backend,
                     "source_path": frame.source_path,
@@ -416,28 +427,52 @@ class Detector(BaseModel):
 
     def _pack_detection(self, det: Any, image: Any, frame_index: int, lat_ms: float, fps_val: float) -> Detection:
         """Normalise one raw result (dict or Detection) into a fully-populated Detection."""
-        from klygo import media
+        import numpy as np
+        from klygo import media, outputs, preprocessing
         img_path = str(image.path) if isinstance(image, media.LazyImage) else getattr(image, "path", getattr(image, "filename", None))
         final_image = image if isinstance(image, media.LazyImage) else (media.LazyImage(img_path) if img_path is not None else image)
         actual_idx = getattr(final_image, "frame_index", None)
         actual_idx = int(frame_index if actual_idx is None else actual_idx)
 
+        trace = preprocessing.get_trace(image)
+        original_size = getattr(image, "_preprocessing_original_size", None)
+        if trace and original_size is not None and getattr(image, "path", None) is not None:
+            final_image = media.LazyImage(image.path, frame_index=getattr(image, "frame_index", None))
+        target_size = original_size if (trace and original_size is not None) else getattr(final_image, "size", None)
+
         if isinstance(det, dict):
             b_list, s_list = det.get("boxes", []), det.get("scores", [1.0] * len(det.get("boxes", [])))
             l_list, c_list = det.get("labels", ["object"] * len(b_list)), det.get("class_ids", range(len(b_list)))
-            from klygo import preprocessing
-            trace = preprocessing.get_trace(image)
             if trace:
                 b_list = preprocessing.restore_boxes(b_list, trace)
-                original_size = getattr(image, "_preprocessing_original_size", None)
-                if original_size is not None:
-                    final_image = media.LazyImage(image.path, frame_index=getattr(image, "frame_index", None))
-            box_objs = [Box(b, uid=i, class_id=int(c), label=l, score=float(s)) for i, (b, s, l, c) in enumerate(zip(b_list, s_list, l_list, c_list))]
-            det = Detection(box_objs, frame_index=actual_idx, image_size=final_image.size, source=final_image, names=self.names)
+            det = outputs.build_detections(
+                [final_image],
+                [{"boxes": b_list, "scores": list(s_list), "labels": list(l_list), "class_ids": list(c_list)}],
+                names=self.names,
+            )[0]
+            if trace:
+                det._mark_restored()
+            det._frame_index = actual_idx
+            det._identity = (det._source_id, actual_idx)
+            if target_size is not None:
+                det._image_size = target_size
         else:
-            det = Detection([box._clone() for box in det], frame_index=actual_idx,
-                            source_path=img_path, image_size=final_image.size, source=final_image,
-                            metadata=det.metadata, names=det._registry)
+            det = det._clone((det.source_id, actual_idx))
+            det._source_path = str(img_path) if img_path is not None else det._source_path
+            det._image_size = target_size if target_size is not None else final_image.size
+            det._source = final_image
+            det._source_id, _ = outputs.detect._source(final_image, None)
+            if trace:
+                if len(det._labels) > 0:
+                    restored = preprocessing.restore_boxes(det.boxes, trace)
+                    dtype = np.float32 if det.dtype == 32 else np.float64
+                    det._xyxy = np.array(restored, dtype=dtype)
+                    if det._boxes_cache is not None:
+                        for i, b in enumerate(det._boxes_cache):
+                            if b is not None:
+                                row = det._xyxy[i]
+                                b._box = (float(row[0]), float(row[1]), float(row[2]), float(row[3]))
+                det._mark_restored()
         det._source_path = str(getattr(final_image, "path", getattr(final_image, "url", img_path))) if (img_path or hasattr(final_image, "url")) else None
         det.metadata.update({"speed": {"inference": lat_ms, "fps": fps_val}})
         return det

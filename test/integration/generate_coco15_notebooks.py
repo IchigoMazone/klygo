@@ -139,8 +139,8 @@ def notebook(class_id: int, class_name: str, source_id: int):
             prepared = preprocessing.auto_orient()(lazy_image)
             result = model.predict(prepared, prompt=[TARGET_CLASS], verbose=False)[0]
             assert isinstance(result, outputs.detect.Detection)
-            postprocessing.apply(result, postprocessing.threshold(0.25), postprocessing.nms(0.5))
-            postprocessing.select(result, labels=[TARGET_CLASS])
+            result.transform(postprocessing.threshold(0.25), postprocessing.nms(0.5))
+            result.transform(postprocessing.select(labels=[TARGET_CLASS]))
             tp, fp, fn = score_image(truth_by_id[image_id], result)
             predictions[image_id] = result
             rows.append({"image_id": image_id, "tp": tp, "fp": fp, "fn": fn,

@@ -21,7 +21,7 @@ Local Tutorial Notebooks (`tutorials/preprocessing/`, 1-to-1 with `klygo/preproc
 
 1. **Lazy Pipelines on `media.LazyImage` (`Operation` & `Compose`)**:
    - Every transform in `transforms.py` returns a serializable [`Operation`](api/Operation.md) and pipelines are built with [`compose()`](api/compose.md) / [`Compose`](api/Compose.md).
-   - Applying an `Operation` or `Compose` pipeline to a `media.LazyImage` appends operations to the image's lazy queue without decoding pixels until [`materialize()`](api/materialize.md) (or `.to_pil()` / `.to_numpy()`) is called. Use [`inspect()`](api/inspect.md) to preview queued steps and [`optimize()`](api/optimize.md) to fuse redundant operations.
+   - Applying an `Operation` or `Compose` pipeline to a `media.LazyImage` appends operations to the image's lazy queue without decoding pixels until [`materialize()`](api/materialize.md) (or `.to_pil()` / `.to_numpy()`) is called. Use [`inspect()`](api/inspect.md) to preview queued steps and [`optimize()`](api/optimize.md) to normalize a pipeline without changing pixel semantics.
 2. **Quality Scoring & Conditional Predicates (`Metric` & `Predicate`)**:
    - Functions in `metrics.py` (such as [`blur_score()`](api/blur_score.md), [`brightness_score()`](api/brightness_score.md), [`contrast_score()`](api/contrast_score.md), and [`perceptual_hash()`](api/perceptual_hash.md)) return reusable [`Metric`](api/Metric.md) evaluators that compute fast preview statistics.
    - Comparing a `Metric` (e.g., `p.brightness_score() < 80`) or combining conditions with [`all_of()`](api/all_of.md), [`any_of()`](api/any_of.md), [`not_()`](api/not_.md), and [`between()`](api/between.md) produces a [`Predicate`](api/Predicate.md) that gates transforms via `op.when(predicate)`.
@@ -42,7 +42,7 @@ Local Tutorial Notebooks (`tutorials/preprocessing/`, 1-to-1 with `klygo/preproc
 | :--- | :--- | :--- |
 | **Chain multiple transforms into a reusable pipeline** | [`compose()`](api/compose.md) | `pipe = p.compose(p.auto_orient(), p.letterbox((640, 640)))` |
 | **Execute a lazy pipeline to PIL / NumPy / tensor** | [`materialize()`](api/materialize.md) | `pil_img = p.materialize(lazy_img, output="pil")` |
-| **Inspect or fuse queued operations before decoding** | [`inspect()`](api/inspect.md) / [`optimize()`](api/optimize.md) | `plan = p.inspect(lazy_img); fast_pipe = p.optimize(pipe)` |
+| **Inspect or normalize queued operations before decoding** | [`inspect()`](api/inspect.md) / [`optimize()`](api/optimize.md) | `plan = p.inspect(lazy_img); safe_pipe = p.optimize(pipe)` |
 | **Run a transform conditionally based on image quality** | [`Predicate`](api/Predicate.md) / [`between()`](api/between.md) | `op = p.clahe().when(p.brightness_score() < 90)` |
 | **Combine multiple quality conditions** | [`all_of()`](api/all_of.md) / [`any_of()`](api/any_of.md) | `ok = p.all_of(p.blur_score() > 50, p.between(p.brightness_score(), 40, 220))` |
 | **Resize with aspect-ratio preservation & padding** | [`letterbox()`](api/letterbox.md) | `img2 = p.letterbox((640, 640), fill=(114, 114, 114))(img)` |

@@ -84,6 +84,16 @@ def clear_trace(image: Any) -> Any:
 
 def _restore_point(point: Sequence[float], item: Dict[str, Any]) -> Tuple[float, float]:
     x, y = float(point[0]), float(point[1])
+    inverse = item.get("inverse")
+    if inverse is not None:
+        restored = inverse((x, y), item)
+        try:
+            rx, ry = float(restored[0]), float(restored[1])
+        except (TypeError, ValueError, IndexError) as error:
+            raise ValueError("custom inverse must return two numeric coordinates") from error
+        if not np.isfinite((rx, ry)).all():
+            raise ValueError("custom inverse must return finite coordinates")
+        return rx, ry
     name = item["name"]
     before = tuple(item["before"])
     after = tuple(item["after"])
@@ -179,6 +189,13 @@ def restore_points(points: Iterable[Sequence[float]], trace: Iterable[Dict[str, 
     return [[float(x), float(y)] for x, y in restored]
 
 
+_AXIS_ALIGNED_NAMES = {
+    "crop", "center_crop", "random_crop",
+    "letterbox", "pad", "resize", "thumbnail",
+    "contain", "cover", "fit", "random_resize", "flip",
+}
+
+
 def restore_boxes(boxes: Iterable[Sequence[float]], trace: Iterable[Dict[str, Any]]) -> List[List[float]]:
     """Return or update restore boxes using preprocessing geometry history.
 
@@ -194,9 +211,56 @@ def restore_boxes(boxes: Iterable[Sequence[float]], trace: Iterable[Dict[str, An
     object
         Restored coordinates, trace information, or updated image.
     """
-    output: List[List[float]] = []
+    box_list = list(boxes)
+    if not box_list:
+        return []
     active_trace = list(trace)
-    for box in boxes:
+    if not active_trace:
+        return [[float(x) for x in b[:4]] for b in box_list]
+
+    if all(item.get("name") in _AXIS_ALIGNED_NAMES for item in active_trace):
+        xyxy = np.array([b[:4] for b in box_list], dtype=np.float64)
+        for item in reversed(active_trace):
+            name = item["name"]
+            before = item["before"]
+            after = item["after"]
+            if name in ("resize", "thumbnail", "contain", "random_resize"):
+                sx, sy = item.get("scale", (after[0] / before[0], after[1] / before[1]))
+                xyxy[:, [0, 2]] /= sx
+                xyxy[:, [1, 3]] /= sy
+            elif name in ("cover", "fit"):
+                crop_left, crop_top = item["crop"]
+                scale = item["scale"]
+                xyxy[:, [0, 2]] = (xyxy[:, [0, 2]] + crop_left) / scale
+                xyxy[:, [1, 3]] = (xyxy[:, [1, 3]] + crop_top) / scale
+            elif name in ("crop", "center_crop", "random_crop"):
+                left, top = item["box"][:2]
+                xyxy[:, [0, 2]] += left
+                xyxy[:, [1, 3]] += top
+            elif name == "letterbox":
+                left, top = item["padding"][:2]
+                scale = item["scale"]
+                xyxy[:, [0, 2]] = (xyxy[:, [0, 2]] - left) / scale
+                xyxy[:, [1, 3]] = (xyxy[:, [1, 3]] - top) / scale
+            elif name == "pad":
+                left, top = item["padding"][:2]
+                xyxy[:, [0, 2]] -= left
+                xyxy[:, [1, 3]] -= top
+            elif name == "flip":
+                if item.get("horizontal"):
+                    new_x1 = before[0] - xyxy[:, 2]
+                    new_x2 = before[0] - xyxy[:, 0]
+                    xyxy[:, 0] = new_x1
+                    xyxy[:, 2] = new_x2
+                if item.get("vertical"):
+                    new_y1 = before[1] - xyxy[:, 3]
+                    new_y2 = before[1] - xyxy[:, 1]
+                    xyxy[:, 1] = new_y1
+                    xyxy[:, 3] = new_y2
+        return xyxy.tolist()
+
+    output: List[List[float]] = []
+    for box in box_list:
         x1, y1, x2, y2 = map(float, box[:4])
         corners = restore_points(((x1, y1), (x2, y1), (x2, y2), (x1, y2)), active_trace)
         xs, ys = [point[0] for point in corners], [point[1] for point in corners]

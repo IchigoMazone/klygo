@@ -15,7 +15,7 @@ Klygo is a modular, composable Python toolkit for filesystem operations, multi-f
                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ 2. Media & Coordinate-Aware Preprocessing Layer                             │
-│    klygo.media (LazyImage, MediaStream)  •  klygo.preprocessing (trace)     │
+│    klygo.media (LazyImage, MediaFrames)  •  klygo.preprocessing (trace)     │
 └──────────────────────────────────────┬──────────────────────────────────────┘
                                        │
                                        ▼

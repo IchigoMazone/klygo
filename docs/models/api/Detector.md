@@ -30,7 +30,7 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
    - Resolves single images, lists of images, directories, or video streams through `klygo.media`.
    - Applies call-local parameter overrides (`**kwargs`) validated against `metadata.flags` and `metadata.priority`.
    - Automatically restores bounding-box coordinates to original image dimensions when inputs carry a `klygo.preprocessing` transformation trace.
-   - Supports `stream=True` to return a lazy `klygo.outputs.Detections` generator that processes long videos in bounded memory.
+   - Supports `stream=True` to return the same `klygo.outputs.Detections` type in lazy one-pass mode, processing long videos in bounded memory. When `media.load(..., stream=True)` already created a stream, `predict(source)` detects `source.is_stream` automatically; callers declare streaming only once. Use materialized media when random access is required.
 4. **Lifecycle & Isolated Benchmarking**:
    - `warmup()`: Run a single 640×640 dummy inference pass to initialize GPU kernels.
    - `benchmark(source=None, iterations=10, warmup=3, verbose=True, **kwargs)`: Measure mean latency (ms), throughput (FPS), device, and dtype inside accelerator synchronization. Temporary overrides apply only during the benchmark run and are safely restored on completion or failure.
@@ -76,6 +76,16 @@ See [`Detector.py`](../../../examples/models/Detector.py) for a standalone execu
 ## Tests
 
 See [`test_preprocessed_input.py`](../../../test/models/test_preprocessed_input.py) and [`test_torchvision_backend.py`](../../../test/models/test_torchvision_backend.py).
+
+Declare streaming at either input boundary, never both:
+
+```python
+source = media.load("video.mp4", stream=True)
+results = detector.predict(source)
+
+# Equivalent when passing a path directly:
+results = detector.predict("video.mp4", stream=True)
+```
 
 ## Complete executable example
 

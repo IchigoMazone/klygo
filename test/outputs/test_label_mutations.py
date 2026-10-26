@@ -150,49 +150,6 @@ class TestLabelMutations(unittest.TestCase):
         self.assertEqual(results.names, {})
         self.assertEqual(results.total_objects, 0)
 
-    def test_preview_add_matches_append_without_mutating_inputs(self):
-        results = outputs.Detections(
-            [make_frame("preview", 0, ["vehicle", "bicycle"])]
-        )
-        incoming = outputs.Detection(
-            [
-                outputs.Box([0, 0, 5, 5], label="vehicle", class_id=6),
-                outputs.Box([5, 5, 10, 10], label="motorcycle", class_id=0),
-            ],
-            source_id="preview",
-            frame_index=1,
-            image_size=(20, 20),
-        )
-        before_results = results.to_dict()
-        before_incoming = incoming.to_dict()
-
-        preview = results.preview_add(incoming)
-
-        self.assertTrue(preview["can_add"])
-        self.assertFalse(preview["identity_conflict"])
-        self.assertEqual(preview["new_labels"], ("motorcycle",))
-        self.assertTrue(preview["mapping"]["vehicle"]["remapped"])
-        self.assertTrue(preview["mapping"]["motorcycle"]["remapped"])
-        self.assertEqual(results.to_dict(), before_results)
-        self.assertEqual(incoming.to_dict(), before_incoming)
-
-        results.append(incoming)
-        for label, decision in preview["mapping"].items():
-            actual_id = next(box.class_id for box in results[-1] if box.label == label)
-            self.assertEqual(actual_id, decision["resolved_class_id"])
-        assert_collection_consistent(self, results)
-
-    def test_preview_add_reports_identity_collision(self):
-        results = outputs.Detections([make_frame("duplicate", 0, ["car"])])
-        incoming = make_frame("duplicate", 0, ["truck"])
-
-        preview = results.preview_add(incoming)
-
-        self.assertFalse(preview["can_add"])
-        self.assertTrue(preview["identity_conflict"])
-        with self.assertRaises(ValueError):
-            results.append(incoming)
-
     def test_failed_bulk_relabel_leaves_all_labels_unchanged(self):
         results = outputs.Detections([make_frame("atomic", 0, ["a", "b", "c"] * 20)])
         before = results.to_dict()

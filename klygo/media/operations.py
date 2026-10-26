@@ -1,6 +1,8 @@
 import builtins
 import importlib
+import math
 import os
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union, Optional, Generator, Iterable, Callable, Iterator
 
@@ -15,7 +17,8 @@ from klygo import files
 __all__ = [
     "load", "save", "convert", "copy", "save_video", "save_images",
     "iter_frames", "probe", "to_array", "to_tensor", "to_pil",
-    "MediaFrames", "MediaStream", "LazyImage", "VideoReader",
+    "MediaFrames", "LazyImage", "VideoReader",
+    "compose",
 ]
 
 
@@ -49,6 +52,40 @@ VIDEO_SUFFIXES = {
     ".mp4",
     ".webm",
 }
+
+
+def _operation_size(operation: Any, size: Optional[Tuple[int, int]]) -> Optional[Tuple[int, int]]:
+    """Return lazy output dimensions for a known preprocessing operation."""
+    if size is None or not getattr(operation, "changes_geometry", False):
+        return size
+    width, height = size
+    params = operation.params
+    if operation.name == "crop":
+        left, top, right, bottom = params["box"]
+        return max(0, right - left), max(0, bottom - top)
+    if operation.name in ("resize", "thumbnail", "contain") and params.get("keep_ratio", operation.name != "resize"):
+        target_width, target_height = params["size"]
+        scale = min(target_width / max(1, width), target_height / max(1, height))
+        return max(1, round(width * scale)), max(1, round(height * scale))
+    if operation.name in ("resize", "fit", "cover", "letterbox", "center_crop"):
+        return tuple(params["size"])
+    if operation.name == "pad":
+        padding = params["padding"]
+        if isinstance(padding, int):
+            left = top = right = bottom = padding
+        elif len(padding) == 2:
+            left = right = padding[0]
+            top = bottom = padding[1]
+        else:
+            left, top, right, bottom = padding
+        return width + left + right, height + top + bottom
+    if operation.name in ("affine", "perspective", "warp") and params.get("size"):
+        return tuple(params["size"])
+    if operation.name == "transpose" and params.get("method") in (
+        "rotate_90", "rotate_270", "transpose", "transverse",
+    ):
+        return height, width
+    return None
 
 
 # =========================================================================
@@ -288,7 +325,7 @@ class LazyImage(Image.Image):
         self._processed_cache = None
 
     def clear(self) -> None:
-        """Alias cho unload()."""
+        """Alias for :meth:`unload`."""
         self.unload()
 
     @property
@@ -444,6 +481,11 @@ class LazyImage(Image.Image):
             trace: List[Dict[str, Any]] = []
             result, trace = execute_pipeline(result, self._preprocessing_ops, trace)
             self._preprocessing_trace = trace
+            if isinstance(result, Image.Image):
+                self._cached_size = result.size
+                self._cached_mode = result.mode
+            elif isinstance(result, np.ndarray) and result.ndim >= 2:
+                self._cached_size = (int(result.shape[1]), int(result.shape[0]))
         else:
             self._preprocessing_trace = []
         if cache:
@@ -452,6 +494,14 @@ class LazyImage(Image.Image):
 
     def process(self, operation_or_pipeline: Any) -> "LazyImage":
         """Attach a preprocessing transform without decoding pixel data."""
+        from klygo.preprocessing import apply
+
+        return apply(self, operation_or_pipeline)
+
+    def transform(self, operation_or_pipeline: Any) -> "LazyImage":
+        """Apply a callable transform or pipeline to this image lazily."""
+        if callable(operation_or_pipeline):
+            return operation_or_pipeline(self)
         from klygo.preprocessing import apply
 
         return apply(self, operation_or_pipeline)
@@ -536,181 +586,65 @@ class LazyImage(Image.Image):
 
 
 # =========================================================================
-# 0C. MediaFrames: Lazy-pixel List-like Media Container
+# 0C. MediaFrames: Unified Streaming & Materialized Container
 # =========================================================================
 
 class MediaFrames(list):
-    """Hold indexed lazy frames and their source metadata.
+    """Represent media as indexed lazy frames or a bounded-memory stream.
 
     Parameters
     ----------
-    frames : iterable
-        Images or lazy image proxies.
+    source : str or os.PathLike[str], default=""
+        Image, video, or image-directory source.
+    sample_rate : int, default=1
+        Yield every nth frame.
+    max_frames : int or None, default=None
+        Maximum frames to yield.
+    recursive : bool, default=False
+        Traverse subdirectories for images.
+    backend : str, default='pil'
+        Pixel backend, either 'pil' or 'opencv'.
+    verbose : bool, default=False
+        Show progress output.
+    stream : bool, default=True
+        Whether to stream sequentially (True) or load materialized frames (False).
 
     Returns
     -------
     MediaFrames
-        List-like collection that retains media metadata."""
-
-    def __init__(
-        self,
-        items: Optional[Iterable] = None,
-        *,
-        fps: float = 30.0,
-        source_path: Optional[Union[str, Path]] = None,
-        width: Optional[int] = None,
-        height: Optional[int] = None,
-        source_type: str = "video",
-        reader: Optional[VideoReader] = None,
-    ) -> None:
-        super().__init__(items if items is not None else [])
-        self.fps = float(fps) if fps else 30.0
-        self.source_path = str(source_path) if source_path is not None else None
-        self.width = width
-        self.height = height
-        self.source_type = source_type
-        self.reader = reader
-
-    @property
-    def total_frames(self) -> int:
-        """Current collection length."""
-        return super().__len__()
-
-    @property
-    def source(self) -> Optional[str]:
-        """Short alias for ``source_path``."""
-        return self.source_path
-
-    @property
-    def loaded_count(self) -> int:
-        """Number of frames currently holding decoded pixels in RAM."""
-        return sum(bool(getattr(item, "is_loaded", False)) for item in self)
-
-    def _new(self, items: Iterable[Any], *, fps: Optional[float] = None) -> "MediaFrames":
-        """Create a new collection while preserving source metadata."""
-        return MediaFrames(
-            items,
-            fps=self.fps if fps is None else fps,
-            source_path=self.source_path,
-            width=self.width,
-            height=self.height,
-            source_type=self.source_type,
-            reader=self.reader,
-        )
-
-    def __len__(self) -> int:
-        return super().__len__()
-
-    def __getitem__(self, index: Union[int, slice]) -> Any:
-        if isinstance(index, slice):
-            sub_items = super().__getitem__(index)
-            step = index.step or 1
-            new_fps = self.fps / abs(step) if abs(step) > 1 else self.fps
-            return self._new(sub_items, fps=new_fps)
-        return super().__getitem__(index)
-
-    def map(self, func: Callable[[Any], Any]) -> "MediaFrames":
-        """Apply callable to each item while preserving collection metadata."""
-        if not callable(func):
-            raise TypeError("func must be callable")
-        return self._new(func(frame) for frame in self)
-
-    def transform(self, operation_or_pipeline: Any) -> "MediaFrames":
-        """Attach a preprocessing transform lazily across all items."""
-        from klygo.preprocessing import Compose, Operation
-
-        if not isinstance(operation_or_pipeline, (Operation, Compose)):
-            raise TypeError("operation_or_pipeline must be a prepreprocessing Operation or Compose")
-        return self.map(operation_or_pipeline)
-
-    def filter(self, func: Callable[[Any], bool]) -> "MediaFrames":
-        """Compatibility alias for :meth:`where`."""
-        return self.where(func)
-
-    def where(self, predicate: Callable[[Any], bool]) -> "MediaFrames":
-        """Retain items satisfying ``predicate(item)`` while preserving metadata."""
-        if not callable(predicate):
-            raise TypeError("predicate must be callable")
-        return self._new(frame for frame in self if predicate(frame))
-
-    def copy(self) -> "MediaFrames":
-        """Copy collection without decoding pixels or losing metadata."""
-        return self._new(self)
-
-    def to_list(self) -> List[Any]:
-        """Convert items to a standard list."""
-        return list(self)
-
-    def unload(self) -> None:
-        """Release cached pixels across all items while preserving the collection."""
-        for item in self:
-            unload = getattr(item, "unload", None)
-            if callable(unload):
-                unload()
-
-    def save_video(self, output_path: Union[str, Path], fps: Optional[float] = None, **kwargs) -> Path:
-        """Encode and save all frames into an MP4/AVI video file."""
-        target_fps = fps if fps is not None else self.fps
-        return globals()["save_video"](output_path, self, fps=target_fps, **kwargs)
-
-    def save_images(self, output_dir: Union[str, Path], prefix: str = "frame", **kwargs) -> Path:
-        """Save all frames into an image directory."""
-        return globals()["save_images"](output_dir, self, prefix=prefix, **kwargs)
-
-    def close(self) -> None:
-        """Release cached pixels and shared reader resources."""
-        self.unload()
-        if self.reader is not None:
-            try:
-                self.reader.release()
-            except Exception:
-                pass
-            self.reader = None
-
-    def __del__(self) -> None:
-        self.close()
-
-    def __enter__(self) -> "MediaFrames":
-        return self
-
-    def __exit__(self, *args) -> None:
-        self.close()
-
-    def __repr__(self) -> str:
-        return (
-            f"<MediaFrames: {len(self)} frames, loaded={self.loaded_count}, "
-            f"type='{self.source_type}', fps={self.fps}>"
-        )
-
-
-class MediaStream:
-    """Yield source frames sequentially with bounded decoded memory.
-
-    Parameters
-    ----------
-    source : str or pathlib.Path
-        Image, video, or image-directory source.
-
-    Returns
-    -------
-    MediaStream
-        Iterable stream with sampling and filtering methods.
+        Unified media container with materialized and streaming modes.
 
     Raises
     ------
     FileNotFoundError
-        The source does not exist."""
+        The source does not exist.
+    ValueError
+        Invalid backend or source format.
+    """
+
+    is_stream: bool = True
+
+    def __new__(cls, *args: Any, stream: bool = False, **kwargs: Any) -> Any:
+        if cls is MediaFrames and not stream:
+            return load(*args, stream=False, **kwargs)
+        return list.__new__(cls)
 
     def __init__(
         self,
-        source: Union[str, os.PathLike[str]],
+        source: Union[str, os.PathLike[str]] = "",
         *,
         sample_rate: int = 1,
         max_frames: Optional[int] = None,
         recursive: bool = False,
         backend: str = "pil",
         verbose: bool = False,
+        stream: bool = False,
+        **kwargs: Any,
     ) -> None:
+        if getattr(self, "_initialized", False):
+            return
+        self._initialized = True
+        list.__init__(self)
         validate_type(source, (str, os.PathLike), "source")
         validate_count(sample_rate, "sample_rate")
         validate_type(recursive, bool, "recursive")
@@ -768,57 +702,241 @@ class MediaStream:
                 raise ValueError(f"source is not a supported image or video file: {path}")
         elif files.is_dir(path):
             self.source_type = "folder"
-            source_total = sum(1 for _ in self._iter_image_paths())
+            self._cached_paths = tuple(self._iter_image_paths())
+            source_total = len(self._cached_paths)
             if source_total == 0:
                 raise ValueError(f"No supported image files found in directory: {path}")
         else:
             raise ValueError(f"source must be a file or directory: {path}")
 
         if self.source_type == "video" and source_total <= 0:
-            self.total_frames = None
+            self._total_frames = None
         else:
             sampled_total = (source_total + sample_rate - 1) // sample_rate
-            self.total_frames = min(sampled_total, max_frames) if max_frames is not None else sampled_total
+            self._total_frames = min(sampled_total, max_frames) if max_frames is not None else sampled_total
+
+    @classmethod
+    def _from_items(
+        cls,
+        items: Iterable[Any],
+        *,
+        fps: float = 30.0,
+        source_path: Optional[Union[str, Path]] = None,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        source_type: str = "video",
+        reader: Optional[VideoReader] = None,
+    ) -> "MediaFrames":
+        """Build materialized storage without reloading the source."""
+        instance = list.__new__(cls)
+        list.__init__(instance, items)
+        instance._initialized = True
+        instance.fps = float(fps) if fps else 30.0
+        instance.source_path = str(source_path) if source_path is not None else None
+        instance.path = files.path(source_path) if source_path is not None else None
+        instance.width = width
+        instance.height = height
+        instance.source_type = source_type
+        instance.reader = reader
+        instance.is_stream = False
+        instance.sample_rate = 1
+        instance.max_frames = None
+        instance._active_readers = []
+        instance._preprocessing_ops = []
+        instance._predicates = []
+        instance._motion_threshold = None
+        instance._deduplicate_threshold = None
+        return instance
+
+    def _new(self, items: Iterable[Any], *, fps: Optional[float] = None) -> "MediaFrames":
+        """Create a materialized container while preserving source metadata."""
+        materialized = list(items)
+        width, height = self.width, self.height
+        if materialized:
+            sizes = set()
+            for item in materialized:
+                operations = getattr(item, "_preprocessing_ops", ())
+                if any(
+                    getattr(operation, "changes_geometry", False)
+                    and _operation_size(operation, (1, 1)) is None
+                    for operation in operations
+                ):
+                    sizes.clear()
+                    break
+                item_size = getattr(item, "size", None)
+                if isinstance(item_size, (tuple, list)) and len(item_size) == 2:
+                    sizes.add((int(item_size[0]), int(item_size[1])))
+                    continue
+                shape = getattr(item, "shape", ())
+                if len(shape) >= 2:
+                    if len(shape) == 3 and shape[0] in (1, 3, 4):
+                        sizes.add((int(shape[2]), int(shape[1])))
+                    else:
+                        sizes.add((int(shape[1]), int(shape[0])))
+            width, height = next(iter(sizes)) if len(sizes) == 1 else (None, None)
+        return type(self)._from_items(
+            materialized,
+            fps=self.fps if fps is None else fps,
+            source_path=self.source_path,
+            width=width,
+            height=height,
+            source_type=self.source_type,
+            reader=self.reader,
+        )
+
+    def _require_materialized(self, operation: str) -> None:
+        """Ensure random-access operation is only performed on materialized frames."""
+        if getattr(self, "is_stream", False):
+            raise TypeError(f"{operation} is unavailable for a stream; load with stream=False")
+
+    @property
+    def total_frames(self) -> Optional[int]:
+        """Estimated or exact total frames in collection."""
+        if not getattr(self, "is_stream", False):
+            return list.__len__(self)
+        return getattr(self, "_total_frames", None)
+
+    @total_frames.setter
+    def total_frames(self, value: Optional[int]) -> None:
+        self._total_frames = value
+
+    @property
+    def source(self) -> Optional[str]:
+        """Short alias for ``source_path``."""
+        return self.source_path
+
+    @property
+    def loaded_count(self) -> int:
+        """Number of frames currently holding decoded pixels in RAM."""
+        self._require_materialized("loaded_count")
+        return sum(bool(getattr(item, "is_loaded", False)) for item in self)
+
+    def unload(self) -> None:
+        """Release cached pixels across all items while preserving the collection."""
+        self._require_materialized("unload()")
+        for item in self:
+            unload = getattr(item, "unload", None)
+            if callable(unload):
+                unload()
+
+    def to_list(self) -> List[Any]:
+        """Convert items to a standard list."""
+        self._require_materialized("to_list()")
+        return list(self)
+
+    def __getitem__(self, index: Union[int, slice]) -> Any:
+        self._require_materialized("indexing and slicing")
+        if isinstance(index, slice):
+            sub_items = list.__getitem__(self, index)
+            step = index.step or 1
+            new_fps = self.fps / abs(step) if abs(step) > 1 else self.fps
+            return self._new(sub_items, fps=new_fps)
+        return list.__getitem__(self, index)
+
+    def __len__(self) -> int:
+        self._require_materialized("len()")
+        return list.__len__(self)
+
+    def append(self, item: Any) -> None:
+        self._require_materialized("append()")
+        list.append(self, item)
+
+    def extend(self, items: Iterable[Any]) -> None:
+        self._require_materialized("extend()")
+        list.extend(self, items)
+
+    def insert(self, index: int, item: Any) -> None:
+        self._require_materialized("insert()")
+        list.insert(self, index, item)
+
+    def pop(self, index: int = -1) -> Any:
+        self._require_materialized("pop()")
+        return list.pop(self, index)
+
+    def remove(self, item: Any) -> None:
+        self._require_materialized("remove()")
+        list.remove(self, item)
+
+    def clear(self) -> None:
+        self._require_materialized("clear()")
+        list.clear(self)
+
+    def __setitem__(self, index: Any, value: Any) -> None:
+        self._require_materialized("item assignment")
+        list.__setitem__(self, index, value)
+
+    def __delitem__(self, index: Any) -> None:
+        self._require_materialized("item deletion")
+        list.__delitem__(self, index)
 
     def _iter_image_paths(self) -> Iterator[Path]:
         iterator = files.iter_find(self.path, recursive=self.recursive)
         paths = (p for p in iterator if files.is_file(p) and files.extension(p).lower() in IMAGE_SUFFIXES)
         yield from sorted(paths, key=lambda p: str(p).lower())
 
-    def _clone(self) -> "MediaStream":
+    def _clone(self) -> "MediaFrames":
         # Reuse validated source metadata instead of scanning a large folder or
         # probing a video again whenever a lazy stream operation is attached.
-        cloned = object.__new__(type(self))
+        cloned = list.__new__(MediaFrames)
         cloned.__dict__.update(self.__dict__)
         cloned._active_readers = []
         cloned._preprocessing_ops = list(self._preprocessing_ops)
         cloned._predicates = list(self._predicates)
         cloned._motion_threshold = self._motion_threshold
         cloned._deduplicate_threshold = self._deduplicate_threshold
+        cloned._cached_paths = getattr(self, "_cached_paths", None)
         return cloned
 
-    def transform(self, operation_or_pipeline: Any) -> "MediaStream":
-        """Attach a preprocessing transform to each frame without decoding upfront."""
+    def transform(self, operation_or_pipeline: Any) -> Any:
+        """Apply a preprocessing transform, media pipeline, or callable function."""
         from klygo.preprocessing import Compose, Operation
+
+        if type(operation_or_pipeline).__name__ == "MediaCompose" or isinstance(operation_or_pipeline, globals().get("MediaCompose", tuple)):
+            return operation_or_pipeline(self)
 
         if isinstance(operation_or_pipeline, Operation):
             operations = [operation_or_pipeline]
         elif isinstance(operation_or_pipeline, Compose):
             operations = list(operation_or_pipeline.operations)
+        elif callable(operation_or_pipeline):
+            return operation_or_pipeline(self)
         else:
-            raise TypeError("transform expects preprocessing.Operation or preprocessing.Compose")
+            raise TypeError("transform expects preprocessing.Operation, preprocessing.Compose, media.compose, or callable")
+
+        if self.is_stream:
+            cloned = self._clone()
+            cloned._preprocessing_ops.extend(operations)
+            size = None if cloned.width is None or cloned.height is None else (cloned.width, cloned.height)
+            for operation in operations:
+                size = _operation_size(operation, size)
+            cloned.width, cloned.height = size if size is not None else (None, None)
+            return cloned
+        return self.map(operation_or_pipeline)
+
+    def map(self, func: Callable[[Any], Any]) -> "MediaFrames":
+        """Attach a custom frame-level callable transform lazily."""
+        if not callable(func):
+            raise TypeError("func must be callable")
+        if not self.is_stream:
+            return self._new(func(frame) for frame in self)
         cloned = self._clone()
-        cloned._preprocessing_ops.extend(operations)
+        cloned._preprocessing_ops.append(func)
         return cloned
 
-    def where(self, predicate: Callable[[Any], bool]) -> "MediaStream":
-        """Retain frames satisfying predicate evaluated sequentially."""
+    def where(self, predicate: Callable[[Any], bool]) -> Any:
+        """Retain items satisfying predicate evaluated sequentially."""
         if not callable(predicate):
             raise TypeError("predicate must be callable")
-        cloned = self._clone()
-        cloned._predicates.append(predicate)
-        cloned.total_frames = None
-        return cloned
+        if self.is_stream:
+            cloned = self._clone()
+            cloned._predicates.append(predicate)
+            cloned.total_frames = None
+            return cloned
+        return self._new(frame for frame in self if predicate(frame))
+
+    def filter(self, func: Callable[[Any], bool]) -> Any:
+        """Compatibility alias for :meth:`where`."""
+        return self.where(func)
 
     def where_quality(
         self,
@@ -830,7 +948,8 @@ class MediaStream:
         max_blur: Optional[float] = None,
         min_entropy: Optional[float] = None,
         preview_size: Tuple[int, int] = (160, 160),
-    ) -> "MediaStream":
+    ) -> Any:
+        """Filter frames based on image quality metrics."""
         from klygo import preprocessing as p
 
         conditions = []
@@ -846,21 +965,98 @@ class MediaStream:
             conditions.append(p.blur_score(preview_size=preview_size) <= max_blur)
         if min_entropy is not None:
             conditions.append(p.entropy_score(preview_size) >= min_entropy)
-        return self.where(p.all_of(*conditions)) if conditions else self._clone()
+        return self.where(p.all_of(*conditions)) if conditions else (self._clone() if self.is_stream else self.copy())
 
-    def where_motion(self, threshold: float = 0.02) -> "MediaStream":
+    def where_motion(self, threshold: float = 0.02) -> Any:
+        """Filter frames that show motion difference above threshold."""
+        if self.is_stream:
+            cloned = self._clone()
+            cloned._motion_threshold = float(threshold)
+            cloned.total_frames = None
+            return cloned
+        from klygo import preprocessing as p
+        filtered = []
+        previous = None
+        for frame in self:
+            if previous is not None and p.motion_score(previous)(frame) < threshold:
+                continue
+            previous = frame
+            filtered.append(frame)
+        return self._new(filtered)
+
+    def deduplicate(self, threshold: float = 0.95) -> Any:
+        """Filter consecutive frames that have similarity above threshold."""
+        if self.is_stream:
+            cloned = self._clone()
+            cloned._deduplicate_threshold = float(threshold)
+            cloned.total_frames = None
+            return cloned
+        from klygo import preprocessing as p
+        filtered = []
+        previous = None
+        for frame in self:
+            was_loaded = getattr(frame, "is_loaded", False)
+            if previous is not None and p.similarity_score(previous)(frame) >= threshold:
+                if not was_loaded:
+                    frame.unload()
+                continue
+            if previous is not None and not getattr(previous, "_initially_loaded", False):
+                previous.unload()
+            frame._initially_loaded = was_loaded
+            previous = frame
+            filtered.append(frame)
+        if previous is not None and not getattr(previous, "_initially_loaded", False):
+            previous.unload()
+        for f in filtered:
+            if hasattr(f, "_initially_loaded"):
+                delattr(f, "_initially_loaded")
+        return self._new(filtered)
+
+    def sample(self, sample_rate: int) -> "MediaFrames":
+        """Sample every nth frame."""
+        validate_count(sample_rate, "sample_rate")
+        if not self.is_stream:
+            return self[::sample_rate]
         cloned = self._clone()
-        cloned._motion_threshold = float(threshold)
-        cloned.total_frames = None
+        cloned.sample_rate = self.sample_rate * sample_rate
+        cloned.fps = self.fps / sample_rate
+        if cloned.total_frames is not None:
+            cloned.total_frames = (cloned.total_frames + sample_rate - 1) // sample_rate
         return cloned
 
-    def deduplicate(self, threshold: float = 0.95) -> "MediaStream":
+    def limit(self, max_frames: Optional[int]) -> "MediaFrames":
+        """Limit maximum frames yielded or retained."""
+        if max_frames is not None:
+            validate_count(max_frames, "max_frames")
+        if not self.is_stream:
+            return self.copy() if max_frames is None else self[:max_frames]
         cloned = self._clone()
-        cloned._deduplicate_threshold = float(threshold)
-        cloned.total_frames = None
+        if max_frames is None:
+            return cloned
+        cloned.max_frames = min(cloned.max_frames, max_frames) if cloned.max_frames is not None else max_frames
+        if cloned.total_frames is not None and max_frames is not None:
+            cloned.total_frames = min(cloned.total_frames, max_frames)
         return cloned
+
+    def save_video(self, output_path: Union[str, Path], fps: Optional[float] = None, **kwargs: Any) -> Path:
+        """Encode and save all frames into an MP4/AVI video file."""
+        target_fps = fps if fps is not None else getattr(self, "fps", 30.0)
+        return globals()["save_video"](output_path, self, fps=target_fps, **kwargs)
+
+    def save_images(self, output_dir: Union[str, Path], prefix: str = "frame", **kwargs: Any) -> Path:
+        """Save all frames into an image directory."""
+        return globals()["save_images"](output_dir, self, prefix=prefix, **kwargs)
+
+    def copy(self) -> Any:
+        """Copy collection without decoding pixels or losing metadata."""
+        if self.is_stream:
+            return self._clone()
+        return self._new(self)
 
     def __iter__(self) -> Iterator[LazyImage]:
+        if not self.is_stream:
+            yield from list.__iter__(self)
+            return
         previous_frame: Optional[LazyImage] = None
 
         def prepare(frame: LazyImage) -> Optional[LazyImage]:
@@ -877,7 +1073,10 @@ class MediaStream:
                     return None
             previous_frame = frame
             if self._preprocessing_ops:
-                return p.compose(self._preprocessing_ops)(frame)
+                res = frame
+                for op in self._preprocessing_ops:
+                    res = op(res)
+                return res
             return frame
 
         if self.source_type == "video":
@@ -925,6 +1124,8 @@ class MediaStream:
         paths: Iterable[Path]
         if self.source_type == "image":
             paths = (self.path,)
+        elif getattr(self, "_cached_paths", None) is not None:
+            paths = self._cached_paths
         else:
             paths = self._iter_image_paths()
 
@@ -940,26 +1141,147 @@ class MediaStream:
                 emitted += 1
 
     def close(self) -> None:
+        """Release underlying video captures, readers, and cached pixels."""
         for reader in tuple(getattr(self, "_active_readers", ())):
             reader.release()
         if hasattr(self, "_active_readers"):
             self._active_readers.clear()
+        if hasattr(self, "reader") and self.reader is not None:
+            try:
+                self.reader.release()
+            except Exception:
+                pass
+            self.reader = None
+        if not getattr(self, "is_stream", False):
+            for item in getattr(self, "__iter__", lambda: ())():
+                unload = getattr(item, "unload", None)
+                if callable(unload):
+                    unload()
 
-    def __enter__(self) -> "MediaStream":
+    def __enter__(self) -> "MediaFrames":
         return self
 
-    def __exit__(self, *args) -> None:
+    def __exit__(self, *args: Any) -> None:
         self.close()
 
     def __del__(self) -> None:
         self.close()
 
     def __repr__(self) -> str:
+        if self.is_stream:
+            return (
+                f"<MediaFrames: stream=True, type='{self.source_type}', total_frames={self.total_frames}, "
+                f"fps={self.fps}>"
+            )
         return (
-            f"<MediaStream: type='{self.source_type}', total_frames={self.total_frames}, "
-            f"fps={self.fps}>"
+            f"<MediaFrames: {len(self)} frames, loaded={self.loaded_count}, "
+            f"type='{self.source_type}', fps={self.fps}>"
         )
 
+
+# =========================================================================
+# 0D. MediaCompose: Pipeline Composition for Media Operations
+# =========================================================================
+
+class MediaCompose:
+    """Chain media stream or frames filtering, sampling, and transform steps.
+
+    Parameters
+    ----------
+    steps : iterable or varargs of callables
+        Sequence of filtering steps, transform pipelines, or container functions.
+
+    Returns
+    -------
+    MediaCompose
+        Callable pipeline that executes steps sequentially on media containers.
+    """
+
+    def __init__(self, *steps: Any) -> None:
+        if len(steps) == 1 and isinstance(steps[0], (list, tuple)):
+            steps = steps[0]
+        self.steps = tuple(steps)
+
+    def __call__(self, target: Any) -> Any:
+        from klygo import preprocessing as p
+
+        if isinstance(target, (str, os.PathLike)):
+            target = globals()["load"](target)
+
+        result = target
+        for step in self.steps:
+            if isinstance(step, (p.Operation, p.Compose)):
+                result = result.transform(step)
+            elif callable(step):
+                result = step(result)
+            else:
+                raise TypeError(f"Expected callable step or preprocessing operation, got {type(step).__name__}")
+        return result
+
+    def __repr__(self) -> str:
+        return f"<MediaCompose: {len(self.steps)} steps>"
+
+
+class _ComposeStep:
+    """Hold a named lazy filtering step for media.compose."""
+
+    def __init__(self, func: Callable[[Any], Any], name: str) -> None:
+        self.func = func
+        self.name = name
+
+    def __call__(self, target: Any) -> Any:
+        return self.func(target)
+
+    def __repr__(self) -> str:
+        return f"<ComposeStep: {self.name}>"
+
+
+def compose(*steps: Any) -> MediaCompose:
+    """Create a composite filtering and transformation pipeline for media.
+
+    Parameters
+    ----------
+    *steps : callable, preprocessing.Compose, or list thereof
+        Sequential filtering steps or transforms. Accepts varargs or a list.
+
+    Returns
+    -------
+    MediaCompose
+        Callable pipeline applicable to ``MediaFrames`` or file paths.
+
+    Examples
+    --------
+    >>> from klygo import media, preprocessing as p
+    >>> pipeline = media.compose(
+    ...     media.compose.quality(min_brightness=0.3),
+    ...     media.compose.sample(2),
+    ...     p.resize((640, 640)),
+    ... )
+    >>> stream = media.load("video.mp4", stream=True)
+    >>> processed = pipeline(stream)
+    """
+    return MediaCompose(*steps)
+
+
+compose.where = lambda predicate: _ComposeStep(lambda c: c.where(predicate), f"where({getattr(predicate, '__name__', 'predicate')})")
+compose.filter = compose.where
+compose.quality = lambda **kwargs: _ComposeStep(lambda c: c.where_quality(**kwargs), f"quality({kwargs})")
+compose.where_quality = compose.quality
+compose.motion = lambda threshold=0.02: _ComposeStep(lambda c: c.where_motion(threshold), f"motion({threshold})")
+compose.where_motion = compose.motion
+compose.deduplicate = lambda threshold=0.95: _ComposeStep(lambda c: c.deduplicate(threshold), f"deduplicate({threshold})")
+compose.sample = lambda sample_rate=1: _ComposeStep(lambda c: c.sample(sample_rate), f"sample({sample_rate})")
+compose.limit = lambda max_frames=None: _ComposeStep(lambda c: c.limit(max_frames), f"limit({max_frames})")
+
+# Top-level step builders for media.compose
+quality = compose.quality
+where_quality = compose.where_quality
+motion = compose.motion
+where_motion = compose.where_motion
+deduplicate = compose.deduplicate
+sample = compose.sample
+limit = compose.limit
+where = compose.where
 
 
 # =========================================================================
@@ -987,7 +1309,7 @@ def _read_video_frames(
         for i in range(total_frames)
     ]
 
-    return MediaFrames(
+    return MediaFrames._from_items(
         lazy_frames,
         fps=fps,
         source_path=path,
@@ -1007,7 +1329,7 @@ def load(
     stream: bool = False,
     sample_rate: int = 1,
     max_frames: Optional[int] = None,
-) -> Union[MediaFrames, MediaStream]:
+) -> MediaFrames:
     """Load an image, video, or image directory as lazy media frames.
 
     By default, return a list-like collection for indexing and slicing. With
@@ -1032,8 +1354,9 @@ def load(
 
     Returns
     -------
-    MediaFrames or MediaStream
-        Indexed lazy frames by default, or a bounded-memory stream.
+    MediaFrames
+        Unified container in indexed mode by default or streaming mode when
+        ``stream=True``.
 
     Raises
     ------
@@ -1060,8 +1383,9 @@ def load(
     validate_type(stream, bool, "stream")
 
     if stream:
-        return MediaStream(
+        return MediaFrames(
             source,
+            stream=True,
             sample_rate=sample_rate,
             max_frames=max_frames,
             recursive=recursive,
@@ -1105,7 +1429,7 @@ def load(
     # Zero-RAM Lazy Loading: wrap each path in a LazyImage (URL/Path Proxy)
     lazy_frames = [LazyImage(f, backend=backend) for f in image_paths]
 
-    return MediaFrames(
+    return MediaFrames._from_items(
         lazy_frames,
         source_path=p,
         source_type="folder" if files.is_dir(p) else "image",
@@ -1442,6 +1766,14 @@ RuntimeError
     validate_type(output_path, (str, os.PathLike), "output_path")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
+    if isinstance(fps, bool) or not isinstance(fps, (int, float)):
+        raise TypeError("fps must be a number")
+    if not math.isfinite(float(fps)) or float(fps) <= 0:
+        raise ValueError("fps must be a finite positive number")
+    if not isinstance(fourcc, str):
+        raise TypeError("fourcc must be a string")
+    if len(fourcc) != 4:
+        raise ValueError("fourcc must contain exactly four characters")
 
     p = files.path(output_path)
     if files.exists(p) and not overwrite:
@@ -1455,32 +1787,52 @@ RuntimeError
     except StopIteration:
         raise ValueError("frames iterable is empty")
 
-    arr = to_array(first_frame)
-    height, width = arr.shape[:2]
+    def _video_frame(value: Any, expected: Optional[Tuple[int, int]] = None) -> np.ndarray:
+        array = np.asarray(to_array(value))
+        if array.ndim == 2:
+            array = cv.cvtColor(array, cv.COLOR_GRAY2RGB)
+        elif array.ndim == 3 and array.shape[2] == 1:
+            array = cv.cvtColor(array[..., 0], cv.COLOR_GRAY2RGB)
+        elif array.ndim == 3 and array.shape[2] == 4:
+            array = cv.cvtColor(array, cv.COLOR_RGBA2RGB)
+        elif array.ndim != 3 or array.shape[2] != 3:
+            raise ValueError("video frames must have one, three, or four channels")
+        if array.dtype != np.uint8:
+            raise TypeError("video frames must use uint8 pixels")
+        current = int(array.shape[1]), int(array.shape[0])
+        if expected is not None and current != expected:
+            raise ValueError(f"all video frames must have size {expected}; received {current}")
+        return np.ascontiguousarray(cv.cvtColor(array, cv.COLOR_RGB2BGR))
+
+    first_bgr = _video_frame(first_frame)
+    height, width = first_bgr.shape[:2]
+    frame_size = (width, height)
+    extension = files.extension(p) or ".mp4"
+    temporary = files.join(
+        files.parent(p), f".{files.stem(p)}.{uuid.uuid4().hex}.tmp{extension}"
+    )
 
     fourcc_code = cv.VideoWriter_fourcc(*fourcc)
-    writer = cv.VideoWriter(str(p), fourcc_code, float(fps), (width, height))
+    writer = cv.VideoWriter(str(temporary), fourcc_code, float(fps), frame_size)
     if not writer.isOpened():
+        files.remove(temporary, missing_ok=True)
         raise RuntimeError(f"Could not open VideoWriter for {p} with fourcc {fourcc!r}")
-
-    def _write_frame(f):
-        f_arr = to_array(f)
-        if isinstance(f, (Image.Image, LazyImage)) or (f_arr.ndim == 3 and f_arr.shape[2] == 3):
-            f_bgr = cv.cvtColor(f_arr, cv.COLOR_RGB2BGR)
-        else:
-            f_bgr = f_arr
-        writer.write(f_bgr)
 
     try:
         with ProgressBar(total=None, desc=f"Encoding video {files.name(p)}", unit="frame", verbose=verbose, colour="cyan") as pbar:
-            _write_frame(first_frame)
+            writer.write(first_bgr)
             pbar.update(1)
             for frame in frame_iter:
-                _write_frame(frame)
+                writer.write(_video_frame(frame, frame_size))
                 pbar.update(1)
+    except Exception:
+        writer.release()
+        files.remove(temporary, missing_ok=True)
+        raise
     finally:
         writer.release()
 
+    files.move(temporary, p, overwrite=overwrite)
     return p
 
 
@@ -1525,7 +1877,8 @@ overwrite, verbose : bool
         extension = f".{extension}"
 
     saved_paths: List[Path] = []
-    total = len(images) if isinstance(images, (builtins.list, tuple)) else getattr(images, "total_frames", None)
+    is_sequential = bool(getattr(images, "is_stream", False))
+    total = len(images) if isinstance(images, (builtins.list, tuple)) and not is_sequential else getattr(images, "total_frames", None)
     with ProgressBar(total=total, desc=f"Saving image batch to {files.name(out_p)}", unit="file", verbose=verbose, colour="cyan") as pbar:
         for idx, img in enumerate(images, start=1):
             file_path = files.join(out_p, f"{prefix}_{idx:06d}{extension}")

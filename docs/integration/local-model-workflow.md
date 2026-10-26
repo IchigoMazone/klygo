@@ -24,7 +24,7 @@ $$\text{files} \rightarrow \text{datasets (info \& load)} \rightarrow \text{mode
 4. klygo.outputs: Structured detection frames (`Detections` containing `Box`)
         │
         ▼
-5. klygo.postprocessing: NMS suppression (`suppress`) & IoU matching (`box_iou`)
+5. klygo.postprocessing: NMS operation (`nms`) and IoU matching (`box_iou`)
         │
         ▼
 6. klygo.visual & utils: Bounding box drawing (`draw_bboxes`) & Rich metrics table

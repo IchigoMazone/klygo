@@ -68,8 +68,9 @@ upstream examples also demonstrate sampling. Runtime source/stream/batch
 controls are never sent to generation as inference options.
 
 Box tokens encode XYXY coordinates in `[0, 1000]`. The adapter validates them
-and converts to pixels of the image passed to the model. For Klygo preprocessing,
-call `results.restore(target="original")` to map back to the original source.
+and converts to pixels of the image passed to the model. When the input carries
+a Klygo preprocessing trace, `Detector.predict()` automatically maps the boxes
+back to the original source coordinates.
 Malformed, truncated or inverted boxes raise errors rather than returning
 partial results. An explicit `None` response represents no detections.
 

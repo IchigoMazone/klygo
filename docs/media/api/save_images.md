@@ -10,7 +10,7 @@ Save an iterable of images or lazy frames to sequentially numbered files inside 
 
 Resolves and creates `output_dir` via `klygo.files.path()` and `klygo.files.mkdir()`. Normalizes `extension` so it always begins with a leading dot (e.g., `'png'` becomes `'.png'`). Iterates through `images` with 1-based indexing and writes each item to `{prefix}_{idx:06d}{extension}` (for example, `frame_000001.jpg`, `frame_000002.jpg`) by delegating to [`media.save()`](save.md).
 
-Because each item is saved sequentially as it is yielded, `images` can be a [`MediaFrames`](MediaFrames.md), a [`MediaStream`](MediaStream.md), a list of `PIL.Image.Image` or `numpy.ndarray` objects, or any generator.
+Because each item is saved sequentially as it is yielded, `images` can be [`MediaFrames`](MediaFrames.md) in either mode, a list of `PIL.Image.Image` or `numpy.ndarray` objects, or any generator.
 
 ## Parameters
 

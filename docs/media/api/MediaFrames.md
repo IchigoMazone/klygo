@@ -1,35 +1,40 @@
 # `media.MediaFrames`
 
 ```python
-media.MediaFrames(items=None, *, fps=30.0, source_path=None, width=None, height=None, source_type='video', reader=None)
+media.MediaFrames(source, *, stream=False, sample_rate=1, max_frames=None, recursive=False, backend='pil', verbose=False)
 ```
 
-List-like container of [`LazyImage`](LazyImage.md) frames that preserves source metadata across slicing, mapping, and filtering.
+Unified container for indexed lazy frames and bounded-memory sequential streaming.
 
 ## Contract
 
-Subclasses Python's built-in `list` and is returned by [`media.load(..., stream=False)`](load.md). Stores frame proxies without decoding pixels until individual elements are materialized:
-- **Indexing and slicing**: integer indexing (`frames[0]`) returns a single item; slicing (`frames[::2]`) returns a new `MediaFrames` retaining `source_path`, `width`, `height`, `source_type`, and `reader`, while scaling `fps` by `1 / abs(step)` when `abs(step) > 1`.
-- **Functional & lazy methods**: `.map(func)` applies a callable to each item; `.transform(op_or_pipeline)` attaches a `klygo.preprocessing` `Operation` or `Compose` lazily to every frame; `.where(predicate)` (alias `.filter(predicate)`) keeps matching frames; `.copy()` clones the container without decoding pixels; `.to_list()` returns a plain `list`.
-- **Persistence & lifecycle**: `.save_video(output_path, fps=None, **kwargs)` and `.save_images(output_dir, prefix='frame', **kwargs)` export all frames. `.unload()` clears cached RAM buffers across all items, and `.close()` (or using `with frames:`) unloads items and releases any shared [`VideoReader`](VideoReader.md).
+[`media.load()`](load.md) always returns `MediaFrames`:
+
+- With `stream=False`, the container is list-like. It supports indexing, slicing, `.loaded_count`, `.to_list()`, mutation, and `.unload()` while keeping pixels lazy until accessed.
+- With `stream=True`, the container reads one [`LazyImage`](LazyImage.md) at a time. Random access and list mutation raise `TypeError`, while `.sample()`, `.limit()`, `.where()`, quality filtering, motion filtering, deduplication, and preprocessing remain lazy.
+- Both modes expose `.is_stream`, `.source`, `.source_type`, `.total_frames`, `.fps`, `.width`, and `.height`.
+- `.transform(callable)` applies a collection-level callable once. Use `.map(callable)` for a frame-level transform.
+- `.save_video()` and `.save_images()` consume either mode sequentially.
+
+Calling `MediaFrames(source, stream=False)` delegates to `media.load(source, stream=False)`. Calling it with `stream=True` creates the bounded-memory mode directly.
 
 ## Parameters
 
-- `items`: `Iterable[Any] | None`, default `None` — initial sequence of [`LazyImage`](LazyImage.md) or image objects.
-- `fps`: `float`, default `30.0` — keyword-only; frame rate metadata (defaults to `30.0` if falsy).
-- `source_path`: `str | pathlib.Path | None`, default `None` — keyword-only; origin path string (also accessible via `.source`).
-- `width`: `int | None`, default `None` — keyword-only; frame width in pixels.
-- `height`: `int | None`, default `None` — keyword-only; frame height in pixels.
-- `source_type`: `str`, default `'video'` — keyword-only; `'image'`, `'folder'`, or `'video'`.
-- `reader`: `VideoReader | None`, default `None` — keyword-only; shared video reader instance.
+- `source`: `str | os.PathLike[str]` — existing image, video, or image directory.
+- `stream`: `bool`, default `False` — keyword-only; select bounded-memory sequential mode when true.
+- `sample_rate`: `int`, default `1` — emit every nth frame in streaming mode.
+- `max_frames`: `int | None`, default `None` — maximum frames emitted in streaming mode.
+- `recursive`: `bool`, default `False` — search image directories recursively.
+- `backend`: `str`, default `'pil'` — pixel backend, either `'pil'` or `'opencv'`.
+- `verbose`: `bool`, default `False` — enable progress output where supported.
 
 ## Returns
 
-`MediaFrames` — list-like frame collection exposing `.total_frames`, `.loaded_count`, `.source`, and `.fps`.
+`MediaFrames` — the same public type in indexed and streaming modes.
 
 ## Errors and edge cases
 
-Raises `TypeError` if `.map()` or `.where()` / `.filter()` receives a non-callable, or if `.transform()` receives an object that is not a `klygo.preprocessing.Operation` or `Compose`.
+Raises `TypeError` for invalid parameters or when an indexed-only operation is used in streaming mode. Raises `FileNotFoundError` when the source does not exist. Raises `ValueError` for unsupported sources, invalid backends, or non-positive sampling and limit values.
 
 ## Example
 
@@ -38,7 +43,7 @@ See [`MediaFrames.py`](../../../examples/media/MediaFrames.py) for a standalone 
 ## Complete executable example
 
 ```python
-"""Inspect, slice, filter, and unload a lazy MediaFrames collection."""
+"""Use MediaFrames in indexed and bounded-memory modes."""
 
 import tempfile
 from PIL import Image
@@ -49,18 +54,12 @@ with tempfile.TemporaryDirectory() as temporary:
     media.save(root / "1.png", Image.new("RGB", (32, 24), "red"))
     media.save(root / "2.png", Image.new("RGB", (64, 48), "blue"))
 
-    with media.load(root) as frames:
-        assert isinstance(frames, media.MediaFrames)
-        assert frames.total_frames == 2 and frames.loaded_count == 0
+    indexed = media.load(root, stream=False)
+    streamed = media.load(root, stream=True, max_frames=1)
 
-        # Filter by zero-RAM header dimensions and slice
-        large = frames.where(lambda img: img.width >= 64)
-        assert len(large) == 1 and large[0].size == (64, 48)
-
-        # Decode one frame, check loaded_count, then unload back to zero RAM
-        _ = frames[0].load()
-        assert frames.loaded_count == 1
-        frames.unload()
-        assert frames.loaded_count == 0
-        print(isinstance(frames, media.MediaFrames), frames.total_frames, frames.loaded_count)
+    assert isinstance(indexed, media.MediaFrames)
+    assert isinstance(streamed, media.MediaFrames)
+    assert not indexed.is_stream and streamed.is_stream
+    assert indexed[0].size == (32, 24)
+    assert len(list(streamed)) == 1
 ```

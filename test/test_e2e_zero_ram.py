@@ -15,7 +15,7 @@ class MockDetector:
 class TestEndToEnd(unittest.TestCase):
     def test_predict_process_and_export(self):
         results = MockDetector().predict([Image.new("RGB",(64,48)) for _ in range(100)])
-        post.apply(results, post.threshold(.5), post.nms(.5))
+        results.transform(post.threshold(.5), post.nms(.5))
         self.assertEqual(results.count, 100); self.assertEqual(results.total_objects, 100)
         with tempfile.TemporaryDirectory() as root:
             target = files.join(root, "annotations"); results.export(target)

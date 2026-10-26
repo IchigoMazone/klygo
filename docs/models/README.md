@@ -70,7 +70,7 @@ See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](back
 | **Run batch detection on images, folders, or videos** | [`Detector.predict()`](api/Detector.md) | `dets = detector.predict("images/", prompt=["person"], threshold=0.4)` |
 | **Inspect remembered effective inference settings** | [`Detector.predict_config`](api/Detector.md) | `cfg = detector.predict_config  # {'prompt': ['person'], 'threshold': 0.4}` |
 | **Inspect hardware device and model data type** | [`Detector.device`](api/Detector.md) / [`dtype`](api/Detector.md) | `print(detector.device, detector.dtype)` |
-| **Stream large videos lazily without filling RAM** | [`Detector.predict()`](api/Detector.md) | `for frame_det in detector.predict("traffic.mp4", stream=True, vid_stride=2): ...` |
+| **Stream large videos lazily without filling RAM** | [`Detector.predict()`](api/Detector.md) | `source = media.load("traffic.mp4", stream=True); results = detector.predict(source)` |
 | **Measure model latency (ms) and throughput in isolation** | [`Detector.benchmark()`](api/Detector.md) | `stats = detector.benchmark("sample.jpg", iterations=10, warmup=3)` |
 | **Clear remembered prompt or restore defaults** | [`Detector.predict()`](api/Detector.md) / [`reset()`](api/Detector.md) | `detector.predict(img, prompt=None)` or `detector.reset()` |
 | **Export a self-contained model bundle to disk** | [`Detector.save()`](api/Detector.md) | `detector.save("exported_model/")` |

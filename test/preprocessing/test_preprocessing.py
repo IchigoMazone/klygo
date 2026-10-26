@@ -106,6 +106,33 @@ class TestPreprocessing(unittest.TestCase):
         restored = p.restore_boxes([[0, 25, 100, 75]], p.get_trace(processed))
         assert np.allclose(restored[0], [0, 0, 100, 50])
 
+    def test_optimize_preserves_exact_pixel_semantics(self):
+        image = Image.fromarray(np.arange(19 * 23 * 3, dtype=np.uint8).reshape(19, 23, 3))
+        pipeline = p.compose(p.resize((13, 11)), p.resize((9, 7)))
+        expected = p.materialize(pipeline(image), output="array")
+        actual = p.materialize(p.optimize(pipeline)(image), output="array")
+        assert np.array_equal(actual, expected)
+
+    def test_custom_geometry_records_an_inverse_trace(self):
+        def resize_half(value):
+            return value.resize((value.width // 2, value.height // 2))
+
+        def inverse(point, _step):
+            return point[0] * 2, point[1] * 2
+
+        operation = p.custom(
+            resize_half, changes_geometry=True, inverse=inverse, name="half_size"
+        )
+        source_path = _image_path(self.tmp_path, size=(100, 60))
+        processed = operation(media.load(source_path)[0])
+        image = p.materialize(processed)
+        trace = p.get_trace(processed)
+        self.assertEqual(image.size, (50, 30))
+        self.assertEqual(processed.size, (50, 30))
+        self.assertEqual(p.restore_boxes([[5, 4, 20, 15]], trace), [[10.0, 8.0, 40.0, 30.0]])
+        with self.assertRaisesRegex(TypeError, "inverse must be callable"):
+            p.custom(resize_half, changes_geometry=True)
+
     def test_metrics_and_predicates_accept_lazy_image(self):
         image = media.load(_image_path(self.tmp_path))[0]
         condition = p.all_of(

@@ -4,7 +4,7 @@
 postprocessing.clip(image_size=None)
 ```
 
-Creates an `Operation` that applies `clip_boxes`.
+Creates an `Operation` that clips coordinates to the image boundary.
 
 ## Returns
 

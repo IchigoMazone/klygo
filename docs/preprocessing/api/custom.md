@@ -3,7 +3,7 @@
 Defined in `core.py`.
 
 ```python
-preprocessing.custom(function: 'Callable[[Any], Any]', backend: 'str' = 'auto', name: 'Optional[str]' = None, **kwargs: 'Any') -> 'Operation'
+preprocessing.custom(function: 'Callable[[Any], Any]', backend: 'str' = 'auto', name: 'Optional[str]' = None, *, changes_geometry: 'bool' = False, inverse: 'Optional[Callable[[Sequence[float], Dict[str, Any]], Sequence[float]]]' = None, **kwargs: 'Any') -> 'Operation'
 ```
 
 Create or execute custom for an image preprocessing pipeline.
@@ -13,6 +13,8 @@ Create or execute custom for an image preprocessing pipeline.
 - `function` (Callable[[Any], Any]): Callable transformation applied to image data.
 - `backend` (str; default `'auto'`): Requested pixel backend; auto selects a compatible implementation.
 - `name` (Optional[str]; default `None`): Public name used in operation descriptions and traces.
+- `changes_geometry` (bool; default `False`): Whether the callable changes image coordinates.
+- `inverse` (callable; default `None`): Restores one output point to input coordinates for geometry-changing callables.
 - `kwargs` (Any): Value passed to the operation or evaluator.
 
 **Returns and effects:** operation, pipeline, predicate, metric, or evaluated image value. Image operations remain deferred when applied to a `media.LazyImage`; calling `materialize` decodes pixels.

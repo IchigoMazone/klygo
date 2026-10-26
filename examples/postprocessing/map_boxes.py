@@ -13,5 +13,5 @@ frame = outputs.Detection(
     names={0: "cat", 1: "dog"},
 )
 
-post.map_boxes(frame, lambda box: (box.translate(1, 1), box)[1])
+frame.transform(post.map_boxes(lambda box: (box.translate(1, 1), box)[1]))
 print(frame.labels)

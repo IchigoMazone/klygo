@@ -44,8 +44,21 @@ class TestPreprocessedInput(unittest.TestCase):
             for name, source, stream in sources:
                 with self.subTest(name=name):
                     results = model.predict(source, stream=stream, verbose=False)
+                    result = next(iter(results)) if stream else results[0]
                     self.assertEqual(
-                        results[0].boxes,
+                        result.boxes,
                         [(12.0, 12.0, 18.0, 18.0)],
                     )
-                    self.assertIsInstance(results[0]._resolve_source(), media.LazyImage)
+                    result.restore()
+                    self.assertEqual(result.boxes, [(12.0, 12.0, 18.0, 18.0)])
+                    self.assertIsInstance(result._resolve_source(), media.LazyImage)
+
+    def test_predict_inherits_stream_mode_from_media_source(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "sample.png"
+            Image.new("RGB", (40, 40), "red").save(path)
+            source = media.load(path, stream=True)
+            model = StrictImageDetector(metadata={"backend": "Custom"})
+            results = model.predict(source, verbose=False)
+            self.assertTrue(results.is_stream)
+            self.assertEqual(len(list(results)), 1)

@@ -17,7 +17,7 @@ import klygo.preprocessing as preprocessing
 class TestMedia(unittest.TestCase):
     def test_partial_reader_and_stream_release_is_safe(self):
         media.VideoReader.__new__(media.VideoReader).close()
-        media.MediaStream.__new__(media.MediaStream).close()
+        media.MediaFrames.__new__(media.MediaFrames, stream=True).close()
 
     def setUp(self):
         temporary_directory = tempfile.TemporaryDirectory()
@@ -40,8 +40,8 @@ class TestMedia(unittest.TestCase):
         streamed = media.load(video_path, stream=True, sample_rate=2, max_frames=2)
 
         assert isinstance(loaded, media.MediaFrames)
-        assert isinstance(streamed, media.MediaStream)
-        assert not isinstance(streamed, list)
+        assert isinstance(streamed, media.MediaFrames)
+        assert type(streamed) is media.MediaFrames
         assert streamed.is_stream
         assert streamed.total_frames == 2
 
@@ -98,7 +98,7 @@ class TestMedia(unittest.TestCase):
 
         frames, is_single = resolve_images(image_path, stream=True)
 
-        self.assertIsInstance(frames, media.MediaStream)
+        self.assertIsInstance(frames, media.MediaFrames)
         self.assertTrue(is_single)
         self.assertEqual(len(list(frames)), 1)
 
@@ -195,12 +195,12 @@ class TestMedia(unittest.TestCase):
         Image.new("RGB", (10, 10), "red").save(img_dir / "0.jpg")
 
         with self.assertRaises(TypeError):
-            media.MediaStream(img_dir, sample_rate=True)
+            media.MediaFrames(img_dir, stream=True, sample_rate=True)
         with self.assertRaises(TypeError):
-            media.MediaStream(img_dir, sample_rate="2")
+            media.MediaFrames(img_dir, stream=True, sample_rate="2")
         with self.assertRaises(ValueError):
-            media.MediaStream(img_dir, sample_rate=0)
+            media.MediaFrames(img_dir, stream=True, sample_rate=0)
         with self.assertRaises(TypeError):
-            media.MediaStream(img_dir, max_frames=True)
+            media.MediaFrames(img_dir, stream=True, max_frames=True)
         with self.assertRaises(ValueError):
-            media.MediaStream(img_dir, max_frames=0)
+            media.MediaFrames(img_dir, stream=True, max_frames=0)

@@ -8,7 +8,7 @@ Encode an iterable of images or lazy frames into a video file using OpenCV `Vide
 
 ## Contract
 
-Resolves `output_path` via `klygo.files.path()`, checks for existing files unless `overwrite=True`, and creates missing parent directories. Pulls the first frame from `frames` to determine the output `(width, height)` via [`media.to_array()`](to_array.md), initializes `cv2.VideoWriter` with `fourcc` and `fps`, and streams the remaining frames through the encoder one by one so bounded-memory iterators ([`MediaStream`](MediaStream.md) or generators) are encoded without buffering the entire video in RAM.
+Resolves `output_path` via `klygo.files.path()`, checks for existing files unless `overwrite=True`, and creates missing parent directories. Pulls the first frame from `frames` to determine the output `(width, height)` via [`media.to_array()`](to_array.md), initializes `cv2.VideoWriter` with `fourcc` and `fps`, and streams the remaining frames through the encoder one by one so bounded-memory [`MediaFrames`](MediaFrames.md) or generators are encoded without buffering the entire video in RAM.
 
 RGB inputs (`PIL.Image.Image`, [`LazyImage`](LazyImage.md), and 3-channel RGB arrays) are converted to BGR before writing; always releases the underlying `cv2.VideoWriter` in a `finally` block.
 

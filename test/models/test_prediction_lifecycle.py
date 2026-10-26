@@ -116,7 +116,11 @@ class TestPredictionLifecycle(unittest.TestCase):
         self.assertEqual(self.model.predict_config, before)
 
     def test_stream_captures_snapshot_at_creation(self):
+        calls_before = len(self.model.calls)
         stream = self.model([self.image] * 3, prompt="old", threshold=.4, stream=True, batch=2, verbose=False)
+        self.assertIsInstance(stream, outputs.Detections)
+        self.assertTrue(stream.is_stream)
+        self.assertEqual(len(self.model.calls), calls_before)
         self.model(self.image, prompt="new", threshold=.8, verbose=False)
         frames = list(stream)
         self.assertEqual([frame.metadata["prompt"] for frame in frames], [["old"]] * 3)
@@ -155,7 +159,8 @@ class TestPredictionLifecycle(unittest.TestCase):
                 setattr(self.model, attribute, None)
         stream = self.model([self.image], stream=True)
         self.model.unload()
-        self.assertEqual(len(stream), 1)
+        with self.assertRaises(models.errors.InvalidStateError):
+            list(stream)
         output = StringIO()
         with redirect_stdout(output):
             self.model.info()

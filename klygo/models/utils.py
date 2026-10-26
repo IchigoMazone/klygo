@@ -351,7 +351,7 @@ def resolve_images(
         elif hasattr(source, "shape") and getattr(source, "ndim", 0) in (2, 3):
             raw_stream = [source]
             total_frames = 1
-        elif hasattr(source, "__iter__") and not isinstance(source, (list, tuple)):
+        elif getattr(source, "is_stream", False) or (hasattr(source, "__iter__") and not isinstance(source, (list, tuple))):
             raw_stream = source
             total_frames = getattr(source, "total_frames", None)
             fps_val = getattr(source, "fps", 30.0)

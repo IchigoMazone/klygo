@@ -4,7 +4,7 @@
 postprocessing.remove_invalid(min_area=0)
 ```
 
-Creates an `Operation` that applies `remove_invalid_boxes`.
+Creates an `Operation` that removes non-finite, inverted, or undersized boxes.
 
 ## Returns
 

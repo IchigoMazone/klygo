@@ -1,14 +1,15 @@
 # `postprocessing.select`
 
 ```python
-postprocessing.select(result, *, where=None, labels=None, class_ids=None, uids=None)
+postprocessing.select(*, where=None, labels=None, class_ids=None, uids=None)
 ```
 
-Keeps boxes that match every supplied selector. It mutates a frame or every frame in a collection.
+Builds an operation that keeps boxes matching every supplied selector.
+`labels`, `class_ids`, and `uids` accept either one scalar selector or an iterable.
 
 ## Returns
 
-`None`.
+`Operation` — apply it with `result.transform(...)` or include it in `postprocessing.compose(...)`.
 
 ## Errors
 
@@ -32,7 +33,7 @@ frame = outputs.Detection(
     names={0: "cat", 1: "dog"},
 )
 
-post.select(frame, labels=["cat"], where=lambda box: box.score >= 0.5)
+frame.transform(post.select(labels="cat", where=lambda box: box.score >= 0.5))
 print(frame.labels)
 ```
 

@@ -13,5 +13,5 @@ frame = outputs.Detection(
     names={0: "cat", 1: "dog"},
 )
 
-post.select(frame, labels=["cat"], where=lambda box: box.score >= 0.5)
+frame.transform(post.select(labels=["cat"], where=lambda box: box.score >= 0.5))
 print(frame.labels)

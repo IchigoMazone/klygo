@@ -4,7 +4,7 @@
 postprocessing.nms(iou=0.5, class_agnostic=False)
 ```
 
-Creates an `Operation` that applies `suppress`.
+Creates a score-ordered non-maximum-suppression `Operation`.
 
 ## Returns
 

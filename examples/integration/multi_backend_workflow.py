@@ -200,7 +200,7 @@ class LocalTorchvisionDetector(Detector):
         if prompt:
             requested = [prompt] if isinstance(prompt, str) else list(prompt)
             for detection in results:
-                postprocessing.select(detection, labels=requested)
+                detection.transform(postprocessing.select(labels=requested))
         return results
 
 
@@ -255,7 +255,7 @@ class LocalKerasDetector(Detector):
         if prompt:
             requested = [prompt] if isinstance(prompt, str) else list(prompt)
             for detection in results:
-                postprocessing.select(detection, labels=requested)
+                detection.transform(postprocessing.select(labels=requested))
         return results
 
 
@@ -309,8 +309,7 @@ def evaluate_model_on_dataset(
             latencies.append(time.perf_counter() - t0)
 
             # Apply postprocessing threshold and NMS
-            postprocessing.apply(
-                pred_det,
+            pred_det.transform(
                 postprocessing.threshold(0.35),
                 postprocessing.nms(0.50),
             )

@@ -114,7 +114,7 @@ def evaluate_local_detector(
     predictions = detector(input_images)
 
     # 6. Postprocessing: Apply Non-Maximum Suppression (NMS)
-    postprocessing.suppress(predictions, iou=0.5)
+    predictions.transform(postprocessing.nms(iou=0.5))
     cleaned_predictions = predictions
 
     # 7. Evaluate predictions vs ground-truth annotations using IoU matching

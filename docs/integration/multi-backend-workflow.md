@@ -13,7 +13,7 @@ This workflow evaluates **four distinct deep-learning backends** side by side th
 
 $$\text{files} \rightarrow \text{datasets} \rightarrow \text{media \& preprocessing} \rightarrow \text{models (4 Backends)} \rightarrow \text{outputs} \rightarrow \text{postprocessing (NMS \& IoU)} \rightarrow \text{visual (draw\_bboxes)} \rightarrow \text{utils}$$
 
-Every backend produces standardized [`klygo.outputs.Detections`](../outputs/README.md) objects (`xyxy` bounding boxes in original image coordinates, confidence scores, class IDs, and class names), allowing identical downstream NMS (`postprocessing.suppress`), IoU ground-truth matching (`postprocessing.box_iou`), and bounding-box rendering (`visual.draw_bboxes`).
+Every backend produces standardized [`klygo.outputs.Detections`](../outputs/README.md) objects (`xyxy` bounding boxes in original image coordinates, confidence scores, class IDs, and class names), allowing identical downstream NMS (`results.transform(postprocessing.nms())`), IoU ground-truth matching (`postprocessing.box_iou`), and bounding-box rendering (`visual.draw_bboxes`).
 
 ---
 

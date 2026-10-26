@@ -10,7 +10,7 @@ Klygo is a modular, composable Python toolkit (`Python >= 3.10`) organized into 
 
 ```text
 1. Storage, Config & Datasets : klygo.files • klygo.archive • klygo.config • klygo.datasets
-2. Media & Preprocessing      : klygo.media (LazyImage, MediaStream) • klygo.preprocessing (trace)
+2. Media & Preprocessing      : klygo.media (LazyImage, MediaFrames) • klygo.preprocessing (trace)
 3. Multi-Backend AI Models    : klygo.models (BaseModel -> Detector -> backend.common)
                                 ├── Ultralytics (YOLOv8/v11, YOLO-World v2)
                                 ├── Hugging Face / PyTorch (Grounding DINO, DETR, custom nn.Module)
@@ -26,7 +26,7 @@ Klygo is a modular, composable Python toolkit (`Python >= 3.10`) organized into 
 | `archive` | `from klygo import archive` | Create, inspect, extract, search, convert, merge, and split ZIP, TAR, GZip, 7z, and RAR archives | [`docs/archive/README.md`](docs/archive/README.md) |
 | `config` | `from klygo import config, Config` | Immutable functional config helpers (`load`, `get`, `set`, `merge`, `diff`, `from_env`) & stateful `Config` | [`docs/config/README.md`](docs/config/README.md) |
 | `datasets` | `from klygo import datasets` | Inspect (`info`), load (`load`), partition, repartition, unpartition, merge, split, and remap YOLO datasets | [`docs/datasets/README.md`](docs/datasets/README.md) |
-| `media` | `from klygo import media` | Lazy image (`LazyImage`) & video streaming (`MediaStream`), frame iteration, and PIL/NumPy/Tensor conversion | [`docs/media/README.md`](docs/media/README.md) |
+| `media` | `from klygo import media` | Lazy image (`LazyImage`) and unified indexed/streaming frames (`MediaFrames`), frame iteration, and PIL/NumPy/Tensor conversion | [`docs/media/README.md`](docs/media/README.md) |
 | `preprocessing` | `from klygo import preprocessing as p` | 137 lazy transforms, image quality metrics/predicates, and automatic coordinate restoration (`trace`) | [`docs/preprocessing/README.md`](docs/preprocessing/README.md) |
 | `models` | `from klygo import models` | 3-tier model wrappers (`BaseModel`, `Detector`), schema builders (`metadata`, `flags`, `priority`, `details`, `configure`), and `load` | [`docs/models/README.md`](docs/models/README.md) |
 | `outputs` | `from klygo import outputs` | Standardized detection containers (`Box`, `Crops`, `Detection`, `Detections`) and `build_detections` | [`docs/outputs/README.md`](docs/outputs/README.md) |

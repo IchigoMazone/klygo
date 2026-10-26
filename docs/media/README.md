@@ -1,6 +1,6 @@
 # `klygo.media` Documentation
 
-`klygo.media` provides 15 public APIs (11 functions and 4 classes) for zero-RAM lazy image and video loading, bounded-memory frame streaming, format conversions across PIL, NumPy, and PyTorch, metadata inspection, and video/image serialization.
+`klygo.media` provides 15 public APIs (12 functions and 3 classes) for zero-RAM lazy image and video loading, bounded-memory frame streaming, format conversions across PIL, NumPy, and PyTorch, metadata inspection, and video/image serialization.
 
 Interactive Google Colab Tutorial:
 [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/media/Document_Media_Overview.ipynb)
@@ -20,20 +20,17 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 
 1. **[`LazyImage`](api/LazyImage.md) (Zero-RAM Pixel Proxy)**:
    Subclasses `PIL.Image.Image` and wraps a file path or video frame index without decoding pixels on construction. Reading `.size`, `.width`, `.height`, or `.shape` inspects headers or cached dimensions only. Calling `.crop()` or `.lazy_crop()` records a bounding box in zero RAM, and `.process()` attaches `klygo.preprocessing` operations lazily until `.load()`, `.to_pil()`, `.to_array()`, or `.to_tensor()` materializes the image.
-2. **[`MediaFrames`](api/MediaFrames.md) (Indexed Lazy Collection)**:
-   Returned by [`load(..., stream=False)`](api/load.md). Subclasses `list` to hold `LazyImage` items while preserving source metadata (`fps`, `source_path`, `width`, `height`, `source_type`) across slicing (`frames[::2]` automatically adjusts `fps`), `.map()`, `.transform()`, and `.where()` / `.filter()`. Use `.unload()` or a `with` block to release decoded pixel caches and shared video handles.
-3. **[`MediaStream`](api/MediaStream.md) (Bounded-Memory Sequential Stream)**:
-   Returned by [`load(..., stream=True)`](api/load.md). Iterates over videos, image folders, or single images one `LazyImage` at a time with `sample_rate` and `max_frames` controls. Supports lazy `.transform()`, `.where()`, `.where_quality()`, `.where_motion()`, and `.deduplicate()` chaining without pre-loading the dataset.
-4. **[`VideoReader`](api/VideoReader.md) (Smart Sequential & Random-Access Seeker)**:
+2. **[`MediaFrames`](api/MediaFrames.md) (Unified Frame Container)**:
+   Returned by [`load()`](api/load.md) in both modes. With `stream=False`, it is an indexed list-like collection of `LazyImage` proxies. With `stream=True`, it becomes a bounded-memory sequential iterator with `sample_rate` and `max_frames` controls. Both modes share `.transform()`, `.where()`, `.where_quality()`, `.where_motion()`, `.deduplicate()`, `.sample()`, and `.limit()`.
+3. **[`VideoReader`](api/VideoReader.md) (Smart Sequential & Random-Access Seeker)**:
    Manages a single reusable `cv2.VideoCapture` handle with position tracking so consecutive reads avoid redundant seeks while out-of-order frame indices seek on demand.
-5. **Format Conversions & Media I/O**:
+4. **Format Conversions & Media I/O**:
    [`to_array()`](api/to_array.md), [`to_pil()`](api/to_pil.md), and [`to_tensor()`](api/to_tensor.md) normalize any `LazyImage`, `PIL.Image.Image`, `numpy.ndarray`, or `torch.Tensor` into an independent target representation. [`save()`](api/save.md), [`save_images()`](api/save_images.md), [`save_video()`](api/save_video.md), [`convert()`](api/convert.md), [`copy()`](api/copy.md), and [`probe()`](api/probe.md) handle persistence and header inspection using `klygo.files` path semantics.
 
 | Container / Type | Decodes on Init? | Random Indexing | Best For |
 | :--- | :--- | :--- | :--- |
 | [`LazyImage`](api/LazyImage.md) | No | N/A (single frame) | Deferred decoding, zero-RAM crops, lazy preprocessing |
-| [`MediaFrames`](api/MediaFrames.md) | No | Yes (`frames[i]`, slices) | Interactive inspection, slicing, batch export |
-| [`MediaStream`](api/MediaStream.md) | No | No (sequential iterator) | Long videos, large folders, motion/quality filtering |
+| [`MediaFrames`](api/MediaFrames.md) | No | Materialized mode only | Indexed inspection or bounded-memory streaming |
 | [`VideoReader`](api/VideoReader.md) | Header only | Yes (`read_frame(i)`) | Low-level indexed BGR frame reads from a video file |
 
 </details>
@@ -48,13 +45,13 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 | I want to... | Recommended API | Key Parameters / Example |
 | :--- | :--- | :--- |
 | **Load an image, video, or folder lazily** | [`load()`](api/load.md) | `frames = media.load("video.mp4")` |
-| **Stream a long video with bounded RAM** | [`load()`](api/load.md) / [`MediaStream`](api/MediaStream.md) | `stream = media.load("video.mp4", stream=True, sample_rate=5)` |
+| **Stream a long video with bounded RAM** | [`load()`](api/load.md) / [`MediaFrames`](api/MediaFrames.md) | `frames = media.load("video.mp4", stream=True, sample_rate=5)` |
 | **Inspect image or video metadata** | [`probe()`](api/probe.md) | `meta = media.probe("clip.mp4", verbose=True)` |
 | **Check dimensions without decoding pixels** | [`LazyImage`](api/LazyImage.md) | `img = media.LazyImage("photo.jpg"); print(img.size)` |
 | **Crop a region without loading into RAM** | [`LazyImage.lazy_crop()`](api/LazyImage.md) | `patch = frames[0].lazy_crop((10, 10, 110, 90))` |
-| **Filter stream frames by visual quality** | [`MediaStream.where_quality()`](api/MediaStream.md) | `stream.where_quality(min_sharpness=20.0, max_blur=0.6)` |
-| **Filter stream frames by scene motion** | [`MediaStream.where_motion()`](api/MediaStream.md) | `stream.where_motion(threshold=0.03)` |
-| **Drop near-duplicate consecutive frames** | [`MediaStream.deduplicate()`](api/MediaStream.md) | `stream.deduplicate(threshold=0.95)` |
+| **Filter stream frames by visual quality** | [`MediaFrames.where_quality()`](api/MediaFrames.md) | `frames.where_quality(min_sharpness=20.0, max_blur=0.6)` |
+| **Filter stream frames by scene motion** | [`MediaFrames.where_motion()`](api/MediaFrames.md) | `frames.where_motion(threshold=0.03)` |
+| **Drop near-duplicate consecutive frames** | [`MediaFrames.deduplicate()`](api/MediaFrames.md) | `frames.deduplicate(threshold=0.95)` |
 | **Attach preprocessing lazily to frames** | [`MediaFrames.transform()`](api/MediaFrames.md) | `frames.transform(preprocessing.resize((640, 640)))` |
 | **Iterate decoded frames directly** | [`iter_frames()`](api/iter_frames.md) | `for frame in media.iter_frames("clip.mp4", sample_rate=2): ...` |
 | **Read specific video frame by index** | [`VideoReader`](api/VideoReader.md) | `reader = media.VideoReader("clip.mp4"); bgr = reader.read_frame(10)` |
@@ -71,12 +68,13 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 
 ---
 
-## 3. Public APIs Reference (11 Functions, 4 Classes in `operations.py`)
+## 3. Public APIs Reference (12 Functions, 3 Classes in `operations.py`)
 
 <details open>
-<summary><b>Loading, streaming, and inspection — <code>operations.py</code> (3 functions)</b> <i>(Click to expand)</i></summary>
+<summary><b>Loading, streaming, and inspection — <code>operations.py</code> (4 functions)</b> <i>(Click to expand)</i></summary>
 
-- [`load(source, recursive=False, backend='pil', verbose=False, *, stream=False, sample_rate=1, max_frames=None)`](api/load.md) ([example](../../examples/media/load.py)): Load an image, video, or directory into indexed [`MediaFrames`](api/MediaFrames.md) or a sequential [`MediaStream`](api/MediaStream.md).
+- [`load(source, recursive=False, backend='pil', verbose=False, *, stream=False, sample_rate=1, max_frames=None)`](api/load.md) ([example](../../examples/media/load.py)): Load an image, video, or directory into [`MediaFrames`](api/MediaFrames.md) in indexed or streaming mode.
+- [`compose(*steps)`](api/compose.md) ([example](../../examples/media/compose.py)): Chain filtering, sampling, and transform steps into a reusable media pipeline.
 - [`iter_frames(source, sample_rate=1, recursive=False, backend='pil', verbose=False)`](api/iter_frames.md) ([example](../../examples/media/iter_frames.py)): Yield sampled frames from a video or image directory as a generator.
 - [`probe(path, *, verbose=False)`](api/probe.md) ([example](../../examples/media/probe.py)): Read image or video format, dimensions, codec, and timing metadata into a dictionary (with optional Rich table display).
 
@@ -103,11 +101,10 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 </details>
 
 <details open>
-<summary><b>Lazy containers and frame proxies — <code>operations.py</code> (4 classes)</b> <i>(Click to expand)</i></summary>
+<summary><b>Lazy containers and frame proxies — <code>operations.py</code> (3 classes)</b> <i>(Click to expand)</i></summary>
 
 - [`LazyImage(path, backend='pil', crop_box=None, frame_index=None, reader=None)`](api/LazyImage.md) ([example](../../examples/media/LazyImage.py)): Zero-RAM image and video-frame proxy supporting lazy crops, PIL method forwarding, and preprocessing pipelines.
-- [`MediaFrames(items=None, *, fps=30.0, source_path=None, width=None, height=None, source_type='video', reader=None)`](api/MediaFrames.md) ([example](../../examples/media/MediaFrames.py)): List-like collection of lazy frames that preserves source metadata across slicing, mapping, and filtering.
-- [`MediaStream(source, *, sample_rate=1, max_frames=None, recursive=False, backend='pil', verbose=False)`](api/MediaStream.md) ([example](../../examples/media/MediaStream.py)): Bounded-memory iterable stream with quality, motion, deduplication, and preprocessing stages.
+- [`MediaFrames(source, *, stream=False, sample_rate=1, max_frames=None, recursive=False, backend='pil', verbose=False)`](api/MediaFrames.md) ([example](../../examples/media/MediaFrames.py)): Unified indexed and streaming frame container with quality, motion, deduplication, and preprocessing stages.
 - [`VideoReader(path)`](api/VideoReader.md) ([example](../../examples/media/VideoReader.py)): Reusable OpenCV video capture wrapper for sequential and random-access frame decoding.
 
 </details>

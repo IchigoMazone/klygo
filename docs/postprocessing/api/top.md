@@ -4,7 +4,7 @@
 postprocessing.top(count)
 ```
 
-Creates an `Operation` that applies `top_boxes`.
+Creates an `Operation` that keeps the highest-confidence boxes per frame.
 
 ## Returns
 
