@@ -24,3 +24,8 @@ results.export("artifacts/predictions", format="yolo")
 - [`detect`](api/detect.md) contains the implementation of the three levels.
 
 Postprocessing mutates `Detection` or `Detections` in place. Visual save methods decode one frame at a time; video export therefore remains bounded-memory for streams. Annotation export writes labels and source references without copying images.
+
+`Detections` owns one storage profile for every frame. Use `results.cuda(0)` for
+CuPy arrays, `results.cpu()` for NumPy arrays, and `results.astype(16|32|64)` for
+floating coordinates and scores. Device and precision conversion remain lazy for
+streams. Install optional CUDA storage with `pip install "klygo[gpu-outputs]"`.

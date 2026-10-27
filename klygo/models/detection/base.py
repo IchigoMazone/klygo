@@ -6,7 +6,10 @@ export, and benchmark workflows.
 """
 
 from contextlib import contextmanager
+from concurrent.futures import Future, ThreadPoolExecutor
 from copy import copy, deepcopy
+from collections import deque
+import itertools
 import math
 import statistics
 from threading import RLock
@@ -30,18 +33,79 @@ _LOADING_OPTIONS = {
 }
 
 
-def _materialize_model_images(images: Sequence[Any]) -> List[PIL.Image.Image]:
-    """Give model backends real RGB images without replacing lazy source proxies."""
+def _materialize_model_image(image: Any) -> PIL.Image.Image:
+    """Decode one model input without replacing its lazy source proxy."""
     from klygo import media
 
-    prepared = []
-    for image in images:
-        if isinstance(image, media.LazyImage):
-            image = image.to_pil(cache=False)
-            if image.mode != "RGB":
-                image = image.convert("RGB")
-        prepared.append(image)
-    return prepared
+    if isinstance(image, media.LazyImage):
+        image = image.to_pil(cache=False)
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+    return image
+
+
+def _materialize_model_images(images: Sequence[Any]) -> List[PIL.Image.Image]:
+    """Give model backends real RGB images without replacing lazy source proxies."""
+    return [_materialize_model_image(image) for image in images]
+
+
+def _prepared_batches(
+    images: Any,
+    batch: int,
+    workers: int,
+    prefetch: int,
+):
+    """Yield ordered source batches and decoded pixels with bounded read-ahead."""
+    iterator = iter(images)
+
+    def parts():
+        while True:
+            part = list(itertools.islice(iterator, batch))
+            if not part:
+                return
+            yield part
+
+    batches = iter(parts())
+    if workers == 0 or prefetch == 0:
+        for part in batches:
+            yield part, _materialize_model_images(part)
+        return
+
+    first = next(batches, None)
+    if first is None:
+        return
+    second = next(batches, None)
+    if second is None:
+        yield first, _materialize_model_images(first)
+        return
+    batches = itertools.chain((first, second), batches)
+
+    # Video frames can share one stateful OpenCV reader. Keep their decoding
+    # sequential even when callers request more workers.
+    worker_count = 1 if any(getattr(image, "reader", None) is not None for image in first) else workers
+
+    pending: deque[tuple[List[Any], List[Future[PIL.Image.Image]]]] = deque()
+    with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="klygo-decode") as executor:
+        def submit(part: List[Any]) -> tuple[List[Any], List[Future[PIL.Image.Image]]]:
+            return part, [executor.submit(_materialize_model_image, image) for image in part]
+
+        try:
+            for _ in range(prefetch):
+                part = next(batches, None)
+                if part is None:
+                    break
+                pending.append(submit(part))
+            while pending:
+                part, futures = pending.popleft()
+                prepared = [future.result() for future in futures]
+                following = next(batches, None)
+                if following is not None:
+                    pending.append(submit(following))
+                yield part, prepared
+        finally:
+            for _part, futures in pending:
+                for future in futures:
+                    future.cancel()
 
 
 def _values_match(left: Any, right: Any) -> bool:
@@ -95,6 +159,8 @@ class Detector(BaseModel):
         source: Any,
         prompt: Any = _UNSET,
         batch: int = 1,
+        workers: int = 1,
+        prefetch: int = 1,
         vid_stride: int = 1,
         max_frames: Optional[int] = None,
         verbose: bool = True,
@@ -108,6 +174,8 @@ class Detector(BaseModel):
         configuration at invocation, including across interleaved predictions.
         """
         validators.validate_count(batch, "batch")
+        validators.validate_count(workers, "workers", minimum=0)
+        validators.validate_count(prefetch, "prefetch", minimum=0)
         validators.validate_count(vid_stride, "vid_stride")
         if max_frames is not None:
             validators.validate_count(max_frames, "max_frames")
@@ -125,10 +193,14 @@ class Detector(BaseModel):
                 if not stream:
                     frames = []
                     with ProgressBar(total=len(images), desc="Predict", unit="frame", verbose=verbose, colour="cyan") as progress:
-                        for offset in range(0, len(images), batch):
-                            part = images[offset:offset + batch]
-                            frames.extend(self._infer_batch(part, prompts, metadata, offset * vid_stride, vid_stride))
+                        offset = 0
+                        for part, prepared in _prepared_batches(images, batch, workers, prefetch):
+                            frames.extend(self._infer_batch(
+                                part, prompts, metadata, offset * vid_stride,
+                                vid_stride, prepared_images=prepared,
+                            ))
                             progress.update(len(part))
+                            offset += len(part)
                     result = Detections(frames, metadata={"source_type": "image" if is_single else "video", "fps": getattr(images, "fps", 30.0)}, names=self.names)
             except Exception:
                 self._restore_prediction_state(previous)
@@ -144,27 +216,25 @@ class Detector(BaseModel):
                 total = len(images)
 
         def generate():
-            import itertools
-            iterator = iter(images)
             offset = 0
             try:
-                while True:
-                    part = list(itertools.islice(iterator, batch))
-                    if not part:
-                        break
+                for part, prepared in _prepared_batches(images, batch, workers, prefetch):
                     with self._prediction_lock:
                         if self.state == "UNLOADED":
                             from klygo.models.errors import InvalidStateError
                             raise InvalidStateError("Cannot consume a stream after model unload")
                         current = self._snapshot_prediction_state()
                         try:
-                            frames = self._infer_batch(part, prompts, metadata, offset * vid_stride, vid_stride)
+                            frames = self._infer_batch(
+                                part, prompts, metadata, offset * vid_stride,
+                                vid_stride, prepared_images=prepared,
+                            )
                         finally:
                             self._restore_prediction_state(current)
                     yield from frames
                     offset += len(part)
             finally:
-                close = getattr(iterator, "close", None)
+                close = getattr(images, "close", None)
                 if callable(close):
                     close()
 
@@ -284,7 +354,7 @@ class Detector(BaseModel):
         validators.validate_count(iterations, "iterations")
         validators.validate_count(warmup, "warmup", minimum=0)
         validators.validate_type(verbose, bool, "verbose")
-        if any(key in kwargs for key in ("stream", "batch", "vid_stride", "max_frames")):
+        if any(key in kwargs for key in ("stream", "batch", "workers", "prefetch", "vid_stride", "max_frames")):
             raise ValueError("benchmark accepts inference options, not stream or sampling controls")
 
         img = source if source is not None else PIL.Image.new("RGB", (640, 640))
@@ -393,11 +463,16 @@ class Detector(BaseModel):
     # 4. INTERNAL STATE & BATCH INFERENCE HELPERS
     # =========================================================================
 
-    def _infer_batch(self, images: List[Any], prompt: Any, metadata: Dict[str, Any], offset: int = 0, frame_step: int = 1) -> List[Detection]:
+    def _infer_batch(self, images: List[Any], prompt: Any, metadata: Dict[str, Any],
+                     offset: int = 0, frame_step: int = 1,
+                     prepared_images: Optional[List[PIL.Image.Image]] = None) -> List[Detection]:
         with self._prediction_lock, self._use_metadata(metadata), common.inference_context(self.backend):
             self._prepare_prediction(prompt)
             start = time.perf_counter()
-            raw = list(self.forward(images=_materialize_model_images(images), prompt=deepcopy(prompt)))
+            prepared = prepared_images if prepared_images is not None else _materialize_model_images(images)
+            if len(prepared) != len(images):
+                raise ValueError("prepared image count must match source image count")
+            raw = list(self.forward(images=prepared, prompt=deepcopy(prompt)))
             elapsed = (time.perf_counter() - start) * 1000 / max(1, len(images))
             if len(raw) != len(images):
                 raise ValueError("forward() must return exactly one result per input image")

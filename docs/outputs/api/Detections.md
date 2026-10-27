@@ -81,13 +81,29 @@ results.export("artifacts/predictions", format="yolo")
 results.drop("bg").relabel({"car": "vehicle"}).compact()
 ```
 
-`astype(32)` and `astype(64)` convert numeric annotation arrays in-place. Materialized
-collections validate every frame before changing any of them. Streams queue the
-conversion and apply it lazily as frames are yielded. Copy first when both precisions
-are needed. Storage conversion is recorded in `history` but does not mark frames as
-annotation edits in `modified_frames`:
+The collection owns one array storage profile shared by every frame. `cuda(device=0)`
+moves annotation arrays to CuPy, `cpu()` moves them to NumPy, and `astype(16|32|64)`
+changes floating coordinate and score precision. Class IDs remain `int32`; stable box
+UIDs remain `int64`. All methods mutate in place and return the same collection for
+chaining. Install CUDA output support with `pip install "klygo[gpu-outputs]"`.
+
+Materialized collections validate and prepare every frame before committing a
+conversion. Streams queue conversions and apply them lazily as frames are yielded.
+Storage conversions are recorded in `history` but do not mark frames as annotation
+edits in `modified_frames`. Individual `Detection` frames expose read-only `device`
+and `dtype` properties and cannot change storage independently:
 
 ```python
 compact_results = results.copy()
-compact_results.astype(32)
+compact_results.cuda(0).astype(16)
+print(compact_results.device, compact_results.dtype)  # cuda:0 16
+
+compact_results.astype(32).cpu()
+print(compact_results.device, compact_results.dtype)  # cpu 32
 ```
+
+GPU postprocessing runs directly on CuPy arrays. Visual display, image/video save,
+JSON serialization, and YOLO export stage only the current frame on CPU and do not
+change the collection's storage profile. Float16 storage uses float32 intermediates
+for sorting, NMS, and area calculations to support older CUDA devices and reduce
+geometry error.

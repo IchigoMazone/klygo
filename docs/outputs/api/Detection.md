@@ -56,16 +56,10 @@ frame.restore()
 `model.predict()` already performs this restoration automatically, so calling
 `restore()` on its result is harmless and does not transform coordinates twice.
 
-Use `astype(32)` to halve the numeric array width for large annotation sets, or
-`astype(64)` for the default precision. Conversion is in-place and remains active
-through later box CRUD. A 32-bit conversion raises `OverflowError` when coordinates,
-class IDs, or UIDs do not fit safely. Converting back to 64-bit does not recover
-precision already discarded by a previous 32-bit conversion.
-
-```python
-frame.astype(32)
-print(frame.dtype)  # 32
-```
+`device` and `dtype` report the frame's array storage but are read-only at this
+level. The owning [`Detections`](Detections.md) collection controls storage for
+every frame together through `cuda()`, `cpu()`, and `astype()`. This invariant
+prevents a collection from mixing NumPy and CuPy frames or numeric precision.
 
 `filter()`, `drop()`, `relabel()`, and `clear()` mutate the frame and return the
 same instance for method chaining.

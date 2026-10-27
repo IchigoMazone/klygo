@@ -33,9 +33,11 @@ and restore the current vocabulary before yielding. A per-detector lock prevents
 overlapping backend state changes through these APIs; direct native model calls
 remain the caller's responsibility.
 
-`batch`, `vid_stride`, `max_frames`, `stream`, `verbose`, sources and output paths
+`batch`, `workers`, `prefetch`, `vid_stride`, `max_frames`, `stream`, `verbose`, sources and output paths
 are execution controls, never remembered options. Batch and stride must be
-positive integers; `max_frames` must be None or a positive integer. Bool is not
+positive integers; `workers` and `prefetch` may also be zero to disable
+background decoding. Workers decode independent images concurrently inside the bounded
+prefetch window. `max_frames` must be None or a positive integer. Bool is not
 an integer control. Confidence/IoU options must be finite numbers in `[0, 1]`.
 Prompts accept a string, list or tuple of strings; whitespace is trimmed,
 duplicates are removed, and blank/non-string labels are rejected.

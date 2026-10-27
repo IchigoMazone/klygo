@@ -4,9 +4,144 @@ from typing import Callable, Iterable, Optional
 
 import numpy as np
 
-from klygo.outputs.detect import Box, Detection, Detections
+from klygo.outputs.detect import Box, Detection, Detections, _array_module
 
 Result = Detection | Detections
+
+_CUPY_NMS_KERNELS = {}
+
+
+def _cupy_nms(module, xyxy, scores, class_ids, iou, class_agnostic):
+    """Return score-ordered NMS indices using CuPy CUDA kernels."""
+    coordinate_type = "double" if xyxy.dtype == module.float64 else "float"
+    kernels = _CUPY_NMS_KERNELS.get(coordinate_type)
+    if kernels is None:
+        source = f"""
+        #define NMS_THREADS 64
+
+        extern "C" __global__ void nms_mask(
+            const {coordinate_type}* boxes,
+            const long long* classes,
+            const int count,
+            const int column_blocks,
+            const {coordinate_type} threshold,
+            const int class_agnostic,
+            unsigned long long* mask) {{
+            const int row_block = blockIdx.y;
+            const int column_block = blockIdx.x;
+            if (row_block > column_block) return;
+
+            const int row_start = row_block * NMS_THREADS;
+            const int column_start = column_block * NMS_THREADS;
+            const int row_size = min(count - row_start, NMS_THREADS);
+            const int column_size = min(count - column_start, NMS_THREADS);
+
+            __shared__ {coordinate_type} block_boxes[NMS_THREADS * 4];
+            __shared__ long long block_classes[NMS_THREADS];
+            if (threadIdx.x < column_size) {{
+                const int index = column_start + threadIdx.x;
+                block_boxes[threadIdx.x * 4] = boxes[index * 4];
+                block_boxes[threadIdx.x * 4 + 1] = boxes[index * 4 + 1];
+                block_boxes[threadIdx.x * 4 + 2] = boxes[index * 4 + 2];
+                block_boxes[threadIdx.x * 4 + 3] = boxes[index * 4 + 3];
+                block_classes[threadIdx.x] = classes[index];
+            }}
+            __syncthreads();
+
+            if (threadIdx.x < row_size) {{
+                const int current = row_start + threadIdx.x;
+                const {coordinate_type}* current_box = boxes + current * 4;
+                const {coordinate_type} current_area =
+                    (current_box[2] - current_box[0]) *
+                    (current_box[3] - current_box[1]);
+                const int start = row_block == column_block ? threadIdx.x + 1 : 0;
+                unsigned long long suppressed = 0;
+
+                for (int index = start; index < column_size; ++index) {{
+                    if (!class_agnostic &&
+                            classes[current] != block_classes[index]) continue;
+                    const {coordinate_type} left =
+                        max(current_box[0], block_boxes[index * 4]);
+                    const {coordinate_type} top =
+                        max(current_box[1], block_boxes[index * 4 + 1]);
+                    const {coordinate_type} right =
+                        min(current_box[2], block_boxes[index * 4 + 2]);
+                    const {coordinate_type} bottom =
+                        min(current_box[3], block_boxes[index * 4 + 3]);
+                    const {coordinate_type} width =
+                        max(({coordinate_type})0, right - left);
+                    const {coordinate_type} height =
+                        max(({coordinate_type})0, bottom - top);
+                    const {coordinate_type} intersection = width * height;
+                    const {coordinate_type} other_area =
+                        (block_boxes[index * 4 + 2] - block_boxes[index * 4]) *
+                        (block_boxes[index * 4 + 3] - block_boxes[index * 4 + 1]);
+                    const {coordinate_type} union_area =
+                        current_area + other_area - intersection;
+                    if (union_area > 0 && intersection / union_area > threshold)
+                        suppressed |= 1ULL << index;
+                }}
+                mask[current * column_blocks + column_block] = suppressed;
+            }}
+        }}
+
+        extern "C" __global__ void nms_select(
+            const unsigned long long* mask,
+            const int count,
+            const int column_blocks,
+            unsigned long long* removed,
+            long long* keep,
+            int* keep_count) {{
+            if (blockIdx.x != 0 || threadIdx.x != 0) return;
+            int selected = 0;
+            for (int index = 0; index < count; ++index) {{
+                const int block = index / NMS_THREADS;
+                const int offset = index % NMS_THREADS;
+                if (!(removed[block] & (1ULL << offset))) {{
+                    keep[selected++] = index;
+                    const unsigned long long* row = mask + index * column_blocks;
+                    for (int column = block; column < column_blocks; ++column)
+                        removed[column] |= row[column];
+                }}
+            }}
+            keep_count[0] = selected;
+        }}
+        """
+        kernels = (
+            module.RawKernel(source, "nms_mask"),
+            module.RawKernel(source, "nms_select"),
+        )
+        _CUPY_NMS_KERNELS[coordinate_type] = kernels
+
+    order = module.argsort(-scores, kind="stable")
+    ordered_boxes = module.ascontiguousarray(xyxy[order])
+    if class_ids is None:
+        ordered_classes = module.zeros(len(order), dtype=module.int64)
+    else:
+        ordered_classes = module.ascontiguousarray(class_ids[order], dtype=module.int64)
+    count = len(order)
+    column_blocks = (count + 63) // 64
+    mask = module.zeros((count, column_blocks), dtype=module.uint64)
+    threshold = module.float64(iou) if coordinate_type == "double" else module.float32(iou)
+    kernels[0](
+        (column_blocks, column_blocks),
+        (64,),
+        (
+            ordered_boxes,
+            ordered_classes,
+            count,
+            column_blocks,
+            threshold,
+            int(class_agnostic),
+            mask,
+        ),
+    )
+    removed = module.zeros(column_blocks, dtype=module.uint64)
+    keep = module.empty(count, dtype=module.int64)
+    keep_count = module.zeros(1, dtype=module.int32)
+    kernels[1]((1,), (1,), (mask, count, column_blocks, removed, keep, keep_count))
+    selected = int(keep_count.item())
+    return order[keep[:selected]]
 
 
 def _frames(result: Result, function: Callable[[Detection], None]) -> None:
@@ -77,7 +212,8 @@ def _filter_score(result: Result, minimum: float) -> None:
         if len(frame._labels) == 0:
             frame._slice_keep([], "filter_boxes")
             return
-        keep = np.flatnonzero(frame._scores >= minimum)
+        module = _array_module(frame.device)
+        keep = module.flatnonzero(frame._scores >= minimum)
         frame._slice_keep(keep, "filter_boxes")
 
     _frames(result, threshold_frame)
@@ -99,13 +235,14 @@ def _clip_boxes(result: Result, image_size: Optional[tuple[int, int]] = None) ->
         if len(frame._labels) == 0:
             frame._slice_keep([], "clip_boxes")
             return
+        module = _array_module(frame.device)
         xyxy = frame._xyxy.copy()
-        xyxy[:, 0] = np.maximum(0.0, xyxy[:, 0])
-        xyxy[:, 1] = np.maximum(0.0, xyxy[:, 1])
-        xyxy[:, 2] = np.minimum(float(width), xyxy[:, 2])
-        xyxy[:, 3] = np.minimum(float(height), xyxy[:, 3])
+        xyxy[:, 0] = module.maximum(0.0, xyxy[:, 0])
+        xyxy[:, 1] = module.maximum(0.0, xyxy[:, 1])
+        xyxy[:, 2] = module.minimum(float(width), xyxy[:, 2])
+        xyxy[:, 3] = module.minimum(float(height), xyxy[:, 3])
         valid = (xyxy[:, 2] > xyxy[:, 0]) & (xyxy[:, 3] > xyxy[:, 1])
-        keep = np.flatnonzero(valid)
+        keep = module.flatnonzero(valid)
         frame._slice_keep(keep, "clip_boxes", new_xyxy=xyxy[keep])
 
     _frames(result, clip_frame)
@@ -123,12 +260,18 @@ def _remove_invalid_boxes(result: Result, min_area: float = 0) -> None:
         if len(frame._labels) == 0:
             frame._slice_keep([], "filter_boxes")
             return
+        module = _array_module(frame.device)
         xyxy = frame._xyxy
-        finite = np.isfinite(xyxy).all(axis=1)
-        widths = xyxy[:, 2] - xyxy[:, 0]
-        heights = xyxy[:, 3] - xyxy[:, 1]
+        calculation = (
+            xyxy.astype(module.float32)
+            if module is not np and xyxy.dtype == module.float16
+            else xyxy
+        )
+        finite = module.isfinite(calculation).all(axis=1)
+        widths = calculation[:, 2] - calculation[:, 0]
+        heights = calculation[:, 3] - calculation[:, 1]
         valid = finite & (widths > 0) & (heights > 0) & ((widths * heights) >= minimum)
-        frame._slice_keep(np.flatnonzero(valid), "filter_boxes")
+        frame._slice_keep(module.flatnonzero(valid), "filter_boxes")
 
     _frames(result, clean_frame)
 
@@ -157,27 +300,33 @@ def _suppress(result: Result, iou: float = .5, class_agnostic: bool = False) -> 
             return
         xyxy = frame._xyxy
         scores = frame._scores
-        cids = None if class_agnostic else np.asarray(frame.class_ids, dtype=np.int64)
-        if n >= 512 and np.unique(scores).size == n:
-            try:
-                import torch
-                from torchvision.ops import batched_nms, nms as torch_nms
-
-                boxes_tensor = torch.as_tensor(xyxy, dtype=torch.float32)
-                scores_tensor = torch.as_tensor(scores, dtype=torch.float32)
-                if class_agnostic:
-                    kept = torch_nms(boxes_tensor, scores_tensor, iou)
-                else:
-                    kept = batched_nms(
-                        boxes_tensor, scores_tensor,
-                        torch.as_tensor(cids, dtype=torch.int64), iou,
-                    )
-                frame._slice_keep(kept.cpu().numpy(), "nms")
-                return
-            except (ImportError, OSError, RuntimeError):
-                pass
+        module = _array_module(frame.device)
+        calculation_xyxy = (
+            xyxy.astype(module.float32)
+            if module is not np and xyxy.dtype == module.float16
+            else xyxy
+        )
+        calculation_scores = (
+            scores.astype(module.float32)
+            if module is not np and scores.dtype == module.float16
+            else scores
+        )
+        cids = None if class_agnostic else frame._class_ids.astype(module.int64, copy=False)
+        if module is not np:
+            kept = _cupy_nms(
+                module,
+                calculation_xyxy,
+                calculation_scores,
+                cids,
+                iou,
+                class_agnostic,
+            )
+            frame._slice_keep(kept, "nms")
+            return
+        xyxy = calculation_xyxy
+        scores = calculation_scores
         areas = (xyxy[:, 2] - xyxy[:, 0]) * (xyxy[:, 3] - xyxy[:, 1])
-        order = np.argsort(-scores, kind="stable")
+        order = module.argsort(-scores, kind="stable")
         kept: list[int] = []
         while order.size > 0:
             i = int(order[0])
@@ -185,15 +334,15 @@ def _suppress(result: Result, iou: float = .5, class_agnostic: bool = False) -> 
             if order.size == 1:
                 break
             rest = order[1:]
-            xx1 = np.maximum(xyxy[i, 0], xyxy[rest, 0])
-            yy1 = np.maximum(xyxy[i, 1], xyxy[rest, 1])
-            xx2 = np.minimum(xyxy[i, 2], xyxy[rest, 2])
-            yy2 = np.minimum(xyxy[i, 3], xyxy[rest, 3])
-            w = np.maximum(0.0, xx2 - xx1)
-            h = np.maximum(0.0, yy2 - yy1)
+            xx1 = module.maximum(xyxy[i, 0], xyxy[rest, 0])
+            yy1 = module.maximum(xyxy[i, 1], xyxy[rest, 1])
+            xx2 = module.minimum(xyxy[i, 2], xyxy[rest, 2])
+            yy2 = module.minimum(xyxy[i, 3], xyxy[rest, 3])
+            w = module.maximum(0.0, xx2 - xx1)
+            h = module.maximum(0.0, yy2 - yy1)
             inter = w * h
             union = areas[i] + areas[rest] - inter
-            ovr = np.where(union <= 0.0, 0.0, inter / union)
+            ovr = module.where(union <= 0.0, 0.0, inter / union)
             if class_agnostic:
                 mask = ovr <= iou
             else:
@@ -215,7 +364,11 @@ def _top_boxes(result: Result, count: int) -> None:
         if len(frame._labels) == 0:
             frame._slice_keep([], "top")
             return
-        order = np.argsort(-frame._scores, kind="stable")[:count]
+        module = _array_module(frame.device)
+        scores = frame._scores
+        if module is not np and scores.dtype == module.float16:
+            scores = scores.astype(module.float32)
+        order = module.argsort(-scores, kind="stable")[:count]
         frame._slice_keep(order, "top")
 
     _frames(result, top_frame)

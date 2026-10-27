@@ -55,6 +55,9 @@ torchvision = [
 keras-hub = [
     "keras-hub",
 ]
+gpu-outputs = [
+    "cupy-cuda12x[ctk]>=14,<15",
+]
 models = [
     "torch>=2.7,<3.0",
     "transformers>=4.50,<6.0",

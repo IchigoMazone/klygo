@@ -3,7 +3,9 @@
 from contextlib import redirect_stdout
 from copy import deepcopy
 from io import StringIO
+from threading import current_thread
 from types import SimpleNamespace
+import time
 import unittest
 from unittest.mock import patch
 
@@ -78,13 +80,14 @@ class TestPredictionLifecycle(unittest.TestCase):
 
     def test_nested_snapshot_and_execution_controls(self):
         self.model(self.image, prompt=["dog"], post_options={"values": [1]}, verbose=False,
-                   batch=2, vid_stride=2, max_frames=1)
+                   batch=2, workers=1, prefetch=1, vid_stride=2, max_frames=1)
         saved = self.model.predict_config
         saved["prompt"].append("cat")
         saved["post_options"]["values"].append(2)
         self.assertEqual(self.model.predict_config["post_options"], {"values": [1]})
         self.assertEqual(self.model.predict_config["prompt"], ["dog"])
-        for key in ("source", "verbose", "batch", "vid_stride", "max_frames", "stream"):
+        for key in ("source", "verbose", "batch", "workers", "prefetch",
+                    "vid_stride", "max_frames", "stream"):
             self.assertNotIn(key, self.model.predict_config)
 
     def test_array_configuration_comparison_is_unambiguous(self):
@@ -105,6 +108,7 @@ class TestPredictionLifecycle(unittest.TestCase):
         for kwargs in ({"prompt": ["cat"], "threshold": 2}, {"prompt": [3]}, {"prompt": []},
                        {"prompt": " "}, {"prompt": True}, {"threshold": float("nan")},
                        {"iou": -.1}, {"threshold": True}, {"batch": 0}, {"batch": True},
+                       {"workers": -1}, {"workers": True}, {"prefetch": -1}, {"prefetch": True},
                        {"vid_stride": -1}, {"max_frames": 0}, {"stream": 1}, {"verbose": 1},
                        {"unknown": 4}, {"post_verbose": True}):
             with self.subTest(kwargs=kwargs), self.assertRaises((TypeError, ValueError)):
@@ -128,6 +132,29 @@ class TestPredictionLifecycle(unittest.TestCase):
         self.assertEqual(self.model.predict_config["prompt"], ["new"])
         self.assertEqual(self.model.names, {0: "new"})
 
+    def test_predict_prefetches_decode_and_preserves_order(self):
+        from klygo.models.detection import base
+
+        threads = []
+        original = base._materialize_model_image
+
+        def record(image):
+            threads.append(current_thread().name)
+            time.sleep(0.01)
+            return original(image)
+
+        with patch.object(base, "_materialize_model_image", side_effect=record):
+            result = self.model(
+                [self.image] * 5,
+                batch=2,
+                workers=4,
+                prefetch=2,
+                verbose=False,
+            )
+        self.assertEqual([frame.frame_index for frame in result], list(range(5)))
+        self.assertTrue(any(name.startswith("klygo-decode") for name in threads))
+        self.assertGreater(len(set(threads)), 1)
+
     def test_benchmark_is_scoped_and_reports_actual_sample_size(self):
         self.model(self.image, prompt="dog", threshold=.6, verbose=False)
         before = deepcopy(self.model.predict_config)
@@ -147,7 +174,8 @@ class TestPredictionLifecycle(unittest.TestCase):
 
     def test_benchmark_rejects_invalid_counts_and_stream_controls(self):
         for kwargs in ({"iterations": 0}, {"iterations": True}, {"warmup": -1},
-                       {"warmup": 1.5}, {"stream": True}, {"num_runs": 2}):
+                       {"warmup": 1.5}, {"stream": True}, {"workers": 2},
+                       {"prefetch": 2}, {"num_runs": 2}):
             with self.subTest(kwargs=kwargs), self.assertRaises((ValueError, TypeError)):
                 self.model.benchmark(self.image, verbose=False, **kwargs)
 

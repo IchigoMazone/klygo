@@ -24,8 +24,8 @@ def traced_frame(index=0, *, precision=64):
         source_id="video", frame_index=index, image_size=image.size,
         source=image, names={0: "car"},
     )
-    item.astype(precision)
-    return item
+    result = outputs.Detections([item]).astype(precision)
+    return result[0]
 
 class TestOutputs(unittest.TestCase):
     def test_builder_and_geometry(self):
@@ -471,24 +471,27 @@ class TestOutputs(unittest.TestCase):
         self.assertEqual(results[0].to_dict()["boxes"][0]["metadata"], {"tag": "tracked"})
 
     def test_astype_preserves_precision_through_crud_copy_and_pipeline(self):
-        item = frame(labels=("car", "person"))
+        results = outputs.Detections([frame(labels=("car", "person"))])
+        item = results[0]
         cached = item[0]
-        item.astype(32)
+        results.astype(32)
+        self.assertEqual(results.dtype, 32)
         self.assertEqual(item.dtype, 32)
         self.assertEqual(item._xyxy.dtype, np.dtype("float32"))
         self.assertEqual(item._scores.dtype, np.dtype("float32"))
         self.assertEqual(item._class_ids.dtype, np.dtype("int32"))
-        self.assertEqual(item._uids.dtype, np.dtype("int32"))
+        self.assertEqual(item._uids.dtype, np.dtype("int64"))
         self.assertEqual(cached.box, tuple(float(value) for value in item._xyxy[0]))
+        self.assertIsNone(cached._owner)
 
         item.add_box([10, 10, 20, 20], label="bus", score=.75)
         item.relabel({"person": "human"})
         self.assertEqual(item.dtype, 32)
         self.assertTrue(all(array.dtype.itemsize == 4 for array in (
-            item._xyxy, item._scores, item._class_ids, item._uids,
+            item._xyxy, item._scores, item._class_ids,
         )))
+        self.assertEqual(item._uids.dtype.itemsize, 8)
 
-        results = outputs.Detections([item])
         copied = results.copy()
         self.assertEqual(copied.modified_frames, ())
         copied.astype(64)
@@ -500,8 +503,9 @@ class TestOutputs(unittest.TestCase):
         copied.astype(64)
         self.assertEqual(copied[0].dtype, 64)
         self.assertTrue(all(array.dtype.itemsize == 8 for array in (
-            copied[0]._xyxy, copied[0]._scores, copied[0]._class_ids, copied[0]._uids,
+            copied[0]._xyxy, copied[0]._scores, copied[0]._uids,
         )))
+        self.assertEqual(copied[0]._class_ids.dtype.itemsize, 4)
 
     def test_astype_validates_before_collection_mutation_and_streams_lazily(self):
         normal = frame("video", 0, ("car",))
@@ -512,8 +516,11 @@ class TestOutputs(unittest.TestCase):
         with self.assertRaises(OverflowError):
             results.astype(32)
         self.assertEqual([item.dtype for item in results], [64, 64])
-        with self.assertRaises(ValueError):
-            normal.astype(16)
+        self.assertFalse(hasattr(normal, "astype"))
+
+        compact = outputs.Detections([frame("compact", 0, ("car",))]).astype(16)
+        self.assertEqual(compact.dtype, 16)
+        self.assertEqual(compact[0]._xyxy.dtype, np.dtype("float16"))
 
         consumed = []
         def generate():
@@ -531,6 +538,12 @@ class TestOutputs(unittest.TestCase):
         self.assertEqual(results.modified_frames, ())
         original_score = results[0][0].score
         results[0][0].score = 0.15
+        self.assertEqual(results.modified_frames, (("image-a", 0),))
+        results[0][0].score = original_score
+        self.assertEqual(results.modified_frames, ())
+
+        results[0][0].score = 0.15
+        results.astype(16)
         self.assertEqual(results.modified_frames, (("image-a", 0),))
         results[0][0].score = original_score
         self.assertEqual(results.modified_frames, ())

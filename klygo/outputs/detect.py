@@ -347,22 +347,103 @@ class Box:
 
 _EMPTY_XYXY = np.empty((0, 4), dtype=np.float64)
 _EMPTY_SCORES = np.empty((0,), dtype=np.float64)
-_EMPTY_INTS = np.empty((0,), dtype=np.int64)
-_EMPTY_XYXY32 = np.empty((0, 4), dtype=np.float32)
-_EMPTY_SCORES32 = np.empty((0,), dtype=np.float32)
-_EMPTY_INTS32 = np.empty((0,), dtype=np.int32)
+_EMPTY_CLASS_IDS = np.empty((0,), dtype=np.int32)
+_EMPTY_UIDS = np.empty((0,), dtype=np.int64)
 
 
 def _precision(value: Any) -> int:
-    if isinstance(value, bool) or value not in (32, 64):
-        raise ValueError("dtype must be 32 or 64")
+    if isinstance(value, bool) or value not in (16, 32, 64):
+        raise ValueError("dtype must be 16, 32, or 64")
     return int(value)
 
 
-def _empty_arrays(bits: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    if bits == 32:
-        return _EMPTY_XYXY32, _EMPTY_SCORES32, _EMPTY_INTS32
-    return _EMPTY_XYXY, _EMPTY_SCORES, _EMPTY_INTS
+def _cupy() -> Any:
+    """Import the optional CUDA array backend only when requested."""
+    try:
+        import cupy as cp
+    except ImportError as error:
+        raise ImportError(
+            "CUDA detection storage requires CuPy. Install the matching CUDA build, "
+            "for example 'pip install cupy-cuda12x'."
+        ) from error
+    return cp
+
+
+def _normalize_device(value: Any) -> str:
+    if isinstance(value, bool):
+        raise TypeError("CUDA device must be a non-negative integer")
+    if isinstance(value, Integral):
+        if int(value) < 0:
+            raise ValueError("CUDA device must be non-negative")
+        return f"cuda:{int(value)}"
+    result = str(value).strip().lower()
+    if result == "cpu":
+        return result
+    if result == "cuda":
+        return "cuda:0"
+    if result.startswith("cuda:"):
+        try:
+            index = int(result.split(":", 1)[1])
+        except ValueError as error:
+            raise ValueError("device must be 'cpu', 'cuda', or 'cuda:N'") from error
+        if index < 0:
+            raise ValueError("CUDA device must be non-negative")
+        return f"cuda:{index}"
+    raise ValueError("device must be 'cpu', 'cuda', or 'cuda:N'")
+
+
+def _array_device(value: Any) -> str:
+    if type(value).__module__.split(".", 1)[0] != "cupy":
+        return "cpu"
+    return f"cuda:{int(value.device.id)}"
+
+
+def _array_module(device: str) -> Any:
+    if device == "cpu":
+        return np
+    module = _cupy()
+    module.cuda.Device(int(device.split(":", 1)[1])).use()
+    return module
+
+
+def _float_dtype(module: Any, bits: int) -> Any:
+    return {16: module.float16, 32: module.float32, 64: module.float64}[bits]
+
+
+def _to_cpu(value: Any) -> np.ndarray:
+    return value if isinstance(value, np.ndarray) else _cupy().asnumpy(value)
+
+
+def _empty_arrays(bits: int, device: str = "cpu") -> tuple[Any, Any, Any, Any]:
+    module = _array_module(device)
+    float_dtype = _float_dtype(module, bits)
+    return (
+        module.empty((0, 4), dtype=float_dtype),
+        module.empty((0,), dtype=float_dtype),
+        module.empty((0,), dtype=module.int32),
+        module.empty((0,), dtype=module.int64),
+    )
+
+
+def _signature_precision(signature: tuple[Any, ...], bits: int) -> tuple[Any, ...]:
+    """Cast stored baseline float bytes without changing semantic history."""
+    if not signature:
+        return signature
+    target = np.dtype({16: np.float16, 32: np.float32, 64: np.float64}[bits])
+
+    def convert(payload: tuple[str, bytes]) -> tuple[str, bytes]:
+        source_dtype, values = payload
+        array = np.frombuffer(values, dtype=np.dtype(source_dtype)).astype(target)
+        return target.str, array.tobytes()
+
+    return (
+        signature[0],
+        signature[1],
+        signature[2],
+        convert(signature[3]),
+        convert(signature[4]),
+        signature[5],
+    )
 
 
 class Detection:
@@ -372,6 +453,7 @@ class Detection:
         "_source_id",
         "_frame_index",
         "_identity",
+        "_device",
         "_precision",
         "_source_path",
         "_image_size",
@@ -406,6 +488,7 @@ class Detection:
         self._source_id, inferred_path = _source(source, source_id)
         self._frame_index = frame_index
         self._identity = (self._source_id, self._frame_index)
+        self._device = "cpu"
         self._precision = 64
         self._source_path = str(source_path) if source_path is not None else inferred_path
         self._image_size = _size(image_size or getattr(source, "size", None))
@@ -418,8 +501,8 @@ class Detection:
         self._label_ids = {label: class_id for class_id, label in self._registry.items()}
         self._xyxy: np.ndarray = _EMPTY_XYXY
         self._scores: np.ndarray = _EMPTY_SCORES
-        self._class_ids: np.ndarray = _EMPTY_INTS
-        self._uids: np.ndarray = _EMPTY_INTS
+        self._class_ids: np.ndarray = _EMPTY_CLASS_IDS
+        self._uids: np.ndarray = _EMPTY_UIDS
         self._labels: list[str] = []
         self._track_ids: Optional[list[Optional[int | str]]] = None
         self._metas: Optional[list[Optional[dict[str, Any]]]] = None
@@ -435,10 +518,10 @@ class Detection:
     @classmethod
     def _from_arrays(
         cls,
-        xyxy: np.ndarray,
-        scores: np.ndarray,
-        class_ids: np.ndarray,
-        uids: np.ndarray,
+        xyxy: Any,
+        scores: Any,
+        class_ids: Any,
+        uids: Any,
         labels: list[str],
         *,
         track_ids: Optional[list[Optional[int | str]]] = None,
@@ -453,6 +536,7 @@ class Detection:
         registry: Optional[Names] = None,
         label_ids: Optional[dict[str, int]] = None,
         precision: Optional[int] = None,
+        device: Optional[str] = None,
         restore_trace: Any = None,
     ) -> "Detection":
         instance = cls.__new__(cls)
@@ -463,9 +547,9 @@ class Detection:
         instance._source_id, inferred_path = _source(source, source_id)
         instance._frame_index = frame_index
         instance._identity = (instance._source_id, instance._frame_index)
+        instance._device = _normalize_device(device or _array_device(xyxy))
         if precision is None:
-            arrays = (xyxy, scores, class_ids, uids)
-            precision = 32 if arrays and all(array.dtype.itemsize <= 4 for array in arrays) else 64
+            precision = int(xyxy.dtype.itemsize * 8) if xyxy.size else 64
         instance._precision = _precision(precision)
         instance._source_path = str(source_path) if source_path is not None else inferred_path
         instance._image_size = _size(image_size or getattr(source, "size", None))
@@ -484,18 +568,17 @@ class Detection:
             if label_ids is not None
             else {lbl: cid for cid, lbl in instance._registry.items()}
         )
-        float_dtype = np.float32 if instance._precision == 32 else np.float64
-        int_dtype = np.int32 if instance._precision == 32 else np.int64
-        if instance._precision == 32:
-            int_limit = np.iinfo(np.int32).max
-            if any(array.size and int(array.max()) > int_limit for array in (class_ids, uids)):
-                raise OverflowError("class IDs and UIDs must fit in int32")
-            if xyxy.size and np.any(np.abs(xyxy) > np.finfo(np.float32).max):
-                raise OverflowError("box coordinates must fit in float32")
-        instance._xyxy = np.asarray(xyxy, dtype=float_dtype)
-        instance._scores = np.asarray(scores, dtype=float_dtype)
-        instance._class_ids = np.asarray(class_ids, dtype=int_dtype)
-        instance._uids = np.asarray(uids, dtype=int_dtype)
+        module = _array_module(instance._device)
+        float_dtype = _float_dtype(module, instance._precision)
+        if class_ids.size and int(class_ids.max()) > np.iinfo(np.int32).max:
+            raise OverflowError("class IDs must fit in int32")
+        float_limit = np.finfo({16: np.float16, 32: np.float32, 64: np.float64}[instance._precision]).max
+        if xyxy.size and bool(module.any(module.abs(xyxy) > float_limit)):
+            raise OverflowError(f"box coordinates must fit in float{instance._precision}")
+        instance._xyxy = module.asarray(xyxy, dtype=float_dtype)
+        instance._scores = module.asarray(scores, dtype=float_dtype)
+        instance._class_ids = module.asarray(class_ids, dtype=module.int32)
+        instance._uids = module.asarray(uids, dtype=module.int64)
         instance._labels = labels
         instance._track_ids = track_ids
         instance._metas = metas
@@ -515,7 +598,8 @@ class Detection:
     frame_index = property(lambda self: self._frame_index, doc="Frame number in the source.")
     source_path = property(lambda self: self._source_path, doc="Optional physical source path.")
     image_size = property(lambda self: self._image_size, doc="Original width and height.")
-    dtype = property(lambda self: self._precision, doc="Numeric storage width, either 32 or 64 bits.")
+    device = property(lambda self: self._device, doc="Read-only annotation array device.")
+    dtype = property(lambda self: self._precision, doc="Floating annotation width: 16, 32, or 64 bits.")
     count = property(lambda self: len(self._labels), doc="Current box count.")
     empty = property(lambda self: not self._labels, doc="Whether the frame is empty.")
     has_objects = property(lambda self: bool(self._labels), doc="Whether the frame has boxes.")
@@ -627,9 +711,9 @@ class Detection:
                 raise ValueError("box indices must not contain duplicates")
             normalized.append(position)
 
-        int_dtype = np.int32 if self._precision == 32 else np.int64
-        selected = np.asarray(normalized, dtype=np.int64)
-        class_ids = np.asarray(self.class_ids, dtype=int_dtype)
+        module = _array_module(self._device)
+        selected = module.asarray(normalized, dtype=module.int64)
+        class_ids = module.asarray(self.class_ids, dtype=module.int32)
         track_ids = None if self._track_ids is None else [self._track_ids[i] for i in normalized]
         metas = None if self._metas is None else [deepcopy(self._metas[i]) for i in normalized]
         registry = self._owner._registry if self._owner is not None else self._registry
@@ -652,6 +736,7 @@ class Detection:
             registry=registry,
             label_ids=label_ids,
             precision=self._precision,
+            device=self._device,
             restore_trace=self._restore_trace,
         )
 
@@ -741,12 +826,14 @@ class Detection:
     def _commit(self, boxes: Iterable[Box], operation: Optional[str], *, retain_boxes: bool = True) -> None:
         prepared, registry, next_uid = self._prepare(boxes)
         n = len(prepared)
-        if n and self._precision == 32:
-            values = [value for b in prepared for value in (b._class_id, b._uid)]
-            if max(values) > np.iinfo(np.int32).max:
-                raise OverflowError("class IDs and UIDs must fit in int32")
-            if any(abs(value) > np.finfo(np.float32).max for b in prepared for value in b._box):
-                raise OverflowError("box coordinates must fit in float32")
+        if n:
+            if max(b._class_id for b in prepared) > np.iinfo(np.int32).max:
+                raise OverflowError("class IDs must fit in int32")
+            float_limit = np.finfo(
+                {16: np.float16, 32: np.float32, 64: np.float64}[self._precision]
+            ).max
+            if any(abs(value) > float_limit for b in prepared for value in b._box):
+                raise OverflowError(f"box coordinates must fit in float{self._precision}")
         self._before_change()
         if self._boxes_cache is not None:
             surviving = {id(b) for b in prepared} if retain_boxes else set()
@@ -755,22 +842,24 @@ class Detection:
                     item._owner = None
 
         if n == 0:
-            empty_xyxy, empty_scores, empty_ints = _empty_arrays(self._precision)
+            empty_xyxy, empty_scores, empty_class_ids, empty_uids = _empty_arrays(
+                self._precision, self._device
+            )
             self._xyxy = empty_xyxy
             self._scores = empty_scores
-            self._class_ids = empty_ints
-            self._uids = empty_ints
+            self._class_ids = empty_class_ids
+            self._uids = empty_uids
             self._labels = []
             self._track_ids = None
             self._metas = None
             self._boxes_cache = None
         else:
-            float_dtype = np.float32 if self._precision == 32 else np.float64
-            int_dtype = np.int32 if self._precision == 32 else np.int64
-            self._xyxy = np.array([b._box for b in prepared], dtype=float_dtype)
-            self._scores = np.array([b._score for b in prepared], dtype=float_dtype)
-            self._class_ids = np.array([b._class_id for b in prepared], dtype=int_dtype)
-            self._uids = np.array([b._uid for b in prepared], dtype=int_dtype)
+            module = _array_module(self._device)
+            float_dtype = _float_dtype(module, self._precision)
+            self._xyxy = module.array([b._box for b in prepared], dtype=float_dtype)
+            self._scores = module.array([b._score for b in prepared], dtype=float_dtype)
+            self._class_ids = module.array([b._class_id for b in prepared], dtype=module.int32)
+            self._uids = module.array([b._uid for b in prepared], dtype=module.int64)
             self._labels = [b._label for b in prepared]
             has_tracks = any(b._track_id is not None for b in prepared)
             self._track_ids = [b._track_id for b in prepared] if has_tracks else None
@@ -792,8 +881,11 @@ class Detection:
 
     def _copy_from(self, draft: "Detection", operation: Optional[str]) -> None:
         self._before_change()
+        self._device = draft._device
         self._precision = draft._precision
-        empty_xyxy, empty_scores, empty_ints = _empty_arrays(self._precision)
+        empty_xyxy, empty_scores, empty_class_ids, empty_uids = _empty_arrays(
+            self._precision, self._device
+        )
         if self._boxes_cache is not None:
             for item in self._boxes_cache:
                 if item is not None:
@@ -801,8 +893,8 @@ class Detection:
             self._boxes_cache = None
         self._xyxy = draft._xyxy.copy() if len(draft._labels) else empty_xyxy
         self._scores = draft._scores.copy() if len(draft._labels) else empty_scores
-        self._class_ids = draft._class_ids.copy() if len(draft._labels) else empty_ints
-        self._uids = draft._uids.copy() if len(draft._labels) else empty_ints
+        self._class_ids = draft._class_ids.copy() if len(draft._labels) else empty_class_ids
+        self._uids = draft._uids.copy() if len(draft._labels) else empty_uids
         self._labels = list(draft._labels)
         self._track_ids = list(draft._track_ids) if draft._track_ids is not None else None
         self._metas = [deepcopy(m) if m else None for m in draft._metas] if draft._metas is not None else None
@@ -815,17 +907,18 @@ class Detection:
 
     def _slice_keep(
         self,
-        indices: Sequence[int] | np.ndarray,
+        indices: Sequence[int] | Any,
         operation: Optional[str],
-        new_xyxy: Optional[np.ndarray] = None,
+        new_xyxy: Optional[Any] = None,
     ) -> None:
-        idx_list = indices.tolist() if isinstance(indices, np.ndarray) else list(indices)
+        idx_list = indices.tolist() if hasattr(indices, "tolist") else list(indices)
         unchanged_indices = len(idx_list) == len(self._labels) and all(
             index == position for position, index in enumerate(idx_list)
         )
-        unchanged_boxes = new_xyxy is None or np.array_equal(
-            np.asarray(new_xyxy), self._xyxy, equal_nan=True
-        )
+        module = _array_module(self._device)
+        unchanged_boxes = new_xyxy is None or bool(module.array_equal(
+            module.asarray(new_xyxy), self._xyxy, equal_nan=True
+        ))
         if unchanged_indices and unchanged_boxes:
             return
         self._before_change()
@@ -845,11 +938,13 @@ class Detection:
                             row = new_xyxy[new_i]
                             b._box = (float(row[0]), float(row[1]), float(row[2]), float(row[3]))
         if n == 0:
-            empty_xyxy, empty_scores, empty_ints = _empty_arrays(self._precision)
+            empty_xyxy, empty_scores, empty_class_ids, empty_uids = _empty_arrays(
+                self._precision, self._device
+            )
             self._xyxy = empty_xyxy
             self._scores = empty_scores
-            self._class_ids = empty_ints
-            self._uids = empty_ints
+            self._class_ids = empty_class_ids
+            self._uids = empty_uids
             self._labels = []
             self._track_ids = None
             self._metas = None
@@ -936,8 +1031,8 @@ class Detection:
             self._uids.tobytes(),
             tuple(self._labels),
             cids,
-            self._scores.tobytes(),
-            self._xyxy.tobytes(),
+            (self._scores.dtype.str, self._scores.tobytes()),
+            (self._xyxy.dtype.str, self._xyxy.tobytes()),
             extra,
         )
 
@@ -947,12 +1042,14 @@ class Detection:
         label_ids = self._owner._label_ids if self._owner is not None else self._label_ids
         n = len(self._labels)
         if n == 0:
-            empty_xyxy, empty_scores, empty_ints = _empty_arrays(self._precision)
+            empty_xyxy, empty_scores, empty_class_ids, empty_uids = _empty_arrays(
+                self._precision, self._device
+            )
             return Detection._from_arrays(
                 empty_xyxy,
                 empty_scores,
-                empty_ints,
-                empty_ints,
+                empty_class_ids,
+                empty_uids,
                 [],
                 source_id=source_id,
                 frame_index=frame_index,
@@ -963,10 +1060,11 @@ class Detection:
                 registry=registry,
                 label_ids=label_ids,
                 precision=self._precision,
+                device=self._device,
                 restore_trace=self._restore_trace,
             )
-        int_dtype = np.int32 if self._precision == 32 else np.int64
-        cids = np.asarray(self.class_ids, dtype=int_dtype) if self._owner is not None else self._class_ids.copy()
+        module = _array_module(self._device)
+        cids = module.asarray(self.class_ids, dtype=module.int32) if self._owner is not None else self._class_ids.copy()
         cache = self._boxes_cache
         tids = None
         if cache is not None and any(b is not None and b._track_id is not None for b in cache):
@@ -1004,6 +1102,7 @@ class Detection:
             registry=registry,
             label_ids=label_ids,
             precision=self._precision,
+            device=self._device,
             restore_trace=self._restore_trace,
         )
 
@@ -1029,23 +1128,25 @@ class Detection:
         self._next_uid = uid + 1
 
         n = len(self._labels)
-        float_dtype = np.float32 if self._precision == 32 else np.float64
-        int_dtype = np.int32 if self._precision == 32 else np.int64
-        if self._precision == 32:
-            if class_id > np.iinfo(np.int32).max or uid > np.iinfo(np.int32).max:
-                raise OverflowError("class ID and UID must fit in int32")
-            if any(abs(value) > np.finfo(np.float32).max for value in coords):
-                raise OverflowError("box coordinates must fit in float32")
+        module = _array_module(self._device)
+        float_dtype = _float_dtype(module, self._precision)
+        if class_id > np.iinfo(np.int32).max:
+            raise OverflowError("class ID must fit in int32")
+        float_limit = np.finfo(
+            {16: np.float16, 32: np.float32, 64: np.float64}[self._precision]
+        ).max
+        if any(abs(value) > float_limit for value in coords):
+            raise OverflowError(f"box coordinates must fit in float{self._precision}")
         if n == 0:
-            self._xyxy = np.array([coords], dtype=float_dtype)
-            self._scores = np.array([score], dtype=float_dtype)
-            self._class_ids = np.array([class_id], dtype=int_dtype)
-            self._uids = np.array([uid], dtype=int_dtype)
+            self._xyxy = module.array([coords], dtype=float_dtype)
+            self._scores = module.array([score], dtype=float_dtype)
+            self._class_ids = module.array([class_id], dtype=module.int32)
+            self._uids = module.array([uid], dtype=module.int64)
         else:
-            self._xyxy = np.vstack((self._xyxy, np.asarray([coords], dtype=float_dtype)))
-            self._scores = np.concatenate((self._scores, np.asarray([score], dtype=float_dtype)))
-            self._class_ids = np.concatenate((self._class_ids, np.asarray([class_id], dtype=int_dtype)))
-            self._uids = np.concatenate((self._uids, np.asarray([uid], dtype=int_dtype)))
+            self._xyxy = module.vstack((self._xyxy, module.asarray([coords], dtype=float_dtype)))
+            self._scores = module.concatenate((self._scores, module.asarray([score], dtype=float_dtype)))
+            self._class_ids = module.concatenate((self._class_ids, module.asarray([class_id], dtype=module.int32)))
+            self._uids = module.concatenate((self._uids, module.asarray([uid], dtype=module.int64)))
         self._labels.append(label)
         if track_id is not None or self._track_ids is not None:
             if self._track_ids is None:
@@ -1208,8 +1309,12 @@ class Detection:
                     b._owner = None
             self._boxes_cache = None
         self._labels = new_labels
-        int_dtype = np.int32 if self._precision == 32 else np.int64
-        self._class_ids = np.asarray(new_cids, dtype=int_dtype) if new_cids else _empty_arrays(self._precision)[2]
+        module = _array_module(self._device)
+        self._class_ids = (
+            module.asarray(new_cids, dtype=module.int32)
+            if new_cids
+            else _empty_arrays(self._precision, self._device)[2]
+        )
         self._registry = registry
         self._label_ids = label_ids
         if self._owner is not None:
@@ -1218,40 +1323,60 @@ class Detection:
 
     def _validate_precision(self, dtype: int) -> int:
         bits = _precision(dtype)
-        if bits == 64:
-            return bits
-        int_limit = np.iinfo(np.int32).max
-        if self._next_uid > int_limit:
-            raise OverflowError("UIDs must fit in int32")
-        if self._class_ids.size and int(self._class_ids.max()) > int_limit:
-            raise OverflowError("class IDs must fit in int32")
-        if self._uids.size and int(self._uids.max()) > int_limit:
-            raise OverflowError("UIDs must fit in int32")
-        if self._xyxy.size and np.any(np.abs(self._xyxy) > np.finfo(np.float32).max):
-            raise OverflowError("box coordinates must fit in float32")
+        limit = np.finfo({16: np.float16, 32: np.float32, 64: np.float64}[bits]).max
+        module = _array_module(self._device)
+        if self._xyxy.size and bool(module.any(module.abs(self._xyxy) > limit)):
+            raise OverflowError(f"box coordinates must fit in float{bits}")
         return bits
 
-    def astype(self, dtype: int) -> None:
-        """Convert numeric annotation storage to 32 or 64 bits in-place."""
+    def _converted_arrays(self, device: str, dtype: int) -> tuple[Any, Any, Any, Any]:
+        """Build converted arrays without mutating this frame."""
+        target = _normalize_device(device)
         bits = self._validate_precision(dtype)
-        if bits == self._precision:
-            return
-        float_dtype = np.float32 if bits == 32 else np.float64
-        int_dtype = np.int32 if bits == 32 else np.int64
-        self._xyxy = self._xyxy.astype(float_dtype)
-        self._scores = self._scores.astype(float_dtype)
-        self._class_ids = self._class_ids.astype(int_dtype)
-        self._uids = self._uids.astype(int_dtype)
-        self._precision = bits
+        if target == "cpu":
+            arrays = tuple(_to_cpu(value) for value in (
+                self._xyxy, self._scores, self._class_ids, self._uids
+            ))
+            return (
+                np.asarray(arrays[0], dtype=_float_dtype(np, bits)),
+                np.asarray(arrays[1], dtype=_float_dtype(np, bits)),
+                np.asarray(arrays[2], dtype=np.int32),
+                np.asarray(arrays[3], dtype=np.int64),
+            )
+        module = _cupy()
+        device_index = int(target.split(":", 1)[1])
+        with module.cuda.Device(device_index):
+            return (
+                module.asarray(self._xyxy, dtype=_float_dtype(module, bits)),
+                module.asarray(self._scores, dtype=_float_dtype(module, bits)),
+                module.asarray(self._class_ids, dtype=module.int32),
+                module.asarray(self._uids, dtype=module.int64),
+            )
+
+    def _apply_storage(
+        self,
+        device: str,
+        dtype: int,
+        arrays: tuple[Any, Any, Any, Any],
+    ) -> None:
+        """Commit an already validated storage conversion."""
         if self._boxes_cache is not None:
-            for index, box in enumerate(self._boxes_cache):
-                if box is None:
-                    continue
-                row = self._xyxy[index]
-                box._box = tuple(float(value) for value in row)
-                box._score = float(self._scores[index])
-                box._class_id = int(self._class_ids[index])
-                box._uid = int(self._uids[index])
+            for box in self._boxes_cache:
+                if box is not None:
+                    box._owner = None
+        self._boxes_cache = None
+        self._uid_to_idx = None
+        self._xyxy, self._scores, self._class_ids, self._uids = arrays
+        self._device = _normalize_device(device)
+        self._precision = _precision(dtype)
+
+    def _convert_storage(self, device: str, dtype: int) -> None:
+        """Convert one frame under collection-level storage control."""
+        target, bits = _normalize_device(device), self._validate_precision(dtype)
+        if target == self._device and bits == self._precision:
+            return
+        arrays = self._converted_arrays(target, bits)
+        self._apply_storage(target, bits, arrays)
 
     def _resolve_source(self) -> Any:
         if self._source is not None: return self._source
@@ -1407,8 +1532,9 @@ class Detection:
 
         restored = preprocessing.restore_boxes(self._xyxy, steps)
         image_size = _size(steps[0]["before"])
-        dtype = np.float32 if self._precision == 32 else np.float64
-        xyxy = np.asarray(restored, dtype=dtype).reshape((-1, 4))
+        module = _array_module(self._device)
+        dtype = _float_dtype(module, self._precision)
+        xyxy = module.asarray(restored, dtype=dtype).reshape((-1, 4))
         if self._owner is not None:
             self._owner._snapshot_frame_baseline(self)
         self._xyxy = xyxy
@@ -1484,7 +1610,13 @@ class Detections:
         self._edit_changes = 0
         self._edit_operation = "edit"
         self._history: list[dict[str, Any]] = []; self._sequence = 0
+        self._device = "cpu"
+        self._precision = 64
         self._stream_mode = stream
+        initial_frames = None if stream else list(frames)
+        if initial_frames:
+            self._device = initial_frames[0].device
+            self._precision = initial_frames[0].dtype
         self._stream = iter(frames) if stream else None
         self._stream_active = False
         self._stream_started = False
@@ -1496,7 +1628,7 @@ class Detections:
         if stream:
             self._total_frames = self.metadata.get("requested_total_frames")
         else:
-            self._commit(list(frames), None)
+            self._commit(initial_frames or [], None)
             self._total_frames = len(self)
             self._baseline_identities = tuple(frame.identity for frame in self._frames)
             self._baseline_set = set(self._baseline_identities)
@@ -1528,6 +1660,7 @@ class Detections:
         frame = incoming if incoming._owner in (None, self) else incoming._clone()
         if identity is not None and frame.identity != identity:
             frame = frame._clone(identity)
+        frame._convert_storage(self._device, self._precision)
         n = len(frame._labels)
         if n > 0:
             cids = frame._class_ids
@@ -1549,7 +1682,7 @@ class Detections:
                     self._label_ids[label] = found
                     self._next_class_id = max(self._next_class_id, found + 1)
                 if int(cids[i]) != found:
-                    if frame.dtype == 32 and found > np.iinfo(np.int32).max:
+                    if found > np.iinfo(np.int32).max:
                         raise OverflowError("class IDs must fit in int32")
                     if not changed_cids:
                         new_cids = cids.copy()
@@ -1823,6 +1956,8 @@ class Detections:
     count = property(lambda self: len(self), doc="Current frame count.")
     total_frames = property(lambda self: self._total_frames, doc="Initial frame count.")
     total_objects = property(lambda self: self._total_objects(), doc="Current object count.")
+    device = property(lambda self: self._device, doc="Shared annotation array device.")
+    dtype = property(lambda self: self._precision, doc="Shared floating annotation width.")
     names = property(
         lambda self: dict(self._registry),
         doc="Active collection class IDs mapped to labels.",
@@ -2088,22 +2223,50 @@ class Detections:
         self._record("compact", changed_fields={"class_ids": mapping})
         return self
 
-    def astype(self, dtype: int) -> None:
-        """Convert every frame's numeric annotation storage to 32 or 64 bits."""
-        bits = _precision(dtype)
+    def _set_storage(self, device: str, dtype: int, operation: str) -> "Detections":
+        """Apply one atomic storage profile to every frame."""
+        target, bits = _normalize_device(device), _precision(dtype)
+        if target == self._device and bits == self._precision:
+            return self
+        if target != "cpu":
+            module = _cupy()
+            device_index = int(target.split(":", 1)[1])
+            if device_index >= module.cuda.runtime.getDeviceCount():
+                raise ValueError(f"CUDA device {device_index} is unavailable")
         if self._stream_mode:
             def transform(frame: Detection) -> Detection:
-                frame.astype(bits)
+                frame._convert_storage(target, bits)
                 return frame
+
             self._transform_stream(transform)
-            return
-        for frame in self._frames:
-            frame._validate_precision(bits)
-        changed = any(frame.dtype != bits for frame in self._frames)
-        for frame in self._frames:
-            frame.astype(bits)
-        if changed:
-            self._record("astype", dtype=bits)
+        else:
+            converted = [
+                (frame, frame._converted_arrays(target, bits))
+                for frame in self._frames
+            ]
+            baselines = {
+                identity: _signature_precision(signature, bits)
+                for identity, signature in self._baseline_signatures.items()
+            }
+            for frame, arrays in converted:
+                frame._apply_storage(target, bits, arrays)
+            self._baseline_signatures = baselines
+        self._device, self._precision = target, bits
+        self._record(operation, device=target, dtype=bits)
+        return self
+
+    def cuda(self, device: int = 0) -> "Detections":
+        """Move every annotation array to one CuPy CUDA device."""
+        target = _normalize_device(device)
+        return self._set_storage(target, self._precision, "cuda")
+
+    def cpu(self) -> "Detections":
+        """Move every annotation array to NumPy CPU storage."""
+        return self._set_storage("cpu", self._precision, "cpu")
+
+    def astype(self, dtype: int) -> "Detections":
+        """Convert every frame's floating annotation arrays to 16, 32, or 64 bits."""
+        return self._set_storage(self._device, _precision(dtype), "astype")
 
     def restore(self, index: Optional[int | Iterable[int]] = None,
                 trace: Optional[Iterable[Mapping[str, Any]]] = None) -> None:
@@ -2324,8 +2487,8 @@ def build_detections(images: Sequence[Any], predictions: Sequence[Mapping[str, A
         if n == 0:
             xyxy_arr = _EMPTY_XYXY
             score_arr = _EMPTY_SCORES
-            cid_arr = _EMPTY_INTS
-            uid_arr = _EMPTY_INTS
+            cid_arr = _EMPTY_CLASS_IDS
+            uid_arr = _EMPTY_UIDS
             label_list: list[str] = []
         else:
             xyxy_rows = []
@@ -2346,7 +2509,7 @@ def build_detections(images: Sequence[Any], predictions: Sequence[Mapping[str, A
                 label_list.append(lbl)
             xyxy_arr = np.array(xyxy_rows, dtype=np.float64)
             score_arr = np.array(score_vals, dtype=np.float64)
-            cid_arr = np.array(cid_vals, dtype=np.int64)
+            cid_arr = np.array(cid_vals, dtype=np.int32)
             uid_arr = np.arange(n, dtype=np.int64)
 
         frame_index = getattr(image, "frame_index", None)

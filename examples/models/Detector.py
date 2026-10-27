@@ -43,7 +43,14 @@ detector = DemoDetector()
 image = Image.new("RGB", (24, 24), "white")
 first = detector(image, prompt=["person"], threshold=0.5, verbose=False)
 second = detector(image, verbose=False)
-stream = detector([image, image], stream=True, verbose=False)
+stream = detector(
+    [image, image, image],
+    batch=2,
+    workers=1,
+    prefetch=1,
+    stream=True,
+    verbose=False,
+)
 print("Streaming container:", type(stream).__name__, stream.is_stream)
 print("Streamed frame indices:", [frame.frame_index for frame in stream])
 print("Remembered configuration:", detector.predict_config)
