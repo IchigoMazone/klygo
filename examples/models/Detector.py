@@ -43,6 +43,7 @@ detector = DemoDetector()
 image = Image.new("RGB", (24, 24), "white")
 first = detector(image, prompt=["person"], threshold=0.5, verbose=False)
 second = detector(image, verbose=False)
+packed = detector([image, image], packed=True, verbose=False)
 stream = detector(
     [image, image, image],
     batch=2,
@@ -56,6 +57,7 @@ print("Streamed frame indices:", [frame.frame_index for frame in stream])
 print("Remembered configuration:", detector.predict_config)
 print("Original result context:", first[0].metadata)
 print("Second result context:", second[0].metadata)
+print("Packed output:", packed.is_packed, packed.total_objects)
 print("Device / dtype:", detector.device, detector.dtype)
 report = detector.benchmark(
     image,

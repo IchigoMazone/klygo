@@ -9,6 +9,7 @@ import math
 from numbers import Integral
 import sys
 import uuid
+import weakref
 from typing import Any, Callable, Iterable, Iterator, Mapping, Optional, Sequence
 
 import numpy as np
@@ -341,6 +342,18 @@ class Box:
                 "score": self._score, "box": list(self._box), "track_id": self._track_id,
                 "metadata": deepcopy(self._metadata) if self._metadata else {}}
 
+    def __iter__(self) -> Iterator[float]:
+        """Yield box coordinates (xmin, ymin, xmax, ymax)."""
+        yield from self._box
+
+    def __getitem__(self, index: int | slice) -> float | tuple[float, ...]:
+        """Index into box coordinates."""
+        return self._box[index]
+
+    def __len__(self) -> int:
+        """Return coordinate count (4)."""
+        return 4
+
     def __repr__(self) -> str:
         return f"Box(uid={self._uid!r}, label={self._label!r}, score={self._score:.3f})"
 
@@ -364,9 +377,20 @@ def _cupy() -> Any:
     except ImportError as error:
         raise ImportError(
             "CUDA detection storage requires CuPy. Install the matching CUDA build, "
-            "for example 'pip install cupy-cuda12x'."
+            "for example 'pip install \"klygo[gpu-outputs]\"'."
         ) from error
     return cp
+
+
+def _free_cupy_cache() -> None:
+    """Free cached memory in CuPy memory pools if CuPy is loaded."""
+    if "cupy" in sys.modules:
+        try:
+            import cupy as cp
+            cp.get_default_memory_pool().free_all_blocks()
+            cp.get_default_pinned_memory_pool().free_all_blocks()
+        except Exception:
+            pass
 
 
 def _normalize_device(value: Any) -> str:
@@ -473,6 +497,7 @@ class Detection:
         "_uid_to_idx",
         "_next_uid",
         "_owner",
+        "__weakref__",
         "__dict__",
     )
 
@@ -603,6 +628,7 @@ class Detection:
     count = property(lambda self: len(self._labels), doc="Current box count.")
     empty = property(lambda self: not self._labels, doc="Whether the frame is empty.")
     has_objects = property(lambda self: bool(self._labels), doc="Whether the frame has boxes.")
+    objects = property(lambda self: tuple(self), doc="Box annotations in current order.")
     boxes = property(lambda self: [tuple(row) for row in self._xyxy.tolist()], doc="Coordinates in current order.")
     scores = property(lambda self: self._scores.tolist(), doc="Scores in current order.")
     labels = property(lambda self: list(self._labels), doc="Labels in current order.")
@@ -1589,14 +1615,313 @@ class Detection:
         return self
 
 
+class _PackedIdentities(Sequence[Identity]):
+    """Create frame identity tuples on demand from compact columns."""
+
+    def __init__(self, store: "_PackedDetectionStore") -> None:
+        self.store = store
+
+    def __len__(self) -> int:
+        return len(self.store.frame_indices)
+
+    def __getitem__(self, index: int | slice) -> Identity | list[Identity]:
+        if isinstance(index, slice):
+            return [self.store.identity(position) for position in range(*index.indices(len(self)))]
+        return self.store.identity(index)
+
+    def __iter__(self) -> Iterator[Identity]:
+        for position in range(len(self)):
+            yield self.store.identity(position)
+
+
+class _PackedDetectionStore:
+    """Store many frames in shared numeric arrays and create facades lazily."""
+
+    def __init__(self, frames: Sequence[Detection], owner: "Detections") -> None:
+        module = _array_module(owner._device)
+        lengths = [len(frame) for frame in frames]
+        self.offsets = module.asarray(
+            np.concatenate(([0], np.cumsum(lengths, dtype=np.int64))),
+            dtype=module.int64,
+        )
+        self.xyxy = (
+            module.concatenate([frame._xyxy for frame in frames], axis=0)
+            if any(lengths)
+            else module.empty((0, 4), dtype=_float_dtype(module, owner._precision))
+        )
+        self.scores = (
+            module.concatenate([frame._scores for frame in frames])
+            if any(lengths)
+            else module.empty((0,), dtype=_float_dtype(module, owner._precision))
+        )
+        self.class_ids = (
+            module.concatenate([frame._class_ids for frame in frames])
+            if any(lengths)
+            else module.empty((0,), dtype=module.int32)
+        )
+        self.uids = (
+            module.concatenate([frame._uids for frame in frames])
+            if any(lengths)
+            else module.empty((0,), dtype=module.int64)
+        )
+        source_ids = [frame.source_id for frame in frames]
+        self.common_source_id = source_ids[0] if source_ids and all(value == source_ids[0] for value in source_ids) else None
+        self.source_ids = None if self.common_source_id is not None else source_ids
+        self.frame_indices = np.asarray([frame.frame_index for frame in frames], dtype=np.int64)
+        self.identities = _PackedIdentities(self)
+        self.identity_positions: Optional[dict[Identity, int]] = None
+        source_paths = [frame.source_path for frame in frames]
+        self.source_paths = source_paths if any(value is not None for value in source_paths) else None
+        self.image_sizes = np.asarray([
+            (-1, -1) if frame.image_size is None else frame.image_size
+            for frame in frames
+        ], dtype=np.int64)
+        sources = [frame._source if frame.source_path is None else None for frame in frames]
+        self.sources = sources if any(value is not None for value in sources) else None
+        metadata = [deepcopy(frame.metadata) if frame.metadata else None for frame in frames]
+        self.metadata = metadata if any(value is not None for value in metadata) else None
+        traces = [frame._restore_trace for frame in frames]
+        self.restore_traces = traces if any(value is not None for value in traces) else None
+        label_names = tuple(dict.fromkeys(label for frame in frames for label in frame._labels))
+        label_codes = {label: index for index, label in enumerate(label_names)}
+        self.label_names = label_names
+        self.label_codes = np.asarray(
+            [label_codes[label] for frame in frames for label in frame._labels],
+            dtype=np.int32,
+        )
+        track_ids = [
+            None if frame._track_ids is None else tuple(frame._track_ids)
+            for frame in frames
+        ]
+        self.track_ids = track_ids if any(value is not None for value in track_ids) else None
+        metas = [
+            None if frame._metas is None else deepcopy(frame._metas)
+            for frame in frames
+        ]
+        self.metas = metas if any(value is not None for value in metas) else None
+        self.next_uids = np.asarray([frame._next_uid for frame in frames], dtype=np.int64)
+        label_positions: dict[str, list[int]] = {}
+        for position, frame in enumerate(frames):
+            for label in dict.fromkeys(frame._labels):
+                label_positions.setdefault(label, []).append(position)
+        self.label_positions = {
+            label: np.asarray(positions, dtype=np.int64)
+            for label, positions in label_positions.items()
+        }
+        self.label_uses = {
+            label: len(positions) for label, positions in self.label_positions.items()
+        }
+        self.overlay_labels: dict[int, set[str]] = {}
+        self.cache: weakref.WeakValueDictionary[int, Detection] = weakref.WeakValueDictionary()
+        self.overrides: dict[int, Detection] = {}
+
+    def __len__(self) -> int:
+        return len(self.frame_indices)
+
+    def identity(self, position: int) -> Identity:
+        source_id = self.common_source_id if self.source_ids is None else self.source_ids[position]
+        return source_id, int(self.frame_indices[position])
+
+    @property
+    def total_objects(self) -> int:
+        return int(self.offsets[-1]) if len(self.offsets) else 0
+
+    def frame(self, owner: "Detections", index: int) -> Detection:
+        length = len(self)
+        position = index + length if index < 0 else index
+        if position < 0 or position >= length:
+            raise IndexError("list index out of range")
+        existing = self.overrides.get(position)
+        if existing is None:
+            existing = self.cache.get(position)
+        if existing is not None:
+            return existing
+        start, stop = int(self.offsets[position]), int(self.offsets[position + 1])
+        source_id, frame_index = self.identity(position)
+        labels = [self.label_names[int(code)] for code in self.label_codes[start:stop]]
+        size_values = self.image_sizes[position]
+        image_size = None if int(size_values[0]) < 0 else (int(size_values[0]), int(size_values[1]))
+        frame = Detection._from_arrays(
+            self.xyxy[start:stop],
+            self.scores[start:stop],
+            self.class_ids[start:stop],
+            self.uids[start:stop],
+            labels,
+            track_ids=(
+                None
+                if self.track_ids is None or self.track_ids[position] is None
+                else list(self.track_ids[position])
+            ),
+            metas=None if self.metas is None else deepcopy(self.metas[position]),
+            next_uid=int(self.next_uids[position]),
+            source_id=source_id,
+            frame_index=frame_index,
+            source_path=None if self.source_paths is None else self.source_paths[position],
+            image_size=image_size,
+            source=None if self.sources is None else self.sources[position],
+            metadata=None if self.metadata is None else self.metadata[position],
+            registry=owner._registry,
+            label_ids=owner._label_ids,
+            precision=owner._precision,
+            device=owner._device,
+            restore_trace=None if self.restore_traces is None else self.restore_traces[position],
+        )
+        frame._owner = owner
+        frame.__dict__["_packed_position"] = position
+        self.cache[position] = frame
+        return frame
+
+    def _ensure_identity_positions(self) -> dict[Identity, int]:
+        if self.identity_positions is None:
+            self.identity_positions = {
+                identity: index for index, identity in enumerate(self.identities)
+            }
+        return self.identity_positions
+
+    def position(self, identity: Identity) -> int:
+        return self._ensure_identity_positions()[identity]
+
+    def pin(self, frame: Detection) -> None:
+        """Keep an edited facade as the authoritative overlay for its frame."""
+        position = frame.__dict__.get("_packed_position")
+        if position is not None and 0 <= position < len(self):
+            self.overrides[position] = frame
+            self.cache[position] = frame
+
+    def positions_for_label(self, label: str) -> list[int]:
+        """Return current frame positions containing one label."""
+        base = self.label_positions.get(label, ())
+        positions = [
+            int(position) for position in base
+            if int(position) not in self.overlay_labels
+            or label in self.overlay_labels[int(position)]
+        ]
+        present = set(positions)
+        positions.extend(
+            position
+            for position, labels in self.overlay_labels.items()
+            if position not in present and label in labels
+        )
+        return positions
+
+    def update_labels(self, frame: Detection) -> tuple[set[str], set[str]]:
+        """Update compact label overlays for an edited frame."""
+        position = frame.__dict__.get("_packed_position")
+        if position is None:
+            return set(), set(frame._labels)
+        start, stop = int(self.offsets[position]), int(self.offsets[position + 1])
+        before = self.overlay_labels.get(
+            position,
+            {self.label_names[int(code)] for code in self.label_codes[start:stop]},
+        )
+        after = set(frame._labels)
+        self.overlay_labels[position] = after
+        for label in before - after:
+            self.label_uses[label] -= 1
+            if self.label_uses[label] == 0:
+                del self.label_uses[label]
+        for label in after - before:
+            self.label_uses[label] = self.label_uses.get(label, 0) + 1
+        return before, after
+
+    def convert(self, owner: "Detections", device: str, precision: int) -> None:
+        """Convert packed base arrays and edited overlays atomically."""
+        target = _normalize_device(device)
+        module = _array_module(target)
+        def converted(array: Any, dtype: Any) -> Any:
+            source = _to_cpu(array) if module is np else array
+            return module.asarray(source, dtype=dtype)
+
+        arrays = (
+            converted(self.xyxy, _float_dtype(module, precision)),
+            converted(self.scores, _float_dtype(module, precision)),
+            converted(self.class_ids, module.int32),
+            converted(self.uids, module.int64),
+            converted(self.offsets, module.int64),
+        )
+        live_frames = dict(self.cache)
+        live_frames.update(self.overrides)
+        converted = [
+            (frame, frame._converted_arrays(target, precision))
+            for frame in dict.fromkeys(live_frames.values())
+        ]
+        self.xyxy, self.scores, self.class_ids, self.uids, self.offsets = arrays
+        for frame, frame_arrays in converted:
+            frame._apply_storage(target, precision, frame_arrays)
+
+
+class _PackedFrames:
+    """List-like facade over packed frame storage."""
+
+    def __init__(self, owner: "Detections") -> None:
+        self.owner = owner
+
+    def __len__(self) -> int:
+        return len(self.owner._packed_store)
+
+    def __iter__(self) -> Iterator[Detection]:
+        for index in range(len(self)):
+            yield self.owner._packed_store.frame(self.owner, index)
+
+    def __getitem__(self, index: int | slice) -> Detection | list[Detection]:
+        if isinstance(index, slice):
+            return [self.owner._packed_store.frame(self.owner, i) for i in range(*index.indices(len(self)))]
+        return self.owner._packed_store.frame(self.owner, index)
+
+    def insert(self, index: int, frame: Detection) -> None:
+        self.owner._materialize_packed()
+        self.owner._frames.insert(index, frame)
+
+    def extend(self, frames: Iterable[Detection]) -> None:
+        self.owner._materialize_packed()
+        self.owner._frames.extend(frames)
+
+    def pop(self, index: int = -1) -> Detection:
+        self.owner._materialize_packed()
+        return self.owner._frames.pop(index)
+
+    def __setitem__(self, index: int | slice, value: Any) -> None:
+        self.owner._materialize_packed()
+        self.owner._frames[index] = value
+
+    def index(self, frame: Detection) -> int:
+        position = frame.__dict__.get("_packed_position")
+        if position is None or self[position] is not frame:
+            raise ValueError("frame is not in collection")
+        return position
+
+
+class _PackedIdentityMap(Mapping[Identity, Detection]):
+    """Identity lookup that resolves packed frames only when requested."""
+
+    def __init__(self, owner: "Detections") -> None:
+        self.owner = owner
+
+    def __getitem__(self, identity: Identity) -> Detection:
+        try:
+            position = self.owner._packed_store.position(identity)
+        except KeyError as error:
+            raise KeyError(identity) from error
+        return self.owner._packed_store.frame(self.owner, position)
+
+    def __iter__(self) -> Iterator[Identity]:
+        return iter(self.owner._packed_store.identities)
+
+    def __len__(self) -> int:
+        return len(self.owner._packed_store)
+
+
 class Detections:
     """Hold a materialized collection or a bounded-memory frame stream."""
 
     def __init__(self, frames: Iterable[Detection] = (), *, metadata: Optional[Mapping[str, Any]] = None,
                  names: Optional[Mapping[int, Any] | Sequence[Any]] = None,
-                 stream: bool = False) -> None:
+                 stream: bool = False, packed: bool = False) -> None:
         if metadata is not None and not isinstance(metadata, Mapping): raise TypeError("metadata must be a mapping or None")
         validators.validate_type(stream, bool, "stream")
+        validators.validate_type(packed, bool, "packed")
+        if stream and packed:
+            raise ValueError("stream and packed storage are mutually exclusive")
         self.metadata = deepcopy(dict(metadata or {})); initial_names = _names(names)
         self._registry = {} if stream else initial_names
         self._label_ids = {label: class_id for class_id, label in self._registry.items()}
@@ -1621,6 +1946,7 @@ class Detections:
         self._stream_active = False
         self._stream_started = False
         self._stream_closed = False
+        self._packed_store: Optional[_PackedDetectionStore] = None
         self._preferred_label_ids = {label: class_id for class_id, label in initial_names.items()}
         self._baseline_identities: tuple[Identity, ...] = ()
         self._baseline_set: set[Identity] = set()
@@ -1632,10 +1958,50 @@ class Detections:
             self._total_frames = len(self)
             self._baseline_identities = tuple(frame.identity for frame in self._frames)
             self._baseline_set = set(self._baseline_identities)
+            if packed:
+                self._pack_frames()
+
+    def _pack_frames(self) -> None:
+        """Replace materialized frame objects with shared packed arrays."""
+        if self._stream_mode or self._packed_store is not None:
+            return
+        frames = list(self._frames)
+        store = _PackedDetectionStore(frames, self)
+        for position, frame in enumerate(frames):
+            frame.__dict__["_packed_position"] = position
+            frame._owner = self
+            store.cache[position] = frame
+        self._packed_store = store
+        self._frames = _PackedFrames(self)
+        self._identity_map = _PackedIdentityMap(self)
+        self._frame_labels = {}
+        self._label_uses = store.label_uses
+        self._label_frames = {}
+        self._baseline_identities = store.identities
+        self._baseline_set = set()
+
+    def _materialize_packed(self) -> None:
+        """Materialize every packed facade before structural collection edits."""
+        if self._packed_store is None:
+            return
+        store = self._packed_store
+        frames = [store.frame(self, index) for index in range(len(store))]
+        self._packed_store = None
+        self._frames = frames
+        self._identity_map = {frame.identity: frame for frame in frames}
+        for frame in frames:
+            frame._owner = self
+            frame.__dict__.pop("_packed_position", None)
+        self._baseline_set = set(self._baseline_identities)
+        self._synchronize_registry()
 
     def _snapshot_frame_baseline(self, frame: Detection) -> None:
         identity = frame.identity
-        if identity in self._baseline_set and identity not in self._baseline_signatures:
+        is_baseline = identity in self._baseline_set
+        if self._packed_store is not None:
+            position = frame.__dict__.get("_packed_position")
+            is_baseline = position is not None and self._packed_store.identities[position] == identity
+        if is_baseline and identity not in self._baseline_signatures:
             self._baseline_signatures[identity] = frame._signature()
 
     def _record(self, operation: str, **details: Any) -> None:
@@ -1767,6 +2133,20 @@ class Detections:
         self._refresh_frames((frame,))
 
     def _refresh_frames(self, frames: Iterable[Detection]) -> None:
+        if self._packed_store is not None:
+            changed_labels: set[str] = set()
+            for frame in dict.fromkeys(frames):
+                before, after = self._packed_store.update_labels(frame)
+                changed_labels.update(before ^ after)
+            self._label_uses = self._packed_store.label_uses
+            for label in changed_labels:
+                if self._label_uses.get(label, 0) == 0:
+                    class_id = self._label_ids.pop(label, None)
+                    if class_id is not None:
+                        self._registry.pop(class_id, None)
+                elif label not in self._label_ids:
+                    self._class(label)
+            return
         changes = []
         for frame in dict.fromkeys(frames):
             identity = frame.identity
@@ -1799,6 +2179,7 @@ class Detections:
         return self._label_ids.get(label, fallback)
 
     def _commit(self, frames: Iterable[Detection], operation: Optional[str]) -> None:
+        self._materialize_packed()
         prepared = self._prepare(frames)
         prepared_ids = {id(f) for f in prepared}
         for frame in self._frames:
@@ -1850,6 +2231,8 @@ class Detections:
         return frame
 
     def _changed(self, frame: Detection, operation: str, details: Mapping[str, Any]) -> None:
+        if self._packed_store is not None:
+            self._packed_store.pin(frame)
         labels_unchanged = operation in ("update_box", "restore")
         if self._edit_depth:
             self._edit_changes += 1
@@ -1877,7 +2260,10 @@ class Detections:
                 self._edit_changes = 0
                 active = [
                     frame for frame in dirty
-                    if self._identity_map.get(frame.identity) is frame
+                    if (
+                        self._packed_store is not None
+                        and frame.__dict__.get("_packed_position") is not None
+                    ) or self._identity_map.get(frame.identity) is frame
                 ]
                 self._refresh_frames(active)
                 if changes:
@@ -1939,6 +2325,11 @@ class Detections:
         return self._stream_mode
 
     @property
+    def is_packed(self) -> bool:
+        """Whether materialized results use compact shared-array storage."""
+        return self._packed_store is not None
+
+    @property
     def stream_exhausted(self) -> bool:
         """Whether a streaming collection is closed or fully consumed."""
         return self._stream_mode and self._stream_closed
@@ -1969,22 +2360,40 @@ class Detections:
 
     def _total_objects(self) -> int:
         self._require_materialized("total_objects")
+        if self._packed_store is not None:
+            base = self._packed_store.total_objects
+            for position, frame in self._packed_store.overrides.items():
+                start = int(self._packed_store.offsets[position])
+                stop = int(self._packed_store.offsets[position + 1])
+                base += len(frame) - (stop - start)
+            return base
         return sum(len(frame._labels) for frame in self._frames)
 
     def _added_frames(self) -> tuple[Identity, ...]:
         self._require_materialized("added_frames")
+        if self._packed_store is not None:
+            return ()
         return tuple(identity for identity in self._identity_map if identity not in self._baseline_set)
 
     def _deleted_frames(self) -> tuple[Identity, ...]:
         self._require_materialized("deleted_frames")
+        if self._packed_store is not None:
+            return ()
         return tuple(identity for identity in self._baseline_identities if identity not in self._identity_map)
 
     def _modified_frames(self) -> tuple[Identity, ...]:
         self._require_materialized("modified_frames")
+        if self._packed_store is not None:
+            return tuple(
+                frame.identity
+                for _position, frame in sorted(self._packed_store.overrides.items())
+                if frame.identity in self._baseline_signatures
+                and frame._signature() != self._baseline_signatures[frame.identity]
+            )
         return tuple(
             identity for identity in self._baseline_identities
-            if identity in self._identity_map
-            and identity in self._baseline_signatures
+            if identity in self._baseline_signatures
+            and identity in self._identity_map
             and self._identity_map[identity]._signature() != self._baseline_signatures[identity]
         )
 
@@ -2006,7 +2415,24 @@ class Detections:
             [frame._clone() for frame in self],
             metadata=self.metadata,
             names=self._registry,
+            packed=self.is_packed,
         )
+
+    def pack(self) -> "Detections":
+        """Move materialized frames into compact shared-array storage."""
+        self._require_materialized("pack()")
+        if self._packed_store is None:
+            self._pack_frames()
+            self._record("pack", count=len(self))
+        return self
+
+    def unpack(self) -> "Detections":
+        """Materialize every compact frame facade into ordinary storage."""
+        self._require_materialized("unpack()")
+        if self._packed_store is not None:
+            self._materialize_packed()
+            self._record("unpack", count=len(self))
+        return self
 
     def get_frame(self, frame_index: int, *, source_id: Optional[str] = None) -> Detection:
         """Return a frame by stable source identity."""
@@ -2167,11 +2593,20 @@ class Detections:
             self._transform_stream(transform)
             return self
         identities: set[Identity] = set()
-        for label in blocked:
-            identities.update(self._label_frames.get(label, ()))
+        positions: set[int] = set()
+        if self._packed_store is not None:
+            for label in blocked:
+                positions.update(self._packed_store.positions_for_label(label))
+        else:
+            for label in blocked:
+                identities.update(self._label_frames.get(label, ()))
         with self._batch("drop_labels"):
-            for identity in identities:
-                self._identity_map[identity].drop(blocked)
+            if self._packed_store is not None:
+                for position in positions:
+                    self._packed_store.frame(self, position).drop(blocked)
+            else:
+                for identity in identities:
+                    self._identity_map[identity].drop(blocked)
         return self
 
     def relabel(self, mapping: Mapping[str, str]) -> "Detections":
@@ -2186,15 +2621,23 @@ class Detections:
             self._transform_stream(transform)
             return self
         identities: set[Identity] = set()
+        positions: set[int] = set()
         preferred: dict[str, int] = {}
         for label in mapping:
-            identities.update(self._label_frames.get(label, ()))
+            if self._packed_store is not None:
+                positions.update(self._packed_store.positions_for_label(label))
+            else:
+                identities.update(self._label_frames.get(label, ()))
             target = mapping[label]
             if target not in self._label_ids and label in self._label_ids:
                 preferred.setdefault(target, self._label_ids[label])
         with self._batch("relabel"):
-            for identity in identities:
-                self._identity_map[identity].relabel(mapping)
+            if self._packed_store is not None:
+                for position in positions:
+                    self._packed_store.frame(self, position).relabel(mapping)
+            else:
+                for identity in identities:
+                    self._identity_map[identity].relabel(mapping)
         for label, class_id in preferred.items():
             current = self._label_ids.get(label)
             if current is not None and class_id not in self._registry:
@@ -2239,6 +2682,12 @@ class Detections:
                 return frame
 
             self._transform_stream(transform)
+        elif self._packed_store is not None:
+            self._packed_store.convert(self, target, bits)
+            self._baseline_signatures = {
+                identity: _signature_precision(signature, bits)
+                for identity, signature in self._baseline_signatures.items()
+            }
         else:
             converted = [
                 (frame, frame._converted_arrays(target, bits))
@@ -2261,8 +2710,10 @@ class Detections:
         return self._set_storage(target, self._precision, "cuda")
 
     def cpu(self) -> "Detections":
-        """Move every annotation array to NumPy CPU storage."""
-        return self._set_storage("cpu", self._precision, "cpu")
+        """Move every annotation array to NumPy CPU storage and free GPU memory pool blocks."""
+        result = self._set_storage("cpu", self._precision, "cpu")
+        _free_cupy_cache()
+        return result
 
     def astype(self, dtype: int) -> "Detections":
         """Convert every frame's floating annotation arrays to 16, 32, or 64 bits."""

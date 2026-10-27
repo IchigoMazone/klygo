@@ -1,10 +1,14 @@
 # `outputs.Detections`
 
 ```python
-Detections(frames=(), *, metadata=None, names=None, stream=False)
+Detections(frames=(), *, metadata=None, names=None, stream=False, packed=False)
 ```
 
 Owns either an ordered materialized frame collection or a bounded-memory one-pass frame stream. Materialized results provide collision-safe CRUD, stable frame lookup, coordinate restoration, net change properties, mutation history, class-wide `drop` and `relabel`, explicit class-ID `compact`, backend-neutral `repredict`, JSON serialization, and annotation-only YOLO export.
+
+Set `packed=True` for compact materialized storage. Coordinates, scores, class IDs, UIDs, and frame offsets are stored in shared NumPy/CuPy arrays. `results[i]` still returns a `Detection`, and `results[i][j]` still returns a `Box`. Unmodified frame facades use a weak cache; edited frames are pinned as authoritative overlays so changes survive garbage collection. Structural frame CRUD safely materializes the collection before editing. Streams and packed storage are mutually exclusive.
+
+Use `results.pack()` to compact an existing materialized collection and `results.unpack()` to explicitly return to ordinary per-frame storage. Both mutate in place, return `self`, and record the storage transition in `history`.
 
 `model.predict(..., stream=True)` returns a lazy `Detections`. Iterate it directly to process every frame without retaining earlier frames. Random access, `len()`, copying, reprediction, and export require `stream=False` because one-pass results intentionally do not cache yielded frames.
 
@@ -18,6 +22,9 @@ for frame in stream:
 results = model.predict("images/", stream=False)
 results.drop("unknown")
 results.export("artifacts/predictions", format="yolo")
+
+packed_results = model.predict("images/", packed=True)
+print(packed_results.is_packed, packed_results.total_objects)
 ```
 
 `restore(index=None, trace=None)` restores box coordinates in-place. Omit

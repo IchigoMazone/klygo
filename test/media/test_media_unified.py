@@ -50,6 +50,64 @@ class TestMediaUnified(unittest.TestCase):
 
         self.assertIs(type(streamed), media.MediaFrames)
 
+    def test_indexed_mode_creates_proxies_on_demand(self):
+        indexed = media.load(self.img_dir, indexed=True)
+
+        self.assertFalse(indexed.is_stream)
+        self.assertTrue(indexed.is_indexed)
+        self.assertEqual(len(indexed), 5)
+        self.assertEqual(list.__len__(indexed), 0)
+        self.assertEqual(indexed.loaded_count, 0)
+
+        first = indexed[0]
+        self.assertIs(first, indexed[0])
+        self.assertIsInstance(first, media.LazyImage)
+        self.assertFalse(first.is_loaded)
+        first.load()
+        self.assertEqual(indexed.loaded_count, 1)
+        indexed.unload()
+        self.assertEqual(indexed.loaded_count, 0)
+
+        subset = indexed[1:5:2]
+        self.assertTrue(subset.is_indexed)
+        self.assertEqual(len(subset), 2)
+        self.assertEqual([item.path.name for item in subset], ["frame_01.png", "frame_03.png"])
+
+    def test_indexed_mode_crud_and_lazy_transform(self):
+        indexed = media.load(self.img_dir, indexed=True)
+        transformed = indexed.transform(preprocessing.resize((10, 8)))
+        self.assertTrue(transformed.is_indexed)
+        self.assertEqual(list.__len__(transformed), 0)
+        self.assertEqual(transformed[0].size, (10, 8))
+
+        replacement = Image.new("RGB", (7, 7), "red")
+        indexed[0] = replacement
+        indexed.insert(1, replacement)
+        indexed.append(replacement)
+        self.assertIs(indexed[0], replacement)
+        self.assertIn(replacement, indexed)
+        self.assertEqual(indexed.index(replacement), 0)
+        self.assertEqual(indexed.count(replacement), 3)
+        self.assertIs(indexed.pop(1), replacement)
+        del indexed[-1]
+        self.assertEqual(len(indexed), 5)
+        copied = indexed.copy()
+        self.assertEqual(copied, indexed)
+        copied.reverse()
+        self.assertEqual(list(reversed(copied)), list(indexed))
+
+    def test_indexed_video_keeps_frame_numbers_without_proxies(self):
+        indexed = media.load(self.video_path, indexed=True)
+        self.addCleanup(indexed.close)
+
+        self.assertTrue(indexed.is_indexed)
+        self.assertEqual(len(indexed), 6)
+        self.assertEqual(list.__len__(indexed), 0)
+        self.assertEqual(indexed[3].frame_index, 3)
+        self.assertIs(indexed[3], indexed[3])
+        with self.assertRaisesRegex(ValueError, "mutually exclusive"):
+            media.MediaFrames(self.video_path, stream=True, indexed=True)
+
     def test_require_materialized_guards_on_stream(self):
         streamed = media.load(self.img_dir, stream=True)
 

@@ -95,13 +95,32 @@ class GroundingDinoDetect(Detector):
                 threshold=thresh,
                 text_threshold=text_thresh,
                 target_sizes=[img.size[::-1] for img in images],
-            **utils.exclude_keys(post_config, ["threshold", "text_threshold", "target_sizes"]),
+                **utils.exclude_keys(post_config, ["threshold", "text_threshold", "target_sizes"]),
             )
+
+        # Filter out predictions with empty or whitespace-only labels from tokenizer
+        cleaned_raw = []
+        for item in raw:
+            boxes = item.get("boxes", [])
+            scores = item.get("scores", [])
+            labels = item.get("labels", [])
+            valid_indices = [
+                i for i, lbl in enumerate(labels)
+                if lbl is not None and str(lbl).strip()
+            ]
+            if len(valid_indices) == len(labels):
+                cleaned_raw.append(item)
+            else:
+                cleaned_raw.append({
+                    "boxes": [boxes[i] for i in valid_indices],
+                    "scores": [scores[i] for i in valid_indices],
+                    "labels": [str(labels[i]).strip() for i in valid_indices],
+                })
 
         # 5. Pack into Detection objects
         results = build_detections(
             images,
-            raw,
+            cleaned_raw,
             metadata={"prompt": prompt, **post_config},
             names=self._result_names,
         )

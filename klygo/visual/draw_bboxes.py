@@ -1,5 +1,5 @@
 import os
-from typing import List, Tuple, Union, Optional
+from typing import Any, List, Tuple, Union, Optional
 import numpy as np
 import PIL.Image
 import PIL.ImageDraw
@@ -109,7 +109,7 @@ def _find_badge_position(
 
 def draw_bboxes(
     image: Union[PIL.Image.Image, np.ndarray],
-    bboxes: List[Union[List[float], Tuple[float, float, float, float]]],
+    bboxes: Any,
     labels: Optional[List[str]] = None,
     scores: Optional[List[float]] = None,
     thickness: Optional[int] = None,
@@ -127,8 +127,8 @@ def draw_bboxes(
     ----------
     image : PIL.Image.Image or numpy.ndarray
         Source image. NumPy images use RGB channel order.
-    bboxes : list of four-number sequences
-        Boxes in ``[xmin, ymin, xmax, ymax]`` pixel coordinates.
+    bboxes : list or Detection
+        Boxes in ``[xmin, ymin, xmax, ymax]`` pixel coordinates or a Klygo Detection frame.
     labels : list of str, optional
         Class labels, matched to boxes by position.
     scores : list of float, optional
@@ -154,6 +154,14 @@ def draw_bboxes(
     Caption badges automatically avoid overlapping when boxes are close or stacked.
     Extra ``width`` in ``kwargs`` is a legacy border-width fallback.
     """
+    # 0. Support Detection frame directly
+    if hasattr(bboxes, "boxes") and hasattr(bboxes, "labels"):
+        if labels is None:
+            labels = list(bboxes.labels)
+        if scores is None and hasattr(bboxes, "scores"):
+            scores = list(bboxes.scores)
+        bboxes = bboxes.boxes
+
     is_np = isinstance(image, np.ndarray)
     if is_np:
         pil_img = PIL.Image.fromarray(image if image.ndim == 2 or image.shape[2] == 3 else image[:, :, :3])
@@ -165,6 +173,17 @@ def draw_bboxes(
     annotated = pil_img.copy()
     draw = PIL.ImageDraw.Draw(annotated)
     w_img, h_img = annotated.size
+
+    # Normalize bboxes so each box is a 4-float sequence
+    norm_boxes = []
+    for b in bboxes:
+        if hasattr(b, "xmin"):
+            norm_boxes.append((float(b.xmin), float(b.ymin), float(b.xmax), float(b.ymax)))
+        elif hasattr(b, "box"):
+            norm_boxes.append(tuple(float(c) for c in b.box))
+        else:
+            norm_boxes.append(tuple(float(c) for c in b))
+    bboxes = norm_boxes
 
     # 1. Compute dynamic line width and font size (crisp, not overly thick)
     actual_lw = line_width or thickness or kwargs.get("width") or max(round(min(w_img, h_img) * 0.0035), 2)

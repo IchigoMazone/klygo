@@ -448,6 +448,28 @@ class TestModelMetadata(unittest.TestCase):
         self.assertEqual(detector.metadata.post.threshold, 0.4)
         self.assertEqual(detector.details.library, "ultralytics")
 
+    def test_local_registered_yolo_weights_keep_registry_parameters(self):
+        load_module = importlib.import_module("klygo.models.load")
+        with TemporaryDirectory() as directory:
+            weight_path = files.join(directory, "yolo11n.pt")
+            Path(weight_path).touch()
+            with patch.object(
+                load_module,
+                "_resolve_class",
+                return_value=RecordingDetector,
+            ):
+                detector = models.load(
+                    weight_path,
+                    device="cpu",
+                    nms=True,
+                    threshold=0.4,
+                )
+
+        self.assertEqual(detector.metadata.model.device, "cpu")
+        self.assertTrue(detector.metadata.model.nms)
+        self.assertEqual(detector.metadata.post.threshold, 0.4)
+        self.assertIn("nms", detector.metadata.priority.model)
+
     def test_detector_resolves_metadata_once_before_forward(self):
         detector = RecordingDetector(
             models.configure("recording", metadata=self.definition)

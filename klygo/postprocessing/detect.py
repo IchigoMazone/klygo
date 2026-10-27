@@ -1,6 +1,6 @@
 """Backend-neutral, in-place detection postprocessing."""
 import math
-from typing import Callable, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 import numpy as np
 
@@ -276,14 +276,30 @@ def _remove_invalid_boxes(result: Result, min_area: float = 0) -> None:
     _frames(result, clean_frame)
 
 
-def box_iou(first: Box, second: Box) -> float:
-    """Return intersection over union for two boxes."""
-    if not isinstance(first, Box) or not isinstance(second, Box):
-        raise TypeError("first and second must be Box instances")
-    x1, y1 = max(first.xmin, second.xmin), max(first.ymin, second.ymin)
-    x2, y2 = min(first.xmax, second.xmax), min(first.ymax, second.ymax)
+def box_iou(first: Any, second: Any) -> float:
+    """Return intersection over union for two boxes or 4-coordinate sequences."""
+    if isinstance(first, Box):
+        x1_a, y1_a, x2_a, y2_a = first.xmin, first.ymin, first.xmax, first.ymax
+        area_a = first.area
+    elif hasattr(first, "__len__") and len(first) == 4 and not isinstance(first, (str, bytes)):
+        x1_a, y1_a, x2_a, y2_a = float(first[0]), float(first[1]), float(first[2]), float(first[3])
+        area_a = max(0.0, x2_a - x1_a) * max(0.0, y2_a - y1_a)
+    else:
+        raise TypeError("first and second must be Box instances or 4-coordinate sequences")
+
+    if isinstance(second, Box):
+        x1_b, y1_b, x2_b, y2_b = second.xmin, second.ymin, second.xmax, second.ymax
+        area_b = second.area
+    elif hasattr(second, "__len__") and len(second) == 4 and not isinstance(second, (str, bytes)):
+        x1_b, y1_b, x2_b, y2_b = float(second[0]), float(second[1]), float(second[2]), float(second[3])
+        area_b = max(0.0, x2_b - x1_b) * max(0.0, y2_b - y1_b)
+    else:
+        raise TypeError("first and second must be Box instances or 4-coordinate sequences")
+
+    x1, y1 = max(x1_a, x1_b), max(y1_a, y1_b)
+    x2, y2 = min(x2_a, x2_b), min(y2_a, y2_b)
     intersection = max(0., x2 - x1) * max(0., y2 - y1)
-    union = first.area + second.area - intersection
+    union = area_a + area_b - intersection
     return 0. if union <= 0 else intersection / union
 
 

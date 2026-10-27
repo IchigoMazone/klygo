@@ -137,7 +137,12 @@ class Operation:
                 target = self.params.get("target")
                 result._cached_mode = "L" if target in ("GRAY", "L") else target
             return result
-        value, _ = execute_pipeline(image, (self,))
+        trace = list(getattr(image, "_preprocessing_trace", []))
+        value, trace = execute_pipeline(image, (self,), trace)
+        try:
+            value._preprocessing_trace = trace
+        except (AttributeError, TypeError):
+            pass
         return value
 
     def to_dict(self) -> Dict[str, Any]:
@@ -192,9 +197,17 @@ class Compose:
     def __call__(self, image: Any) -> Any:
         if type(image).__name__ == "MediaFrames" and hasattr(image, "transform"):
             return image.transform(self)
-        result = image
-        for operation in self.operations:
-            result = operation(result)
+        if _is_lazy_image(image):
+            result = image
+            for operation in self.operations:
+                result = operation(result)
+            return result
+        trace = list(getattr(image, "_preprocessing_trace", []))
+        result, trace = execute_pipeline(image, self.operations, trace)
+        try:
+            result._preprocessing_trace = trace
+        except (AttributeError, TypeError):
+            pass
         return result
 
     def __iter__(self) -> Iterator[Operation]:

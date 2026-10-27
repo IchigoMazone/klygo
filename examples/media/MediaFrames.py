@@ -15,6 +15,8 @@ with tempfile.TemporaryDirectory() as temporary:
     media.save(root / "source.png", image)
 
     frames = media.load(root)
+    indexed = media.load(root, indexed=True)
     stream = media.load(root, stream=True)
     print(isinstance(frames, media.MediaFrames), frames.total_frames, frames.loaded_count)
+    print(indexed.is_indexed, indexed[0] is indexed[0])
     print(isinstance(stream, media.MediaFrames), stream.is_stream, [frame.size for frame in stream])

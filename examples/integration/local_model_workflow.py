@@ -63,13 +63,11 @@ class RealLocalDetector(Detector):
         all_detections: list[Detection] = []
         for img in images:
             preds = self.base_detector.predict(img, prompt=prompts, verbose=False)[0]
-            # Filter by score threshold
-            filtered = [
-                box for box in preds
-                if box.score >= self.confidence and box.label in self.target_classes
-            ]
-            all_detections.append(Detection(source_image=img, objects=filtered))
-        return Detections(all_detections, source_type="images")
+            filtered = preds.filter(
+                lambda box: box.score >= self.confidence and box.label in self.target_classes
+            )
+            all_detections.append(filtered)
+        return Detections(all_detections)
 
 
 def evaluate_local_detector(
@@ -136,7 +134,7 @@ def evaluate_local_detector(
                 best_iou = 0.0
                 best_idx = -1
                 for g_idx in unmatched_gt:
-                    iou = postprocessing.box_iou(p_box.box, gt_boxes[g_idx].box)
+                    iou = postprocessing.box_iou(p_box, gt_boxes[g_idx])
                     if iou > best_iou:
                         best_iou = iou
                         best_idx = g_idx

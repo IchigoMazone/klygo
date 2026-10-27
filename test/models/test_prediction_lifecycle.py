@@ -58,6 +58,25 @@ class FakeYOLO:
             raise RuntimeError("native inference failed")
         return [SimpleNamespace(boxes=[], names=deepcopy(self.names)) for _ in images]
 
+    def predict(self, source, stream=False, **kwargs):
+        self.options.append(deepcopy(kwargs))
+        if self.fail:
+            raise RuntimeError("native inference failed")
+        sources = list(source) if isinstance(source, (list, tuple)) else [source]
+
+        def results():
+            for image in sources:
+                array = np.asarray(image) if isinstance(image, Image.Image) else np.zeros((12, 12, 3), dtype=np.uint8)
+                yield SimpleNamespace(
+                    boxes=[],
+                    names=deepcopy(self.names),
+                    orig_img=array,
+                    path=None,
+                    speed={"inference": 2.0},
+                )
+
+        return results() if stream else list(results())
+
 
 class TestPredictionLifecycle(unittest.TestCase):
     def setUp(self):
@@ -155,6 +174,19 @@ class TestPredictionLifecycle(unittest.TestCase):
         self.assertTrue(any(name.startswith("klygo-decode") for name in threads))
         self.assertGreater(len(set(threads)), 1)
 
+    def test_predict_can_return_packed_materialized_results(self):
+        result = self.model.predict(
+            [self.image] * 4,
+            packed=True,
+            batch=2,
+            verbose=False,
+        )
+        self.assertTrue(result.is_packed)
+        self.assertEqual(len(result), 4)
+        self.assertEqual(result.total_objects, 4)
+        with self.assertRaisesRegex(ValueError, "stream and packed"):
+            self.model.predict(self.image, stream=True, packed=True)
+
     def test_benchmark_is_scoped_and_reports_actual_sample_size(self):
         self.model(self.image, prompt="dog", threshold=.6, verbose=False)
         before = deepcopy(self.model.predict_config)
@@ -242,6 +274,71 @@ class TestWrapperLifecycle(unittest.TestCase):
             model(self.image, prompt="dog")
         self.assertEqual(model.names, {0: "person", 1: "car"})
 
+    def test_native_yolo_routes_backend_options_and_normalizes_results(self):
+        model = self.wrapper(YOLODetect)
+        model.settings["model"]["nms"] = True
+        model.settings["post"]["extra_post_param"] = 999
+        result = model.predict(
+            [self.image, self.image],
+            native=True,
+            threshold=0.4,
+            iou=0.6,
+            packed=True,
+            verbose=False,
+        )
+
+        self.assertIsInstance(result, outputs.Detections)
+        self.assertFalse(result.is_stream)
+        self.assertTrue(result.is_packed)
+        self.assertEqual(len(result), 2)
+        self.assertTrue(all(frame.metadata["native"] for frame in result))
+        self.assertEqual(model.model.options[-1]["conf"], 0.4)
+        self.assertEqual(model.model.options[-1]["iou"], 0.6)
+        self.assertTrue(model.model.options[-1]["nms"])
+        self.assertNotIn("extra_post_param", model.model.options[-1])
+        self.assertEqual(model.model.options[-1]["vid_stride"], 1)
+
+    def test_native_yolo_stream_is_lazy_and_validates_controls(self):
+        model = self.wrapper(YOLODetect)
+        result = model.predict(
+            [self.image, self.image],
+            native=True,
+            stream=True,
+            verbose=False,
+        )
+        self.assertTrue(result.is_stream)
+        self.assertEqual(len(model.model.options), 1)
+        frames = list(result)
+        self.assertEqual(len(frames), 2)
+        self.assertEqual([frame.frame_index for frame in frames], [0, 1])
+        self.assertTrue(all(frame.metadata["native"] for frame in frames))
+
+        with self.assertRaisesRegex(ValueError, "workers and prefetch"):
+            model.predict(self.image, native=True, workers=2)
+        with self.assertRaisesRegex(ValueError, "unavailable in native mode"):
+            model.predict(self.image, native=True, batch=2)
+        with self.assertRaisesRegex(ValueError, "unavailable in native mode"):
+            model.predict(self.image, native=True, vid_stride=2)
+        with self.assertRaisesRegex(ValueError, "unavailable in native mode"):
+            model.predict(self.image, native=True, max_frames=2)
+        with self.assertRaisesRegex(ValueError, "neither a priority parameter"):
+            model.predict(self.image, native=True, conf=0.4)
+        with self.assertRaisesRegex(ValueError, "neither a priority parameter"):
+            model.predict(self.image, native=True, native_conf=0.4)
+        prompted = model.predict(
+            self.image,
+            native=True,
+            prompt="car",
+            verbose=False,
+        )
+        self.assertEqual(prompted[0].metadata["prompt"], ["car"])
+        self.assertEqual(model.model.options[-1]["classes"], [1])
+
+    def test_native_is_rejected_by_unsupported_backend(self):
+        model = RecordingDetector()
+        with self.assertRaisesRegex(ValueError, "native prediction is unsupported"):
+            model.predict(self.image, native=True, verbose=False)
+
     def test_world_changes_only_once_and_restores_native_state(self):
         model = self.wrapper(YOLOWorldDetect)
         model([self.image] * 3, prompt=["dog", "cat"], verbose=False)
@@ -266,6 +363,21 @@ class TestWrapperLifecycle(unittest.TestCase):
     def test_world_old_stream_restores_new_vocabulary_between_batches(self):
         model = self.wrapper(YOLOWorldDetect)
         stream = model([self.image] * 2, prompt="dog", stream=True, verbose=False)
+        model(self.image, prompt="cat", verbose=False)
+        for frame in stream:
+            self.assertEqual(frame.metadata["prompt"], ["dog"])
+            self.assertEqual(model.model.names, {0: "cat"})
+            self.assertEqual(model.predict_config["prompt"], ["cat"])
+
+    def test_world_native_stream_restores_new_vocabulary_per_frame(self):
+        model = self.wrapper(YOLOWorldDetect)
+        stream = model.predict(
+            [self.image] * 2,
+            prompt="dog",
+            native=True,
+            stream=True,
+            verbose=False,
+        )
         model(self.image, prompt="cat", verbose=False)
         for frame in stream:
             self.assertEqual(frame.metadata["prompt"], ["dog"])

@@ -14,7 +14,7 @@ Resolve and instantiate a Klygo model wrapper from metadata, a loaded `Config`, 
 2. **`klygo.config.Config` or `Mapping` / `box.Box` metadata**: Resolved via `models.configure()` and instantiated using the class declared under `"class"` (or `implementation=`).
 3. **In-memory module with `.parameters()` (e.g., `torch.nn.Module`)**: Wrapped directly into a `READY` [`models.Detector`](Detector.md) instance with `backend="PyTorch (In-Memory)"`.
 4. **Offline directory (`klygo.json` or Hugging Face `config.json`)**: Loads `klygo.json` (and local `model.py` if saved from a custom class) or auto-detects offline Hugging Face Grounding DINO directories.
-5. **Local Ultralytics `.pt` file**: Automatically configures and instantiates `YOLODetect` pointing to the resolved `.pt` path.
+5. **Local Ultralytics `.pt` file**: Automatically configures and instantiates `YOLODetect` pointing to the resolved `.pt` path. A filename matching a built-in model, such as `yolo11n.pt`, retains that model's complete `models.json` parameter schema; an unregistered filename uses the generic offline schema.
 6. **Built-in registry name (`models.json`)**: Resolves exact or wildcard model identifiers (such as `"yolov8n"`, `"yolov8s-worldv2"`, `"grounding-dino-base"`) with an $O(1)$ cached lookup.
 
  Note: `models.load()` intentionally does **not** parse raw `.json`, `.yaml`, `.yml`, or `.toml` configuration file paths directly; load configuration files first via `config.load(path)` or `Config(path).read()`.

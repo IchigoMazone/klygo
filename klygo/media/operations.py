@@ -3,6 +3,7 @@ import importlib
 import math
 import os
 import uuid
+import weakref
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union, Optional, Generator, Iterable, Callable, Iterator
 
@@ -484,6 +485,10 @@ class LazyImage(Image.Image):
             if isinstance(result, Image.Image):
                 self._cached_size = result.size
                 self._cached_mode = result.mode
+                try:
+                    result._preprocessing_trace = list(self._preprocessing_trace)
+                except Exception:
+                    pass
             elif isinstance(result, np.ndarray) and result.ndim >= 2:
                 self._cached_size = (int(result.shape[1]), int(result.shape[0]))
         else:
@@ -639,6 +644,7 @@ class MediaFrames(list):
         backend: str = "pil",
         verbose: bool = False,
         stream: bool = False,
+        indexed: bool = False,
         **kwargs: Any,
     ) -> None:
         if getattr(self, "_initialized", False):
@@ -650,6 +656,9 @@ class MediaFrames(list):
         validate_type(recursive, bool, "recursive")
         validate_type(backend, str, "backend")
         validate_type(verbose, bool, "verbose")
+        validate_type(indexed, bool, "indexed")
+        if indexed:
+            raise ValueError("stream and indexed modes are mutually exclusive")
         if max_frames is not None:
             validate_count(max_frames, "max_frames")
 
@@ -669,6 +678,7 @@ class MediaFrames(list):
         self.backend = backend
         self.verbose = verbose
         self.is_stream = True
+        self.is_indexed = False
         self.width: Optional[int] = None
         self.height: Optional[int] = None
         self.fps = 30.0
@@ -739,6 +749,7 @@ class MediaFrames(list):
         instance.source_type = source_type
         instance.reader = reader
         instance.is_stream = False
+        instance.is_indexed = False
         instance.sample_rate = 1
         instance.max_frames = None
         instance._active_readers = []
@@ -747,6 +758,79 @@ class MediaFrames(list):
         instance._motion_threshold = None
         instance._deduplicate_threshold = None
         return instance
+
+    @classmethod
+    def _from_index(
+        cls,
+        entries: Iterable[Any],
+        *,
+        fps: float = 30.0,
+        source_path: Optional[Union[str, Path]] = None,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        source_type: str = "folder",
+        backend: str = "pil",
+        reader: Optional[VideoReader] = None,
+    ) -> "MediaFrames":
+        """Build path-backed indexed storage without creating frame proxies."""
+        instance = list.__new__(cls)
+        list.__init__(instance)
+        instance._initialized = True
+        instance.fps = float(fps) if fps else 30.0
+        instance.source_path = str(source_path) if source_path is not None else None
+        instance.path = files.path(source_path) if source_path is not None else None
+        instance.width = width
+        instance.height = height
+        instance.source_type = source_type
+        instance.backend = backend
+        instance.reader = reader
+        instance.is_stream = False
+        instance.is_indexed = True
+        instance.sample_rate = 1
+        instance.max_frames = None
+        instance.recursive = False
+        instance.verbose = False
+        instance._active_readers = []
+        instance._preprocessing_ops = []
+        instance._predicates = []
+        instance._motion_threshold = None
+        instance._deduplicate_threshold = None
+        instance._indexed_entries = list(entries)
+        instance._indexed_cache = weakref.WeakValueDictionary()
+        instance._indexed_generation = 0
+        return instance
+
+    def _indexed_proxy(self, index: int) -> Any:
+        """Return one cached indexed item, creating its lazy proxy on demand."""
+        length = len(self._indexed_entries)
+        position = index + length if index < 0 else index
+        if position < 0 or position >= length:
+            raise IndexError("list index out of range")
+        entry = self._indexed_entries[position]
+        if not isinstance(entry, (str, os.PathLike, int)) or isinstance(entry, bool):
+            return entry
+        key = (self._indexed_generation, position)
+        cached = self._indexed_cache.get(key)
+        if cached is not None:
+            return cached
+        if self.source_type == "video":
+            proxy = LazyImage(
+                self.path,
+                backend=self.backend,
+                frame_index=int(entry),
+                reader=self.reader,
+            )
+        else:
+            proxy = LazyImage(entry, backend=self.backend)
+        for operation in self._preprocessing_ops:
+            proxy = operation(proxy)
+        self._indexed_cache[key] = proxy
+        return proxy
+
+    def _invalidate_index_cache(self) -> None:
+        """Invalidate positional proxy keys after structural edits."""
+        self._indexed_generation += 1
+        self._indexed_cache = weakref.WeakValueDictionary()
 
     def _new(self, items: Iterable[Any], *, fps: Optional[float] = None) -> "MediaFrames":
         """Create a materialized container while preserving source metadata."""
@@ -793,6 +877,8 @@ class MediaFrames(list):
     def total_frames(self) -> Optional[int]:
         """Estimated or exact total frames in collection."""
         if not getattr(self, "is_stream", False):
+            if getattr(self, "is_indexed", False):
+                return len(self._indexed_entries)
             return list.__len__(self)
         return getattr(self, "_total_frames", None)
 
@@ -809,12 +895,18 @@ class MediaFrames(list):
     def loaded_count(self) -> int:
         """Number of frames currently holding decoded pixels in RAM."""
         self._require_materialized("loaded_count")
+        if getattr(self, "is_indexed", False):
+            return sum(
+                bool(getattr(item, "is_loaded", False))
+                for item in tuple(self._indexed_cache.values())
+            )
         return sum(bool(getattr(item, "is_loaded", False)) for item in self)
 
     def unload(self) -> None:
         """Release cached pixels across all items while preserving the collection."""
         self._require_materialized("unload()")
-        for item in self:
+        items = tuple(self._indexed_cache.values()) if getattr(self, "is_indexed", False) else self
+        for item in items:
             unload = getattr(item, "unload", None)
             if callable(unload):
                 unload()
@@ -826,6 +918,26 @@ class MediaFrames(list):
 
     def __getitem__(self, index: Union[int, slice]) -> Any:
         self._require_materialized("indexing and slicing")
+        if getattr(self, "is_indexed", False):
+            if isinstance(index, slice):
+                indices = range(*index.indices(len(self._indexed_entries)))
+                entries = [self._indexed_entries[position] for position in indices]
+                step = index.step or 1
+                result = type(self)._from_index(
+                    entries,
+                    fps=self.fps / abs(step) if abs(step) > 1 else self.fps,
+                    source_path=self.source_path,
+                    width=self.width,
+                    height=self.height,
+                    source_type=self.source_type,
+                    backend=self.backend,
+                    reader=self.reader,
+                )
+                result._preprocessing_ops = list(self._preprocessing_ops)
+                return result
+            if isinstance(index, bool) or not isinstance(index, int):
+                raise TypeError("frame index must be an integer or slice")
+            return self._indexed_proxy(index)
         if isinstance(index, slice):
             sub_items = list.__getitem__(self, index)
             step = index.step or 1
@@ -835,38 +947,135 @@ class MediaFrames(list):
 
     def __len__(self) -> int:
         self._require_materialized("len()")
+        if getattr(self, "is_indexed", False):
+            return len(self._indexed_entries)
         return list.__len__(self)
+
+    def __contains__(self, item: Any) -> bool:
+        self._require_materialized("membership testing")
+        return any(candidate == item for candidate in self)
+
+    def __eq__(self, other: Any) -> bool:
+        if getattr(self, "is_stream", False):
+            return self is other
+        try:
+            return list(self) == list(other)
+        except TypeError:
+            return False
+
+    def __add__(self, other: Iterable[Any]) -> list[Any]:
+        self._require_materialized("concatenation")
+        return list(self) + list(other)
+
+    def __iadd__(self, other: Iterable[Any]) -> "MediaFrames":
+        self.extend(other)
+        return self
+
+    def __reversed__(self) -> Iterator[Any]:
+        self._require_materialized("reversed iteration")
+        return (self[index] for index in range(len(self) - 1, -1, -1))
+
+    def index(self, item: Any, start: int = 0, stop: Optional[int] = None) -> int:
+        """Return the first matching item position."""
+        self._require_materialized("index()")
+        limit = len(self) if stop is None else min(stop, len(self))
+        for position in range(*slice(start, limit).indices(len(self))):
+            if self[position] == item:
+                return position
+        raise ValueError(f"{item!r} is not in MediaFrames")
+
+    def count(self, item: Any) -> int:
+        """Return the number of matching items."""
+        self._require_materialized("count()")
+        return sum(candidate == item for candidate in self)
+
+    def reverse(self) -> None:
+        """Reverse frames in place."""
+        self._require_materialized("reverse()")
+        if getattr(self, "is_indexed", False):
+            self._indexed_entries.reverse()
+            self._invalidate_index_cache()
+            return
+        list.reverse(self)
+
+    def sort(self, *, key: Optional[Callable[[Any], Any]] = None, reverse: bool = False) -> None:
+        """Sort frames in place using list-compatible semantics."""
+        self._require_materialized("sort()")
+        if getattr(self, "is_indexed", False):
+            decorated = [(self[index], self._indexed_entries[index]) for index in range(len(self))]
+            decorated.sort(key=(lambda pair: key(pair[0])) if key is not None else (lambda pair: pair[0]), reverse=reverse)
+            self._indexed_entries = [entry for _item, entry in decorated]
+            self._invalidate_index_cache()
+            return
+        list.sort(self, key=key, reverse=reverse)
 
     def append(self, item: Any) -> None:
         self._require_materialized("append()")
+        if getattr(self, "is_indexed", False):
+            self._indexed_entries.append(item)
+            return
         list.append(self, item)
 
     def extend(self, items: Iterable[Any]) -> None:
         self._require_materialized("extend()")
+        if getattr(self, "is_indexed", False):
+            self._indexed_entries.extend(items)
+            return
         list.extend(self, items)
 
     def insert(self, index: int, item: Any) -> None:
         self._require_materialized("insert()")
+        if getattr(self, "is_indexed", False):
+            self._indexed_entries.insert(index, item)
+            self._invalidate_index_cache()
+            return
         list.insert(self, index, item)
 
     def pop(self, index: int = -1) -> Any:
         self._require_materialized("pop()")
+        if getattr(self, "is_indexed", False):
+            item = self[index]
+            self._indexed_entries.pop(index)
+            self._invalidate_index_cache()
+            return item
         return list.pop(self, index)
 
     def remove(self, item: Any) -> None:
         self._require_materialized("remove()")
+        if getattr(self, "is_indexed", False):
+            for index, candidate in enumerate(self):
+                if candidate == item:
+                    self._indexed_entries.pop(index)
+                    self._invalidate_index_cache()
+                    return
+            raise ValueError("MediaFrames.remove(x): x not in collection")
         list.remove(self, item)
 
     def clear(self) -> None:
         self._require_materialized("clear()")
+        if getattr(self, "is_indexed", False):
+            self._indexed_entries.clear()
+            self._invalidate_index_cache()
+            return
         list.clear(self)
 
     def __setitem__(self, index: Any, value: Any) -> None:
         self._require_materialized("item assignment")
+        if getattr(self, "is_indexed", False):
+            if isinstance(index, slice):
+                self._indexed_entries[index] = list(value)
+            else:
+                self._indexed_entries[index] = value
+            self._invalidate_index_cache()
+            return
         list.__setitem__(self, index, value)
 
     def __delitem__(self, index: Any) -> None:
         self._require_materialized("item deletion")
+        if getattr(self, "is_indexed", False):
+            del self._indexed_entries[index]
+            self._invalidate_index_cache()
+            return
         list.__delitem__(self, index)
 
     def _iter_image_paths(self) -> Iterator[Path]:
@@ -885,6 +1094,10 @@ class MediaFrames(list):
         cloned._motion_threshold = self._motion_threshold
         cloned._deduplicate_threshold = self._deduplicate_threshold
         cloned._cached_paths = getattr(self, "_cached_paths", None)
+        if getattr(self, "is_indexed", False):
+            cloned._indexed_entries = list(self._indexed_entries)
+            cloned._indexed_cache = weakref.WeakValueDictionary()
+            cloned._indexed_generation = self._indexed_generation
         return cloned
 
     def transform(self, operation_or_pipeline: Any) -> Any:
@@ -903,7 +1116,7 @@ class MediaFrames(list):
         else:
             raise TypeError("transform expects preprocessing.Operation, preprocessing.Compose, media.compose, or callable")
 
-        if self.is_stream:
+        if self.is_stream or getattr(self, "is_indexed", False):
             cloned = self._clone()
             cloned._preprocessing_ops.extend(operations)
             size = None if cloned.width is None or cloned.height is None else (cloned.width, cloned.height)
@@ -1049,12 +1262,16 @@ class MediaFrames(list):
 
     def copy(self) -> Any:
         """Copy collection without decoding pixels or losing metadata."""
-        if self.is_stream:
+        if self.is_stream or getattr(self, "is_indexed", False):
             return self._clone()
         return self._new(self)
 
     def __iter__(self) -> Iterator[LazyImage]:
         if not self.is_stream:
+            if getattr(self, "is_indexed", False):
+                for index in range(len(self._indexed_entries)):
+                    yield self._indexed_proxy(index)
+                return
             yield from list.__iter__(self)
             return
         previous_frame: Optional[LazyImage] = None
@@ -1153,7 +1370,12 @@ class MediaFrames(list):
                 pass
             self.reader = None
         if not getattr(self, "is_stream", False):
-            for item in getattr(self, "__iter__", lambda: ())():
+            items = (
+                tuple(self._indexed_cache.values())
+                if getattr(self, "is_indexed", False)
+                else getattr(self, "__iter__", lambda: ())()
+            )
+            for item in items:
                 unload = getattr(item, "unload", None)
                 if callable(unload):
                     unload()
@@ -1175,6 +1397,7 @@ class MediaFrames(list):
             )
         return (
             f"<MediaFrames: {len(self)} frames, loaded={self.loaded_count}, "
+            f"indexed={getattr(self, 'is_indexed', False)}, "
             f"type='{self.source_type}', fps={self.fps}>"
         )
 
@@ -1327,6 +1550,7 @@ def load(
     verbose: bool = False,
     *,
     stream: bool = False,
+    indexed: bool = False,
     sample_rate: int = 1,
     max_frames: Optional[int] = None,
 ) -> MediaFrames:
@@ -1347,6 +1571,10 @@ def load(
         Enable progress output where supported.
     stream : bool, default=False
         Yield frames sequentially instead of storing all frame proxies.
+    indexed : bool, default=False
+        Store only paths or video frame numbers and create ``LazyImage``
+        proxies on demand. This mode preserves random access without eagerly
+        allocating one proxy per frame.
     sample_rate : int, default=1
         Use every nth frame when ``stream=True``.
     max_frames : int or None, default=None
@@ -1355,8 +1583,8 @@ def load(
     Returns
     -------
     MediaFrames
-        Unified container in indexed mode by default or streaming mode when
-        ``stream=True``.
+        Unified container in materialized-proxy mode by default, path-indexed
+        mode with ``indexed=True``, or streaming mode with ``stream=True``.
 
     Raises
     ------
@@ -1381,6 +1609,10 @@ def load(
     validate_type(backend, str, "backend")
     validate_type(verbose, bool, "verbose")
     validate_type(stream, bool, "stream")
+    validate_type(indexed, bool, "indexed")
+
+    if stream and indexed:
+        raise ValueError("stream and indexed modes are mutually exclusive")
 
     if stream:
         return MediaFrames(
@@ -1406,6 +1638,22 @@ def load(
     if files.is_file(p):
         suf = files.extension(p).lower()
         if suf in VIDEO_SUFFIXES:
+            if indexed:
+                reader = VideoReader(p)
+                total_frames = reader.total_frames
+                if total_frames <= 0:
+                    reader.release()
+                    raise ValueError("indexed video loading requires a known frame count")
+                return MediaFrames._from_index(
+                    range(total_frames),
+                    fps=reader.fps,
+                    source_path=p,
+                    width=reader.width,
+                    height=reader.height,
+                    source_type="video",
+                    backend=backend,
+                    reader=reader,
+                )
             return _read_video_frames(p, backend=backend, verbose=verbose)
         elif suf in IMAGE_SUFFIXES:
             image_paths = [p]
@@ -1426,7 +1674,15 @@ def load(
     else:
         raise ValueError(f"source must be a file or directory: {p}")
 
-    # Zero-RAM Lazy Loading: wrap each path in a LazyImage (URL/Path Proxy)
+    if indexed:
+        return MediaFrames._from_index(
+            image_paths,
+            source_path=p,
+            source_type="folder" if files.is_dir(p) else "image",
+            backend=backend,
+        )
+
+    # Lazy pixel loading: proxies are materialized while pixels remain deferred.
     lazy_frames = [LazyImage(f, backend=backend) for f in image_paths]
 
     return MediaFrames._from_items(

@@ -14,7 +14,7 @@ import math
 import statistics
 from threading import RLock
 import time
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 import PIL.Image
 
 from klygo.models.base import BaseModel
@@ -165,6 +165,8 @@ class Detector(BaseModel):
         max_frames: Optional[int] = None,
         verbose: bool = True,
         stream: bool = False,
+        native: bool = False,
+        packed: bool = False,
         **kwargs,
     ) -> Detections:
         """Predict with remembered inference options and independent result metadata.
@@ -181,7 +183,26 @@ class Detector(BaseModel):
             validators.validate_count(max_frames, "max_frames")
         validators.validate_type(verbose, bool, "verbose")
         validators.validate_type(stream, bool, "stream")
+        validators.validate_type(native, bool, "native")
+        validators.validate_type(packed, bool, "packed")
         stream = stream or bool(getattr(source, "is_stream", False))
+        if stream and packed:
+            raise ValueError("stream and packed result storage are mutually exclusive")
+
+        if native:
+            return self._predict_native(
+                source,
+                prompt=prompt,
+                batch=batch,
+                workers=workers,
+                prefetch=prefetch,
+                vid_stride=vid_stride,
+                max_frames=max_frames,
+                verbose=verbose,
+                stream=stream,
+                packed=packed,
+                kwargs=kwargs,
+            )
 
         with self._prediction_lock:
             metadata, prompts = self._resolve_prediction(prompt, kwargs)
@@ -201,7 +222,12 @@ class Detector(BaseModel):
                             ))
                             progress.update(len(part))
                             offset += len(part)
-                    result = Detections(frames, metadata={"source_type": "image" if is_single else "video", "fps": getattr(images, "fps", 30.0)}, names=self.names)
+                    result = Detections(
+                        frames,
+                        metadata={"source_type": "image" if is_single else "video", "fps": getattr(images, "fps", 30.0)},
+                        names=self.names,
+                        packed=packed,
+                    )
             except Exception:
                 self._restore_prediction_state(previous)
                 raise
@@ -247,6 +273,183 @@ class Detector(BaseModel):
             },
             names=names,
             stream=True,
+        )
+
+    def _native_runtime_options(
+        self,
+        metadata: Dict[str, Any],
+        prompt: Any,
+    ) -> Dict[str, Any]:
+        """Build backend-native runtime options for one prediction."""
+        raise ValueError(f"native prediction is unsupported for backend {self.backend!r}")
+
+    def _native_image(self, raw: Any, frame_index: int) -> Any:
+        """Return source media used to attach identity to one native result."""
+        from klygo import files, media
+
+        path = getattr(raw, "path", None)
+        if path is not None and files.exists(path):
+            suffix = files.extension(path).lower()
+            video_index = frame_index if suffix in media.VIDEO_SUFFIXES else None
+            return media.LazyImage(path, frame_index=video_index)
+        image = getattr(raw, "orig_img", None)
+        if image is None:
+            raise ValueError("native backend result does not provide source image data")
+        return media.to_pil(image)
+
+    def _pack_native_frame(
+        self,
+        raw: Any,
+        frame_index: int,
+        metadata: Dict[str, Any],
+        prompt: Any,
+    ) -> Detection:
+        """Convert one backend-native result into a Klygo Detection."""
+        formatted = self.format_results([raw])
+        if len(formatted) != 1:
+            raise ValueError("native backend must produce exactly one result per frame")
+        speed = getattr(raw, "speed", {}) or {}
+        latency = float(sum(float(value) for value in speed.values())) if isinstance(speed, Mapping) else 0.0
+        frame = self._pack_detection(
+            formatted[0],
+            self._native_image(raw, frame_index),
+            frame_index,
+            latency,
+            1000.0 / max(latency, 0.001),
+        )
+        frame.metadata.update({
+            "native": True,
+            "prompt": deepcopy(prompt),
+            "predict_config": deepcopy(self._config_snapshot(metadata, prompt)),
+            "model_id": self.model_id,
+            "backend": self.backend,
+            "source_path": frame.source_path,
+            "frame_index": frame.frame_index,
+            "image_frame_index": frame.frame_index,
+        })
+        return frame
+
+    def _predict_native(
+        self,
+        source: Any,
+        *,
+        prompt: Any,
+        batch: int,
+        workers: int,
+        prefetch: int,
+        vid_stride: int,
+        max_frames: Optional[int],
+        verbose: bool,
+        stream: bool,
+        packed: bool,
+        kwargs: Dict[str, Any],
+    ) -> Detections:
+        """Run a backend-owned input pipeline and normalize its output."""
+        from klygo import files, media
+
+        if isinstance(source, media.MediaFrames):
+            raise TypeError("native prediction requires a backend-supported source, not MediaFrames")
+        if workers != 1 or prefetch != 1:
+            raise ValueError("workers and prefetch are unavailable in native mode")
+
+        locked = []
+        if batch != 1:
+            locked.append("batch")
+        if vid_stride != 1:
+            locked.append("vid_stride")
+        if max_frames is not None:
+            locked.append("max_frames")
+        if locked:
+            names = ", ".join(locked)
+            raise ValueError(
+                f"{names} are unavailable in native mode; use registered model parameters"
+            )
+
+        with self._prediction_lock:
+            metadata, prompts = self._resolve_prediction(prompt, kwargs)
+            previous = self._snapshot_prediction_state()
+            try:
+                with self._use_metadata(metadata):
+                    self._prepare_prediction(prompts)
+                    runtime_options = self._native_runtime_options(
+                        metadata,
+                        prompts,
+                    )
+                    runtime_options.setdefault("batch", 1)
+                    runtime_options.setdefault("vid_stride", 1)
+                    backend_stream = stream
+                    raw = self.model.predict(
+                        source=source,
+                        stream=backend_stream,
+                        verbose=verbose,
+                        **runtime_options,
+                    )
+                    names = dict(getattr(self.model, "names", self.names))
+                    self.names = names
+            except Exception:
+                self._restore_prediction_state(previous)
+                raise
+            self._remember_prediction(metadata, prompts)
+
+        def frames():
+            iterator = iter(raw)
+            index = 0
+            try:
+                while True:
+                    if backend_stream:
+                        with self._prediction_lock:
+                            current = self._snapshot_prediction_state()
+                            try:
+                                with self._use_metadata(metadata):
+                                    self._prepare_prediction(prompts)
+                                    native_result = next(iterator)
+                            except StopIteration:
+                                break
+                            finally:
+                                self._restore_prediction_state(current)
+                    else:
+                        try:
+                            native_result = next(iterator)
+                        except StopIteration:
+                            break
+                    yield self._pack_native_frame(
+                        native_result,
+                        index,
+                        metadata,
+                        prompts,
+                    )
+                    index += 1
+            finally:
+                close = getattr(iterator, "close", None)
+                if callable(close):
+                    close()
+
+        source_type = "video" if (
+            isinstance(source, int)
+            or (
+                isinstance(source, (str, bytes))
+                and files.extension(source).lower() in media.VIDEO_SUFFIXES
+            )
+        ) else "image"
+        result_metadata = {
+            "source_type": source_type,
+            "fps": 30.0,
+            "native": True,
+            "requested_total_frames": None,
+        }
+        if stream:
+            return Detections(
+                frames(),
+                metadata=result_metadata,
+                names=names,
+                stream=True,
+            )
+        materialized = list(frames())
+        return Detections(
+            materialized,
+            metadata=result_metadata,
+            names=names,
+            packed=packed,
         )
 
     def __call__(self, source: Any, *args, **kwargs) -> Union[Detections, Any]:
@@ -605,7 +808,7 @@ class Detector(BaseModel):
                     validators.validate_type(value, (int, float), name)
                     if isinstance(value, bool) or not math.isfinite(value) or not 0 <= value <= 1:
                         raise ValueError(f"{name} must be a finite number between 0 and 1")
-            for name in ("source", "stream", "verbose", "batch", "vid_stride", "max_frames", "output_path"):
+            for name in ("source", "stream", "verbose", "batch", "vid_stride", "max_frames", "native", "packed", "output_path"):
                 if name in values:
                     raise ValueError(f"{name} is an execution control, not a persistent inference option")
 

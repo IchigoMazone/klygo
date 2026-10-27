@@ -29,7 +29,7 @@ Focused guides:
 1. **Layer 1 — Abstract Contract ([`BaseModel`](api/BaseModel.md) in `base.py`)**:
    Manages lifecycle state (`LOADING`, `READY`, `UNLOADED`), `metadata`, `details`, `flags`, call-local runtime parameter overrides (`_use_metadata`), Rich terminal inspection (`info()`), and post-unload access guards (`InvalidStateError`).
 2. **Layer 2 — Task Engine ([`Detector`](api/Detector.md) in `detection/base.py` & [`backend.common`](backend/README.md))**:
-   Implements the complete object-detection pipeline (`predict()`, streaming video/image generators via `stream=True`, coordinate restoration when paired with `klygo.preprocessing`, `warmup()`, `benchmark()`, `save()`, `reset()`, and `unload()`) and delegates low-level tensor/device operations to [`klygo.models.backend.common`](backend/api/common.md).
+   Implements the complete object-detection pipeline (`predict()`, backend-owned Ultralytics inference via `native=True`, compact materialized results via `packed=True`, streaming via `stream=True`, coordinate restoration, benchmarking, persistence, and lifecycle controls) and delegates low-level tensor/device operations to [`klygo.models.backend.common`](backend/api/common.md).
 3. **Layer 3 — Concrete & Application Wrappers (`detection/*.py` & custom subclasses)**:
    Built-in registry wrappers (`YOLODetect`, `YOLOWorldDetect`, `GroundingDinoDetect`, `LocateAnythingDetect`) or application-owned [`Detector`](api/Detector.md) subclasses implement `forward(images, prompt=None)` using `self.cast_inputs()`, `self.run_inference()`, and `self.format_results()` (or by calling [`klygo.models.backend.common`](backend/api/common.md) directly).
 
@@ -72,6 +72,8 @@ See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](back
 | **Inspect hardware device and model data type** | [`Detector.device`](api/Detector.md) / [`dtype`](api/Detector.md) | `print(detector.device, detector.dtype)` |
 | **Stream large videos lazily without filling RAM** | [`Detector.predict()`](api/Detector.md) | `source = media.load("traffic.mp4", stream=True); results = detector.predict(source)` |
 | **Overlap parallel image decoding with inference** | [`Detector.predict()`](api/Detector.md) | `results = detector.predict(source, batch=8, workers=2, prefetch=2)` |
+| **Use the Ultralytics native source pipeline** | [`Detector.predict()`](api/Detector.md) | `results = detector.predict("video.mp4", native=True, stream=True, threshold=0.35)` |
+| **Pack large finite outputs into shared arrays** | [`Detector.predict()`](api/Detector.md) | `results = detector.predict("images/", packed=True)` |
 | **Measure model latency (ms) and throughput in isolation** | [`Detector.benchmark()`](api/Detector.md) | `stats = detector.benchmark("sample.jpg", iterations=10, warmup=3)` |
 | **Clear remembered prompt or restore defaults** | [`Detector.predict()`](api/Detector.md) / [`reset()`](api/Detector.md) | `detector.predict(img, prompt=None)` or `detector.reset()` |
 | **Export a self-contained model bundle to disk** | [`Detector.save()`](api/Detector.md) | `detector.save("exported_model/")` |

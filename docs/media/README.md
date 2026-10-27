@@ -21,7 +21,7 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 1. **[`LazyImage`](api/LazyImage.md) (Zero-RAM Pixel Proxy)**:
    Subclasses `PIL.Image.Image` and wraps a file path or video frame index without decoding pixels on construction. Reading `.size`, `.width`, `.height`, or `.shape` inspects headers or cached dimensions only. Calling `.crop()` or `.lazy_crop()` records a bounding box in zero RAM, and `.process()` attaches `klygo.preprocessing` operations lazily until `.load()`, `.to_pil()`, `.to_array()`, or `.to_tensor()` materializes the image.
 2. **[`MediaFrames`](api/MediaFrames.md) (Unified Frame Container)**:
-   Returned by [`load()`](api/load.md) in both modes. With `stream=False`, it is an indexed list-like collection of `LazyImage` proxies. With `stream=True`, it becomes a bounded-memory sequential iterator with `sample_rate` and `max_frames` controls. Both modes share `.transform()`, `.where()`, `.where_quality()`, `.where_motion()`, `.deduplicate()`, `.sample()`, and `.limit()`.
+   Returned by [`load()`](api/load.md) in all modes. The default materializes lazy proxies, `indexed=True` retains only paths/frame numbers and creates proxies on demand, and `stream=True` becomes a bounded-memory sequential iterator. All modes share the same public container type.
 3. **[`VideoReader`](api/VideoReader.md) (Smart Sequential & Random-Access Seeker)**:
    Manages a single reusable `cv2.VideoCapture` handle with position tracking so consecutive reads avoid redundant seeks while out-of-order frame indices seek on demand.
 4. **Format Conversions & Media I/O**:
@@ -46,6 +46,7 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 | :--- | :--- | :--- |
 | **Load an image, video, or folder lazily** | [`load()`](api/load.md) | `frames = media.load("video.mp4")` |
 | **Stream a long video with bounded RAM** | [`load()`](api/load.md) / [`MediaFrames`](api/MediaFrames.md) | `frames = media.load("video.mp4", stream=True, sample_rate=5)` |
+| **Index a very large finite source without allocating every proxy** | [`load()`](api/load.md) / [`MediaFrames`](api/MediaFrames.md) | `frames = media.load("images/", indexed=True)` |
 | **Inspect image or video metadata** | [`probe()`](api/probe.md) | `meta = media.probe("clip.mp4", verbose=True)` |
 | **Check dimensions without decoding pixels** | [`LazyImage`](api/LazyImage.md) | `img = media.LazyImage("photo.jpg"); print(img.size)` |
 | **Crop a region without loading into RAM** | [`LazyImage.lazy_crop()`](api/LazyImage.md) | `patch = frames[0].lazy_crop((10, 10, 110, 90))` |
@@ -73,7 +74,7 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 <details open>
 <summary><b>Loading, streaming, and inspection — <code>operations.py</code> (4 functions)</b> <i>(Click to expand)</i></summary>
 
-- [`load(source, recursive=False, backend='pil', verbose=False, *, stream=False, sample_rate=1, max_frames=None)`](api/load.md) ([example](../../examples/media/load.py)): Load an image, video, or directory into [`MediaFrames`](api/MediaFrames.md) in indexed or streaming mode.
+- [`load(source, recursive=False, backend='pil', verbose=False, *, stream=False, indexed=False, sample_rate=1, max_frames=None)`](api/load.md) ([example](../../examples/media/load.py)): Load an image, video, or directory into materialized, path-indexed, or streaming [`MediaFrames`](api/MediaFrames.md).
 - [`compose(*steps)`](api/compose.md) ([example](../../examples/media/compose.py)): Chain filtering, sampling, and transform steps into a reusable media pipeline.
 - [`iter_frames(source, sample_rate=1, recursive=False, backend='pil', verbose=False)`](api/iter_frames.md) ([example](../../examples/media/iter_frames.py)): Yield sampled frames from a video or image directory as a generator.
 - [`probe(path, *, verbose=False)`](api/probe.md) ([example](../../examples/media/probe.py)): Read image or video format, dimensions, codec, and timing metadata into a dictionary (with optional Rich table display).
@@ -104,7 +105,7 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 <summary><b>Lazy containers and frame proxies — <code>operations.py</code> (3 classes)</b> <i>(Click to expand)</i></summary>
 
 - [`LazyImage(path, backend='pil', crop_box=None, frame_index=None, reader=None)`](api/LazyImage.md) ([example](../../examples/media/LazyImage.py)): Zero-RAM image and video-frame proxy supporting lazy crops, PIL method forwarding, and preprocessing pipelines.
-- [`MediaFrames(source, *, stream=False, sample_rate=1, max_frames=None, recursive=False, backend='pil', verbose=False)`](api/MediaFrames.md) ([example](../../examples/media/MediaFrames.py)): Unified indexed and streaming frame container with quality, motion, deduplication, and preprocessing stages.
+- [`MediaFrames(source, *, stream=False, indexed=False, sample_rate=1, max_frames=None, recursive=False, backend='pil', verbose=False)`](api/MediaFrames.md) ([example](../../examples/media/MediaFrames.py)): Unified materialized, path-indexed, and streaming frame container.
 - [`VideoReader(path)`](api/VideoReader.md) ([example](../../examples/media/VideoReader.py)): Reusable OpenCV video capture wrapper for sequential and random-access frame decoding.
 
 </details>

@@ -19,7 +19,7 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
    - `self.device`: Query the active accelerator device of `self.model` via `common.current_device()`.
    - `self.dtype`: Query the active numeric dtype of `self.model` via `common.current_dtype()`.
    - `self.predict_config`: Independent, defensive `deepcopy` snapshot of effective inference options (such as `prompt`, `threshold`, `iou`). External mutation of the returned dictionary does not mutate model state.
-   - Persistent settings: `predict()` automatically retains configured `prompt`, `threshold`, and `iou` across successive calls. Passing `prompt=None` clears the remembered prompt and restores default vocabulary; calling `reset()` clears all remembered overrides. Execution controls (`batch`, `workers`, `prefetch`, `vid_stride`, `max_frames`, `stream`, `verbose`) are never persisted.
+   - Persistent settings: `predict()` automatically retains configured `prompt`, `threshold`, and `iou` across successive calls. Passing `prompt=None` clears the remembered prompt and restores default vocabulary; calling `reset()` clears all remembered overrides. Execution controls (`batch`, `workers`, `prefetch`, `vid_stride`, `max_frames`, `stream`, `native`, `packed`, `verbose`) are never persisted.
 2. **Multi-Backend Dispatch Helpers (delegated to [`klygo.models.backend.common`](../backend/api/common.md))**:
    - `self.cast_inputs(inputs, dev=None, dtype=None)`: Cast floating-point tensors to the model's device and dtype while preserving integer tensors (`input_ids`) via `common.cast_inputs()`.
    - `self.run_inference(inputs, **model_kwargs)`: Execute forward pass via `common.run_inference()` on the active backend adapter (`Hugging Face`, `Ultralytics`, `Torchvision`, or `Keras`).
@@ -32,6 +32,8 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
    - Automatically restores bounding-box coordinates to original image dimensions when inputs carry a `klygo.preprocessing` transformation trace.
    - Supports `stream=True` to return the same `klygo.outputs.Detections` type in lazy one-pass mode, processing long videos in bounded memory. When `media.load(..., stream=True)` already created a stream, `predict(source)` detects `source.is_stream` automatically; callers declare streaming only once. Use materialized media when random access is required.
    - Uses one decode worker and one prefetched batch by default, matching YOLO-style prediction read-ahead. Higher `workers` values decode independent images within each prefetched batch concurrently; `workers=0` or `prefetch=0` disables background decoding. Video frames sharing one reader always decode sequentially, and results preserve source order.
+   - `native=True` lets a supported backend own source decoding and streaming. `prompt` and inference parameters registered by the model keep their normal public names, such as `threshold` and `iou`; they pass through the same metadata validation as managed prediction. Pipeline controls `batch`, `workers`, `prefetch`, `vid_stride`, and `max_frames` are unavailable in native mode. Outputs are still normalized to `Detections`.
+   - `packed=True` returns materialized `Detections` using shared compact arrays and lazy frame facades. It cannot be combined with `stream=True`.
 4. **Lifecycle & Isolated Benchmarking**:
    - `warmup()`: Run a single 640×640 dummy inference pass to initialize GPU kernels.
    - `benchmark(source=None, iterations=10, warmup=3, verbose=True, **kwargs)`: Measure mean latency (ms), throughput (FPS), device, and dtype inside accelerator synchronization. Temporary overrides apply only during the benchmark run and are safely restored on completion or failure.
@@ -51,7 +53,7 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
 - `device`: Read-only property returning active accelerator device (e.g., `torch.device("cpu")`).
 - `dtype`: Read-only property returning active data type (e.g., `torch.float32`).
 - `predict_config`: Read-only defensive snapshot dictionary of remembered inference parameters.
-- `predict(source, prompt=None, batch=1, workers=1, prefetch=1, vid_stride=1, max_frames=None, stream=False, verbose=True, **kwargs) -> Detections`: Run object detection with bounded ordered decode read-ahead.
+- `predict(source, prompt=None, batch=1, workers=1, prefetch=1, vid_stride=1, max_frames=None, stream=False, native=False, packed=False, verbose=True, **kwargs) -> Detections`: Run Klygo-managed or supported backend-native detection.
 - `forward(images, prompt=None) -> list[Detection]`: Pure inference hook implemented by subclasses on a batch of `PIL.Image.Image` instances.
 - `benchmark(source=None, iterations=10, warmup=3, verbose=True, **kwargs) -> dict[str, Any]`: Measure latency and FPS in isolation without mutating persistent model settings.
 - `warmup() -> None`: Warm up the accelerator pipeline on a 640×640 image.
@@ -90,6 +92,18 @@ results = detector.predict("video.mp4", stream=True)
 # Override or disable the YOLO-style decode read-ahead:
 results = detector.predict(source, batch=8, workers=2, prefetch=2)
 results = detector.predict(source, workers=0)
+
+# Ultralytics owns decoding while Klygo still returns Detections.
+results = detector.predict(
+    "video.mp4",
+    native=True,
+    stream=True,
+    threshold=0.35,
+    iou=0.5,
+)
+
+# Compact materialized annotations for large finite sources.
+results = detector.predict("images/", packed=True)
 ```
 
 ## Complete executable example

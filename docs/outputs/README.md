@@ -1,6 +1,6 @@
 # `klygo.outputs`
 
-`klygo.outputs` provides a three-level detection hierarchy: `Box`, `Detection`, and `Detections`. The same `Detections` type supports materialized results and bounded-memory one-pass streams.
+`klygo.outputs` provides a three-level detection hierarchy: `Box`, `Detection`, and `Detections`. The same `Detections` type supports ordinary materialized results, compact packed arrays with lazy frame facades, and bounded-memory one-pass streams.
 
 ```python
 from klygo import models, postprocessing as post
@@ -20,6 +20,7 @@ results.export("artifacts/predictions", format="yolo")
 - [`Box`](api/Box.md) stores one validated annotation with a stable frame-local UID.
 - [`Detection`](api/Detection.md) owns the boxes for one `(source_id, frame_index)` identity and can restore that frame's coordinates.
 - [`Detections`](api/Detections.md) owns ordered frames, history, class aggregation, indexed coordinate restoration, export, and reprediction.
+- `Detections(..., packed=True)` and `model.predict(..., packed=True)` store numeric annotations in shared arrays while preserving `Detection` and `Box` access.
 - [`build_detections`](api/build_detections.md) converts normalized backend predictions into frames.
 - [`detect`](api/detect.md) contains the implementation of the three levels.
 

@@ -1,7 +1,7 @@
 # `media.load`
 
 ```python
-media.load(source, recursive=False, backend='pil', verbose=False, *, stream=False, sample_rate=1, max_frames=None)
+media.load(source, recursive=False, backend='pil', verbose=False, *, stream=False, indexed=False, sample_rate=1, max_frames=None)
 ```
 
 Load an image file, video file, or image directory as indexed lazy frames or a bounded-memory sequential stream.
@@ -13,7 +13,9 @@ Resolves `source` via `klygo.files.path()`. When `stream=False` (the default), i
 - For a directory, discovers matching image files in case-insensitive sorted path order (recursively when `recursive=True`) and returns a `MediaFrames` with `source_type="folder"`.
 - For a supported video (`.avi`, `.m4v`, `.mkv`, `.mov`, `.mp4`, `.webm`), probes header metadata once via [`VideoReader`](VideoReader.md) and populates `LazyImage` proxies indexed from `0` to `total_frames - 1` sharing that reader with `source_type="video"`.
 
-When `stream=True`, the same [`MediaFrames`](MediaFrames.md) API yields frames sequentially with bounded memory according to `sample_rate` and `max_frames`. Passing `sample_rate != 1` or `max_frames is not None` while `stream=False` is rejected.
+With `indexed=True`, Klygo stores only sorted paths (or integer video frame numbers) and creates `LazyImage` proxies when an index is accessed. Repeated access returns the same live proxy while avoiding one proxy allocation per untouched frame. Slicing stays indexed. Structural list operations invalidate positional proxy caches without decoding pixels.
+
+When `stream=True`, the same [`MediaFrames`](MediaFrames.md) API yields frames sequentially with bounded memory according to `sample_rate` and `max_frames`. `stream=True` and `indexed=True` are mutually exclusive. Passing `sample_rate != 1` or `max_frames is not None` while `stream=False` is rejected.
 
 ## Parameters
 
@@ -22,12 +24,13 @@ When `stream=True`, the same [`MediaFrames`](MediaFrames.md) API yields frames s
 - `backend`: `str`, default `'pil'` — decoded pixel representation (`'pil'` for RGB `PIL.Image.Image`, `'opencv'` for BGR `numpy.ndarray`).
 - `verbose`: `bool`, default `False` — enable progress reporting where supported.
 - `stream`: `bool`, default `False` — keyword-only; select sequential mode instead of indexed mode.
+- `indexed`: `bool`, default `False` — keyword-only; keep a compact path/frame-number index and create frame proxies on demand.
 - `sample_rate`: `int`, default `1` — keyword-only; emit every `sample_rate`-th frame when `stream=True`.
 - `max_frames`: `int | None`, default `None` — keyword-only; cap the maximum number of yielded frames when `stream=True`.
 
 ## Returns
 
-`MediaFrames` — indexed lazy frame collection when `stream=False`, or bounded-memory iterable when `stream=True`.
+`MediaFrames` — materialized proxy collection by default, path-backed indexed collection with `indexed=True`, or bounded-memory iterable with `stream=True`.
 
 ## Errors and edge cases
 
@@ -56,6 +59,10 @@ with tempfile.TemporaryDirectory() as temporary:
     assert isinstance(frames, media.MediaFrames)
     assert len(frames) == 2 and frames.loaded_count == 0
     assert frames[0].size == (32, 24)
+
+    indexed = media.load(root, indexed=True)
+    assert indexed.is_indexed and len(indexed) == 2
+    assert indexed[0] is indexed[0]
 
     # Sequential bounded-memory stream with frame sampling
     with media.load(root, stream=True, sample_rate=1, max_frames=1) as stream:

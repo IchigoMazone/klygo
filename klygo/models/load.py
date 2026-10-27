@@ -316,23 +316,27 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
 
     # 2. Load from a local YOLO .pt weights file
     elif files.is_file(model) and files.extension(model).lower() == ".pt":
-        entry = {
-            "class": "klygo.models.detection.YOLODetect",
-            "model_id": str(files.resolve(model)),
-            "details": {
-                "name": "YOLO",
-                "task": "Object-Detection",
-                "backend": "Ultralytics (Offline)",
-                "library": "ultralytics",
-                "num_params": "Offline",
-            },
-            "flags": {"model": False, "post": True},
-            "model": {},
-            "post": {"threshold": 0.25, "iou": 0.7},
-            "priority": {
-                "post": ("threshold", "iou"),
-            },
-        }
+        entry = _resolve(files.name(model))
+        if entry is not None:
+            entry = {**entry, "model_id": str(files.resolve(model))}
+        else:
+            entry = {
+                "class": "klygo.models.detection.YOLODetect",
+                "model_id": str(files.resolve(model)),
+                "details": {
+                    "name": "YOLO",
+                    "task": "Object-Detection",
+                    "backend": "Ultralytics (Offline)",
+                    "library": "ultralytics",
+                    "num_params": "Offline",
+                },
+                "flags": {"model": False, "post": True},
+                "model": {},
+                "post": {"threshold": 0.25, "iou": 0.7},
+                "priority": {
+                    "post": ("threshold", "iou"),
+                },
+            }
 
     # 3. Look up in the built-in model registry
     if entry is None:

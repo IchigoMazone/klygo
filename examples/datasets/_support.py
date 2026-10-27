@@ -51,16 +51,9 @@ class ExampleDetector:
             width, height = image.size
             detections.append(
                 Detection(
-                    source_image=image,
-                    objects=[
-                        Box(
-                            id=0,
-                            label=prompt[0],
-                            score=0.9,
-                            box=[0, 0, width, height],
-                            parent_image=image,
-                        )
-                    ],
+                    [Box([0, 0, width, height], label=prompt[0], score=0.9)],
+                    image_size=image.size,
+                    source=image,
                 )
             )
-        return Detections(detections, source_type="images")
+        return Detections(detections)
