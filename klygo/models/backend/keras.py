@@ -389,7 +389,7 @@ def clear_cache() -> None:
 def save(model: Any, output_dir: str) -> None:
     """Save a Keras 3 or KerasHub model to `output_dir`."""
     from klygo import files
-    abs_out = files.resolve(output_dir)
+    abs_out = str(files.resolve(output_dir))
     files.mkdir(abs_out)
 
     if model is not None:
@@ -404,7 +404,7 @@ def save(model: Any, output_dir: str) -> None:
         # 2. Standard .keras format
         if hasattr(model, "save") and callable(model.save):
             try:
-                keras_file = files.join(abs_out, "model.keras")
+                keras_file = str(files.join(abs_out, "model.keras"))
                 model.save(keras_file)
                 return
             except Exception:
