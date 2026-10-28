@@ -4,6 +4,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 from PIL import Image
@@ -13,6 +14,7 @@ import cv2
 
 import klygo.media as media
 import klygo.preprocessing as preprocessing
+from klygo import files
 
 class TestMedia(unittest.TestCase):
     def test_partial_reader_and_stream_release_is_safe(self):
@@ -101,6 +103,45 @@ class TestMedia(unittest.TestCase):
         self.assertIsInstance(frames, media.MediaFrames)
         self.assertTrue(is_single)
         self.assertEqual(len(list(frames)), 1)
+
+    def test_model_image_resolution_keeps_folder_indexed(self):
+        from klygo.models.utils import resolve_images
+
+        image_dir = self.tmp_path / "indexed_model_input"
+        files.mkdir(image_dir)
+        for index in range(3):
+            media.save(
+                image_dir / f"{index}.png",
+                Image.new("RGB", (20, 10), "red"),
+                verbose=False,
+            )
+
+        frames, is_single = resolve_images(image_dir, stream=False)
+
+        self.assertIsInstance(frames, media.MediaFrames)
+        self.assertTrue(frames.is_indexed)
+        self.assertEqual(frames.source_type, "folder")
+        self.assertFalse(is_single)
+        self.assertEqual(frames.loaded_count, 0)
+
+    def test_video_reader_serializes_concurrent_random_access(self):
+        video_path = self.tmp_path / "concurrent.mp4"
+        media.save_video(
+            video_path,
+            [np.full((16, 24, 3), value * 16, dtype=np.uint8) for value in range(12)],
+            fps=12,
+            overwrite=True,
+        )
+
+        reader = media.VideoReader(video_path)
+        self.addCleanup(reader.close)
+        indices = [9, 1, 7, 0, 11, 3, 8, 2]
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            decoded = list(executor.map(reader.read_frame, indices))
+
+        self.assertTrue(all(frame is not None for frame in decoded))
+        for index, frame in zip(indices, decoded):
+            self.assertAlmostEqual(float(frame.mean()), index * 16, delta=8)
 
     def test_stream_transform_reuses_source_metadata_without_rescan(self):
         image_dir = self.tmp_path / "many_images"

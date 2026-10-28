@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
-import cv2 as cv
 import numpy as np
-from PIL import Image, ImageOps
 
 
 def get_trace(image: Any) -> List[Dict[str, Any]]:
@@ -168,21 +166,8 @@ def _restore_point(point: Sequence[float], item: Dict[str, Any]) -> Tuple[float,
     return x, y
 
 
-def restore_points(points: Iterable[Sequence[float]], trace: Iterable[Dict[str, Any]]) -> List[List[float]]:
-    """Return or update restore points using preprocessing geometry history.
-
-    Parameters
-    ----------
-    points : Iterable[Sequence[float]]
-        Pixel points to map back to source coordinates.
-    trace : Iterable[Dict[str, Any]]
-        Recorded geometry transformations.
-
-    Returns
-    -------
-    object
-        Restored coordinates, trace information, or updated image.
-    """
+def _restore_box_corners(points: Iterable[Sequence[float]], trace: Iterable[Dict[str, Any]]) -> List[List[float]]:
+    """Restore continuous box-edge coordinates through non-axis-aligned transforms."""
     restored = [tuple(map(float, point[:2])) for point in points]
     for item in reversed(list(trace)):
         restored = [_restore_point(point, item) for point in restored]
@@ -262,83 +247,10 @@ def restore_boxes(boxes: Iterable[Sequence[float]], trace: Iterable[Dict[str, An
     output: List[List[float]] = []
     for box in box_list:
         x1, y1, x2, y2 = map(float, box[:4])
-        corners = restore_points(((x1, y1), (x2, y1), (x2, y2), (x1, y2)), active_trace)
+        corners = _restore_box_corners(((x1, y1), (x2, y1), (x2, y2), (x1, y2)), active_trace)
         xs, ys = [point[0] for point in corners], [point[1] for point in corners]
         output.append([min(xs), min(ys), max(xs), max(ys)])
     return output
-
-
-def restore_mask(mask: Any, trace: Iterable[Dict[str, Any]]) -> Image.Image:
-    """Return or update restore mask using preprocessing geometry history.
-
-    Parameters
-    ----------
-    mask : Any
-        Mask image.
-    trace : Iterable[Dict[str, Any]]
-        Recorded geometry transformations.
-
-    Returns
-    -------
-    object
-        Restored coordinates, trace information, or updated image.
-    """
-    result = mask if isinstance(mask, Image.Image) else Image.fromarray(np.asarray(mask))
-    for item in reversed(list(trace)):
-        name = item["name"]
-        before = tuple(item["before"])
-        if name in ("resize", "thumbnail", "contain", "random_resize", "letterbox"):
-            if name == "letterbox":
-                left, top, right, bottom = item["padding"]
-                result = result.crop((left, top, result.width - right, result.height - bottom))
-            result = result.resize(before, Image.Resampling.NEAREST)
-        elif name in ("cover", "fit"):
-            scale = item["scale"]
-            resized_size = (max(1, round(before[0] * scale)), max(1, round(before[1] * scale)))
-            left, top = item["crop"]
-            canvas = Image.new(result.mode, resized_size, 0)
-            canvas.paste(result, (left, top))
-            result = canvas.resize(before, Image.Resampling.NEAREST)
-        elif name in ("crop", "center_crop", "random_crop"):
-            left, top, right, bottom = item["box"]
-            canvas = Image.new(result.mode, before, 0)
-            canvas.paste(result.resize((right - left, bottom - top), Image.Resampling.NEAREST), (left, top))
-            result = canvas
-        elif name == "pad":
-            left, top, right, bottom = item["padding"]
-            result = result.crop((left, top, result.width - right, result.height - bottom))
-        elif name == "flip":
-            if item.get("vertical"):
-                result = ImageOps.flip(result)
-            if item.get("horizontal"):
-                result = ImageOps.mirror(result)
-        elif name == "rotate":
-            result = result.rotate(-item["angle"], Image.Resampling.NEAREST, expand=item.get("expand", False)).resize(before, Image.Resampling.NEAREST)
-        elif name == "transpose":
-            inverse_methods = {
-                "flip_left_right": Image.Transpose.FLIP_LEFT_RIGHT,
-                "flip_top_bottom": Image.Transpose.FLIP_TOP_BOTTOM,
-                "rotate_90": Image.Transpose.ROTATE_270,
-                "rotate_180": Image.Transpose.ROTATE_180,
-                "rotate_270": Image.Transpose.ROTATE_90,
-                "transpose": Image.Transpose.TRANSPOSE,
-                "transverse": Image.Transpose.TRANSVERSE,
-            }
-            result = result.transpose(inverse_methods[str(item.get("method", "")).lower()])
-        elif name == "auto_orient":
-            inverse_orientations = {
-                2: Image.Transpose.FLIP_LEFT_RIGHT,
-                3: Image.Transpose.ROTATE_180,
-                4: Image.Transpose.FLIP_TOP_BOTTOM,
-                5: Image.Transpose.TRANSPOSE,
-                6: Image.Transpose.ROTATE_90,
-                7: Image.Transpose.TRANSVERSE,
-                8: Image.Transpose.ROTATE_270,
-            }
-            orientation = item.get("orientation", 1)
-            if orientation in inverse_orientations:
-                result = result.transpose(inverse_orientations[orientation])
-    return result
 
 
 __all__ = [
@@ -346,7 +258,5 @@ __all__ = [
     "original_size",
     "processed_size",
     "restore_boxes",
-    "restore_points",
-    "restore_mask",
     "clear_trace",
 ]

@@ -27,7 +27,7 @@ Local Tutorial Notebooks (`tutorials/preprocessing/`, 1-to-1 with `klygo/preproc
    - Comparing a `Metric` (e.g., `p.brightness_score() < 80`) or combining conditions with [`all_of()`](api/all_of.md), [`any_of()`](api/any_of.md), [`not_()`](api/not_.md), and [`between()`](api/between.md) produces a [`Predicate`](api/Predicate.md) that gates transforms via `op.when(predicate)`.
 3. **Automatic Coordinate Restoration (`trace.py` & `models.Detector`)**:
    - Geometry-changing transforms (`resize`, `letterbox`, `pad`, `crop`, `center_crop`, `flip`, `rotate`, `affine`, `perspective`, etc.) record exact before/after spatial parameters on the image's preprocessing trace.
-   - Call [`get_trace()`](api/get_trace.md) and pass the history to [`restore_boxes()`](api/restore_boxes.md), [`restore_points()`](api/restore_points.md), or [`restore_mask()`](api/restore_mask.md) to map predictions from preprocessed coordinates back to the original image space—or pass preprocessed images directly to `models.Detector`, which reads the trace automatically.
+   - Call [`get_trace()`](api/get_trace.md) and pass the history to [`restore_boxes()`](api/restore_boxes.md) to map detections from preprocessed coordinates back to the original image space—or pass preprocessed images directly to `models.Detector`, which reads the trace automatically.
 
 </details>
 
@@ -230,8 +230,6 @@ Implemented in `trace.py`.
 | [`original_size`](api/original_size.md) | [Run](../../examples/preprocessing/original_size.py) |
 | [`processed_size`](api/processed_size.md) | [Run](../../examples/preprocessing/processed_size.py) |
 | [`restore_boxes`](api/restore_boxes.md) | [Run](../../examples/preprocessing/restore_boxes.py) |
-| [`restore_points`](api/restore_points.md) | [Run](../../examples/preprocessing/restore_points.py) |
-| [`restore_mask`](api/restore_mask.md) | [Run](../../examples/preprocessing/restore_mask.py) |
 | [`clear_trace`](api/clear_trace.md) | [Run](../../examples/preprocessing/clear_trace.py) |
 
 Start with the [overview notebook](../../tutorials/preprocessing/Document_Preprocessing_Overview.ipynb), then open the [Core](../../tutorials/preprocessing/Document_Preprocessing_Core.ipynb), [Transforms](../../tutorials/preprocessing/Document_Preprocessing_Transforms.ipynb), [Metrics](../../tutorials/preprocessing/Document_Preprocessing_Metrics.ipynb), or [Trace](../../tutorials/preprocessing/Document_Preprocessing_Trace.ipynb) guides.

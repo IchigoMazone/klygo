@@ -5,6 +5,7 @@ from copy import deepcopy
 from io import StringIO
 from threading import current_thread
 from types import SimpleNamespace
+import tempfile
 import time
 import unittest
 from unittest.mock import patch
@@ -12,7 +13,7 @@ from unittest.mock import patch
 from PIL import Image
 import numpy as np
 
-from klygo import models, outputs
+from klygo import files, models, outputs
 from klygo.models.detection.yolo import YOLODetect
 from klygo.models.detection.yolo_world import YOLOWorldDetect
 
@@ -187,6 +188,10 @@ class TestPredictionLifecycle(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "stream and packed"):
             self.model.predict(self.image, stream=True, packed=True)
 
+    def test_multi_image_source_is_not_mislabeled_as_video(self):
+        result = self.model.predict([self.image, self.image], verbose=False)
+        self.assertEqual(result.metadata["source_type"], "frames")
+
     def test_benchmark_is_scoped_and_reports_actual_sample_size(self):
         self.model(self.image, prompt="dog", threshold=.6, verbose=False)
         before = deepcopy(self.model.predict_config)
@@ -297,6 +302,12 @@ class TestWrapperLifecycle(unittest.TestCase):
         self.assertTrue(model.model.options[-1]["nms"])
         self.assertNotIn("extra_post_param", model.model.options[-1])
         self.assertEqual(model.model.options[-1]["vid_stride"], 1)
+
+    def test_native_yolo_preserves_folder_source_type(self):
+        model = self.wrapper(YOLODetect)
+        with tempfile.TemporaryDirectory() as temporary:
+            result = model.predict(files.path(temporary), native=True, verbose=False)
+        self.assertEqual(result.metadata["source_type"], "folder")
 
     def test_native_yolo_stream_is_lazy_and_validates_controls(self):
         model = self.wrapper(YOLODetect)

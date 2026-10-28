@@ -2,6 +2,7 @@ import builtins
 import importlib
 import math
 import os
+import threading
 import uuid
 import weakref
 from pathlib import Path
@@ -129,6 +130,7 @@ class VideoReader:
 
         self._cap: Optional[cv.VideoCapture] = None
         self._current_pos: int = 0
+        self._lock = threading.Lock()
 
     @property
     def cap(self) -> cv.VideoCapture:
@@ -141,27 +143,28 @@ class VideoReader:
         """
         Read frame pixels at `index` using accurate frame seeking.
         """
-        if index < 0 or (self.total_frames > 0 and index >= self.total_frames):
-            return None
+        with self._lock:
+            if index < 0 or (self.total_frames > 0 and index >= self.total_frames):
+                return None
 
-        c = self.cap
-        if self._current_pos != index:
+            c = self.cap
+            if self._current_pos != index:
+                c.set(cv.CAP_PROP_POS_FRAMES, index)
+                self._current_pos = index
+
+            ret, frame = c.read()
+            if ret:
+                self._current_pos += 1
+                return frame
+
+            # Retry seek once if stream synchronization is lost.
             c.set(cv.CAP_PROP_POS_FRAMES, index)
-            self._current_pos = index
+            ret, frame = c.read()
+            if ret:
+                self._current_pos = index + 1
+                return frame
 
-        ret, frame = c.read()
-        if ret:
-            self._current_pos += 1
-            return frame
-
-        # Retry seek once if stream synchronization is lost
-        c.set(cv.CAP_PROP_POS_FRAMES, index)
-        ret, frame = c.read()
-        if ret:
-            self._current_pos = index + 1
-            return frame
-
-        return None
+            return None
 
     def release(self) -> None:
         if getattr(self, "_cap", None) is not None:

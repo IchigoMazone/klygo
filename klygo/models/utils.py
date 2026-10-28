@@ -394,9 +394,11 @@ def resolve_images(
 
     # In-memory list path (standard RAM mode)
     if isinstance(source, (str, Path)):
-        loaded = media.load(source, verbose=False)
-        raw_list = loaded if isinstance(loaded, list) else [loaded]
-        is_single = len(raw_list) == 1 and files.extension(str(source)).lower() not in media.VIDEO_SUFFIXES
+        raw_list = media.load(source, indexed=True, verbose=False)
+        is_single = raw_list.source_type == "image"
+    elif isinstance(source, media.MediaFrames):
+        raw_list = source
+        is_single = source.source_type == "image"
     elif isinstance(source, media.LazyImage):
         return [source], True
     elif isinstance(source, PIL.Image.Image):
@@ -429,6 +431,9 @@ def resolve_images(
         raw_list = raw_list[::step]
     if max_frames is not None and max_frames > 0:
         raw_list = raw_list[:max_frames]
+
+    if isinstance(raw_list, media.MediaFrames):
+        return raw_list, is_single
 
     cleaned_images = []
     for item in raw_list:

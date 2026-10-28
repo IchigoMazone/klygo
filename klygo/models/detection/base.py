@@ -11,6 +11,7 @@ from copy import copy, deepcopy
 from collections import deque
 import itertools
 import math
+import os
 import statistics
 from threading import RLock
 import time
@@ -81,12 +82,8 @@ def _prepared_batches(
         return
     batches = itertools.chain((first, second), batches)
 
-    # Video frames can share one stateful OpenCV reader. Keep their decoding
-    # sequential even when callers request more workers.
-    worker_count = 1 if any(getattr(image, "reader", None) is not None for image in first) else workers
-
     pending: deque[tuple[List[Any], List[Future[PIL.Image.Image]]]] = deque()
-    with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="klygo-decode") as executor:
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="klygo-decode") as executor:
         def submit(part: List[Any]) -> tuple[List[Any], List[Future[PIL.Image.Image]]]:
             return part, [executor.submit(_materialize_model_image, image) for image in part]
 
@@ -208,6 +205,7 @@ class Detector(BaseModel):
         with self._prediction_lock:
             metadata, prompts = self._resolve_prediction(prompt, kwargs)
             images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames, stream=stream)
+            source_type = getattr(images, "source_type", "image" if is_single else "frames")
             previous = self._snapshot_prediction_state()
             try:
                 with self._use_metadata(metadata):
@@ -225,7 +223,7 @@ class Detector(BaseModel):
                             offset += len(part)
                     result = Detections(
                         frames,
-                        metadata={"source_type": "image" if is_single else "video", "fps": getattr(images, "fps", 30.0)},
+                        metadata={"source_type": source_type, "fps": getattr(images, "fps", 30.0)},
                         names=self.names,
                         packed=packed,
                     )
@@ -268,7 +266,7 @@ class Detector(BaseModel):
         return Detections(
             generate(),
             metadata={
-                "source_type": "image" if is_single else "video",
+                "source_type": source_type,
                 "fps": getattr(images, "fps", 30.0),
                 "requested_total_frames": total,
             },
@@ -377,6 +375,7 @@ class Detector(BaseModel):
                 metadata, prompts = self._resolve_prediction(prompt, kwargs, runtime=False)
                 _ = self._native_runtime_options(metadata, prompts)
                 images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames, stream=stream)
+                source_type = getattr(images, "source_type", "image" if is_single else "frames")
                 previous = self._snapshot_prediction_state()
                 try:
                     with self._use_metadata(metadata):
@@ -396,7 +395,7 @@ class Detector(BaseModel):
                             result = Detections(
                                 frames_list,
                                 metadata={
-                                    "source_type": "image" if is_single else "video",
+                                    "source_type": source_type,
                                     "fps": getattr(images, "fps", 30.0),
                                     "native": True,
                                 },
@@ -443,7 +442,7 @@ class Detector(BaseModel):
             return Detections(
                 generate_native(),
                 metadata={
-                    "source_type": "image" if is_single else "video",
+                    "source_type": source_type,
                     "fps": getattr(images, "fps", 30.0),
                     "requested_total_frames": total,
                     "native": True,
@@ -532,9 +531,11 @@ class Detector(BaseModel):
         source_type = "video" if (
             isinstance(source, int)
             or (
-                isinstance(source, (str, bytes))
+                isinstance(source, (str, bytes, os.PathLike))
                 and files.extension(source).lower() in media.VIDEO_SUFFIXES
             )
+        ) else "folder" if (
+            isinstance(source, (str, os.PathLike)) and files.is_dir(source)
         ) else "image"
         result_metadata = {
             "source_type": source_type,
