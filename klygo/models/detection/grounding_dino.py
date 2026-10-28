@@ -36,7 +36,7 @@ class GroundingDinoDetect(Detector):
         model_config = dict(self.metadata["model"])
         processor_config = dict(self.metadata["processor"])
 
-        # 2. Initialise Processor & Model from Hugging Face
+        # Initialise Processor & Model from Hugging Face
         with self.suppress_warnings():
             self.processor = AutoProcessor.from_pretrained(self.model_id, **processor_config)
             self.model = AutoModelForZeroShotObjectDetection.from_pretrained(
@@ -64,7 +64,7 @@ class GroundingDinoDetect(Detector):
         proc_opts = {**processor_config, **kwargs}
         post_opts = {**post_config, **kwargs}
 
-        # 2. In-place preprocessing (Grounding DINO-specific prompt formatting)
+        # Format prompts and tokenize text batch
         prompt_list = [prompt] if isinstance(prompt, str) else list(prompt)
         text_str = ". ".join(prompt_list) + "."
         text_batch = [text_str] * len(images)
@@ -77,17 +77,16 @@ class GroundingDinoDetect(Detector):
         )
         inputs = self.cast_inputs(inputs)
 
-        # 3. Inference (AMP + automatic GPU sync via backend helpers)
-        loading_keys = ["device_map", "torch_dtype", "dtype", "low_cpu_mem_usage", "cache_dir",
-                        "revision", "local_files_only", "trust_remote_code", "token"]
+        # Inference with AMP and device casting
+        loading_keys = [
+            "device_map", "torch_dtype", "dtype", "low_cpu_mem_usage", "cache_dir",
+            "revision", "local_files_only", "trust_remote_code", "token",
+        ]
         outputs = self.run_inference(inputs, **utils.exclude_keys(model_config, loading_keys))
 
-        # 4. Grounding DINO postprocessing
         thresh = float(post_opts.get("threshold", 0.25))
         text_thresh = float(post_opts.get("text_threshold", 0.3))
 
-        # Only sync 'input_ids' to the output device when needed (Multi-GPU).
-        # Never copy large 'pixel_values' tensors; that would waste PCIe bandwidth and VRAM.
         target_dev = self.get_output_device(outputs)
         raw_input_ids = inputs.get("input_ids") if isinstance(inputs, Mapping) else None
         input_ids = self.sync_device(raw_input_ids, target_device=target_dev)
@@ -102,7 +101,7 @@ class GroundingDinoDetect(Detector):
                 **utils.exclude_keys(post_opts, ["threshold", "text_threshold", "target_sizes"]),
             )
 
-        # Filter out predictions with empty or whitespace-only labels from tokenizer
+        # Filter out empty or whitespace-only labels
         cleaned_raw = []
         for item in raw:
             boxes = item.get("boxes", [])
@@ -121,13 +120,18 @@ class GroundingDinoDetect(Detector):
                     "labels": [str(labels[i]).strip() for i in valid_indices],
                 })
 
-        # 5. Pack into Detection objects
+        # Pack into Detection objects
         results = build_detections(
             images,
             cleaned_raw,
-            metadata={"prompt": prompt, "threshold": thresh, "text_threshold": text_thresh},
+            metadata={
+                "prompt": prompt,
+                "threshold": thresh,
+                "text_threshold": text_thresh,
+            },
             names=self._result_names,
         )
         if results:
             self._result_names = dict(results[0]._registry)
+
         return results

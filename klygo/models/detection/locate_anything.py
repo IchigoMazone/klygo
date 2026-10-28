@@ -191,13 +191,16 @@ class LocateAnythingDetect(Detector):
         **kwargs,
     ) -> List[Any]:
         """Generate real box tokens for each image/query and normalize coordinates."""
+
         # 1. Validate prompt and reject incompatible postprocessing overrides
         if not prompt:
             raise ValueError(
                 "Locate Anything requires a non-empty prompt; use reset() to clear saved state"
             )
+
         if any("<" in label or ">" in label for label in prompt):
             raise ValueError("Locate Anything labels must not contain model control tokens")
+
         if self.metadata.get("post") or self.metadata.get("processor"):
             raise ValueError(
                 "Locate Anything does not expose confidence thresholds or processor overrides"
