@@ -286,7 +286,7 @@ class Detector(BaseModel):
             model_config = dict(metadata.get("model", {}))
             post_config = dict(metadata.get("post", {}))
             classes = model_config.pop("classes", None)
-            if prompt:
+            if prompt and not hasattr(self, "original_names"):
                 requested = [prompt] if isinstance(prompt, str) else list(prompt)
                 unknown = [label for label in requested if label not in self.names.values()]
                 if unknown:
@@ -304,6 +304,8 @@ class Detector(BaseModel):
             if classes is not None:
                 runtime["classes"] = classes
             return runtime
+        if self.backend in ("Hugging Face", "Torchvision", "Keras"):
+            return {}
         raise ValueError(f"native prediction is unsupported for backend {self.backend!r}")
 
     def _native_image(self, raw: Any, frame_index: int) -> Any:
@@ -369,6 +371,86 @@ class Detector(BaseModel):
     ) -> Detections:
         """Run a backend-owned input pipeline and normalize its output."""
         from klygo import files, media
+
+        if self.backend != "Ultralytics":
+            with self._prediction_lock:
+                metadata, prompts = self._resolve_prediction(prompt, kwargs, runtime=False)
+                _ = self._native_runtime_options(metadata, prompts)
+                images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames, stream=stream)
+                previous = self._snapshot_prediction_state()
+                try:
+                    with self._use_metadata(metadata):
+                        self._prepare_prediction(prompts)
+                        if not stream:
+                            frames_list = []
+                            offset = 0
+                            for part, prepared in _prepared_batches(images, batch, workers, prefetch):
+                                batch_frames = self._infer_batch(
+                                    part, prompts, metadata, offset * vid_stride,
+                                    vid_stride, prepared_images=prepared,
+                                )
+                                for f in batch_frames:
+                                    f.metadata["native"] = True
+                                frames_list.extend(batch_frames)
+                                offset += len(part)
+                            result = Detections(
+                                frames_list,
+                                metadata={
+                                    "source_type": "image" if is_single else "video",
+                                    "fps": getattr(images, "fps", 30.0),
+                                    "native": True,
+                                },
+                                names=self.names,
+                                packed=packed,
+                            )
+                except Exception:
+                    self._restore_prediction_state(previous)
+                    raise
+                self._remember_prediction(metadata, prompts)
+                if not stream:
+                    return result
+
+                names = deepcopy(self.names)
+                total = getattr(images, "total_frames", None)
+                if total is None and hasattr(images, "__len__"):
+                    total = len(images)
+
+            def generate_native():
+                offset = 0
+                try:
+                    for part, prepared in _prepared_batches(images, batch, workers, prefetch):
+                        with self._prediction_lock:
+                            if self.state == "UNLOADED":
+                                from klygo.models.errors import InvalidStateError
+                                raise InvalidStateError("Cannot consume a stream after model unload")
+                            current = self._snapshot_prediction_state()
+                            try:
+                                batch_frames = self._infer_batch(
+                                    part, prompts, metadata, offset * vid_stride,
+                                    vid_stride, prepared_images=prepared,
+                                )
+                                for f in batch_frames:
+                                    f.metadata["native"] = True
+                            finally:
+                                self._restore_prediction_state(current)
+                        yield from batch_frames
+                        offset += len(part)
+                finally:
+                    close = getattr(images, "close", None)
+                    if callable(close):
+                        close()
+
+            return Detections(
+                generate_native(),
+                metadata={
+                    "source_type": "image" if is_single else "video",
+                    "fps": getattr(images, "fps", 30.0),
+                    "requested_total_frames": total,
+                    "native": True,
+                },
+                names=names,
+                stream=True,
+            )
 
         if isinstance(source, media.MediaFrames):
             raise TypeError("native prediction requires a backend-supported source, not MediaFrames")
