@@ -33,6 +33,37 @@ os.environ["KERAS_BACKEND"] = "torch"
 # 1. HARDWARE DISCOVERY & DEVICE MANAGEMENT
 # =============================================================================
 
+def get_cpu_brand_name() -> str:
+    """Return accurate CPU brand/model name cross-platform."""
+    import platform
+    sys_name = platform.system()
+    if sys_name == "Windows":
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
+            val, _ = winreg.QueryValueEx(key, "ProcessorNameString")
+            return val.strip()
+        except Exception:
+            pass
+    elif sys_name == "Linux":
+        try:
+            with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("model name"):
+                        return line.split(":", 1)[1].strip()
+        except Exception:
+            pass
+    elif sys_name == "Darwin":
+        try:
+            import subprocess
+            out = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"]).decode().strip()
+            if out:
+                return out
+        except Exception:
+            pass
+    return platform.processor() or "Host CPU"
+
+
 def discover_available_devices() -> Dict[str, Any]:
     """Inspect and catalog host hardware accelerators."""
     cuda_available = torch.cuda.is_available()
@@ -52,12 +83,14 @@ def discover_available_devices() -> Dict[str, Any]:
         })
 
     mps_available = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+    cpu_name = get_cpu_brand_name()
 
     return {
         "cuda_available": cuda_available,
         "cuda_device_count": cuda_count,
         "gpus": gpus,
         "mps_available": mps_available,
+        "cpu_name": cpu_name,
         "cpu_threads": os.cpu_count() or 1,
         "torch_version": torch.__version__,
     }
@@ -467,6 +500,51 @@ def generate_markdown_report(report_data: Dict[str, Any]) -> str:
                 else:
                     lines.append(
                         f"| **{m_name}** | {b_name} | {mode_name} | **{gpu_fps} FPS** | — | — | {gpu_lat} ms | — | {gpu_heap} MB | — |"
+                    )
+
+        # Row-by-Row Paired CPU vs GPU Layout (Direct Visual Inspection)
+        discovery_info = report_data.get("discovery", {})
+        gpu_name = primary_gpu.get("name", "NVIDIA GPU")
+        for d in report_data.get("devices", []):
+            if d.get("device_id") == gpu_id:
+                gpu_name = d.get("name", gpu_name)
+        cpu_name = discovery_info.get("cpu_name", "Host CPU")
+
+        lines.extend([
+            "",
+            "## Paired Row-by-Row Hardware Matrix (Dòng GPU & Dòng CPU Chi Tiết)",
+            "",
+            f"- **Dòng GPU (Đồ họa)**: {gpu_name} ({primary_gpu.get('total_vram_gb', 4.0)} GB VRAM)",
+            f"- **Dòng CPU (Vi xử lý)**: {cpu_name} ({discovery_info.get('cpu_threads', 8)} Threads)",
+            "",
+            r"| Model Architecture | Execution Mode | Dòng Phần Cứng (Chip) | Throughput (FPS) | First-Frame | Latency / Frame | Peak Heap | $\Delta$ RSS | Boxes |",
+            "| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
+        ])
+
+        for m in primary_gpu.get("models", []):
+            m_name = m.get("model_name")
+            for mode_name, gpu_metrics in m.get("modes", {}).items():
+                cpu_metrics = cpu_lookup.get((m_name, mode_name))
+                g_fps = gpu_metrics.get("fps_median", 0.0)
+                g_1st = gpu_metrics.get("first_frame_ms_median", 0.0)
+                g_lat = gpu_metrics.get("ms_per_frame_median", 0.0)
+                g_heap = gpu_metrics.get("peak_heap_mb_median", 0.0)
+                g_rss = gpu_metrics.get("rss_delta_mb_median", 0.0)
+                g_box = gpu_metrics.get("total_boxes", 0)
+
+                lines.append(
+                    f"| **{m_name}** | {mode_name} | **GPU ({gpu_name})** | **{g_fps} FPS** | {g_1st} ms | {g_lat} ms | {g_heap} MB | {g_rss} MB | {g_box} |"
+                )
+
+                if cpu_metrics:
+                    c_fps = cpu_metrics.get("fps_median", 0.0)
+                    c_1st = cpu_metrics.get("first_frame_ms_median", 0.0)
+                    c_lat = cpu_metrics.get("ms_per_frame_median", 0.0)
+                    c_heap = cpu_metrics.get("peak_heap_mb_median", 0.0)
+                    c_rss = cpu_metrics.get("rss_delta_mb_median", 0.0)
+                    c_box = cpu_metrics.get("total_boxes", 0)
+                    lines.append(
+                        f"| | | **CPU ({cpu_name})** | {c_fps} FPS | {c_1st} ms | {c_lat} ms | {c_heap} MB | {c_rss} MB | {c_box} |"
                     )
 
     lines.extend([
