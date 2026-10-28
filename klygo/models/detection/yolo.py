@@ -1,6 +1,5 @@
 """Ultralytics YOLO detection wrapper."""
 
-import sys
 from typing import Any, Dict, List, Optional
 
 import PIL.Image
@@ -18,24 +17,21 @@ from klygo.models.detection.base import Detector
 from klygo.outputs.detect import Detection
 
 
-_YOLO_POST_OPTIONS = {"agnostic_nms", "max_det", "retina_masks", "nms"}
-
-
 class YOLODetect(Detector):
     """Run a fixed-vocabulary Ultralytics YOLO detector."""
 
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
         super().__init__(metadata=metadata, **kwargs)
 
-        yolo_cls = getattr(sys.modules.get("ultralytics"), "YOLO", YOLO)
-        self.model = yolo_cls(self.model_id)
+        from ultralytics import YOLO
+
+        self.model = YOLO(self.model_id)
         self.names = dict(self.model.names)
 
     def forward(
         self,
         images: List[PIL.Image.Image],
         prompt: Optional[List[str]] = None,
-        native: Optional[bool] = None,
         **kwargs,
     ) -> List[Detection]:
 
@@ -55,12 +51,9 @@ class YOLODetect(Detector):
         threshold = float(kwargs.get("threshold", post_config.get("threshold", 0.25)))
         iou = float(kwargs.get("iou", post_config.get("iou", 0.7)))
 
-        post_model_opts = {
-            k: v for k, v in post_config.items()
-            if k in _YOLO_POST_OPTIONS and k not in ("conf", "iou", "threshold")
-        }
-        extra_kwargs = utils.exclude_keys(kwargs, ["threshold", "iou", "conf", "classes", "prompt", "native"])
-        model_args = {**model_config, **post_model_opts, **extra_kwargs}
+        post_opts = utils.exclude_keys(post_config, ["conf", "iou", "threshold"])
+        extra_kwargs = utils.exclude_keys(kwargs, ["threshold", "iou", "conf", "classes", "prompt"])
+        model_args = {**model_config, **post_opts, **extra_kwargs}
 
         results = self.model(
             images,
@@ -82,7 +75,6 @@ class YOLODetect(Detector):
                 "classes": classes,
                 "threshold": threshold,
                 "iou": iou,
-                "native": bool(native),
             },
             names=self.names,
         )

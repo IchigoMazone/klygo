@@ -483,7 +483,6 @@ class Detector(BaseModel):
         self,
         images: List[PIL.Image.Image],
         prompt: Optional[List[str]] = None,
-        native: Optional[bool] = None,
         **kwargs,
     ) -> List[Detection]:
         """Execute model forward pass. Subclasses implement this method."""

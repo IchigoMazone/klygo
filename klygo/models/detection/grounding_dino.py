@@ -51,7 +51,6 @@ class GroundingDinoDetect(Detector):
         self,
         images: List[PIL.Image.Image],
         prompt: Union[str, List[str]],
-        native: Optional[bool] = None,
         **kwargs,
     ) -> List[Detection]:
 
@@ -126,7 +125,7 @@ class GroundingDinoDetect(Detector):
         results = build_detections(
             images,
             cleaned_raw,
-            metadata={"prompt": prompt, "threshold": thresh, "text_threshold": text_thresh, "native": bool(native)},
+            metadata={"prompt": prompt, "threshold": thresh, "text_threshold": text_thresh},
             names=self._result_names,
         )
         if results:

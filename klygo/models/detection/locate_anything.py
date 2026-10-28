@@ -188,7 +188,6 @@ class LocateAnythingDetect(Detector):
         self,
         images: Sequence[Image.Image],
         prompt: Any = None,
-        native: Optional[bool] = None,
         **kwargs,
     ) -> List[Any]:
         """Generate real box tokens for each image/query and normalize coordinates."""
@@ -301,7 +300,6 @@ class LocateAnythingDetect(Detector):
                 "confidence_available": False,
                 "revision": self._revision,
                 "generation": generation,
-                "native": bool(native),
             },
         )
 
