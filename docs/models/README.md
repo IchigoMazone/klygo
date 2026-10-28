@@ -2,6 +2,10 @@
 
 `klygo.models` provides a unified, multi-backend AI model orchestration layer for configuring metadata schemas, resolving local or registry models, managing hardware lifecycles, and executing standardized object-detection inference across **Ultralytics**, **Hugging Face / PyTorch**, **Torchvision**, and **Keras 3 / KerasHub**.
 
+Performance comparisons must follow the execution-path, fairness, parity, latency,
+throughput, and stability requirements in
+[`BENCHMARK_CRITERIA.md`](BENCHMARK_CRITERIA.md).
+
 Interactive Google Colab Tutorial:
 [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/models/Document_Models_Overview.ipynb)
 
