@@ -73,5 +73,9 @@ class YOLOWorldDetect(Detector):
             names=self.names,
         )
 
+    def _adopt_forward_detections(self) -> bool:
+        """YOLO-World forward creates fresh unowned frames for each call."""
+        return True
+
 
 __all__ = ["YOLOWorldDetect"]

@@ -28,6 +28,15 @@ def traced_frame(index=0, *, precision=64):
     return result[0]
 
 class TestOutputs(unittest.TestCase):
+    def test_builder_accepts_numpy_images(self):
+        image = np.zeros((30, 40, 3), dtype=np.uint8)
+        built = outputs.build_detections(
+            [image],
+            [{"boxes": [[1, 2, 10, 12]], "scores": [.8], "labels": ["car"]}],
+        )
+        self.assertEqual(built[0].image_size, (40, 30))
+        self.assertIs(built[0]._source, image)
+
     def test_builder_and_geometry(self):
         built = outputs.build_detections([Image.new("RGB", (40, 30))], [{"boxes": [[1,2,10,12]], "scores": [.8], "labels": ["car"]}])
         self.assertEqual(built[0].uids, [0]); self.assertEqual(built[0][0].area, 90)

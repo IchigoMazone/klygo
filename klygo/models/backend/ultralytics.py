@@ -4,7 +4,10 @@ Provides runtime adaptation, result formatting, and lifecycle helpers for
 Ultralytics YOLO and YOLO-World detection models.
 """
 
-from typing import Any, List, Dict
+import time
+from typing import Any, Dict, List, Optional
+
+import numpy as np
 
 try:
     from . import torch_runtime
@@ -51,13 +54,20 @@ def format_results(ultra_results: Any) -> List[Dict[str, Any]]:
     if ultra_results is not None:
         for res in ultra_results:
             boxes_data, scores_data, labels_data, class_ids = [], [], [], []
-            if getattr(res, "boxes", None) is not None:
-                for b in res.boxes:
-                    boxes_data.append(b.xyxy[0].tolist())
-                    scores_data.append(float(b.conf[0].item()))
-                    cls_id = int(b.cls[0].item())
-                    class_ids.append(cls_id)
-                    labels_data.append(res.names.get(cls_id, str(cls_id)))
+            boxes = getattr(res, "boxes", None)
+            if boxes is not None and len(boxes):
+                if hasattr(boxes, "xyxy"):
+                    boxes_data = boxes.xyxy.detach().cpu().numpy()
+                    scores_data = boxes.conf.detach().cpu().numpy()
+                    class_ids = boxes.cls.detach().to(dtype=torch_runtime.torch.int32).cpu().numpy()
+                    labels_data = [res.names.get(int(class_id), str(int(class_id))) for class_id in class_ids]
+                else:
+                    for box in boxes:
+                        boxes_data.append(box.xyxy[0].tolist())
+                        scores_data.append(float(box.conf[0].item()))
+                        class_id = int(box.cls[0].item())
+                        class_ids.append(class_id)
+                        labels_data.append(res.names.get(class_id, str(class_id)))
             raw_list.append(
                 {
                     "boxes": boxes_data,
@@ -67,6 +77,87 @@ def format_results(ultra_results: Any) -> List[Dict[str, Any]]:
                 }
             )
     return raw_list
+
+
+def _option_matches(current: Any, expected: Any) -> bool:
+    """Compare predictor options without array truth-value errors."""
+    try:
+        comparison = current == expected
+        return bool(comparison if isinstance(comparison, bool) else comparison.all())
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
+def predict_prepared(
+    model: Any,
+    images: List[Any],
+    options: Optional[Dict[str, Any]] = None,
+) -> Optional[List[Any]]:
+    """Run an initialized predictor on decoded BGR arrays without rebuilding its source loader.
+
+    ``None`` is returned when the installed Ultralytics predictor does not expose
+    the required stable operations, allowing callers to use the public prediction
+    API as a compatibility fallback.
+    """
+    predictor = getattr(model, "predictor", None)
+    required = (
+        "_lock", "model", "preprocess", "inference", "postprocess", "run_callbacks"
+    )
+    if (
+        predictor is None
+        or not images
+        or not all(isinstance(image, np.ndarray) for image in images)
+        or any(not hasattr(predictor, name) for name in required)
+    ):
+        return None
+
+    args = getattr(predictor, "args", None)
+    if args is None or any(
+        bool(getattr(args, name, False))
+        for name in ("save", "save_txt", "save_crop", "show", "visualize", "embed")
+    ):
+        return None
+    if options and any(
+        hasattr(args, name) and not _option_matches(getattr(args, name), value)
+        for name, value in options.items()
+        if name != "verbose"
+    ):
+        return None
+
+    paths = [f"image{index}.jpg" for index in range(len(images))]
+    messages = [""] * len(images)
+    with predictor._lock:
+        predictor.seen = 0
+        predictor.batch = (paths, images, messages)
+        predictor.run_callbacks("on_predict_start")
+        predictor.run_callbacks("on_predict_batch_start")
+
+        started = time.perf_counter()
+        inputs = predictor.preprocess(images)
+        preprocess_ms = (time.perf_counter() - started) * 1000.0 / len(images)
+        if not predictor.done_warmup:
+            predictor.model.warmup(im=inputs)
+            predictor.done_warmup = True
+
+        started = time.perf_counter()
+        predictions = predictor.inference(inputs)
+        inference_ms = (time.perf_counter() - started) * 1000.0 / len(images)
+
+        started = time.perf_counter()
+        results = predictor.postprocess(predictions, inputs, images)
+        postprocess_ms = (time.perf_counter() - started) * 1000.0 / len(images)
+        predictor.results = results
+        predictor.run_callbacks("on_predict_postprocess_end")
+        for result in results:
+            predictor.seen += 1
+            result.speed = {
+                "preprocess": preprocess_ms,
+                "inference": inference_ms,
+                "postprocess": postprocess_ms,
+            }
+        predictor.run_callbacks("on_predict_batch_end")
+        predictor.run_callbacks("on_predict_end")
+        return results
 
 
 def save(model: Any, output_dir: str) -> None:

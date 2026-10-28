@@ -75,6 +75,14 @@ def _size(value: Any) -> tuple[int, int]:
     return result
 
 
+def _source_size(source: Any) -> Any:
+    """Return a PIL-style ``(width, height)`` size for image-like sources."""
+    shape = getattr(source, "shape", None)
+    if shape is not None and len(shape) >= 2:
+        return int(shape[1]), int(shape[0])
+    return getattr(source, "size", None)
+
+
 def _names(value: Optional[Mapping[int, Any] | Sequence[Any]]) -> Names:
     if value is None:
         return {}
@@ -516,7 +524,7 @@ class Detection:
         self._device = "cpu"
         self._precision = 64
         self._source_path = str(source_path) if source_path is not None else inferred_path
-        self._image_size = _size(image_size or getattr(source, "size", None))
+        self._image_size = _size(image_size or _source_size(source))
         self._source = source
         self._restore_trace = getattr(source, "_preprocessing_trace", None) or None
         if metadata is not None and not isinstance(metadata, Mapping):
@@ -577,7 +585,7 @@ class Detection:
             precision = int(xyxy.dtype.itemsize * 8) if xyxy.size else 64
         instance._precision = _precision(precision)
         instance._source_path = str(source_path) if source_path is not None else inferred_path
-        instance._image_size = _size(image_size or getattr(source, "size", None))
+        instance._image_size = _size(image_size or _source_size(source))
         instance._source = source
         instance._restore_trace = (
             restore_trace
@@ -2966,23 +2974,23 @@ def build_detections(images: Sequence[Any], predictions: Sequence[Mapping[str, A
         frame_index = getattr(image, "frame_index", None)
         frame_index = position if frame_index is None else frame_index
         source_id, source_path = _source(image, None)
-        frames.append(
-            Detection._from_arrays(
-                xyxy_arr,
-                score_arr,
-                cid_arr,
-                uid_arr,
-                label_list,
-                source_id=source_id,
-                frame_index=frame_index,
-                source_path=source_path,
-                image_size=getattr(image, "size", None),
-                source=image,
-                metadata=metadata,
-                registry=local,
-                label_ids=local_rev,
-            )
+        frame = Detection._from_arrays(
+            xyxy_arr,
+            score_arr,
+            cid_arr,
+            uid_arr,
+            label_list,
+            source_id=source_id,
+            frame_index=frame_index,
+            source_path=source_path,
+            image_size=_source_size(image),
+            source=image,
+            metadata=metadata,
+            registry=local,
+            label_ids=local_rev,
         )
+        frame.__dict__["_klygo_fresh_output"] = True
+        frames.append(frame)
         registry.update(local)
     return frames
 

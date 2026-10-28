@@ -3,7 +3,9 @@
 import sys
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
+
+import numpy as np
 
 from klygo.models.backend import common, huggingface, keras, ultralytics
 from klygo.models.detection.base import Detector
@@ -33,6 +35,49 @@ class BenchmarkHarness(Detector):
 
 
 class TestBackendRuntimeDispatch(unittest.TestCase):
+    def test_ultralytics_prepared_path_reuses_initialized_predictor(self):
+        result = SimpleNamespace(speed=None)
+        predictor = SimpleNamespace(
+            args=SimpleNamespace(
+                save=False, save_txt=False, save_crop=False, show=False,
+                visualize=False, embed=None, conf=0.25,
+            ),
+            _lock=MagicMock(),
+            preprocess=Mock(return_value="inputs"),
+            inference=Mock(return_value="predictions"),
+            postprocess=Mock(return_value=[result]),
+            run_callbacks=Mock(),
+            done_warmup=True,
+            model=Mock(),
+        )
+        model = SimpleNamespace(predictor=predictor)
+        image = np.zeros((8, 12, 3), dtype=np.uint8)
+
+        actual = ultralytics.predict_prepared(
+            model, [image], options={"conf": 0.25, "verbose": False}
+        )
+
+        self.assertEqual(actual, [result])
+        predictor.preprocess.assert_called_once()
+        predictor.inference.assert_called_once_with("inputs")
+        predictor.postprocess.assert_called_once_with("predictions", "inputs", [image])
+        self.assertEqual(result.speed.keys(), {"preprocess", "inference", "postprocess"})
+
+    def test_ultralytics_prepared_path_rejects_stale_options(self):
+        predictor = SimpleNamespace(
+            args=SimpleNamespace(
+                save=False, save_txt=False, save_crop=False, show=False,
+                visualize=False, embed=None, conf=0.5,
+            ),
+            preprocess=Mock(), inference=Mock(), postprocess=Mock(), run_callbacks=Mock(),
+        )
+        model = SimpleNamespace(predictor=predictor)
+        image = np.zeros((8, 12, 3), dtype=np.uint8)
+        self.assertIsNone(
+            ultralytics.predict_prepared(model, [image], options={"conf": 0.25})
+        )
+        predictor.preprocess.assert_not_called()
+
     def test_offline_backend_names_keep_their_framework_dispatch(self):
         with patch.object(huggingface, "synchronize") as synchronize:
             common.synchronize("Hugging Face (Offline)", device="cuda:0")

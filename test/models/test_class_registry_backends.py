@@ -92,6 +92,24 @@ class TestClassRegistryBackends(unittest.TestCase):
         self.assertEqual(result["class_ids"], [6])
         self.assertEqual(result["labels"], ["6"])
 
+    def test_keras_vectorized_format_filters_padding_and_converts_yxyx(self):
+        fake_keras = SimpleNamespace(
+            ops=SimpleNamespace(convert_to_numpy=lambda value: np.asarray(value))
+        )
+        with patch.dict("sys.modules", {"keras": fake_keras}):
+            result = keras.format_results({
+                "boxes": np.array([[[2, 1, 8, 7], [0, 0, 0, 0]]], dtype=np.float32),
+                "confidence": np.array([[0.75, -1.0]], dtype=np.float32),
+                "classes": np.array([[6, -1]], dtype=np.int64),
+                "num_detections": np.array([2]),
+                "_bounding_box_format": "yxyx",
+            })[0]
+
+        self.assertEqual(result["boxes"], [[1.0, 2.0, 7.0, 8.0]])
+        self.assertEqual(result["scores"], [0.75])
+        self.assertEqual(result["class_ids"], [6])
+        self.assertEqual(result["labels"], ["6"])
+
     def test_yolo_world_keeps_only_init_and_forward_wrappers(self):
         fake_ultralytics = SimpleNamespace(YOLOWorld=_YOLOWorld)
         metadata = {

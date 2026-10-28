@@ -1,6 +1,6 @@
 ---
 name: klygo-multi-gpu-benchmark
-description: Run standardized multi-backend benchmarks across multiple GPUs and accelerators (CUDA, Apple Silicon MPS, CPU) for all integrated Klygo detector architectures (YOLOv8, YOLO-World v2, Grounding DINO, Faster R-CNN, RT-DETR / D-FINE) across all 5 execution modes (Raw, Native Stream, Native Non-stream, Managed Stream, Managed Non-stream).
+description: Run standardized multi-backend benchmarks across multiple GPUs and accelerators (CUDA, Apple Silicon MPS, CPU) for all integrated Klygo detector architectures (YOLOv8, YOLO-World v2, Grounding DINO, Faster R-CNN, RT-DETR / D-FINE) across all 6 execution modes (Raw Stream, Raw Non-stream, Native Stream, Native Non-stream, Managed Stream, Managed Non-stream).
 ---
 
 # Klygo Multi-GPU & Multi-Backend Benchmark Skill
@@ -21,12 +21,13 @@ The benchmark evaluates:
   4. `faster-rcnn`: Torchvision Faster R-CNN MobileNetV3 FPN (Two-Stage RPN + RoIAlign)
   5. `d-fine`: KerasHub / Keras 3 RT-DETR / D-FINE Nano (End-to-End DETR Transformer)
 
-- **5 Execution Modes**:
-  1. `raw`: Pure upstream framework pipeline (C++ / CUDA native)
-  2. `native-stream`: Klygo native backend generator (`native=True, stream=True`)
-  3. `native-non-stream`: Klygo native backend batched (`native=True, stream=False`)
-  4. `managed-stream`: Klygo managed pipeline generator (`native=False, stream=True`)
-  5. `managed-non-stream`: Klygo managed pipeline batched (`native=False, stream=False`)
+- **6 Execution Modes**:
+  1. `raw-stream`: Pure upstream framework streaming pipeline (e.g. `model.predict(source, stream=True)`)
+  2. `raw-non-stream`: Pure upstream framework batched/non-streaming pipeline (e.g. `model.predict(source, stream=False)`)
+  3. `native-stream`: Klygo native backend generator (`native=True, stream=True`) receiving direct inputs without media/preprocessing
+  4. `native-non-stream`: Klygo native backend batched (`native=True, stream=False`) receiving direct inputs without media/preprocessing
+  5. `managed-stream`: Klygo managed pipeline generator (`native=False, stream=True`) with `media` lazy decoding & coordinate trace
+  6. `managed-non-stream`: Klygo managed pipeline batched (`native=False, stream=False`) with `media` lazy decoding & coordinate trace
 
 - **Hardware Targeting**:
   - Multi-GPU enumeration: Automatically tests and compares each GPU card (`--device all-gpus`).

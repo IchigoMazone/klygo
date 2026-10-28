@@ -21,6 +21,7 @@ import tracemalloc
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import psutil
+import numpy as np
 import torch
 
 from klygo import files, media, models, outputs, utils, validators
@@ -306,9 +307,9 @@ def build_kerashub_detector(device_str: str, imgsz: int = 320) -> Tuple[models.D
 MODEL_REGISTRY = {
     "yolo": ("YOLOv8n", "Ultralytics", build_yolo_detector, True),
     "yolo-world": ("YOLO-World v2", "Ultralytics", build_yolo_world_detector, True),
-    "grounding-dino": ("Grounding DINO tiny", "Hugging Face", build_grounding_dino_detector, False),
-    "faster-rcnn": ("Faster R-CNN MobileNetV3", "Torchvision", build_torchvision_detector, False),
-    "d-fine": ("RT-DETR / D-FINE Nano", "KerasHub", build_kerashub_detector, False),
+    "grounding-dino": ("Grounding DINO tiny", "Hugging Face", build_grounding_dino_detector, True),
+    "faster-rcnn": ("Faster R-CNN MobileNetV3", "Torchvision", build_torchvision_detector, True),
+    "d-fine": ("RT-DETR / D-FINE Nano", "KerasHub", build_kerashub_detector, True),
 }
 
 
@@ -348,30 +349,274 @@ def make_non_stream_runner(detector: models.Detector, paths: List[str], prompt: 
     return runner
 
 
-def make_raw_ultralytics_runner(detector: models.Detector, paths: List[str], prompt: Any, device_str: str, imgsz: int):
-    def runner():
-        synchronize_device(device_str)
-        t0 = time.perf_counter()
-        raw_stream = detector.model.predict(
-            source=paths,
-            stream=True,
-            verbose=False,
-            device=device_str,
-            imgsz=imgsz,
-            conf=0.25,
-            iou=0.7,
-        )
-        it = iter(raw_stream)
-        first = next(it)
-        synchronize_device(device_str)
-        first_ms = (time.perf_counter() - t0) * 1000.0
-        total_boxes = len(first.boxes)
-        cnt = 1
-        for f in it:
-            total_boxes += len(f.boxes)
-            cnt += 1
-        return first_ms, total_boxes, cnt
-    return runner
+def make_raw_ultralytics_runner(
+    detector: models.Detector,
+    paths: List[str],
+    prompt: Any,
+    device_str: str,
+    imgsz: int,
+    stream: bool = False,
+):
+    if stream:
+        def runner():
+            synchronize_device(device_str)
+            t0 = time.perf_counter()
+            raw_stream = detector.model.predict(
+                source=paths,
+                stream=True,
+                verbose=False,
+                device=device_str,
+                imgsz=imgsz,
+                conf=0.25,
+                iou=0.7,
+            )
+            it = iter(raw_stream)
+            first = next(it)
+            synchronize_device(device_str)
+            first_ms = (time.perf_counter() - t0) * 1000.0
+            total_boxes = len(first.boxes)
+            cnt = 1
+            for f in it:
+                total_boxes += len(f.boxes)
+                cnt += 1
+            return first_ms, total_boxes, cnt
+        return runner
+    else:
+        def runner():
+            synchronize_device(device_str)
+            t0 = time.perf_counter()
+            raw_res = detector.model.predict(
+                source=paths,
+                stream=False,
+                verbose=False,
+                device=device_str,
+                imgsz=imgsz,
+                conf=0.25,
+                iou=0.7,
+            )
+            synchronize_device(device_str)
+            total_ms = (time.perf_counter() - t0) * 1000.0
+            total_boxes = sum(len(f.boxes) for f in raw_res)
+            cnt = len(raw_res)
+            first_ms = total_ms / max(cnt, 1)
+            return first_ms, total_boxes, cnt
+        return runner
+
+
+def _load_pil(path: str):
+    """Decode one benchmark image through the public media facade."""
+    loaded = media.load(path, verbose=False)
+    image = loaded[0] if isinstance(loaded, media.MediaFrames) else loaded
+    return image.to_pil(cache=False) if isinstance(image, media.LazyImage) else media.to_pil(image)
+
+
+def make_raw_grounding_dino_runner(
+    detector: models.Detector,
+    paths: List[str],
+    prompt: Any,
+    device_str: str,
+    stream: bool = False,
+):
+    """Run the Hugging Face processor and model without Klygo output containers."""
+    prompt_list = [prompt] if isinstance(prompt, str) else list(prompt)
+    text = ". ".join(prompt_list) + "."
+
+    if stream:
+        def runner():
+            first_ms = 0.0
+            total_boxes = 0
+            started = time.perf_counter()
+            for index, path in enumerate(paths):
+                image = _load_pil(path)
+                inputs = detector.processor(
+                    images=[image], text=[text], return_tensors="pt"
+                ).to(device_str)
+                with torch.inference_mode():
+                    raw = detector.model(**inputs)
+                processed = detector.processor.post_process_grounded_object_detection(
+                    outputs=raw,
+                    input_ids=inputs.get("input_ids"),
+                    threshold=0.25,
+                    text_threshold=0.3,
+                    target_sizes=[image.size[::-1]],
+                )
+                item = processed[0]
+                labels = item.get("labels", [])
+                total_boxes += sum(
+                    label is not None and bool(str(label).strip())
+                    for label in labels
+                ) if len(labels) else len(item.get("boxes", []))
+                if index == 0:
+                    synchronize_device(device_str)
+                    first_ms = (time.perf_counter() - started) * 1000.0
+            return first_ms, total_boxes, len(paths)
+        return runner
+    else:
+        def runner():
+            synchronize_device(device_str)
+            started = time.perf_counter()
+            images = [_load_pil(path) for path in paths]
+            texts = [text] * len(images)
+            inputs = detector.processor(
+                images=images, text=texts, return_tensors="pt"
+            ).to(device_str)
+            with torch.inference_mode():
+                raw = detector.model(**inputs)
+            processed = detector.processor.post_process_grounded_object_detection(
+                outputs=raw,
+                input_ids=inputs.get("input_ids"),
+                threshold=0.25,
+                text_threshold=0.3,
+                target_sizes=[img.size[::-1] for img in images],
+            )
+            synchronize_device(device_str)
+            total_ms = (time.perf_counter() - started) * 1000.0
+            total_boxes = 0
+            for item in processed:
+                labels = item.get("labels", [])
+                total_boxes += sum(
+                    label is not None and bool(str(label).strip())
+                    for label in labels
+                ) if len(labels) else len(item.get("boxes", []))
+            first_ms = total_ms / max(len(paths), 1)
+            return first_ms, total_boxes, len(paths)
+        return runner
+
+
+def make_raw_torchvision_runner(
+    detector: models.Detector,
+    paths: List[str],
+    device_str: str,
+    stream: bool = False,
+):
+    """Run Torchvision tensors and model without Klygo output containers."""
+    device = torch.device(device_str)
+
+    if stream:
+        def runner():
+            first_ms = 0.0
+            total_boxes = 0
+            started = time.perf_counter()
+            for index, path in enumerate(paths):
+                tensor = media.to_tensor(_load_pil(path)).to(device)
+                with torch.inference_mode():
+                    raw = detector.model([tensor])[0]
+                total_boxes += len(raw["boxes"])
+                if index == 0:
+                    synchronize_device(device_str)
+                    first_ms = (time.perf_counter() - started) * 1000.0
+            return first_ms, total_boxes, len(paths)
+        return runner
+    else:
+        def runner():
+            synchronize_device(device_str)
+            started = time.perf_counter()
+            tensors = [media.to_tensor(_load_pil(path)).to(device) for path in paths]
+            with torch.inference_mode():
+                raw_list = detector.model(tensors)
+            synchronize_device(device_str)
+            total_ms = (time.perf_counter() - started) * 1000.0
+            total_boxes = sum(len(r["boxes"]) for r in raw_list)
+            first_ms = total_ms / max(len(paths), 1)
+            return first_ms, total_boxes, len(paths)
+        return runner
+
+
+def make_raw_keras_runner(
+    detector: models.Detector,
+    paths: List[str],
+    device_str: str,
+    stream: bool = False,
+):
+    """Run the KerasHub preprocessing and decode pipeline without Klygo outputs."""
+    import keras
+
+    model = detector.model
+    preprocessor = model.preprocessor
+    image_converter = getattr(preprocessor, "image_converter", None)
+    target_size = getattr(image_converter, "image_size", None)
+
+    if stream:
+        def runner():
+            first_ms = 0.0
+            total_boxes = 0
+            started = time.perf_counter()
+            for index, path in enumerate(paths):
+                image = media.to_array(_load_pil(path))
+                inputs = keras.ops.convert_to_tensor(np.expand_dims(image, axis=0), dtype="float32")
+                prepared_input = (
+                    keras.ops.image.resize(inputs, target_size)
+                    if target_size is not None
+                    else inputs
+                )
+                prepared = preprocessor(prepared_input)
+                predictions = model(prepared, training=False)
+                decoded = model.decode_predictions(predictions, inputs)
+                score_values = decoded.get(
+                    "confidence", decoded.get("scores", decoded.get("detection_scores"))
+                )
+                class_values = decoded.get(
+                    "classes", decoded.get("labels", decoded.get("detection_classes"))
+                )
+                scores = keras.ops.convert_to_numpy(score_values)[0]
+                classes = keras.ops.convert_to_numpy(class_values)[0]
+                total_boxes += int(np.count_nonzero((scores >= 0.0) & (classes >= 0)))
+                if index == 0:
+                    synchronize_device(device_str)
+                    first_ms = (time.perf_counter() - started) * 1000.0
+            return first_ms, total_boxes, len(paths)
+        return runner
+    else:
+        def runner():
+            synchronize_device(device_str)
+            started = time.perf_counter()
+            images = [media.to_array(_load_pil(path)) for path in paths]
+            total_boxes = 0
+            for index, img_arr in enumerate(images):
+                inputs = keras.ops.convert_to_tensor(np.expand_dims(img_arr, axis=0), dtype="float32")
+                prepared_input = (
+                    keras.ops.image.resize(inputs, target_size)
+                    if target_size is not None
+                    else inputs
+                )
+                prepared = preprocessor(prepared_input)
+                predictions = model(prepared, training=False)
+                decoded = model.decode_predictions(predictions, inputs)
+                score_values = decoded.get(
+                    "confidence", decoded.get("scores", decoded.get("detection_scores"))
+                )
+                class_values = decoded.get(
+                    "classes", decoded.get("labels", decoded.get("detection_classes"))
+                )
+                scores = keras.ops.convert_to_numpy(score_values)[0]
+                classes = keras.ops.convert_to_numpy(class_values)[0]
+                total_boxes += int(np.count_nonzero((scores >= 0.0) & (classes >= 0)))
+            synchronize_device(device_str)
+            total_ms = (time.perf_counter() - started) * 1000.0
+            first_ms = total_ms / max(len(paths), 1)
+            return first_ms, total_boxes, len(paths)
+        return runner
+
+
+def make_raw_runner(
+    model_key: str,
+    detector: models.Detector,
+    paths: List[str],
+    prompt: Any,
+    device_str: str,
+    imgsz: int,
+    stream: bool = False,
+):
+    """Build the matching upstream-framework runner for one model family."""
+    if model_key in {"yolo", "yolo-world"}:
+        return make_raw_ultralytics_runner(detector, paths, prompt, device_str, imgsz, stream=stream)
+    if model_key == "grounding-dino":
+        return make_raw_grounding_dino_runner(detector, paths, prompt, device_str, stream=stream)
+    if model_key == "faster-rcnn":
+        return make_raw_torchvision_runner(detector, paths, device_str, stream=stream)
+    if model_key == "d-fine":
+        return make_raw_keras_runner(detector, paths, device_str, stream=stream)
+    raise ValueError(f"Raw benchmark is unsupported for model {model_key!r}")
 
 
 # =============================================================================
@@ -437,8 +682,10 @@ def generate_markdown_report(report_data: Dict[str, Any]) -> str:
         "",
         "## Multi-Model & Multi-Mode Performance Scorecard",
         "",
-        r"| Device | Model Architecture | Backend | Execution Mode | Throughput (FPS) | First-Frame | Latency/Frame | Peak Heap | $\Delta$ RSS | Boxes |",
-        "| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |",
+        "For non-Ultralytics backends, `native=True` currently uses the managed-compatible execution path; the JSON report records this as `native_execution`.",
+        "",
+        r"| Device | Model Architecture | Backend | Execution Mode | Throughput (FPS) | First-Frame | Latency/Frame | Peak Heap | $\Delta$ RSS | Boxes | Raw Parity |",
+        "| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
     ])
 
     for dev_entry in report_data.get("runs", []):
@@ -453,8 +700,10 @@ def generate_markdown_report(report_data: Dict[str, Any]) -> str:
                 heap_mb = metrics.get("peak_heap_mb_median", 0.0)
                 rss_mb = metrics.get("rss_delta_mb_median", 0.0)
                 boxes = metrics.get("total_boxes", 0)
+                parity = metrics.get("parity_matches_raw")
+                parity_text = "N/A" if parity is None else "Yes" if parity else "No"
                 lines.append(
-                    f"| `{dev_id}` | **{m_name}** | {b_name} | {mode_name} | **{fps} FPS** | {first_ms} ms | {lat_ms} ms | {heap_mb} MB | {rss_mb} MB | {boxes} |"
+                    f"| `{dev_id}` | **{m_name}** | {b_name} | {mode_name} | **{fps} FPS** | {first_ms} ms | {lat_ms} ms | {heap_mb} MB | {rss_mb} MB | {boxes} | {parity_text} |"
                 )
 
     # CPU vs GPU Direct Comparison Matrix
@@ -512,12 +761,12 @@ def generate_markdown_report(report_data: Dict[str, Any]) -> str:
 
         lines.extend([
             "",
-            "## Paired Row-by-Row Hardware Matrix (Dòng GPU & Dòng CPU Chi Tiết)",
+            "## Paired Row-by-Row Hardware Matrix",
             "",
-            f"- **Dòng GPU (Đồ họa)**: {gpu_name} ({primary_gpu.get('total_vram_gb', 4.0)} GB VRAM)",
-            f"- **Dòng CPU (Vi xử lý)**: {cpu_name} ({discovery_info.get('cpu_threads', 8)} Threads)",
+            f"- **GPU**: {gpu_name} ({primary_gpu.get('total_vram_gb', 4.0)} GB VRAM)",
+            f"- **CPU**: {cpu_name} ({discovery_info.get('cpu_threads', 8)} Threads)",
             "",
-            r"| Model Architecture | Execution Mode | Dòng Phần Cứng (Chip) | Throughput (FPS) | First-Frame | Latency / Frame | Peak Heap | $\Delta$ RSS | Boxes |",
+            r"| Model Architecture | Execution Mode | Hardware | Throughput (FPS) | First-Frame | Latency / Frame | Peak Heap | $\Delta$ RSS | Boxes |",
             "| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
         ])
 
@@ -551,9 +800,9 @@ def generate_markdown_report(report_data: Dict[str, Any]) -> str:
         "",
         "## Key Architectural Findings",
         "",
-        "1. **Managed Streaming Memory Efficiency**: Across all evaluated models, `Managed Stream` restricts Python heap allocations to under 3 MB.",
-        "2. **Native Stream Throughput**: Retains up to ~85–90% of raw C++ framework speed while providing standard `outputs.Detections` wrappers.",
-        r"3. **Zero-Memory-Leak Guarantee**: Stream modes yield constant $\Delta$ RSS (~0.0 MB), ensuring safety for long-running video streams.",
+        "1. Compare each Klygo mode with the Raw Framework row for the same model and device; cross-model FPS is not an overhead measurement.",
+        "2. `parity_matches_raw` verifies detection-count parity. Numeric coordinate and score parity requires a dedicated model-specific parity run.",
+        r"3. Peak heap and $\Delta$ RSS are observations for this bounded run and do not establish a memory-leak guarantee.",
         "",
     ])
 
@@ -587,11 +836,30 @@ def run_benchmark(
         selected_model_keys = [k.strip().lower() for k in models_arg.split(",") if k.strip().lower() in MODEL_REGISTRY]
 
     # Resolve modes
-    all_modes = ["raw", "native-stream", "native-non-stream", "managed-stream", "managed-non-stream"]
-    if modes_arg.strip().lower() == "all":
-        selected_modes = all_modes
+    all_modes = [
+        "raw-non-stream",
+        "raw-stream",
+        "native-non-stream",
+        "native-stream",
+        "managed-non-stream",
+        "managed-stream",
+    ]
+    if modes_arg.strip().lower() in ("all", "all-modes"):
+        selected_modes = list(all_modes)
     else:
-        selected_modes = [m.strip().lower() for m in modes_arg.split(",") if m.strip().lower() in all_modes]
+        raw_tokens = [m.strip().lower() for m in modes_arg.split(",") if m.strip()]
+        selected_modes = []
+        for t in raw_tokens:
+            if t == "raw":
+                selected_modes.extend(["raw-non-stream", "raw-stream"])
+            elif t == "native":
+                selected_modes.extend(["native-non-stream", "native-stream"])
+            elif t == "managed":
+                selected_modes.extend(["managed-non-stream", "managed-stream"])
+            elif t in all_modes:
+                selected_modes.append(t)
+        seen = set()
+        selected_modes = [m for m in selected_modes if not (m in seen or seen.add(m))]
 
     test_images = prepare_test_images(source_arg, max_frames)
     print(f"\n========================================================")
@@ -633,48 +901,68 @@ def run_benchmark(
                 "model_key": model_key,
                 "model_name": name,
                 "backend": backend,
+                "native_execution": (
+                    "backend-owned"
+                    if backend == "Ultralytics"
+                    else "managed-compatible"
+                ),
                 "modes": {},
             }
 
-            # 1. Raw Framework
-            if "raw" in selected_modes and has_raw:
-                print(f"  Testing Mode: Raw {backend}...")
-                raw_fn = make_raw_ultralytics_runner(detector, test_images, prompt, dev_str, imgsz)
-                runs = [measure_run(raw_fn, dev_str) for _ in range(repeats)]
-                model_data["modes"]["Raw Framework"] = aggregate_metrics(runs)
-                print(f"    [Raw] FPS: {model_data['modes']['Raw Framework']['fps_median']} | 1st: {model_data['modes']['Raw Framework']['first_frame_ms_median']}ms")
-
-            # 2. Native Stream
-            if "native-stream" in selected_modes:
-                print(f"  Testing Mode: Klygo Native Stream...")
-                stream_fn = make_stream_runner(detector, test_images, prompt, native=True, device_str=dev_str)
-                runs = [measure_run(stream_fn, dev_str) for _ in range(repeats)]
-                model_data["modes"]["Klygo Native Stream"] = aggregate_metrics(runs)
-                print(f"    [Native Stream] FPS: {model_data['modes']['Klygo Native Stream']['fps_median']} | Heap: {model_data['modes']['Klygo Native Stream']['peak_heap_mb_median']}MB")
-
-            # 3. Native Non-stream
+            runners = {}
+            if "raw-non-stream" in selected_modes and has_raw:
+                runners["Raw Non-stream"] = make_raw_runner(
+                    model_key, detector, test_images, prompt, dev_str, imgsz, stream=False
+                )
+            if "raw-stream" in selected_modes and has_raw:
+                runners["Raw Stream"] = make_raw_runner(
+                    model_key, detector, test_images, prompt, dev_str, imgsz, stream=True
+                )
             if "native-non-stream" in selected_modes:
-                print(f"  Testing Mode: Klygo Native Non-stream...")
-                non_stream_fn = make_non_stream_runner(detector, test_images, prompt, native=True, device_str=dev_str)
-                runs = [measure_run(non_stream_fn, dev_str) for _ in range(repeats)]
-                model_data["modes"]["Klygo Native Non-stream"] = aggregate_metrics(runs)
-                print(f"    [Native Non-stream] FPS: {model_data['modes']['Klygo Native Non-stream']['fps_median']} | Heap: {model_data['modes']['Klygo Native Non-stream']['peak_heap_mb_median']}MB")
-
-            # 4. Managed Stream
-            if "managed-stream" in selected_modes:
-                print(f"  Testing Mode: Klygo Managed Stream...")
-                man_stream_fn = make_stream_runner(detector, test_images, prompt, native=False, device_str=dev_str)
-                runs = [measure_run(man_stream_fn, dev_str) for _ in range(repeats)]
-                model_data["modes"]["Klygo Managed Stream"] = aggregate_metrics(runs)
-                print(f"    [Managed Stream] FPS: {model_data['modes']['Klygo Managed Stream']['fps_median']} | Heap: {model_data['modes']['Klygo Managed Stream']['peak_heap_mb_median']}MB")
-
-            # 5. Managed Non-stream
+                runners["Klygo Native Non-stream"] = make_non_stream_runner(
+                    detector, test_images, prompt, native=True, device_str=dev_str
+                )
+            if "native-stream" in selected_modes:
+                runners["Klygo Native Stream"] = make_stream_runner(
+                    detector, test_images, prompt, native=True, device_str=dev_str
+                )
             if "managed-non-stream" in selected_modes:
-                print(f"  Testing Mode: Klygo Managed Non-stream...")
-                man_non_fn = make_non_stream_runner(detector, test_images, prompt, native=False, device_str=dev_str)
-                runs = [measure_run(man_non_fn, dev_str) for _ in range(repeats)]
-                model_data["modes"]["Klygo Managed Non-stream"] = aggregate_metrics(runs)
-                print(f"    [Managed Non-stream] FPS: {model_data['modes']['Klygo Managed Non-stream']['fps_median']} | Heap: {model_data['modes']['Klygo Managed Non-stream']['peak_heap_mb_median']}MB")
+                runners["Klygo Managed Non-stream"] = make_non_stream_runner(
+                    detector, test_images, prompt, native=False, device_str=dev_str
+                )
+            if "managed-stream" in selected_modes:
+                runners["Klygo Managed Stream"] = make_stream_runner(
+                    detector, test_images, prompt, native=False, device_str=dev_str
+                )
+
+            samples = {mode_name: [] for mode_name in runners}
+            mode_names = list(runners)
+            for repeat in range(repeats):
+                offset = repeat % max(len(mode_names), 1)
+                ordered_modes = mode_names[offset:] + mode_names[:offset]
+                print(f"  Measurement pass {repeat + 1}/{repeats}: {ordered_modes}")
+                for mode_name in ordered_modes:
+                    samples[mode_name].append(
+                        measure_run(runners[mode_name], dev_str)
+                    )
+
+            for mode_name, runs in samples.items():
+                model_data["modes"][mode_name] = aggregate_metrics(runs)
+
+            raw_metrics = model_data["modes"].get("Raw Stream") or model_data["modes"].get("Raw Non-stream")
+            raw_boxes = raw_metrics.get("total_boxes") if raw_metrics else None
+            for mode_name, metrics in model_data["modes"].items():
+                metrics["parity_matches_raw"] = (
+                    None
+                    if raw_boxes is None
+                    else metrics.get("total_boxes") == raw_boxes
+                )
+                print(
+                    f"    [{mode_name}] FPS: {metrics['fps_median']} | "
+                    f"1st: {metrics['first_frame_ms_median']}ms | "
+                    f"Boxes: {metrics['total_boxes']} | "
+                    f"Parity: {metrics['parity_matches_raw']}"
+                )
 
             dev_entry["models"].append(model_data)
 
@@ -707,7 +995,9 @@ def run_benchmark(
     if output_md:
         md_content = generate_markdown_report(full_report)
         files.mkdir(files.parent(output_md))
-        files.path(output_md).write_text(md_content, encoding="utf-8")
+        temporary_md = files.with_extension(output_md, ".txt")
+        files.save(temporary_md, md_content, overwrite=True, verbose=False)
+        files.move(temporary_md, output_md, overwrite=True)
         print(f"[OK] Markdown summary scorecard saved to: {output_md}")
 
     return full_report
@@ -717,7 +1007,7 @@ def main():
     parser = argparse.ArgumentParser(description="Klygo Unified Multi-Backend & Multi-GPU Benchmark Tool")
     parser.add_argument("--device", type=str, default="auto", help="Device: 'auto', 'all-gpus', 'cuda:0', 'cuda:1', 'cpu', 'mps'")
     parser.add_argument("--models", type=str, default="all", help="Models: 'all' or comma-separated 'yolo,yolo-world,grounding-dino,faster-rcnn,d-fine'")
-    parser.add_argument("--modes", type=str, default="all", help="Modes: 'all' or comma-separated 'raw,native-stream,native-non-stream,managed-stream,managed-non-stream'")
+    parser.add_argument("--modes", type=str, default="all", help="Modes: 'all' or comma-separated 'raw-non-stream,raw-stream,native-non-stream,native-stream,managed-non-stream,managed-stream'")
     parser.add_argument("--source", type=str, default=None, help="Path to image directory, video, or image file")
     parser.add_argument("--max-frames", type=int, default=10, help="Maximum number of frames/images to evaluate per run")
     parser.add_argument("--repeats", type=int, default=3, help="Number of repeat runs for statistical aggregation")

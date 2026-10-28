@@ -323,6 +323,7 @@ def resolve_images(
     step: int = 1,
     max_frames: Optional[int] = None,
     stream: bool = False,
+    pixel_backend: str = "pil",
 ) -> Tuple[Union[List[PIL.Image.Image], Any], bool]:
     """Resolve input media sources via :mod:`klygo.media`.
 
@@ -342,6 +343,7 @@ def resolve_images(
             raw_stream = media.load(
                 source,
                 stream=True,
+                backend=pixel_backend,
                 sample_rate=step,
                 max_frames=max_frames,
                 verbose=False,
@@ -370,7 +372,7 @@ def resolve_images(
                         yield item
                     else:
                         if isinstance(item, (str, Path)):
-                            loaded = media.load(item, verbose=False)
+                            loaded = media.load(item, backend=pixel_backend, verbose=False)
                             item = loaded[0] if isinstance(loaded, list) else loaded
                             if isinstance(item, media.LazyImage):
                                 yield item
@@ -394,7 +396,7 @@ def resolve_images(
 
     # In-memory list path (standard RAM mode)
     if isinstance(source, (str, Path)):
-        raw_list = media.load(source, indexed=True, verbose=False)
+        raw_list = media.load(source, backend=pixel_backend, indexed=True, verbose=False)
         is_single = raw_list.source_type == "image"
     elif isinstance(source, media.MediaFrames):
         raw_list = source
@@ -441,7 +443,7 @@ def resolve_images(
             cleaned_images.append(item)
             continue
         if isinstance(item, (str, Path)):
-            loaded = media.load(item, verbose=False)
+            loaded = media.load(item, backend=pixel_backend, verbose=False)
             item = loaded[0] if isinstance(loaded, list) else loaded
             if isinstance(item, media.LazyImage):
                 cleaned_images.append(item)

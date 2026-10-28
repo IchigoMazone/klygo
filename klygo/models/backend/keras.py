@@ -190,35 +190,37 @@ def format_results(raw_outputs: Any) -> List[Dict[str, Any]]:
         n_np = _to_numpy_array(num_det_tensor)
 
         if b_np is not None and s_np is not None:
+            import numpy as np
+
             batch_size = len(b_np)
             for b_idx in range(batch_size):
-                boxes_data, scores_data, labels_data, class_ids = [], [], [], []
-                sample_b = b_np[b_idx]
-                sample_s = s_np[b_idx]
-                sample_c = c_np[b_idx] if c_np is not None else [0] * len(sample_s)
-                limit = int(n_np[b_idx]) if n_np is not None else len(sample_s)
-
-                for idx, (box, score, cls_id) in enumerate(zip(sample_b, sample_s, sample_c)):
-                    if idx >= limit:
-                        break
-                    score_val = float(score)
-                    class_id = int(cls_id)
-                    if score_val < 0.0 or class_id < 0:
-                        continue
-                    coords = [float(x) for x in box]
-                    if bbox_fmt == "yxyx" and len(coords) == 4:
-                        coords = [coords[1], coords[0], coords[3], coords[2]]
-                    boxes_data.append(coords)
-                    scores_data.append(score_val)
-                    class_ids.append(class_id)
-                    labels_data.append(str(class_id))
+                sample_b = np.asarray(b_np[b_idx])
+                sample_s = np.asarray(s_np[b_idx])
+                sample_c = (
+                    np.asarray(c_np[b_idx])
+                    if c_np is not None
+                    else np.zeros(len(sample_s), dtype=np.int32)
+                )
+                limit = min(
+                    int(n_np[b_idx]) if n_np is not None else len(sample_s),
+                    len(sample_b),
+                    len(sample_s),
+                    len(sample_c),
+                )
+                valid = (sample_s[:limit] >= 0.0) & (sample_c[:limit] >= 0)
+                boxes_data = sample_b[:limit][valid]
+                if bbox_fmt == "yxyx" and boxes_data.ndim == 2 and boxes_data.shape[1] == 4:
+                    boxes_data = boxes_data[:, [1, 0, 3, 2]]
+                scores_data = sample_s[:limit][valid]
+                class_ids = sample_c[:limit][valid].astype(np.int32, copy=False)
+                labels_data = [str(int(class_id)) for class_id in class_ids]
 
                 raw_list.append(
                     {
-                        "boxes": boxes_data,
-                        "scores": scores_data,
+                        "boxes": boxes_data.tolist(),
+                        "scores": scores_data.tolist(),
                         "labels": labels_data,
-                        "class_ids": class_ids,
+                        "class_ids": class_ids.tolist(),
                     }
                 )
             return raw_list

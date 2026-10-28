@@ -13,6 +13,7 @@ except ImportError as exc:
     ) from exc
 
 from klygo import outputs, utils
+from klygo.models.backend import ultralytics as ultralytics_backend
 from klygo.models.detection.base import Detector
 from klygo.outputs.detect import Detection
 
@@ -37,7 +38,8 @@ class YOLODetect(Detector):
 
         model_config = dict(self.metadata["model"])
         post_config = dict(self.metadata["post"])
-        self.names = dict(self.model.names)
+        if self.names != self.model.names:
+            self.names = dict(self.model.names)
         classes = model_config.get("classes")
 
         if prompt:
@@ -55,17 +57,24 @@ class YOLODetect(Detector):
         extra_kwargs = utils.exclude_keys(kwargs, ["threshold", "iou", "conf", "classes", "prompt"])
         model_args = {**model_config, **post_opts, **extra_kwargs}
 
-        results = self.model(
-            images,
-            conf=threshold,
-            iou=iou,
-            classes=classes,
-            verbose=False,
-            **utils.exclude_keys(
-                model_args,
-                ["threshold", "iou", "classes"],
-            ),
-        )
+        predict_options = {
+            "conf": threshold,
+            "iou": iou,
+            "classes": classes,
+            "verbose": False,
+            **utils.exclude_keys(model_args, ["threshold", "iou", "classes"]),
+        }
+        prepared_options = getattr(self, "_prepared_predict_options", None)
+        results = None
+        if prepared_options == predict_options:
+            results = ultralytics_backend.predict_prepared(
+                self.model,
+                images,
+                options=predict_options,
+            )
+        if results is None:
+            results = self.model(images, **predict_options)
+            self._prepared_predict_options = predict_options
 
         return outputs.build_detections(
             images,
@@ -78,6 +87,14 @@ class YOLODetect(Detector):
             },
             names=self.names,
         )
+
+    def _stream_state_isolation_required(self) -> bool:
+        """Fixed-vocabulary YOLO does not mutate backend state between frames."""
+        return False
+
+    def _adopt_forward_detections(self) -> bool:
+        """YOLO forward creates fresh unowned frames for each call."""
+        return True
 
 
 __all__ = ["YOLODetect"]

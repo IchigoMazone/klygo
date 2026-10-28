@@ -35,20 +35,27 @@ _LOADING_OPTIONS = {
 }
 
 
-def _materialize_model_image(image: Any) -> PIL.Image.Image:
+def _materialize_model_image(image: Any, backend: Optional[str] = None) -> Any:
     """Decode one model input without replacing its lazy source proxy."""
     from klygo import media
 
     if isinstance(image, media.LazyImage):
+        if (
+            backend == "Ultralytics"
+            and image.backend == "opencv"
+            and not image._instructions
+            and not image._preprocessing_ops
+        ):
+            return image.load(cache=False)
         image = image.to_pil(cache=False)
         if image.mode != "RGB":
             image = image.convert("RGB")
     return image
 
 
-def _materialize_model_images(images: Sequence[Any]) -> List[PIL.Image.Image]:
+def _materialize_model_images(images: Sequence[Any], backend: Optional[str] = None) -> List[Any]:
     """Give model backends real RGB images without replacing lazy source proxies."""
-    return [_materialize_model_image(image) for image in images]
+    return [_materialize_model_image(image, backend=backend) for image in images]
 
 
 def _prepared_batches(
@@ -56,9 +63,15 @@ def _prepared_batches(
     batch: int,
     workers: int,
     prefetch: int,
+    backend: Optional[str] = None,
 ):
     """Yield ordered source batches and decoded pixels with bounded read-ahead."""
     iterator = iter(images)
+
+    def materialize(image: Any) -> Any:
+        if backend == "Ultralytics":
+            return _materialize_model_image(image, backend=backend)
+        return _materialize_model_image(image)
 
     def parts():
         while True:
@@ -70,7 +83,7 @@ def _prepared_batches(
     batches = iter(parts())
     if workers == 0 or prefetch == 0:
         for part in batches:
-            yield part, _materialize_model_images(part)
+            yield part, [materialize(image) for image in part]
         return
 
     first = next(batches, None)
@@ -78,14 +91,14 @@ def _prepared_batches(
         return
     second = next(batches, None)
     if second is None:
-        yield first, _materialize_model_images(first)
+        yield first, [materialize(image) for image in first]
         return
     batches = itertools.chain((first, second), batches)
 
-    pending: deque[tuple[List[Any], List[Future[PIL.Image.Image]]]] = deque()
+    pending: deque[tuple[List[Any], List[Future[Any]]]] = deque()
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="klygo-decode") as executor:
-        def submit(part: List[Any]) -> tuple[List[Any], List[Future[PIL.Image.Image]]]:
-            return part, [executor.submit(_materialize_model_image, image) for image in part]
+        def submit(part: List[Any]) -> tuple[List[Any], List[Future[Any]]]:
+            return part, [executor.submit(materialize, image) for image in part]
 
         try:
             for _ in range(prefetch):
@@ -204,7 +217,14 @@ class Detector(BaseModel):
 
         with self._prediction_lock:
             metadata, prompts = self._resolve_prediction(prompt, kwargs)
-            images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames, stream=stream)
+            pixel_backend = "opencv" if self.backend == "Ultralytics" else "pil"
+            images, is_single = utils.resolve_images(
+                source,
+                step=vid_stride,
+                max_frames=max_frames,
+                stream=stream,
+                pixel_backend=pixel_backend,
+            )
             source_type = getattr(images, "source_type", "image" if is_single else "frames")
             previous = self._snapshot_prediction_state()
             try:
@@ -214,7 +234,9 @@ class Detector(BaseModel):
                     frames = []
                     with ProgressBar(total=len(images), desc="Predict", unit="frame", verbose=verbose, colour="cyan") as progress:
                         offset = 0
-                        for part, prepared in _prepared_batches(images, batch, workers, prefetch):
+                        for part, prepared in _prepared_batches(
+                            images, batch, workers, prefetch, backend=self.backend
+                        ):
                             frames.extend(self._infer_batch(
                                 part, prompts, metadata, offset * vid_stride,
                                 vid_stride, prepared_images=prepared,
@@ -240,22 +262,34 @@ class Detector(BaseModel):
             if total is None and hasattr(images, "__len__"):
                 total = len(images)
 
+            isolate_state = self._stream_state_isolation_required()
+            prediction_snapshot = self._config_snapshot(metadata, prompts)
+
         def generate():
             offset = 0
             try:
-                for part, prepared in _prepared_batches(images, batch, workers, prefetch):
-                    with self._prediction_lock:
+                for part, prepared in _prepared_batches(
+                    images, batch, workers, prefetch, backend=self.backend
+                ):
+                    def infer() -> List[Detection]:
                         if self.state == "UNLOADED":
                             from klygo.models.errors import InvalidStateError
                             raise InvalidStateError("Cannot consume a stream after model unload")
-                        current = self._snapshot_prediction_state()
-                        try:
-                            frames = self._infer_batch(
-                                part, prompts, metadata, offset * vid_stride,
-                                vid_stride, prepared_images=prepared,
-                            )
-                        finally:
-                            self._restore_prediction_state(current)
+                        return self._infer_batch(
+                            part, prompts, metadata, offset * vid_stride,
+                            vid_stride, prepared_images=prepared,
+                            prediction_snapshot=prediction_snapshot,
+                        )
+
+                    if isolate_state:
+                        with self._prediction_lock:
+                            current = self._snapshot_prediction_state()
+                            try:
+                                frames = infer()
+                            finally:
+                                self._restore_prediction_state(current)
+                    else:
+                        frames = infer()
                     yield from frames
                     offset += len(part)
             finally:
@@ -374,7 +408,12 @@ class Detector(BaseModel):
             with self._prediction_lock:
                 metadata, prompts = self._resolve_prediction(prompt, kwargs, runtime=False)
                 _ = self._native_runtime_options(metadata, prompts)
-                images, is_single = utils.resolve_images(source, step=vid_stride, max_frames=max_frames, stream=stream)
+                images, is_single = utils.resolve_images(
+                    source,
+                    step=vid_stride,
+                    max_frames=max_frames,
+                    stream=stream,
+                )
                 source_type = getattr(images, "source_type", "image" if is_single else "frames")
                 previous = self._snapshot_prediction_state()
                 try:
@@ -383,7 +422,9 @@ class Detector(BaseModel):
                         if not stream:
                             frames_list = []
                             offset = 0
-                            for part, prepared in _prepared_batches(images, batch, workers, prefetch):
+                            for part, prepared in _prepared_batches(
+                                images, batch, workers, prefetch, backend=self.backend
+                            ):
                                 batch_frames = self._infer_batch(
                                     part, prompts, metadata, offset * vid_stride,
                                     vid_stride, prepared_images=prepared,
@@ -417,7 +458,9 @@ class Detector(BaseModel):
             def generate_native():
                 offset = 0
                 try:
-                    for part, prepared in _prepared_batches(images, batch, workers, prefetch):
+                    for part, prepared in _prepared_batches(
+                        images, batch, workers, prefetch, backend=self.backend
+                    ):
                         with self._prediction_lock:
                             if self.state == "UNLOADED":
                                 from klygo.models.errors import InvalidStateError
@@ -673,7 +716,8 @@ class Detector(BaseModel):
 
         with self._prediction_lock:
             metadata, prompts = self._resolve_prediction(prompt, kwargs)
-            images, _ = utils.resolve_images(img, stream=False)
+            pixel_backend = "opencv" if self.backend == "Ultralytics" else "pil"
+            images, _ = utils.resolve_images(img, stream=False, pixel_backend=pixel_backend)
             if not images:
                 raise ValueError("benchmark source must contain at least one image")
             cur_dev, cur_dt = self.device, self.dtype
@@ -775,11 +819,16 @@ class Detector(BaseModel):
 
     def _infer_batch(self, images: List[Any], prompt: Any, metadata: Dict[str, Any],
                      offset: int = 0, frame_step: int = 1,
-                     prepared_images: Optional[List[PIL.Image.Image]] = None) -> List[Detection]:
+                     prepared_images: Optional[List[Any]] = None,
+                     prediction_snapshot: Optional[Dict[str, Any]] = None) -> List[Detection]:
         with self._prediction_lock, self._use_metadata(metadata), common.inference_context(self.backend):
             self._prepare_prediction(prompt)
             start = time.perf_counter()
-            prepared = prepared_images if prepared_images is not None else _materialize_model_images(images)
+            prepared = (
+                prepared_images
+                if prepared_images is not None
+                else _materialize_model_images(images, backend=self.backend)
+            )
             if len(prepared) != len(images):
                 raise ValueError("prepared image count must match source image count")
             raw = list(self.forward(images=prepared, prompt=deepcopy(prompt)))
@@ -791,22 +840,26 @@ class Detector(BaseModel):
             lat_ms = round(elapsed, 2)
             fps_val = round(1000 / max(elapsed, 0.001), 1)
             base_post = dict(metadata.get("post", {}))
-            pred_snapshot = self._config_snapshot(metadata, prompt)
+            pred_snapshot = (
+                prediction_snapshot
+                if prediction_snapshot is not None
+                else self._config_snapshot(metadata, prompt)
+            )
             for index, (result, image) in enumerate(zip(raw, images)):
                 validators.validate_type(result, (dict, Detection), "forward result")
                 frame = self._pack_detection(result, image, offset + index * frame_step, lat_ms, fps_val)
-                config = deepcopy(base_post)
-                config.update(deepcopy(frame.metadata))
+                config = dict(base_post)
+                config.update(frame.metadata)
                 config.update({
-                    "prompt": deepcopy(prompt),
-                    "predict_config": deepcopy(pred_snapshot),
+                    "prompt": prompt,
+                    "predict_config": pred_snapshot,
                     "model_id": self.model_id,
                     "backend": self.backend,
                     "source_path": frame.source_path,
                     "frame_index": frame.frame_index,
                     "image_frame_index": frame.frame_index,
                 })
-                frame.metadata = config
+                frame.metadata = deepcopy(config)
                 frames.append(frame)
             return frames
 
@@ -842,11 +895,18 @@ class Detector(BaseModel):
             if target_size is not None:
                 det._image_size = target_size
         else:
-            det = det._clone((det.source_id, actual_idx))
+            fresh_output = bool(det.__dict__.pop("_klygo_fresh_output", False))
+            if (
+                det._owner is not None
+                or not (fresh_output or self._adopt_forward_detections())
+            ):
+                det = det._clone()
             det._source_path = str(img_path) if img_path is not None else det._source_path
             det._image_size = target_size if target_size is not None else final_image.size
             det._source = final_image
             det._source_id, _ = outputs.detect._source(final_image, None)
+            det._frame_index = actual_idx
+            det._identity = (det._source_id, actual_idx)
             if trace:
                 if len(det._labels) > 0:
                     restored = preprocessing.restore_boxes(det.boxes, trace)
@@ -861,6 +921,14 @@ class Detector(BaseModel):
         det._source_path = str(getattr(final_image, "path", getattr(final_image, "url", img_path))) if (img_path or hasattr(final_image, "url")) else None
         det.metadata.update({"speed": {"inference": lat_ms, "fps": fps_val}})
         return det
+
+    def _stream_state_isolation_required(self) -> bool:
+        """Return whether each lazy batch must restore mutable backend state."""
+        return True
+
+    def _adopt_forward_detections(self) -> bool:
+        """Return whether fresh unowned forward results may be finalized in place."""
+        return False
 
     def _resolve_prediction(self, prompt: Any, kwargs: Dict[str, Any], *, validate: bool = True, runtime: bool = True) -> Any:
         base = deepcopy(dict(self._metadata))
