@@ -206,8 +206,7 @@ class LocateAnythingDetect(Detector):
 
         # 2. Validate and build generation hyperparameters
         options = dict(self.metadata.get("generation", {}))
-        extra_opts = kwargs if native else {}
-        merged_opts = {**options, **extra_opts}
+        merged_opts = {**options, **kwargs}
         unknown_options = set(merged_opts) - set(_GENERATION_DEFAULTS)
         if unknown_options:
             raise ValueError(

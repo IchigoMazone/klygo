@@ -9,15 +9,11 @@ from klygo.models.detection.base import Detector
 from klygo.outputs.detect import Detection
 
 
+_YOLO_POST_OPTIONS = {"agnostic_nms", "max_det", "retina_masks", "nms"}
+
+
 class YOLOWorldDetect(Detector):
     """Run an Ultralytics YOLO-World model with prompt-defined classes."""
-
-    _NATIVE_OPTIONS = {
-        "agnostic_nms", "augment", "batch", "conf", "device", "half", "imgsz",
-        "iou", "max_det", "retina_masks", "save", "save_conf", "save_crop",
-        "save_frames", "save_json", "save_txt", "show", "show_boxes",
-        "show_conf", "show_labels", "stream", "tracker", "vid_stride", "visualize",
-    }
 
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
         super().__init__(metadata=metadata, **kwargs)
@@ -34,22 +30,16 @@ class YOLOWorldDetect(Detector):
         self.names = dict(self.original_names)
 
     def _native_runtime_options(self, metadata, prompt):
-        """Build validated runtime options for YOLO-World native prediction."""
+        """Build runtime options for YOLO-World native prediction."""
         model_config = dict(metadata["model"])
         post_config = dict(metadata["post"])
-        native_post = {
+        post_model_opts = {
             k: v for k, v in post_config.items()
-            if k in self._NATIVE_OPTIONS and k not in ("conf", "iou", "threshold")
+            if k in _YOLO_POST_OPTIONS and k not in ("conf", "iou", "threshold")
         }
-        runtime = {**model_config, **native_post}
-        runtime.update({
-            "conf": post_config.get("threshold", 0.25),
-            "iou": post_config.get("iou", 0.7),
-        })
-        unsupported = set(runtime) - self._NATIVE_OPTIONS
-        if unsupported:
-            names = ", ".join(sorted(unsupported))
-            raise ValueError(f"Unsupported Ultralytics native options: {names}")
+        runtime = {**model_config, **post_model_opts}
+        runtime["conf"] = float(post_config.get("threshold", 0.25))
+        runtime["iou"] = float(post_config.get("iou", 0.7))
         return runtime
 
     def forward(
@@ -71,10 +61,12 @@ class YOLOWorldDetect(Detector):
         threshold = float(kwargs.get("threshold", post_config.get("threshold", 0.25)))
         iou = float(kwargs.get("iou", post_config.get("iou", 0.7)))
 
-        extra_opts = kwargs if native else {
+        post_model_opts = {
             k: v for k, v in post_config.items()
-            if k in self._NATIVE_OPTIONS and k not in ("conf", "iou", "threshold")
+            if k in _YOLO_POST_OPTIONS and k not in ("conf", "iou", "threshold")
         }
+        extra_kwargs = utils.exclude_keys(kwargs, ["threshold", "iou", "conf", "prompt", "native"])
+        model_args = {**model_config, **post_model_opts, **extra_kwargs}
 
         results = self.model(
             images,
@@ -82,7 +74,7 @@ class YOLOWorldDetect(Detector):
             iou=iou,
             verbose=False,
             **utils.exclude_keys(
-                {**model_config, **extra_opts},
+                model_args,
                 ["threshold", "iou"],
             ),
         )

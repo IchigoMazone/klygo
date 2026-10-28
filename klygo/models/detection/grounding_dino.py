@@ -62,9 +62,8 @@ class GroundingDinoDetect(Detector):
         processor_config = dict(self.metadata["processor"])
         post_config = dict(self.metadata["post"])
 
-        extra_opts = kwargs if native else {}
-        proc_opts = {**processor_config, **extra_opts}
-        post_opts = {**post_config, **extra_opts}
+        proc_opts = {**processor_config, **kwargs}
+        post_opts = {**post_config, **kwargs}
 
         # 2. In-place preprocessing (Grounding DINO-specific prompt formatting)
         prompt_list = [prompt] if isinstance(prompt, str) else list(prompt)
