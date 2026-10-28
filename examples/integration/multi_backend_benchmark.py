@@ -65,24 +65,51 @@ def discover_available_devices() -> Dict[str, Any]:
 
 def resolve_target_devices(device_arg: str, discovery: Dict[str, Any]) -> List[str]:
     """Parse device CLI argument into a concrete list of target device strings."""
-    norm = device_arg.strip().lower()
+    raw = device_arg.strip().lower()
 
-    if norm == "all-gpus":
-        if discovery["cuda_device_count"] == 0:
-            return ["cpu"]
-        return [f"cuda:{i}" for i in range(discovery["cuda_device_count"])]
+    # Handle comma-separated list like "cuda:0,cpu" or "all"
+    tokens = [t.strip() for t in raw.split(",") if t.strip()]
+    resolved = []
 
-    if norm in ("auto", "best"):
-        if discovery["cuda_available"] and discovery["cuda_device_count"] > 0:
-            return ["cuda:0"]
-        if discovery.get("mps_available", False):
-            return ["mps"]
-        return ["cpu"]
+    for token in tokens:
+        if token in ("all", "all-devices"):
+            if discovery["cuda_device_count"] > 0:
+                resolved.extend([f"cuda:{i}" for i in range(discovery["cuda_device_count"])])
+            if discovery.get("mps_available", False):
+                resolved.append("mps")
+            resolved.append("cpu")
+        elif token == "all-gpus":
+            if discovery["cuda_device_count"] == 0:
+                resolved.append("cpu")
+            else:
+                resolved.extend([f"cuda:{i}" for i in range(discovery["cuda_device_count"])])
+        elif token in ("gpu", "cuda"):
+            if discovery["cuda_device_count"] > 0:
+                resolved.append("cuda:0")
+            elif discovery.get("mps_available", False):
+                resolved.append("mps")
+            else:
+                resolved.append("cpu")
+        elif token in ("auto", "best"):
+            if discovery["cuda_available"] and discovery["cuda_device_count"] > 0:
+                resolved.append("cuda:0")
+            elif discovery.get("mps_available", False):
+                resolved.append("mps")
+            else:
+                resolved.append("cpu")
+        elif token.isdigit():
+            resolved.append(f"cuda:{token}")
+        else:
+            resolved.append(token)
 
-    if norm.isdigit():
-        return [f"cuda:{norm}"]
-
-    return [norm]
+    # Deduplicate while preserving order
+    seen = set()
+    final_devices = []
+    for d in resolved:
+        if d not in seen:
+            seen.add(d)
+            final_devices.append(d)
+    return final_devices or ["cpu"]
 
 
 def synchronize_device(device_str: str) -> None:
@@ -397,6 +424,51 @@ def generate_markdown_report(report_data: Dict[str, Any]) -> str:
                     f"| `{dev_id}` | **{m_name}** | {b_name} | {mode_name} | **{fps} FPS** | {first_ms} ms | {lat_ms} ms | {heap_mb} MB | {rss_mb} MB | {boxes} |"
                 )
 
+    # CPU vs GPU Direct Comparison Matrix
+    gpu_runs = [r for r in report_data.get("runs", []) if r.get("device_id", "").startswith("cuda") or r.get("device_id") == "mps"]
+    cpu_runs = [r for r in report_data.get("runs", []) if r.get("device_id") == "cpu"]
+
+    if gpu_runs and cpu_runs:
+        primary_gpu = gpu_runs[0]
+        primary_cpu = cpu_runs[0]
+        gpu_id = primary_gpu.get("device_id", "GPU")
+
+        lines.extend([
+            "",
+            "## CPU vs GPU Direct Hardware Comparison Matrix",
+            "",
+            f"| Model Architecture | Backend | Execution Mode | GPU ({gpu_id}) Throughput | CPU Throughput | Speedup (GPU/CPU) | GPU Latency | CPU Latency | GPU Heap | CPU Heap |",
+            "| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
+        ])
+
+        cpu_lookup = {}
+        for m in primary_cpu.get("models", []):
+            m_name = m.get("model_name")
+            for mode_name, metrics in m.get("modes", {}).items():
+                cpu_lookup[(m_name, mode_name)] = metrics
+
+        for m in primary_gpu.get("models", []):
+            m_name = m.get("model_name")
+            b_name = m.get("backend")
+            for mode_name, gpu_metrics in m.get("modes", {}).items():
+                cpu_metrics = cpu_lookup.get((m_name, mode_name))
+                gpu_fps = gpu_metrics.get("fps_median", 0.0)
+                gpu_lat = gpu_metrics.get("ms_per_frame_median", 0.0)
+                gpu_heap = gpu_metrics.get("peak_heap_mb_median", 0.0)
+
+                if cpu_metrics:
+                    cpu_fps = cpu_metrics.get("fps_median", 0.0)
+                    cpu_lat = cpu_metrics.get("ms_per_frame_median", 0.0)
+                    cpu_heap = cpu_metrics.get("peak_heap_mb_median", 0.0)
+                    speedup_val = f"{round(gpu_fps / max(cpu_fps, 0.001), 1)}x" if cpu_fps > 0 else "N/A"
+                    lines.append(
+                        f"| **{m_name}** | {b_name} | {mode_name} | **{gpu_fps} FPS** | {cpu_fps} FPS | **{speedup_val}** | {gpu_lat} ms | {cpu_lat} ms | {gpu_heap} MB | {cpu_heap} MB |"
+                    )
+                else:
+                    lines.append(
+                        f"| **{m_name}** | {b_name} | {mode_name} | **{gpu_fps} FPS** | — | — | {gpu_lat} ms | — | {gpu_heap} MB | — |"
+                    )
+
     lines.extend([
         "",
         "## Key Architectural Findings",
@@ -534,11 +606,15 @@ def run_benchmark(
 
         benchmark_runs.append(dev_entry)
 
+    devices_list = list(discovery.get("gpus", []))
+    if any(r.get("device_id") == "cpu" for r in benchmark_runs) or not discovery.get("cuda_available"):
+        devices_list.append({"device_id": "cpu", "name": f"Host CPU ({discovery.get('cpu_threads', 1)} threads)", "total_vram_gb": 0.0})
+
     full_report = {
         "benchmark_title": "Klygo Multi-Backend & Multi-GPU Benchmark",
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "discovery": discovery,
-        "devices": discovery.get("gpus", []) if discovery.get("cuda_available") else [{"device_id": "cpu", "name": "CPU"}],
+        "devices": devices_list,
         "test_images_count": len(test_images),
         "repeats": repeats,
         "runs": benchmark_runs,
