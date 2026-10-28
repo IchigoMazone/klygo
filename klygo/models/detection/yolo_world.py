@@ -16,7 +16,7 @@ class YOLOWorldDetect(Detector):
         "agnostic_nms", "augment", "batch", "conf", "device", "half", "imgsz",
         "iou", "max_det", "retina_masks", "save", "save_conf", "save_crop",
         "save_frames", "save_json", "save_txt", "show", "show_boxes",
-        "show_conf", "show_labels", "tracker", "vid_stride", "visualize",
+        "show_conf", "show_labels", "stream", "tracker", "vid_stride", "visualize",
     }
 
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
@@ -56,6 +56,8 @@ class YOLOWorldDetect(Detector):
         self,
         images: List[PIL.Image.Image],
         prompt: Optional[List[str]] = None,
+        native: Optional[bool] = None,
+        **kwargs,
     ) -> List[Detection]:
 
         classes = list(self.original_names.values()) if prompt is None else list(prompt)
@@ -66,24 +68,29 @@ class YOLOWorldDetect(Detector):
         model_config = dict(self.metadata["model"])
         post_config = dict(self.metadata["post"])
 
-        native_post = {
+        threshold = float(kwargs.get("threshold", post_config.get("threshold", 0.25)))
+        iou = float(kwargs.get("iou", post_config.get("iou", 0.7)))
+
+        extra_opts = kwargs if native else {
             k: v for k, v in post_config.items()
             if k in self._NATIVE_OPTIONS and k not in ("conf", "iou", "threshold")
         }
-        native_kwargs = {**model_config, **native_post}
 
         results = self.model(
             images,
-            conf=post_config.get("threshold", 0.25),
-            iou=post_config.get("iou", 0.7),
+            conf=threshold,
+            iou=iou,
             verbose=False,
-            **native_kwargs,
+            **utils.exclude_keys(
+                {**model_config, **extra_opts},
+                ["threshold", "iou"],
+            ),
         )
 
         return outputs.build_detections(
             images,
             self.format_results(results),
-            metadata={"prompt": list(self.names.values()), **post_config},
+            metadata={"prompt": list(self.names.values()), "threshold": threshold, "iou": iou, "native": bool(native)},
             names=self.names,
         )
 

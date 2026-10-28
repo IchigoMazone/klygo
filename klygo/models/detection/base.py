@@ -366,7 +366,7 @@ class Detector(BaseModel):
             )
 
         with self._prediction_lock:
-            metadata, prompts = self._resolve_prediction(prompt, kwargs)
+            metadata, prompts = self._resolve_prediction(prompt, kwargs, runtime=False)
             previous = self._snapshot_prediction_state()
             try:
                 with self._use_metadata(metadata):
@@ -377,7 +377,7 @@ class Detector(BaseModel):
                     )
                     runtime_options.setdefault("batch", 1)
                     runtime_options.setdefault("vid_stride", 1)
-                    backend_stream = stream
+                    backend_stream = runtime_options.pop("stream", stream)
                     raw = self.model.predict(
                         source=source,
                         stream=backend_stream,
@@ -460,6 +460,8 @@ class Detector(BaseModel):
         self,
         images: List[PIL.Image.Image],
         prompt: Optional[List[str]] = None,
+        native: Optional[bool] = None,
+        **kwargs,
     ) -> List[Detection]:
         """Execute model forward pass. Subclasses implement this method."""
         raise NotImplementedError(
@@ -755,12 +757,12 @@ class Detector(BaseModel):
         det.metadata.update({"speed": {"inference": lat_ms, "fps": fps_val}})
         return det
 
-    def _resolve_prediction(self, prompt: Any, kwargs: Dict[str, Any], *, validate: bool = True) -> Any:
+    def _resolve_prediction(self, prompt: Any, kwargs: Dict[str, Any], *, validate: bool = True, runtime: bool = True) -> Any:
         base = deepcopy(dict(self._metadata))
         base.update(deepcopy(self.settings))
         saved = {k: v for k, v in self._predict_config.items() if k != "prompt"}
         base = utils.resolve_metadata(base, saved, runtime=True)
-        resolved = utils.resolve_metadata(base, kwargs, runtime=True)
+        resolved = utils.resolve_metadata(base, kwargs, runtime=runtime)
         effective_prompt = deepcopy(self._predict_config["prompt"]) if prompt is _UNSET else self._normalize_prediction_prompt(prompt)
         if validate:
             self._validate_prediction(resolved, effective_prompt)
@@ -808,7 +810,7 @@ class Detector(BaseModel):
                     validators.validate_type(value, (int, float), name)
                     if isinstance(value, bool) or not math.isfinite(value) or not 0 <= value <= 1:
                         raise ValueError(f"{name} must be a finite number between 0 and 1")
-            for name in ("source", "stream", "verbose", "batch", "vid_stride", "max_frames", "native", "packed", "output_path"):
+            for name in ("source", "verbose", "batch", "vid_stride", "max_frames", "native", "packed", "output_path"):
                 if name in values:
                     raise ValueError(f"{name} is an execution control, not a persistent inference option")
 

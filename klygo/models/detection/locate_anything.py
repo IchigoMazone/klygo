@@ -6,7 +6,7 @@ score=1.0 as a documented presence value, never as measured confidence.
 
 import math
 import re
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 from PIL import Image
 
@@ -188,6 +188,8 @@ class LocateAnythingDetect(Detector):
         self,
         images: Sequence[Image.Image],
         prompt: Any = None,
+        native: Optional[bool] = None,
+        **kwargs,
     ) -> List[Any]:
         """Generate real box tokens for each image/query and normalize coordinates."""
         # 1. Validate prompt and reject incompatible postprocessing overrides
@@ -204,13 +206,15 @@ class LocateAnythingDetect(Detector):
 
         # 2. Validate and build generation hyperparameters
         options = dict(self.metadata.get("generation", {}))
-        unknown_options = set(options) - set(_GENERATION_DEFAULTS)
+        extra_opts = kwargs if native else {}
+        merged_opts = {**options, **extra_opts}
+        unknown_options = set(merged_opts) - set(_GENERATION_DEFAULTS)
         if unknown_options:
             raise ValueError(
                 f"Unsupported Locate Anything generation options: {sorted(unknown_options)}"
             )
 
-        generation = {**_GENERATION_DEFAULTS, **options}
+        generation = {**_GENERATION_DEFAULTS, **merged_opts}
         if generation["generation_mode"] not in ("fast", "hybrid", "slow"):
             raise ValueError("generation_mode must be fast, hybrid or slow")
 
@@ -298,6 +302,7 @@ class LocateAnythingDetect(Detector):
                 "confidence_available": False,
                 "revision": self._revision,
                 "generation": generation,
+                "native": bool(native),
             },
         )
 

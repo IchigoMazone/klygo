@@ -3,7 +3,7 @@ Grounding DINO Zero-Shot Object Detection (klygo.models.detection.grounding_dino
 LAYER 3: Explicit model & processor configuration; ``forward()`` is concise thanks to Detector helpers.
 """
 
-from typing import Any, List, Dict, Union
+from typing import Any, List, Dict, Optional, Union
 from collections.abc import Mapping
 import PIL.Image
 
@@ -51,6 +51,8 @@ class GroundingDinoDetect(Detector):
         self,
         images: List[PIL.Image.Image],
         prompt: Union[str, List[str]],
+        native: Optional[bool] = None,
+        **kwargs,
     ) -> List[Detection]:
 
         if not prompt:
@@ -59,6 +61,10 @@ class GroundingDinoDetect(Detector):
         model_config = dict(self.metadata["model"])
         processor_config = dict(self.metadata["processor"])
         post_config = dict(self.metadata["post"])
+
+        extra_opts = kwargs if native else {}
+        proc_opts = {**processor_config, **extra_opts}
+        post_opts = {**post_config, **extra_opts}
 
         # 2. In-place preprocessing (Grounding DINO-specific prompt formatting)
         prompt_list = [prompt] if isinstance(prompt, str) else list(prompt)
@@ -69,7 +75,7 @@ class GroundingDinoDetect(Detector):
             images=images,
             text=text_batch,
             return_tensors="pt",
-            **processor_config,
+            **utils.exclude_keys(proc_opts, ["threshold", "text_threshold"]),
         )
         inputs = self.cast_inputs(inputs)
 
@@ -79,8 +85,8 @@ class GroundingDinoDetect(Detector):
         outputs = self.run_inference(inputs, **utils.exclude_keys(model_config, loading_keys))
 
         # 4. Grounding DINO postprocessing
-        thresh = post_config.get("threshold", 0.25)
-        text_thresh = post_config.get("text_threshold", 0.3)
+        thresh = float(post_opts.get("threshold", 0.25))
+        text_thresh = float(post_opts.get("text_threshold", 0.3))
 
         # Only sync 'input_ids' to the output device when needed (Multi-GPU).
         # Never copy large 'pixel_values' tensors; that would waste PCIe bandwidth and VRAM.
@@ -95,7 +101,7 @@ class GroundingDinoDetect(Detector):
                 threshold=thresh,
                 text_threshold=text_thresh,
                 target_sizes=[img.size[::-1] for img in images],
-                **utils.exclude_keys(post_config, ["threshold", "text_threshold", "target_sizes"]),
+                **utils.exclude_keys(post_opts, ["threshold", "text_threshold", "target_sizes"]),
             )
 
         # Filter out predictions with empty or whitespace-only labels from tokenizer
@@ -121,7 +127,7 @@ class GroundingDinoDetect(Detector):
         results = build_detections(
             images,
             cleaned_raw,
-            metadata={"prompt": prompt, **post_config},
+            metadata={"prompt": prompt, "threshold": thresh, "text_threshold": text_thresh, "native": bool(native)},
             names=self._result_names,
         )
         if results:
