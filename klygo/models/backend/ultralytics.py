@@ -73,8 +73,9 @@ def save(model: Any, output_dir: str) -> None:
     """Save weights using the Ultralytics model ``save()`` method."""
     from klygo import files
     abs_out = files.resolve(output_dir)
+    target = files.join(abs_out, "model.pt") if files.is_dir(abs_out) else abs_out
     if model is not None and hasattr(model, "save"):
-        model.save(abs_out)
+        model.save(target)
 
 
 def reset(model: Any) -> None:
