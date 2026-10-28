@@ -1,8 +1,17 @@
 """Ultralytics YOLO detection wrapper."""
 
+import sys
 from typing import Any, Dict, List, Optional
 
 import PIL.Image
+
+try:
+    from ultralytics import YOLO
+except ImportError as exc:
+    raise ImportError(
+        "YOLO requires the Ultralytics model extra. "
+        "Install it using 'pip install \"klygo[ultralytics]\"'."
+    ) from exc
 
 from klygo import outputs, utils
 from klygo.models.detection.base import Detector
@@ -17,40 +26,10 @@ class YOLODetect(Detector):
 
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
         super().__init__(metadata=metadata, **kwargs)
-        try:
-            from ultralytics import YOLO
-        except ImportError as exc:
-            raise ImportError(
-                "YOLO requires the Ultralytics model extra. "
-                "Install it using 'pip install \"klygo[ultralytics]\"'."
-            ) from exc
 
-        self.model = YOLO(self.model_id)
+        yolo_cls = getattr(sys.modules.get("ultralytics"), "YOLO", YOLO)
+        self.model = yolo_cls(self.model_id)
         self.names = dict(self.model.names)
-
-    def _native_runtime_options(self, metadata, prompt):
-        """Build runtime options for Ultralytics native prediction."""
-        model_config = dict(metadata["model"])
-        post_config = dict(metadata["post"])
-        classes = model_config.pop("classes", None)
-        if prompt:
-            requested = [prompt] if isinstance(prompt, str) else list(prompt)
-            unknown = [label for label in requested if label not in self.names.values()]
-            if unknown:
-                raise ValueError(f"Unknown YOLO classes: {unknown}; use labels from model.names")
-            class_ids = utils.invert(self.names)
-            classes = [class_ids[name] for name in requested]
-
-        post_model_opts = {
-            k: v for k, v in post_config.items()
-            if k in _YOLO_POST_OPTIONS and k not in ("conf", "iou", "threshold")
-        }
-        runtime = {**model_config, **post_model_opts}
-        runtime["conf"] = float(post_config.get("threshold", 0.25))
-        runtime["iou"] = float(post_config.get("iou", 0.7))
-        if classes is not None:
-            runtime["classes"] = classes
-        return runtime
 
     def forward(
         self,
@@ -59,7 +38,7 @@ class YOLODetect(Detector):
         native: Optional[bool] = None,
         **kwargs,
     ) -> List[Detection]:
-        
+
         model_config = dict(self.metadata["model"])
         post_config = dict(self.metadata["post"])
         self.names = dict(self.model.names)
@@ -98,7 +77,13 @@ class YOLODetect(Detector):
         return outputs.build_detections(
             images,
             self.format_results(results),
-            metadata={"prompt": prompt, "classes": classes, "threshold": threshold, "iou": iou, "native": bool(native)},
+            metadata={
+                "prompt": prompt,
+                "classes": classes,
+                "threshold": threshold,
+                "iou": iou,
+                "native": bool(native),
+            },
             names=self.names,
         )
 

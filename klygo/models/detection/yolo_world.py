@@ -1,8 +1,17 @@
 """Ultralytics YOLO-World detection wrapper."""
 
+import sys
 from typing import Any, Dict, List, Optional
 
 import PIL.Image
+
+try:
+    from ultralytics import YOLOWorld
+except ImportError as exc:
+    raise ImportError(
+        "YOLO-World requires the Ultralytics model extra. "
+        "Install it using 'pip install \"klygo[ultralytics]\"'."
+    ) from exc
 
 from klygo import outputs, utils
 from klygo.models.detection.base import Detector
@@ -17,30 +26,11 @@ class YOLOWorldDetect(Detector):
 
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
         super().__init__(metadata=metadata, **kwargs)
-        try:
-            from ultralytics import YOLOWorld
-        except ImportError as exc:
-            raise ImportError(
-                "YOLO-World requires the Ultralytics model extra. "
-                "Install it using 'pip install \"klygo[ultralytics]\"'."
-            ) from exc
 
-        self.model = YOLOWorld(self.model_id)
+        yolo_cls = getattr(sys.modules.get("ultralytics"), "YOLOWorld", YOLOWorld)
+        self.model = yolo_cls(self.model_id)
         self.original_names = dict(self.model.names)
         self.names = dict(self.original_names)
-
-    def _native_runtime_options(self, metadata, prompt):
-        """Build runtime options for YOLO-World native prediction."""
-        model_config = dict(metadata["model"])
-        post_config = dict(metadata["post"])
-        post_model_opts = {
-            k: v for k, v in post_config.items()
-            if k in _YOLO_POST_OPTIONS and k not in ("conf", "iou", "threshold")
-        }
-        runtime = {**model_config, **post_model_opts}
-        runtime["conf"] = float(post_config.get("threshold", 0.25))
-        runtime["iou"] = float(post_config.get("iou", 0.7))
-        return runtime
 
     def forward(
         self,
@@ -82,7 +72,12 @@ class YOLOWorldDetect(Detector):
         return outputs.build_detections(
             images,
             self.format_results(results),
-            metadata={"prompt": list(self.names.values()), "threshold": threshold, "iou": iou, "native": bool(native)},
+            metadata={
+                "prompt": list(self.names.values()),
+                "threshold": threshold,
+                "iou": iou,
+                "native": bool(native),
+            },
             names=self.names,
         )
 

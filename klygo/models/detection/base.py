@@ -19,6 +19,7 @@ import PIL.Image
 
 from klygo.models.base import BaseModel
 from klygo.models import utils
+from klygo import utils as klygo_utils
 from klygo.models.backend import common
 from klygo.outputs.detect import Box, Detection, Detections
 from klygo.utils.progress import ProgressBar
@@ -281,6 +282,28 @@ class Detector(BaseModel):
         prompt: Any,
     ) -> Dict[str, Any]:
         """Build backend-native runtime options for one prediction."""
+        if self.backend == "Ultralytics":
+            model_config = dict(metadata.get("model", {}))
+            post_config = dict(metadata.get("post", {}))
+            classes = model_config.pop("classes", None)
+            if prompt:
+                requested = [prompt] if isinstance(prompt, str) else list(prompt)
+                unknown = [label for label in requested if label not in self.names.values()]
+                if unknown:
+                    raise ValueError(f"Unknown YOLO classes: {unknown}; use labels from model.names")
+                class_ids = klygo_utils.invert(self.names)
+                classes = [class_ids[name] for name in requested]
+
+            post_model_opts = {
+                k: v for k, v in post_config.items()
+                if k in {"agnostic_nms", "max_det", "retina_masks", "nms"} and k not in ("conf", "iou", "threshold")
+            }
+            runtime = {**model_config, **post_model_opts}
+            runtime["conf"] = float(post_config.get("threshold", 0.25))
+            runtime["iou"] = float(post_config.get("iou", 0.7))
+            if classes is not None:
+                runtime["classes"] = classes
+            return runtime
         raise ValueError(f"native prediction is unsupported for backend {self.backend!r}")
 
     def _native_image(self, raw: Any, frame_index: int) -> Any:
