@@ -351,7 +351,11 @@ class Detector(BaseModel):
         if path is not None and files.exists(path):
             suffix = files.extension(path).lower()
             video_index = frame_index if suffix in media.VIDEO_SUFFIXES else None
-            return media.LazyImage(path, frame_index=video_index)
+            source = media.LazyImage(path, frame_index=video_index)
+            shape = getattr(raw, "orig_shape", None)
+            if shape is not None and len(shape) >= 2:
+                source._cached_size = (int(shape[1]), int(shape[0]))
+            return source
         image = getattr(raw, "orig_img", None)
         if image is None:
             raise ValueError("native backend result does not provide source image data")
@@ -363,6 +367,7 @@ class Detector(BaseModel):
         frame_index: int,
         metadata: Dict[str, Any],
         prompt: Any,
+        prediction_snapshot: Optional[Dict[str, Any]] = None,
     ) -> Detection:
         """Convert one backend-native result into a Klygo Detection."""
         formatted = self.format_results([raw])
@@ -380,7 +385,11 @@ class Detector(BaseModel):
         frame.metadata.update({
             "native": True,
             "prompt": list(prompt) if prompt is not None else None,
-            "predict_config": self._config_snapshot(metadata, prompt),
+            "predict_config": (
+                deepcopy(prediction_snapshot)
+                if prediction_snapshot is not None
+                else self._config_snapshot(metadata, prompt)
+            ),
             "model_id": self.model_id,
             "backend": self.backend,
             "source_path": frame.source_path,
@@ -413,34 +422,40 @@ class Detector(BaseModel):
                 "or model-specific parameters (such as model_stream) if supported by the backend"
             )
 
+        if workers != 1 or prefetch != 1:
+            raise ValueError("workers and prefetch are unavailable in native mode")
+
+        locked = []
+        if batch != 1:
+            locked.append("batch")
+        if vid_stride != 1:
+            locked.append("vid_stride")
+        if max_frames is not None:
+            locked.append("max_frames")
+        if locked:
+            names = ", ".join(locked)
+            raise ValueError(
+                f"{names} are unavailable in native mode; use registered model parameters"
+            )
+
         if self.backend != "Ultralytics":
             with self._prediction_lock:
                 metadata, prompts = self._resolve_prediction(prompt, kwargs, runtime=False)
                 _ = self._native_runtime_options(metadata, prompts)
-                images, is_single = utils.resolve_images(
-                    source,
-                    step=vid_stride,
-                    max_frames=max_frames,
-                    stream=False,
-                )
-                source_type = getattr(images, "source_type", "image" if is_single else "frames")
+                images, is_single = common._native_inputs(source)
+                source_type = "image" if is_single else "frames"
                 previous = self._snapshot_prediction_state()
                 try:
                     with self._use_metadata(metadata):
                         self._prepare_prediction(prompts)
-                        frames_list = []
-                        offset = 0
-                        for part, prepared in _prepared_batches(
-                            images, batch, workers, prefetch, backend=self.backend
-                        ):
-                            batch_frames = self._infer_batch(
-                                part, prompts, metadata, offset * vid_stride,
-                                vid_stride, prepared_images=prepared,
-                            )
-                            for f in batch_frames:
-                                f.metadata["native"] = True
-                            frames_list.extend(batch_frames)
-                            offset += len(part)
+                        frames_list = self._infer_batch(
+                            images,
+                            prompts,
+                            metadata,
+                            prepared_images=images,
+                        )
+                        for frame in frames_list:
+                            frame.metadata["native"] = True
                         result = Detections(
                             frames_list,
                             metadata={
@@ -459,21 +474,6 @@ class Detector(BaseModel):
 
         if isinstance(source, media.MediaFrames):
             raise TypeError("native prediction requires a backend-supported source, not MediaFrames")
-        if workers != 1 or prefetch != 1:
-            raise ValueError("workers and prefetch are unavailable in native mode")
-
-        locked = []
-        if batch != 1:
-            locked.append("batch")
-        if vid_stride != 1:
-            locked.append("vid_stride")
-        if max_frames is not None:
-            locked.append("max_frames")
-        if locked:
-            names = ", ".join(locked)
-            raise ValueError(
-                f"{names} are unavailable in native mode; use registered model parameters"
-            )
 
         with self._prediction_lock:
             metadata, prompts = self._resolve_prediction(prompt, kwargs, runtime=False)
@@ -502,6 +502,7 @@ class Detector(BaseModel):
             self._remember_prediction(metadata, prompts)
             isolate_native_stream = self._stream_state_isolation_required()
             is_generator = hasattr(raw, "__next__") or (hasattr(raw, "__iter__") and not isinstance(raw, (list, tuple)))
+            prediction_snapshot = self._config_snapshot(metadata, prompts)
 
         def frames():
             iterator = iter(raw)
@@ -529,6 +530,7 @@ class Detector(BaseModel):
                         index,
                         metadata,
                         prompts,
+                        prediction_snapshot,
                     )
                     index += 1
             finally:
@@ -801,6 +803,7 @@ class Detector(BaseModel):
                      prediction_snapshot: Optional[Dict[str, Any]] = None) -> List[Detection]:
         with self._prediction_lock, self._use_metadata(metadata), common.inference_context(self.backend):
             self._prepare_prediction(prompt)
+            common._optimize_model(self.backend, self.model)
             start = time.perf_counter()
             prepared = (
                 prepared_images

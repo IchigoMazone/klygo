@@ -37,6 +37,46 @@ class TestOutputs(unittest.TestCase):
         self.assertEqual(built[0].image_size, (40, 30))
         self.assertIs(built[0]._source, image)
 
+    def test_builder_fast_arrays_preserve_contract_without_aliasing(self):
+        boxes = np.array([[1, 2, 10, 12], [4, 5, 20, 24]], dtype=np.float32)
+        scores = np.array([0.8, 0.6], dtype=np.float32)
+        class_ids = np.array([0, 1], dtype=np.int32)
+        built = outputs.build_detections(
+            [Image.new("RGB", (40, 30))],
+            [{
+                "boxes": boxes,
+                "scores": scores,
+                "labels": ["car", "person"],
+                "class_ids": class_ids,
+            }],
+            names={0: "car", 1: "person"},
+        )[0]
+
+        boxes[0, 0] = 99
+        scores[0] = 0.1
+        class_ids[0] = 1
+        self.assertEqual(built.boxes[0], (1.0, 2.0, 10.0, 12.0))
+        self.assertAlmostEqual(built.scores[0], 0.8, places=6)
+        self.assertEqual(built.class_ids, [0, 1])
+        self.assertEqual(built.labels, ["car", "person"])
+        self.assertEqual(built.uids, [0, 1])
+
+    def test_builder_fast_arrays_keep_validation(self):
+        image = Image.new("RGB", (40, 30))
+        prediction = {
+            "boxes": np.array([[10, 2, 1, 12]], dtype=np.float32),
+            "scores": np.array([0.8], dtype=np.float32),
+            "labels": ["car"],
+            "class_ids": np.array([0], dtype=np.int32),
+        }
+        with self.assertRaisesRegex(ValueError, "positive width"):
+            outputs.build_detections([image], [prediction], names={0: "car"})
+
+        prediction["boxes"] = np.array([[1, 2, 10, 12]], dtype=np.float32)
+        prediction["scores"] = np.array([1.2], dtype=np.float32)
+        with self.assertRaisesRegex(ValueError, "between 0 and 1"):
+            outputs.build_detections([image], [prediction], names={0: "car"})
+
     def test_builder_and_geometry(self):
         built = outputs.build_detections([Image.new("RGB", (40, 30))], [{"boxes": [[1,2,10,12]], "scores": [.8], "labels": ["car"]}])
         self.assertEqual(built[0].uids, [0]); self.assertEqual(built[0][0].area, 90)

@@ -35,6 +35,39 @@ class BenchmarkHarness(Detector):
 
 
 class TestBackendRuntimeDispatch(unittest.TestCase):
+    def test_ultralytics_optimizer_preserves_public_model_calls(self):
+        original_predict = Mock(return_value=["fallback"])
+        model = SimpleNamespace(predict=original_predict)
+        images = [np.zeros((8, 12, 3), dtype=np.uint8)]
+
+        with patch.object(ultralytics, "predict_prepared", return_value=["fast"]) as prepared:
+            optimized = ultralytics.optimize_model(model)
+            actual = optimized.predict(images, conf=0.25, verbose=False)
+
+        self.assertEqual(actual, ["fast"])
+        prepared.assert_called_once_with(
+            model,
+            images,
+            options={"conf": 0.25, "verbose": False},
+        )
+        original_predict.assert_not_called()
+        self.assertIs(ultralytics.optimize_model(model), model)
+
+    def test_ultralytics_optimizer_falls_back_for_native_sources(self):
+        original_predict = Mock(return_value=["native"])
+        model = SimpleNamespace(predict=original_predict)
+
+        with patch.object(ultralytics, "predict_prepared", return_value=None):
+            ultralytics.optimize_model(model)
+            actual = model.predict("video.mp4", stream=True, device="cuda:0")
+
+        self.assertEqual(actual, ["native"])
+        original_predict.assert_called_once_with(
+            source="video.mp4",
+            stream=True,
+            device="cuda:0",
+        )
+
     def test_ultralytics_prepared_path_reuses_initialized_predictor(self):
         result = SimpleNamespace(speed=None)
         predictor = SimpleNamespace(

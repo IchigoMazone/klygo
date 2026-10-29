@@ -301,14 +301,19 @@ class TestWrapperLifecycle(unittest.TestCase):
         model = self.wrapper(YOLODetect)
         model.settings["model"]["nms"] = True
         model.settings["post"]["extra_post_param"] = 999
-        result = model.predict(
-            [self.image, self.image],
-            native=True,
-            threshold=0.4,
-            iou=0.6,
-            packed=True,
-            verbose=False,
-        )
+        with patch.object(
+            model,
+            "_config_snapshot",
+            wraps=model._config_snapshot,
+        ) as config_snapshot:
+            result = model.predict(
+                [self.image, self.image],
+                native=True,
+                threshold=0.4,
+                iou=0.6,
+                packed=True,
+                verbose=False,
+            )
 
         self.assertIsInstance(result, outputs.Detections)
         self.assertFalse(result.is_stream)
@@ -320,6 +325,9 @@ class TestWrapperLifecycle(unittest.TestCase):
         self.assertTrue(model.model.options[-1]["nms"])
         self.assertNotIn("extra_post_param", model.model.options[-1])
         self.assertEqual(model.model.options[-1]["vid_stride"], 1)
+        self.assertEqual(config_snapshot.call_count, 1)
+        result[0].metadata["predict_config"]["threshold"] = 0.1
+        self.assertEqual(result[1].metadata["predict_config"]["threshold"], 0.4)
 
     def test_native_yolo_preserves_folder_source_type(self):
         model = self.wrapper(YOLODetect)
@@ -362,6 +370,51 @@ class TestWrapperLifecycle(unittest.TestCase):
         model = RecordingDetector()
         result = model.predict(self.image, native=True, verbose=False)
         self.assertTrue(result[0].metadata["native"])
+
+    def test_generic_native_uses_in_memory_inputs_without_media_resolution(self):
+        model = RecordingDetector()
+
+        with patch("klygo.models.detection.base.utils.resolve_images") as resolve_images:
+            result = model.predict(
+                [self.image, self.image],
+                native=True,
+                verbose=False,
+            )
+
+        resolve_images.assert_not_called()
+        self.assertEqual(len(result), 2)
+        self.assertEqual(len(model.calls), 1)
+        self.assertTrue(all(frame.metadata["native"] for frame in result))
+
+    def test_generic_native_rejects_managed_sources_and_controls(self):
+        model = RecordingDetector()
+
+        with self.assertRaisesRegex(TypeError, "in-memory native inputs"):
+            model.predict("video.mp4", native=True, verbose=False)
+        with self.assertRaisesRegex(ValueError, "workers and prefetch"):
+            model.predict(self.image, native=True, workers=2, verbose=False)
+        with self.assertRaisesRegex(ValueError, "batch"):
+            model.predict(self.image, native=True, batch=2, verbose=False)
+
+    def test_native_source_reuses_backend_image_size(self):
+        model = RecordingDetector()
+
+        class NativeSource:
+            def __init__(self, path, frame_index=None):
+                self.path = path
+                self.frame_index = frame_index
+                self._cached_size = None
+
+        raw = SimpleNamespace(path="video.mp4", orig_shape=(720, 1280))
+        with (
+            patch("klygo.files.exists", return_value=True),
+            patch("klygo.files.extension", return_value=".mp4"),
+            patch("klygo.media.LazyImage", NativeSource),
+        ):
+            source = model._native_image(raw, 7)
+
+        self.assertEqual(source.frame_index, 7)
+        self.assertEqual(source._cached_size, (1280, 720))
 
     def test_world_changes_only_once_and_restores_native_state(self):
         model = self.wrapper(YOLOWorldDetect)

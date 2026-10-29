@@ -39,6 +39,35 @@ def detection(source_id="gpu", frame_index=0):
 
 @unittest.skipUnless(_CUDA_READY, "CuPy CUDA runtime is unavailable")
 class TestGpuStorage(unittest.TestCase):
+    def test_numpy_builder_round_trips_all_gpu_precisions(self):
+        image = np.zeros((20, 20, 3), dtype=np.uint8)
+        prediction = {
+            "boxes": np.array([[0, 0, 10, 10], [12, 12, 18, 18]], dtype=np.float32),
+            "scores": np.array([0.75, 0.5], dtype=np.float32),
+            "labels": ["car", "person"],
+            "class_ids": np.array([0, 1], dtype=np.int32),
+        }
+
+        for precision in (16, 32, 64):
+            results = outputs.Detections(
+                outputs.build_detections(
+                    [image],
+                    [prediction],
+                    names={0: "car", 1: "person"},
+                )
+            ).astype(precision).cuda()
+            self.assertEqual((results.device, results.dtype), ("cuda:0", precision))
+            self.assertIsInstance(results[0]._xyxy, cp.ndarray)
+            self.assertEqual(results[0].labels, ["car", "person"])
+            self.assertEqual(results[0].class_ids, [0, 1])
+            self.assertEqual(results[0].uids, [0, 1])
+
+            results.cpu()
+            self.assertEqual(results[0].boxes, [
+                (0.0, 0.0, 10.0, 10.0),
+                (12.0, 12.0, 18.0, 18.0),
+            ])
+
     def test_packed_storage_converts_base_arrays_without_materializing_frames(self):
         results = outputs.Detections(
             [detection("packed", index) for index in range(3)],

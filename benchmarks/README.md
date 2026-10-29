@@ -4,24 +4,45 @@ This directory contains the official multi-backend benchmark harness, telemetry 
 
 ---
 
-## 1. Directory Structure
+## 1. Directory Structure & Organization
 
 ```text
 benchmarks/
-├── README.md                          # Official Benchmark Suite documentation & guide
-├── runner.py                          # Multi-backend intra-model benchmark CLI runner
-├── metrics/                           # Quantitative telemetry and tabular benchmarks
-│   ├── benchmark_metrics.json         # Complete raw JSON measurements
-│   └── benchmark_tables.md            # Formatted tables of FPS, Latency, TTFF, RAM, VRAM
-└── evaluations/                       # Dedicated analytical reports and architectural insights
-    ├── summary_evaluation.md          # Multi-backend cross-tier evaluation & recommendations
-    ├── cpu_evaluation.md              # In-depth CPU latency, memory footprint, and bottlenecks
-    └── gpu_evaluation.md              # In-depth GPU acceleration, VRAM containment, and throughput
+├── README.md                          # Master Benchmark Suite documentation & navigation
+├── runner.py                          # Master multi-backend benchmark CLI orchestrator
+├── data/                              # Shared benchmark datasets (images, video clips, annotations)
+│   └── .gitkeep
+├── outputs_cpu_gpu/                   # NumPy/CuPy Detections microbenchmarks
+│   ├── README.md                      # Methodology, tables, and conclusions
+│   └── metrics/                       # Raw NMS and storage-operation measurements
+├── round_1/                           # Round 1: Pipeline Smoke Test (Historical Baseline)
+│   ├── README.md                      # Round 1 summary & methodology retrospective
+│   ├── metrics/
+│   │   ├── benchmark_metrics.json     # Raw JSON measurements (Round 1)
+│   │   └── benchmark_tables.md        # Summary tables of FPS, Latency, TTFF, RAM, VRAM
+│   └── evaluations/
+│       ├── summary_evaluation.md      # Multi-backend cross-tier evaluation
+│       ├── cpu_evaluation.md          # CPU latency & memory observations
+│       └── gpu_evaluation.md          # GPU acceleration & VRAM observations
+└── round_2/                           # Round 2: Rigorous Multi-Process Benchmark Harness
+    ├── README.md                      # Round 2 scientific standards & execution plan
+    ├── metrics/                       # Target directory for Round 2 raw JSON & tabular metrics
+    └── evaluations/                   # Target directory for Round 2 analytical reports & scorecards
 ```
 
 ---
 
-## 2. Execution Modes Evaluated
+## 2. Benchmark Iterations
+
+| Iteration | Status | Primary Purpose & Methodology | Reference |
+| :--- | :--- | :--- | :--- |
+| **Round 1** | Completed | Initial API pipeline smoke test verifying end-to-end execution of all 6 modes across backends. Identified 9 core methodology limitations (model load in raw timer, lack of warmup, small 4-frame dataset, memory tracking asymmetry). | [`benchmarks/round_1/README.md`](round_1/README.md) |
+| **Round 2** | Architecture Ready | Rigorous multi-process benchmark with subprocess isolation, symmetric warmup, memory delta tracking, 30–60 real frames, 5 repeats, detection parity verification, and full 5-model coverage. | [`benchmarks/round_2/README.md`](round_2/README.md) |
+| **Outputs CPU/GPU** | Completed | Focused NumPy/CuPy benchmark for NMS, device transfers, precision conversion, and threshold operations on `Detections`. | [`benchmarks/outputs_cpu_gpu/README.md`](outputs_cpu_gpu/README.md) |
+
+---
+
+## 3. Execution Modes Evaluated
 
 Every integrated detection model is evaluated across up to 6 execution modes:
 
@@ -40,7 +61,7 @@ Modes ──┼─ 2. Native ────┤
 ```
 
 1. **Raw Non-stream**: Direct upstream library call (`ultralytics.YOLO.predict(stream=False)`, etc.). Accumulates all results in RAM before returning.
-2. **Raw Stream**: Upstream library streaming generator (`ultralytics.YOLO.predict(stream=True)`). Yields results frame-by-frame. (Unavailable in Hugging Face Grounding DINO).
+2. **Raw Stream**: Upstream library streaming generator (`ultralytics.YOLO.predict(stream=True)`). Yields results frame-by-frame.
 3. **Klygo Native Non-stream**: `detector.predict(..., native=True)` bypasses Klygo's media and preprocessing pipeline while returning standardized `outputs.Detections`.
 4. **Klygo Native Stream**: `detector.predict(..., native=True, model_stream=True)` delegates stream generation directly to the upstream model engine.
 5. **Klygo Managed Non-stream**: Full Klygo pipeline (`media.MediaFrames` + `preprocessing.compose`), tracking affine transformation traces for automatic bounding box restoration.
@@ -48,36 +69,16 @@ Modes ──┼─ 2. Native ────┤
 
 ---
 
-## 3. Quickstart & Running Benchmarks
+## 4. Running Benchmarks
 
-### Basic Execution (CPU & CUDA auto-detection)
 ```bash
+# Run standard benchmark suite
 python benchmarks/runner.py
-```
 
-### Options
-```bash
-# Test specific device
+# Run on specific hardware target
 python benchmarks/runner.py --device cpu
 python benchmarks/runner.py --device cuda:0
 
-# Test specific models
-python benchmarks/runner.py --models yolov8,yolo-world
+# Run specific model backends
+python benchmarks/runner.py --models yolov8,yolo-world,grounding-dino
 ```
-
-The runner automatically generates a 4-frame synthetic clip if no source video is provided, ensuring deterministic, reproducible metrics without requiring gigabytes of media downloads.
-
----
-
-## 4. Key Findings Summary
-
-- **First Frame Responsiveness (TTFF)**: Streaming modes yield frame #1 in **285 ms – 399 ms** on CPU/GPU for YOLO models, compared to **1.8 s – 17.2 s** when using blocking non-streaming modes.
-- **Filling Upstream Gaps**: Hugging Face Grounding DINO does not support lazy streaming natively. `Klygo Managed Stream` closes this gap, reducing initial response latency from 5.2 s to **2.0 s** on GPU.
-- **Memory Predictability**: Accumulating results without streaming consumes hundreds of megabytes on the Python heap (up to 360 MB for YOLO-World). In contrast, Klygo streaming modes cap Heap memory at a flat **~2.2 MB – 2.5 MB**.
-- **GPU VRAM Containment**: In Klygo Managed mode, YOLOv8 requires only **27.8 MB VRAM** and YOLO-World uses **114.8 MB VRAM**, avoiding CUDA cache bloat.
-
-For detailed numbers and architectural insights:
-- [Summary Evaluation Report](evaluations/summary_evaluation.md)
-- [CPU Evaluation & Bottleneck Analysis](evaluations/cpu_evaluation.md)
-- [GPU Acceleration & VRAM Analysis](evaluations/gpu_evaluation.md)
-- [Full Performance Tables](metrics/benchmark_tables.md)

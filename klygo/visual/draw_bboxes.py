@@ -1,4 +1,4 @@
-"""Two-pass non-destructive bounding box rendering matching Ultralytics YOLO style."""
+"""Two-pass non-destructive bounding box rendering matching Ultralytics YOLO style with anti-collision labels."""
 
 import os
 from typing import Any, List, Optional, Tuple, Union
@@ -9,7 +9,7 @@ import PIL.ImageFont
 
 __all__ = ["draw_bboxes"]
 
-# Official Ultralytics 20-color hex palette for fallback rendering
+# Official Ultralytics 20-color hex palette
 ULTRALYTICS_HEX = (
     "042AFF", "0BDBEB", "FF9500", "00DFB7", "3B82F6",
     "FF6FDD", "FF444F", "CCED00", "00F344", "BD00FF",
@@ -21,13 +21,94 @@ ULTRALYTICS_PALETTE = [
 ]
 
 
-def _get_annotator():
-    """Lazily load Ultralytics Annotator and colors to avoid eager framework imports."""
+def _get_yolo_colors():
+    """Lazily load Ultralytics colors object if available."""
     try:
-        from ultralytics.utils.plotting import Annotator, colors
-        return Annotator, colors
+        from ultralytics.utils.plotting import colors
+        return colors
     except ImportError:
-        return None, None
+        return None
+
+
+def _find_badge_position(
+    box: Tuple[float, float, float, float],
+    bw: int,
+    bh: int,
+    w_img: int,
+    h_img: int,
+    occupied: List[List[int]],
+) -> Tuple[int, int]:
+    """Find optimal non-overlapping position for a caption badge near its box."""
+    xmin, ymin, xmax, ymax = box
+    ixmin = int(round(xmin))
+    iymin = int(round(ymin))
+    ixmax = int(round(xmax))
+    iymax = int(round(ymax))
+
+    bx_base = max(0, min(ixmin, w_img - bw))
+    candidates = []
+
+    # 1. Outside top (standard YOLO placement)
+    if iymin - bh >= 0:
+        candidates.append((bx_base, iymin - bh))
+
+    # 2. Inside top (when near top edge or outside top is occupied)
+    if iymin + bh <= h_img:
+        candidates.append((bx_base, iymin))
+
+    # 3. Stacked directly above / below colliding occupied badges
+    for occ in occupied:
+        ox1, oy1, ox2, oy2 = occ
+        # Below occupied badge
+        if oy2 + bh <= h_img:
+            candidates.append((bx_base, oy2))
+        # Above occupied badge
+        if oy1 - bh >= 0:
+            candidates.append((bx_base, oy1 - bh))
+        # Horizontal shift side-by-side
+        if ox2 + bw <= w_img:
+            if iymin - bh >= 0:
+                candidates.append((ox2, iymin - bh))
+            if iymin + bh <= h_img:
+                candidates.append((ox2, iymin))
+        if ox1 - bw >= 0:
+            if iymin - bh >= 0:
+                candidates.append((ox1 - bw, iymin - bh))
+            if iymin + bh <= h_img:
+                candidates.append((ox1 - bw, iymin))
+
+    # 4. Inside bottom & outside bottom
+    if iymax - bh >= 0 and iymax - bh >= iymin:
+        candidates.append((bx_base, iymax - bh))
+    if iymax + bh <= h_img:
+        candidates.append((bx_base, iymax))
+
+    best_candidate = None
+    min_overlap = float("inf")
+
+    for cx, cy in candidates:
+        cx = max(0, min(cx, w_img - bw))
+        cy = max(0, min(cy, h_img - bh))
+        cand_rect = [cx, cy, cx + bw, cy + bh]
+
+        total_overlap = 0
+        for occ in occupied:
+            dx = max(0, min(cand_rect[2], occ[2]) - max(cand_rect[0], occ[0]))
+            dy = max(0, min(cand_rect[3], occ[3]) - max(cand_rect[1], occ[1]))
+            if dx > 0 and dy > 0:
+                total_overlap += dx * dy
+
+        if total_overlap == 0:
+            return cx, cy
+
+        if total_overlap < min_overlap:
+            min_overlap = total_overlap
+            best_candidate = (cx, cy)
+
+    if best_candidate is not None and min_overlap == 0:
+        return best_candidate
+
+    return best_candidate if best_candidate is not None else (bx_base, max(0, iymin - bh if iymin - bh >= 0 else iymin))
 
 
 def draw_bboxes(
@@ -46,8 +127,8 @@ def draw_bboxes(
 ) -> Union[PIL.Image.Image, np.ndarray]:
     """Draw bounding boxes and optional caption badges on a copy of an image matching Ultralytics YOLO.
 
-    Leverages Ultralytics ``Annotator`` and ``colors`` to deliver native, publication-grade
-    YOLO bounding box outlines, vibrant deterministic color palettes, and crisp label badges.
+    Leverages Ultralytics ``colors`` and two-pass anti-collision badge positioning to deliver
+    crisp YOLO outlines without overlapping or obscured label text.
 
     Parameters
     ----------
@@ -88,6 +169,10 @@ def draw_bboxes(
         bboxes = bboxes.boxes
 
     # 1. Normalize input image representation without modifying original
+    if hasattr(image, "__len__") and not isinstance(image, (np.ndarray, PIL.Image.Image, str, bytes)) and hasattr(image, "__getitem__"):
+        if len(image) > 0:
+            image = image[0]
+
     is_np = isinstance(image, np.ndarray)
     has_alpha = False
     alpha_channel = None
@@ -103,16 +188,19 @@ def draw_bboxes(
             base_rgb = image[:, :, :3]
         else:
             base_rgb = image
-        working_np = base_rgb.copy()
+        working_img = PIL.Image.fromarray(base_rgb)
     elif hasattr(image, "to_pil"):
-        pil_source = image.to_pil(cache=False)
-        working_np = np.asarray(pil_source.convert("RGB")).copy()
+        working_img = image.to_pil(cache=False).copy()
     elif isinstance(image, PIL.Image.Image):
-        working_np = np.asarray(image.convert("RGB")).copy()
+        working_img = image.copy()
     else:
         raise TypeError(
             f"Unsupported image type: {type(image)}. Expected PIL.Image.Image, numpy.ndarray, or LazyImage."
         )
+
+    annotated = working_img.copy()
+    draw = PIL.ImageDraw.Draw(annotated)
+    w_img, h_img = annotated.size
 
     # 2. Normalize bboxes into sequences of 4-float tuples [xmin, ymin, xmax, ymax]
     norm_boxes = []
@@ -125,90 +213,93 @@ def draw_bboxes(
             norm_boxes.append(tuple(float(c) for c in b))
     bboxes = norm_boxes
 
-    # 3. Determine line width
-    actual_lw = line_width or thickness or kwargs.get("width")
-    if actual_lw is not None:
-        actual_lw = int(actual_lw)
+    # 3. Dynamic line width and font size matching Ultralytics
+    actual_lw = line_width or thickness or kwargs.get("width") or max(round(min(w_img, h_img) * 0.0035), 2)
+    actual_fs = font_size or max(round(min(w_img, h_img) * 0.03), 13)
 
-    # 4. Initialize Ultralytics Annotator lazily
-    Annotator, colors = _get_annotator()
-
-    if Annotator is not None and colors is not None:
-        annotator = Annotator(
-            working_np,
-            line_width=actual_lw,
-            font_size=font_size,
-            pil=True,
-        )
-
-        all_labels = labels or []
-        unique_labels = list(dict.fromkeys([str(lbl) for lbl in all_labels]))
-        label_to_idx = {lbl: i for i, lbl in enumerate(unique_labels)}
-        txt_clr = text_color if text_color is not None else (255, 255, 255)
-
-        for idx, box in enumerate(bboxes):
-            lbl = str(all_labels[idx]) if idx < len(all_labels) and all_labels[idx] is not None else ""
-            text_parts = []
-            if show_labels and lbl:
-                text_parts.append(lbl)
-            if show_scores and scores is not None and idx < len(scores) and scores[idx] is not None:
-                text_parts.append(f"{scores[idx]:.2f}")
-            caption = " ".join(text_parts) if text_parts else None
-
-            if box_color is not None:
-                c = box_color
-            elif class_ids is not None and idx < len(class_ids) and class_ids[idx] is not None:
-                c = colors(int(class_ids[idx]), True)
-            elif lbl:
-                parts = lbl.split(" ", 1)
-                if len(parts) == 2 and parts[0].isdigit():
-                    c = colors(int(parts[0]), True)
-                elif lbl.isdigit():
-                    c = colors(int(lbl), True)
-                else:
-                    c = colors(label_to_idx.get(lbl, idx), True)
-            else:
-                c = colors(idx, True)
-
-            annotator.box_label(box, label=caption, color=c, txt_color=txt_clr)
-
-        annotated_np = annotator.result()
-    else:
-        # Fallback to direct PIL rendering
-        annotated_pil = PIL.Image.fromarray(working_np)
-        draw = PIL.ImageDraw.Draw(annotated_pil)
-        lw = actual_lw or max(round(min(working_np.shape[:2]) * 0.0035), 2)
-        fs = font_size or max(round(min(working_np.shape[:2]) * 0.03), 13)
+    # 4. Load TrueType font matching Ultralytics Arial
+    ultralytics_font = os.path.join(os.environ.get("APPDATA", ""), "Ultralytics", "Arial.ttf")
+    font = None
+    for font_name in [ultralytics_font, "Arial.ttf", "arial.ttf", "DejaVuSans.ttf", "calibri.ttf", "SegoeUI.ttf"]:
         try:
-            font = PIL.ImageFont.truetype("arial.ttf", fs)
+            font = PIL.ImageFont.truetype(font_name, actual_fs)
+            break
         except Exception:
-            font = PIL.ImageFont.load_default()
+            continue
+    if font is None:
+        font = PIL.ImageFont.load_default()
 
-        all_labels = labels or []
-        for idx, box in enumerate(bboxes):
-            c = box_color or ULTRALYTICS_PALETTE[idx % len(ULTRALYTICS_PALETTE)]
-            draw.rectangle(box, outline=c, width=lw)
-            lbl = str(all_labels[idx]) if idx < len(all_labels) else ""
-            text_parts = []
-            if show_labels and lbl:
-                text_parts.append(lbl)
-            if show_scores and scores is not None and idx < len(scores) and scores[idx] is not None:
-                text_parts.append(f"{scores[idx]:.2f}")
-            caption = " ".join(text_parts)
-            if caption:
-                tb = font.getbbox(caption)
-                tw, th = tb[2] - tb[0], tb[3] - tb[1]
-                draw.rectangle([box[0], max(0, box[1] - th - 4), box[0] + tw + 6, max(th + 4, box[1])], fill=c)
-                draw.text((box[0] + 3, max(0, box[1] - th - 2)), caption, fill=(255, 255, 255), font=font)
-        annotated_np = np.asarray(annotated_pil)
+    # 5. Resolve official YOLO palette colors
+    yolo_colors = _get_yolo_colors()
+    all_labels = labels or []
+    unique_labels = list(dict.fromkeys([str(lbl) for lbl in all_labels]))
+    label_to_idx = {lbl: i for i, lbl in enumerate(unique_labels)}
 
-    # 5. Format return value matching input type
+    def _resolve_color(idx: int) -> Tuple[int, int, int]:
+        if box_color is not None:
+            return box_color
+        if class_ids is not None and idx < len(class_ids) and class_ids[idx] is not None:
+            cid = int(class_ids[idx])
+            return yolo_colors(cid, True) if yolo_colors else ULTRALYTICS_PALETTE[cid % len(ULTRALYTICS_PALETTE)]
+        if idx < len(all_labels) and all_labels[idx] is not None:
+            lbl = str(all_labels[idx])
+            parts = lbl.split(" ", 1)
+            if len(parts) == 2 and parts[0].isdigit():
+                cid = int(parts[0])
+                return yolo_colors(cid, True) if yolo_colors else ULTRALYTICS_PALETTE[cid % len(ULTRALYTICS_PALETTE)]
+            if lbl.isdigit():
+                cid = int(lbl)
+                return yolo_colors(cid, True) if yolo_colors else ULTRALYTICS_PALETTE[cid % len(ULTRALYTICS_PALETTE)]
+            c_idx = label_to_idx.get(lbl, idx)
+            return yolo_colors(c_idx, True) if yolo_colors else ULTRALYTICS_PALETTE[c_idx % len(ULTRALYTICS_PALETTE)]
+        return yolo_colors(idx, True) if yolo_colors else ULTRALYTICS_PALETTE[idx % len(ULTRALYTICS_PALETTE)]
+
+    box_color_list = [_resolve_color(i) for i in range(len(bboxes))]
+
+    # 6. Pass 1: Render bounding box rectangles with crisp borders
+    for idx, box in enumerate(bboxes):
+        c = box_color_list[idx]
+        xmin, ymin, xmax, ymax = map(float, box)
+        draw.rectangle([xmin, ymin, xmax, ymax], outline=c, width=actual_lw)
+
+    # 7. Pass 2: Render label badges with anti-collision resolution so no label is covered
+    occupied_badges: List[List[int]] = []
+    txt_clr = text_color if text_color is not None else (255, 255, 255)
+    pad_x = 3
+    pad_y = 2
+
+    for idx, box in enumerate(bboxes):
+        c = box_color_list[idx]
+        lbl = str(all_labels[idx]) if idx < len(all_labels) and all_labels[idx] is not None else ""
+        text_parts = []
+        if show_labels and lbl:
+            text_parts.append(lbl)
+        if show_scores and scores is not None and idx < len(scores) and scores[idx] is not None:
+            text_parts.append(f"{scores[idx]:.2f}")
+        caption = " ".join(text_parts)
+
+        if caption:
+            tb = font.getbbox(caption)
+            tw = tb[2] - tb[0]
+            th = tb[3] - tb[1]
+            bw = tw + 2 * pad_x
+            bh = th + 2 * pad_y
+
+            bx, by = _find_badge_position(box, bw, bh, w_img, h_img, occupied_badges)
+            badge_rect = [bx, by, bx + bw, by + bh]
+            occupied_badges.append(badge_rect)
+
+            draw.rectangle(badge_rect, fill=c)
+            draw.text((bx + pad_x - tb[0], by + pad_y - tb[1]), caption, fill=txt_clr, font=font)
+
+    # 8. Format return value matching input type
     if is_np:
+        res_np = np.asarray(annotated)
         if has_alpha and alpha_channel is not None:
-            return np.concatenate([annotated_np, alpha_channel], axis=-1)
-        return annotated_np
+            return np.concatenate([res_np, alpha_channel], axis=-1)
+        return res_np
 
-    return PIL.Image.fromarray(annotated_np)
+    return annotated
 
 
 # Convenient alias

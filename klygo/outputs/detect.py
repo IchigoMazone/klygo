@@ -2924,6 +2924,48 @@ class Detections:
         return self
 
 
+def _fast_detection_arrays(
+    boxes: Any,
+    scores: Any,
+    labels: Any,
+    class_ids: Any,
+    registry: Names,
+) -> Optional[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[str]]]:
+    """Return validated arrays when backend output already matches the registry."""
+    if not (
+        isinstance(boxes, np.ndarray)
+        and isinstance(scores, np.ndarray)
+        and isinstance(class_ids, np.ndarray)
+        and isinstance(labels, (list, tuple))
+        and boxes.ndim == 2
+        and boxes.shape[1:] == (4,)
+        and scores.ndim == 1
+        and class_ids.ndim == 1
+        and boxes.dtype.kind in "fiu"
+        and scores.dtype.kind in "fiu"
+        and class_ids.dtype.kind in "iu"
+    ):
+        return None
+    count = boxes.shape[0]
+    if len(scores) != count or len(labels) != count or len(class_ids) != count:
+        return None
+    if not all(registry.get(int(class_id)) == label for class_id, label in zip(class_ids, labels)):
+        return None
+    if not np.isfinite(boxes).all():
+        raise ValueError("box coordinates must be finite")
+    if count and ((boxes[:, 2] <= boxes[:, 0]).any() or (boxes[:, 3] <= boxes[:, 1]).any()):
+        raise ValueError("box must have positive width and height")
+    if not np.isfinite(scores).all() or ((scores < 0) | (scores > 1)).any():
+        raise ValueError("score must be a finite number between 0 and 1")
+    return (
+        boxes.astype(np.float64, copy=True),
+        scores.astype(np.float64, copy=True),
+        class_ids.astype(np.int32, copy=True),
+        np.arange(count, dtype=np.int64),
+        list(labels),
+    )
+
+
 def build_detections(images: Sequence[Any], predictions: Sequence[Mapping[str, Any]], *,
                      metadata: Optional[Mapping[str, Any]] = None,
                      names: Optional[Mapping[int, Any] | Sequence[Any]] = None) -> list[Detection]:
@@ -2933,10 +2975,24 @@ def build_detections(images: Sequence[Any], predictions: Sequence[Mapping[str, A
     frames = []
     for position, (image, prediction) in enumerate(zip(images, predictions)):
         if not isinstance(prediction, Mapping): raise TypeError("each prediction must be a mapping")
-        coords = _list(prediction.get("boxes", []), "boxes")
-        scores = _list(prediction.get("scores", [1.0] * len(coords)), "scores")
-        labels = _list(prediction.get("text_labels", prediction.get("labels", ["object"] * len(coords))), "labels")
-        class_ids = _list(prediction.get("class_ids", [None] * len(coords)), "class_ids")
+        raw_coords = prediction.get("boxes", [])
+        raw_scores = prediction.get("scores", [1.0] * len(raw_coords))
+        raw_labels = prediction.get(
+            "text_labels",
+            prediction.get("labels", ["object"] * len(raw_coords)),
+        )
+        raw_class_ids = prediction.get("class_ids", [None] * len(raw_coords))
+        fast = _fast_detection_arrays(
+            raw_coords,
+            raw_scores,
+            raw_labels,
+            raw_class_ids,
+            registry,
+        )
+        coords = _list(raw_coords, "boxes") if fast is None else raw_coords
+        scores = _list(raw_scores, "scores") if fast is None else raw_scores
+        labels = _list(raw_labels, "labels") if fast is None else raw_labels
+        class_ids = _list(raw_class_ids, "class_ids") if fast is None else raw_class_ids
         if len({len(coords), len(scores), len(labels), len(class_ids)}) != 1:
             raise ValueError("boxes, scores, labels, and class_ids must have the same length")
 
@@ -2949,6 +3005,8 @@ def build_detections(images: Sequence[Any], predictions: Sequence[Mapping[str, A
             cid_arr = _EMPTY_CLASS_IDS
             uid_arr = _EMPTY_UIDS
             label_list: list[str] = []
+        elif fast is not None:
+            xyxy_arr, score_arr, cid_arr, uid_arr, label_list = fast
         else:
             xyxy_rows = []
             score_vals = []

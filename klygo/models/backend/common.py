@@ -119,6 +119,28 @@ def cast_inputs(backend: str, inputs: Any, dev: Any, dtype: Any) -> Any:
     return inputs
 
 
+def _optimize_model(backend: str, model: Any) -> Any:
+    """Apply a backend's transparent runtime optimization once."""
+    if backend_family(backend) == "Ultralytics":
+        return _import_adapter("ultralytics").optimize_model(model)
+    return model
+
+
+def _native_inputs(source: Any) -> tuple[list[Any], bool]:
+    """Normalize in-memory native inputs without invoking Klygo media decoding."""
+    from os import PathLike
+
+    if isinstance(source, (str, bytes, PathLike)) or getattr(source, "is_stream", False):
+        raise TypeError(
+            "This backend requires in-memory native inputs; use native=False for paths, videos, or MediaFrames"
+        )
+    if isinstance(source, (list, tuple)):
+        if not source:
+            raise ValueError("native input must contain at least one item")
+        return list(source), False
+    return [source], True
+
+
 def run_inference(backend: str, model: Any, inputs: Any, cur_dtype: Any, **model_kwargs) -> Any:
     """Dispatch model forward execution (including AMP/preprocessing where applicable) to the selected backend adapter."""
     family = backend_family(backend)

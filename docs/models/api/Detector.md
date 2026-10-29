@@ -32,7 +32,7 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
    - Automatically restores bounding-box coordinates to original image dimensions when inputs carry a `klygo.preprocessing` transformation trace.
    - Supports `stream=True` to return the same `klygo.outputs.Detections` type in lazy one-pass mode, processing long videos in bounded memory. When `media.load(..., stream=True)` already created a stream, `predict(source)` detects `source.is_stream` automatically; callers declare streaming only once. Use materialized media when random access is required.
    - Uses one decode worker and one prefetched batch by default, matching YOLO-style prediction read-ahead. Higher `workers` values decode independent images within each prefetched batch concurrently; `workers=0` or `prefetch=0` disables background decoding. Video frames sharing one reader always decode sequentially, and results preserve source order.
-   - `native=True` lets a supported backend own source decoding. `prompt` and inference parameters registered by the model keep their normal public names, such as `threshold` and `iou`; they pass through the same metadata validation as managed prediction. Pipeline controls `stream`, `batch`, `workers`, `prefetch`, `vid_stride`, and `max_frames` are unavailable in native mode. Outputs are still normalized to `Detections`.
+   - `native=True` bypasses Klygo media decoding while preserving standardized `Detections` output. Ultralytics may own source decoding; backends without a source loader accept in-memory images directly. `prompt` and registered inference parameters keep their normal public names, such as `threshold` and `iou`. Pipeline controls `stream`, `batch`, `workers`, `prefetch`, `vid_stride`, and `max_frames` are unavailable in native mode. Backend-specific controls use their registered prefix, for example `model_stream=True`.
    - `packed=True` returns materialized `Detections` using shared compact arrays and lazy frame facades. It cannot be combined with `stream=True`.
 4. **Lifecycle & Isolated Benchmarking**:
    - `warmup()`: Run a single 640×640 dummy inference pass to initialize GPU kernels.
@@ -97,7 +97,7 @@ results = detector.predict(source, workers=0)
 results = detector.predict(
     "video.mp4",
     native=True,
-    stream=True,
+    model_stream=True,
     threshold=0.35,
     iou=0.5,
 )

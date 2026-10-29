@@ -169,6 +169,35 @@ def predict_prepared(
         return results
 
 
+def optimize_model(model: Any) -> Any:
+    """Reuse an initialized predictor for decoded image batches transparently.
+
+    The concrete detector continues to call the public Ultralytics model API.
+    Unsupported sources, streaming calls, changed options, and custom predictors
+    fall back to the original ``predict`` implementation.
+    """
+    if model is None or getattr(model, "_klygo_predict_optimized", False):
+        return model
+
+    original_predict = getattr(model, "predict", None)
+    if not callable(original_predict):
+        return model
+
+    def optimized_predict(source=None, stream=False, predictor=None, **kwargs):
+        if predictor is None and not stream:
+            prepared = predict_prepared(model, source, options=kwargs)
+            if prepared is not None:
+                return prepared
+        call_options = dict(kwargs)
+        if predictor is not None:
+            call_options["predictor"] = predictor
+        return original_predict(source=source, stream=stream, **call_options)
+
+    model.predict = optimized_predict
+    model._klygo_predict_optimized = True
+    return model
+
+
 def save(model: Any, output_dir: str) -> None:
     """Save weights using the Ultralytics model ``save()`` method."""
     from klygo import files

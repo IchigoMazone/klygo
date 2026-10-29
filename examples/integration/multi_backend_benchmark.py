@@ -337,7 +337,22 @@ def make_stream_runner(detector: models.Detector, paths: List[str], prompt: Any,
     def runner():
         synchronize_device(device_str)
         t0 = time.perf_counter()
-        stream_res = detector.predict(paths, prompt=prompt, native=native, stream=True, verbose=False)
+        if native:
+            stream_res = detector.predict(
+                paths,
+                prompt=prompt,
+                native=True,
+                model_stream=True,
+                verbose=False,
+            )
+        else:
+            stream_res = detector.predict(
+                paths,
+                prompt=prompt,
+                native=False,
+                stream=True,
+                verbose=False,
+            )
         it = iter(stream_res)
         first = next(it)
         synchronize_device(device_str)
