@@ -25,7 +25,7 @@ The backend owns input decoding and inference, while Klygo normalizes every
 result into its public output containers.
 
 ```python
-results = detector.predict(video, stream=True, native=True, verbose=False)
+results = detector.predict(video, native=True, verbose=False)
 ```
 
 This path measures the cost of Klygo output conversion and lifecycle management

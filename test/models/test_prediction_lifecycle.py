@@ -327,20 +327,15 @@ class TestWrapperLifecycle(unittest.TestCase):
             result = model.predict(files.path(temporary), native=True, verbose=False)
         self.assertEqual(result.metadata["source_type"], "folder")
 
-    def test_native_yolo_stream_is_lazy_and_validates_controls(self):
+    def test_native_yolo_validates_controls_and_rejects_stream(self):
         model = self.wrapper(YOLODetect)
-        result = model.predict(
-            [self.image, self.image],
-            native=True,
-            stream=True,
-            verbose=False,
-        )
-        self.assertTrue(result.is_stream)
-        self.assertEqual(len(model.model.options), 1)
-        frames = list(result)
-        self.assertEqual(len(frames), 2)
-        self.assertEqual([frame.frame_index for frame in frames], [0, 1])
-        self.assertTrue(all(frame.metadata["native"] for frame in frames))
+        with self.assertRaisesRegex(ValueError, "stream is unavailable in native mode"):
+            model.predict(
+                [self.image, self.image],
+                native=True,
+                stream=True,
+                verbose=False,
+            )
 
         with self.assertRaisesRegex(ValueError, "workers and prefetch"):
             model.predict(self.image, native=True, workers=2)
@@ -398,20 +393,27 @@ class TestWrapperLifecycle(unittest.TestCase):
             self.assertEqual(model.model.names, {0: "cat"})
             self.assertEqual(model.predict_config["prompt"], ["cat"])
 
-    def test_world_native_stream_restores_new_vocabulary_per_frame(self):
+    def test_world_native_restores_new_vocabulary_per_call(self):
         model = self.wrapper(YOLOWorldDetect)
-        stream = model.predict(
+        with self.assertRaisesRegex(ValueError, "stream is unavailable in native mode"):
+            model.predict(
+                [self.image] * 2,
+                prompt="dog",
+                native=True,
+                stream=True,
+                verbose=False,
+            )
+        result = model.predict(
             [self.image] * 2,
             prompt="dog",
             native=True,
-            stream=True,
             verbose=False,
         )
         model(self.image, prompt="cat", verbose=False)
-        for frame in stream:
+        for frame in result:
             self.assertEqual(frame.metadata["prompt"], ["dog"])
-            self.assertEqual(model.model.names, {0: "cat"})
-            self.assertEqual(model.predict_config["prompt"], ["cat"])
+        self.assertEqual(model.model.names, {0: "cat"})
+        self.assertEqual(model.predict_config["prompt"], ["cat"])
 
 
 if __name__ == "__main__":

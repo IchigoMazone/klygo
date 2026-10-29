@@ -201,6 +201,11 @@ class Detector(BaseModel):
             raise ValueError("stream and packed result storage are mutually exclusive")
 
         if native:
+            if stream:
+                raise ValueError(
+                    "stream is unavailable in native mode; use native=False for Klygo managed stream, "
+                    "or model-specific parameters (such as model_stream) if supported by the backend"
+                )
             return self._predict_native(
                 source,
                 prompt=prompt,
@@ -404,6 +409,12 @@ class Detector(BaseModel):
         """Run a backend-owned input pipeline and normalize its output."""
         from klygo import files, media
 
+        if stream:
+            raise ValueError(
+                "stream is unavailable in native mode; use native=False for Klygo managed stream, "
+                "or model-specific parameters (such as model_stream) if supported by the backend"
+            )
+
         if self.backend != "Ultralytics":
             with self._prediction_lock:
                 metadata, prompts = self._resolve_prediction(prompt, kwargs, runtime=False)
@@ -412,87 +423,41 @@ class Detector(BaseModel):
                     source,
                     step=vid_stride,
                     max_frames=max_frames,
-                    stream=stream,
+                    stream=False,
                 )
                 source_type = getattr(images, "source_type", "image" if is_single else "frames")
                 previous = self._snapshot_prediction_state()
                 try:
                     with self._use_metadata(metadata):
                         self._prepare_prediction(prompts)
-                        if not stream:
-                            frames_list = []
-                            offset = 0
-                            for part, prepared in _prepared_batches(
-                                images, batch, workers, prefetch, backend=self.backend
-                            ):
-                                batch_frames = self._infer_batch(
-                                    part, prompts, metadata, offset * vid_stride,
-                                    vid_stride, prepared_images=prepared,
-                                )
-                                for f in batch_frames:
-                                    f.metadata["native"] = True
-                                frames_list.extend(batch_frames)
-                                offset += len(part)
-                            result = Detections(
-                                frames_list,
-                                metadata={
-                                    "source_type": source_type,
-                                    "fps": getattr(images, "fps", 30.0),
-                                    "native": True,
-                                },
-                                names=self.names,
-                                packed=packed,
+                        frames_list = []
+                        offset = 0
+                        for part, prepared in _prepared_batches(
+                            images, batch, workers, prefetch, backend=self.backend
+                        ):
+                            batch_frames = self._infer_batch(
+                                part, prompts, metadata, offset * vid_stride,
+                                vid_stride, prepared_images=prepared,
                             )
+                            for f in batch_frames:
+                                f.metadata["native"] = True
+                            frames_list.extend(batch_frames)
+                            offset += len(part)
+                        result = Detections(
+                            frames_list,
+                            metadata={
+                                "source_type": source_type,
+                                "fps": getattr(images, "fps", 30.0),
+                                "native": True,
+                            },
+                            names=self.names,
+                            packed=packed,
+                        )
                 except Exception:
                     self._restore_prediction_state(previous)
                     raise
                 self._remember_prediction(metadata, prompts)
-                if not stream:
-                    return result
-
-                names = deepcopy(self.names)
-                total = getattr(images, "total_frames", None)
-                if total is None and hasattr(images, "__len__"):
-                    total = len(images)
-
-            def generate_native():
-                offset = 0
-                try:
-                    for part, prepared in _prepared_batches(
-                        images, batch, workers, prefetch, backend=self.backend
-                    ):
-                        with self._prediction_lock:
-                            if self.state == "UNLOADED":
-                                from klygo.models.errors import InvalidStateError
-                                raise InvalidStateError("Cannot consume a stream after model unload")
-                            current = self._snapshot_prediction_state()
-                            try:
-                                batch_frames = self._infer_batch(
-                                    part, prompts, metadata, offset * vid_stride,
-                                    vid_stride, prepared_images=prepared,
-                                )
-                                for f in batch_frames:
-                                    f.metadata["native"] = True
-                            finally:
-                                self._restore_prediction_state(current)
-                        yield from batch_frames
-                        offset += len(part)
-                finally:
-                    close = getattr(images, "close", None)
-                    if callable(close):
-                        close()
-
-            return Detections(
-                generate_native(),
-                metadata={
-                    "source_type": source_type,
-                    "fps": getattr(images, "fps", 30.0),
-                    "requested_total_frames": total,
-                    "native": True,
-                },
-                names=names,
-                stream=True,
-            )
+                return result
 
         if isinstance(source, media.MediaFrames):
             raise TypeError("native prediction requires a backend-supported source, not MediaFrames")
@@ -588,13 +553,6 @@ class Detector(BaseModel):
             "native": True,
             "requested_total_frames": None,
         }
-        if stream:
-            return Detections(
-                frames(),
-                metadata=result_metadata,
-                names=names,
-                stream=True,
-            )
         materialized = list(frames())
         return Detections(
             materialized,

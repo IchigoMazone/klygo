@@ -76,7 +76,7 @@ See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](back
 | **Inspect hardware device and model data type** | [`Detector.device`](api/Detector.md) / [`dtype`](api/Detector.md) | `print(detector.device, detector.dtype)` |
 | **Stream large videos lazily without filling RAM** | [`Detector.predict()`](api/Detector.md) | `source = media.load("traffic.mp4", stream=True); results = detector.predict(source)` |
 | **Overlap parallel image decoding with inference** | [`Detector.predict()`](api/Detector.md) | `results = detector.predict(source, batch=8, workers=2, prefetch=2)` |
-| **Use the Ultralytics native source pipeline** | [`Detector.predict()`](api/Detector.md) | `results = detector.predict("video.mp4", native=True, stream=True, threshold=0.35)` |
+| **Use the Ultralytics native source pipeline** | [`Detector.predict()`](api/Detector.md) | `results = detector.predict("video.mp4", native=True, threshold=0.35)` |
 | **Pack large finite outputs into shared arrays** | [`Detector.predict()`](api/Detector.md) | `results = detector.predict("images/", packed=True)` |
 | **Measure model latency (ms) and throughput in isolation** | [`Detector.benchmark()`](api/Detector.md) | `stats = detector.benchmark("sample.jpg", iterations=10, warmup=3)` |
 | **Clear remembered prompt or restore defaults** | [`Detector.predict()`](api/Detector.md) / [`reset()`](api/Detector.md) | `detector.predict(img, prompt=None)` or `detector.reset()` |
