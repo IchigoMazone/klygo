@@ -465,16 +465,29 @@ def resolve_images(
 
 def normalize_prompt(text_prompt: Union[str, List[str]]) -> List[str]:
     """Normalize a text prompt string or sequence into a non-empty ``List[str]``."""
+    import re
     from klygo.validators import validate_type
     validate_type(text_prompt, (str, list, tuple), "prompt")
-    values = [text_prompt] if isinstance(text_prompt, str) else list(text_prompt)
+    if isinstance(text_prompt, str):
+        if not text_prompt.strip():
+            raise ValueError("prompt labels must not be empty or whitespace")
+        if "." in text_prompt or "," in text_prompt:
+            parts = [p.strip() for p in re.split(r"[.,]+", text_prompt) if p.strip()]
+            values = parts if parts else [text_prompt]
+        else:
+            values = [text_prompt]
+    else:
+        values = list(text_prompt)
     normalized = []
     for value in values:
         validate_type(value, str, "prompt label")
         if not value.strip():
             raise ValueError("prompt labels must not be empty or whitespace")
-        if value.strip() not in normalized:
-            normalized.append(value.strip())
+        cleaned = value.strip().rstrip(".").lower()
+        if not cleaned:
+            continue
+        if cleaned not in normalized:
+            normalized.append(cleaned)
     if not normalized:
         raise ValueError("prompt must contain at least one label; use None to clear it")
     return normalized

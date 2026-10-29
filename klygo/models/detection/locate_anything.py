@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from PIL import Image
 
 from klygo import files, outputs, validators
+from klygo.models import utils
 from .base import Detector
 
 __all__ = ["LocateAnythingDetect"]
@@ -198,8 +199,12 @@ class LocateAnythingDetect(Detector):
                 "Locate Anything requires a non-empty prompt; use reset() to clear saved state"
             )
 
-        if any("<" in label or ">" in label for label in prompt):
+        prompt_list = utils.normalize_prompt(prompt)
+        if any("<" in label or ">" in label for label in prompt_list):
             raise ValueError("Locate Anything labels must not contain model control tokens")
+
+        self.names = {class_id: label for class_id, label in enumerate(prompt_list)}
+        self._active_prompt = list(prompt_list)
 
         if self.metadata.get("post") or self.metadata.get("processor"):
             raise ValueError(
@@ -298,13 +303,15 @@ class LocateAnythingDetect(Detector):
             predictions,
             names=self.names,
             metadata={
-                "prompt": prompt,
+                "prompt": prompt_list,
                 "score_kind": "presence_only",
                 "confidence_available": False,
                 "revision": self._revision,
                 "generation": generation,
             },
         )
+        if frames:
+            self.names = dict(frames[0]._registry)
 
         for frame, answers in zip(frames, raw_answers):
             frame.metadata["raw_answers"] = answers

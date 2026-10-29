@@ -15,6 +15,7 @@ except ImportError as exc:
 
 from klygo import utils
 from klygo.models.detection.base import Detector
+from klygo.models.utils import normalize_prompt
 from klygo.outputs import build_detections
 from klygo.outputs.detect import Detection
 
@@ -27,7 +28,6 @@ class GroundingDinoDetect(Detector):
             metadata=metadata,
             **kwargs,
         )
-        self._result_names = {}
         self._active_prompt = None
 
         model_config = dict(self.metadata["model"])
@@ -54,6 +54,10 @@ class GroundingDinoDetect(Detector):
         if not prompt:
             raise ValueError("Grounding DINO requires a non-empty text prompt; use reset() to clear saved state")
 
+        prompt_list = normalize_prompt(prompt)
+        self.names = {class_id: label for class_id, label in enumerate(prompt_list)}
+        self._active_prompt = list(prompt_list)
+
         model_config = dict(self.metadata["model"])
         processor_config = dict(self.metadata["processor"])
         post_config = dict(self.metadata["post"])
@@ -62,7 +66,6 @@ class GroundingDinoDetect(Detector):
         post_opts = {**post_config, **kwargs}
 
         # Format prompts and tokenize text batch
-        prompt_list = [prompt] if isinstance(prompt, str) else list(prompt)
         text_str = ". ".join(prompt_list) + "."
         text_batch = [text_str] * len(images)
 
@@ -123,13 +126,13 @@ class GroundingDinoDetect(Detector):
             images,
             cleaned_raw,
             metadata={
-                "prompt": prompt,
+                "prompt": prompt_list,
                 "threshold": thresh,
                 "text_threshold": text_thresh,
             },
-            names=self._result_names,
+            names=self.names,
         )
         if results:
-            self._result_names = dict(results[0]._registry)
+            self.names = dict(results[0]._registry)
 
         return results

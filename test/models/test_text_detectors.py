@@ -92,6 +92,9 @@ class TestGroundingDino(unittest.TestCase):
         self.assertEqual(first[0].metadata["threshold"], .5)
         native_res = self.model([self.image], prompt="dog", native=True, verbose=False)
         self.assertTrue(native_res[0].metadata["native"])
+        dot_res = self.model([self.image], prompt="dog. cat.", verbose=False)
+        self.assertEqual(self.model.predict_config["prompt"], ["dog", "cat"])
+        self.assertEqual(self.model.names, {0: "dog", 1: "cat"})
 
     def test_missing_prompt_clear_and_reset_have_explicit_errors(self):
         with self.assertRaisesRegex(ValueError, "requires"):

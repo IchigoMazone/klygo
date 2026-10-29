@@ -341,9 +341,7 @@ class Detector(BaseModel):
             if classes is not None:
                 runtime["classes"] = classes
             return runtime
-        if self.backend in ("Hugging Face", "Torchvision", "Keras"):
-            return {}
-        raise ValueError(f"native prediction is unsupported for backend {self.backend!r}")
+        return {}
 
     def _native_image(self, raw: Any, frame_index: int) -> Any:
         """Return source media used to attach identity to one native result."""
@@ -948,10 +946,7 @@ class Detector(BaseModel):
     def _normalize_prediction_prompt(self, prompt: Any) -> Optional[List[str]]:
         if prompt is None:
             return None
-        normalized = utils.normalize_prompt(prompt)
-        if self.backend == "Hugging Face":
-            normalized = [name.rstrip(".").strip().lower() for name in normalized]
-        return normalized
+        return utils.normalize_prompt(prompt)
 
     def _validate_prediction(self, metadata: Dict[str, Any], prompt: Any) -> None:
         for values in utils.parameter_groups(metadata).values():
@@ -968,7 +963,7 @@ class Detector(BaseModel):
     def _snapshot_prediction_state(self) -> Dict[str, Any]:
         state = {
             name: copy(getattr(self, name))
-            for name in ("names", "_result_names", "_active_prompt")
+            for name in ("names", "_active_prompt")
             if hasattr(self, name)
         }
         if hasattr(getattr(self, "model", None), "names"):
@@ -1002,7 +997,6 @@ class Detector(BaseModel):
             self.names = dict(self.original_names)
         elif self.backend == "Hugging Face":
             self.names = {}
-            self._result_names = {}
             self._active_prompt = None
 
     def _prepare_prediction(self, prompt: Optional[List[str]]) -> None:
@@ -1014,9 +1008,8 @@ class Detector(BaseModel):
             self.names = dict(self.model.names)
         elif self.backend == "Hugging Face" and prompt is not None:
             if prompt != getattr(self, "_active_prompt", None):
-                self.names = {index: name for index, name in enumerate(prompt or ())}
-                self._result_names = dict(self.names)
-                self._active_prompt = list(prompt) if prompt else None
+                self.names = {index: name for index, name in enumerate(prompt)}
+                self._active_prompt = list(prompt)
 
     @staticmethod
     def _validate_count(value: Any, name: str, minimum: int = 1) -> None:

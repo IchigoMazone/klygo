@@ -358,10 +358,10 @@ class TestWrapperLifecycle(unittest.TestCase):
         self.assertEqual(prompted[0].metadata["prompt"], ["car"])
         self.assertEqual(model.model.options[-1]["classes"], [1])
 
-    def test_native_is_rejected_by_unsupported_backend(self):
+    def test_native_is_supported_by_all_detector_subclasses(self):
         model = RecordingDetector()
-        with self.assertRaisesRegex(ValueError, "native prediction is unsupported"):
-            model.predict(self.image, native=True, verbose=False)
+        result = model.predict(self.image, native=True, verbose=False)
+        self.assertTrue(result[0].metadata["native"])
 
     def test_world_changes_only_once_and_restores_native_state(self):
         model = self.wrapper(YOLOWorldDetect)
