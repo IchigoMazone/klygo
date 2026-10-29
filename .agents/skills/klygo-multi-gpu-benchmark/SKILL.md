@@ -22,12 +22,17 @@ The benchmark evaluates:
   5. `d-fine`: KerasHub / Keras 3 RT-DETR / D-FINE Nano (End-to-End DETR Transformer)
 
 - **6 Execution Modes**:
-  1. `raw-stream`: Pure upstream framework streaming pipeline (e.g. `model.predict(source, stream=True)`)
-  2. `raw-non-stream`: Pure upstream framework batched/non-streaming pipeline (e.g. `model.predict(source, stream=False)`)
-  3. `native-stream`: Klygo native backend generator (`native=True, stream=True`) receiving direct inputs without media/preprocessing
-  4. `native-non-stream`: Klygo native backend batched (`native=True, stream=False`) receiving direct inputs without media/preprocessing
-  5. `managed-stream`: Klygo managed pipeline generator (`native=False, stream=True`) with `media` lazy decoding & coordinate trace
-  6. `managed-non-stream`: Klygo managed pipeline batched (`native=False, stream=False`) with `media` lazy decoding & coordinate trace
+  1. `raw-non-stream`: Pure upstream framework batched/non-streaming pipeline (e.g. `model.predict(source, stream=False)`)
+  2. `raw-stream`: Pure upstream framework streaming pipeline (e.g. `model.predict(source, stream=True)`; only supported if upstream framework has a built-in video stream engine)
+  3. `native-non-stream`: Klygo native backend (`native=True`) receiving direct inputs without `media`/`preprocessing` transforms, locking Klygo decoder parameters (supported across all detector subclasses)
+  4. `native-stream`: Klygo native backend with upstream stream engine enabled (`native=True, model_stream=True`; only supported on models whose backend has an upstream stream engine like Ultralytics)
+  5. `managed-non-stream`: Klygo managed pipeline batched (`native=False, stream=False`) with `media` decoding & coordinate trace
+  6. `managed-stream`: Klygo managed pipeline generator (`native=False, stream=True`) with `media` lazy decoding & coordinate trace
+
+- **Safe Resource Bounding & Anti-Freeze Guidelines**:
+  - **Downsized Sample Clips**: When benchmarking on CPU or memory-constrained accelerators, use short clips (8–10 frames, 320×240 or 320×320 resolution) to prevent system freezing or OOM errors.
+  - **Explicit Memory Reclamation**: Run `gc.collect()` and `torch.cuda.empty_cache()` between each model and mode transition.
+  - **Structured Run Folders**: Organize every benchmark execution inside an isolated timestamped folder under `artifacts/benchmarks/run_<YYYYMMDD_HHMMSS>/` containing both raw JSON metrics (`benchmark_metrics.json`) and a formatted Markdown scorecard (`benchmark_report.md`).
 
 - **Hardware Targeting**:
   - Multi-GPU enumeration: Automatically tests and compares each GPU card (`--device all-gpus`).

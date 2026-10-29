@@ -53,9 +53,19 @@ When switching models or devices in the same process:
    ```
 3. PyTorch automatically frees unreferenced tensors, and `detector.unload()` purges framework references.
 
-### 3.2. Preventing Out-Of-Memory (OOM) on Limited VRAM
-- Grounding DINO tiny and large Transformer models require ~2.8 GB VRAM. On GPUs with 4 GB VRAM (such as Quadro M1200), keep `batch=1` and ensure other VRAM consumers are closed.
-- Always use `stream=True` (`Managed Stream` or `Native Stream`) when evaluating videos or image series exceeding 50 frames to ensure Python GC can reclaim frame memory.
+### 3.2. Preventing Out-Of-Memory (OOM) and System Freezing
+- Grounding DINO tiny and large Transformer models require substantial CPU/GPU memory. On constrained hardware (CPU or 4 GB GPUs like Quadro M1200):
+  - Downsize test video clips to 8–10 frames and resolution to 320×240.
+  - Keep `batch=1` and ensure explicit `gc.collect()` and `torch.cuda.empty_cache()` run between modes.
+- Always use streaming (`Managed Stream` or `Native Stream`) when evaluating videos exceeding 50 frames to ensure Python garbage collection reclaims frame memory immediately ($O(1)$ memory consumption).
+
+### 3.3. Isolated Run Directory Architecture
+Every benchmark run stores artifacts under a dedicated timestamped directory:
+```text
+artifacts/benchmarks/run_<YYYYMMDD_HHMMSS>/
+├── benchmark_metrics.json   # Full raw JSON metrics across devices and modes
+└── benchmark_report.md      # Formatted Markdown report with comparative tables
+```
 
 ---
 
