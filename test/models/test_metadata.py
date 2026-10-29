@@ -326,6 +326,12 @@ class TestModelMetadata(unittest.TestCase):
                 processor=("size",),
             )
 
+    def test_priority_rejects_execution_control_names(self):
+        for control in ("stream", "native", "batch", "workers", "prefetch", "vid_stride", "max_frames", "packed", "verbose"):
+            with self.subTest(control=control):
+                with self.assertRaisesRegex(ValueError, "cannot be declared as a priority parameter"):
+                    models.priority(self.flags, model=(control,))
+
     def test_legacy_config_wrapper_is_flattened(self):
         legacy = {
             "config": {

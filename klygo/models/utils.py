@@ -214,6 +214,11 @@ def normalize_priority(
         for name in names:
             if not name or name.startswith("_") or name.endswith("_"):
                 raise ValueError(f"Invalid priority parameter name {name!r}.")
+            if name in {"stream", "native", "batch", "workers", "prefetch", "vid_stride", "max_frames", "packed", "verbose"}:
+                raise ValueError(
+                    f"Execution control {name!r} cannot be declared as a priority parameter. "
+                    f"Model-specific parameters must use prefixed syntax such as '<group>_{name}'."
+                )
             previous = owners.get(name)
             if previous is not None and previous != group:
                 raise ValueError(

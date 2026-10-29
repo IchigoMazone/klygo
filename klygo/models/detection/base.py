@@ -524,10 +524,10 @@ class Detector(BaseModel):
                     )
                     runtime_options.setdefault("batch", 1)
                     runtime_options.setdefault("vid_stride", 1)
-                    backend_stream = runtime_options.pop("stream", stream)
+                    # Model parameter `stream` can only be set via prefixed syntax (e.g. model_stream=True).
+                    # The invocation control `stream` of predict() is never passed down to the model.
                     raw = self.model.predict(
                         source=source,
-                        stream=backend_stream,
                         verbose=verbose,
                         **runtime_options,
                     )
@@ -538,13 +538,14 @@ class Detector(BaseModel):
                 raise
             self._remember_prediction(metadata, prompts)
             isolate_native_stream = self._stream_state_isolation_required()
+            is_generator = hasattr(raw, "__next__") or (hasattr(raw, "__iter__") and not isinstance(raw, (list, tuple)))
 
         def frames():
             iterator = iter(raw)
             index = 0
             try:
                 while True:
-                    if backend_stream and isolate_native_stream:
+                    if is_generator and isolate_native_stream:
                         with self._prediction_lock:
                             current = self._snapshot_prediction_state()
                             try:
