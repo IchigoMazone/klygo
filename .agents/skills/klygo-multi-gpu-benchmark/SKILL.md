@@ -109,11 +109,18 @@ python examples/integration/multi_backend_benchmark.py \
 
 ## 4. Output Artifacts & Reporting
 
-Every benchmark execution automatically generates two standardized deliverables:
-1. **JSON Raw Report** (`--output <path>.json`):
-   Contains complete machine metadata, GPU device specs, individual run arrays, and aggregated statistical summaries.
-2. **Markdown Scorecard** (`--markdown <path>.md`):
-   Formatted table containing device-by-device, model-by-model, and mode-by-mode comparisons ready for inclusion in research reports or repository documentation.
+Every benchmark execution saves its results into an isolated run folder (`artifacts/benchmarks/run_<timestamp>/`) with segregated subdirectories:
+```text
+artifacts/benchmarks/run_<timestamp>/
+├── README.md                          # Quick index and navigation guide
+├── metrics/                           # Numerical telemetry and raw tabular data
+│   ├── benchmark_metrics.json         # Complete raw JSON measurements
+│   └── benchmark_tables.md            # Markdown performance tables (FPS, Latency, RAM, VRAM)
+└── evaluations/                       # Dedicated analytical reports and insights
+    ├── summary_evaluation.md          # Multi-backend cross-tier evaluation & architectural insights
+    ├── cpu_evaluation.md              # In-depth CPU latency, memory footprint, and bottlenecks
+    └── gpu_evaluation.md              # In-depth GPU acceleration, VRAM containment, and throughput
+```
 
 ---
 
