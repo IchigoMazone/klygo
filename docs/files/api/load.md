@@ -10,14 +10,14 @@ Load structured data inferred from the file extension.
 
 This API returns complete data in memory. For incremental JSONL/CSV processing, use [`iter_load()`](iter_load.md).
 
-Returns decoded Python data. Raises FileNotFoundError for missing paths and ValueError for directories or unsupported formats.
+Returns decoded Python data. Markdown (`.md`) is read as UTF-8 text. Raises FileNotFoundError for missing paths and ValueError for directories or unsupported formats.
 
 Inputs accept strings and text-returning `os.PathLike` objects (including `pathlib.Path`), using the current operating system's path rules. Byte paths are not supported.
 
 ## Parameters
 
 - `path`: `str | os.PathLike[str]` — filesystem path to inspect or operate on.
-- `as_lines`: `bool` — return TXT/LOG content as separate lines.
+- `as_lines`: `bool` — return TXT/LOG/Markdown content as separate lines.
 - `verbose`: `bool` — enable the progress indicator.
 
 ## Returns
@@ -60,4 +60,10 @@ with TemporaryDirectory() as directory:
     labels = files.path(directory) / "labels.txt"
     files.save(labels, ["cat", "dog"], verbose=False)
     assert files.load(labels, as_lines=True, verbose=False) == ["cat", "dog"]
+
+# Markdown is preserved as ordinary UTF-8 text.
+with TemporaryDirectory() as directory:
+    report = files.path(directory) / "report.md"
+    files.save(report, "# Report\n\nReady", verbose=False)
+    assert files.load(report, verbose=False) == "# Report\n\nReady"
 ```

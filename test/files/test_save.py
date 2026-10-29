@@ -32,6 +32,7 @@ class TestSave(unittest.TestCase):
             "data.csv": ([{"name": "cat", "count": "2"}], [{"name": "cat", "count": "2"}]),
             "data.txt": (["a", "b"], "a\nb\n"),
             "data.log": ("message", "message"),
+            "data.md": ("# Report\n\n- fast\n- stable\n", "# Report\n\n- fast\n- stable\n"),
             "data.ini": (structured, structured),
             "data.cfg": (structured, structured),
             "data.properties": (structured, structured),

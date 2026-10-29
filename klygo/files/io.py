@@ -22,7 +22,7 @@ from .filesystem import exists, is_file, is_symlink, mkdir, remove
 from .paths import extension, name, parent, path as _to_path
 
 _DATA_SUFFIXES = {
-    ".yaml", ".yml", ".json", ".jsonl", ".toml", ".csv", ".txt",
+    ".yaml", ".yml", ".json", ".jsonl", ".toml", ".csv", ".txt", ".md",
     ".log", ".ini", ".cfg", ".properties", ".env", ".xml", ".pkl",
     ".pickle",
 }
@@ -80,14 +80,14 @@ def _data_to_xml(tag: str, value: Any) -> ET.Element:
 def load(path: PathInput, as_lines: bool = False, verbose: bool = True) -> Any:
     """Load structured data from a file using its filename extension.
 
-    The format is inferred from the final extension. Text formats use UTF-8. YAML, JSON, JSON Lines, TOML, CSV, text, INI-like, ENV, XML, and Pickle files are supported.
+    The format is inferred from the final extension. Text formats use UTF-8. YAML, JSON, JSON Lines, TOML, CSV, text, Markdown, INI-like, ENV, XML, and Pickle files are supported.
 
     Parameters
     ----------
     path : str or os.PathLike[str]
         Path to inspect or operate on.
     as_lines : bool, default=False
-        Return TXT and LOG files as lines without newline characters.
+        Return TXT, LOG, and Markdown files as lines without newline characters.
     verbose : bool, default=True
         Display a progress indicator.
 
@@ -147,7 +147,7 @@ def load(path: PathInput, as_lines: bool = False, verbose: bool = True) -> Any:
         if suffix == ".csv":
             with candidate.open("r", encoding="utf-8", newline="") as stream:
                 return list(csv.DictReader(stream))
-        if suffix in (".txt", ".log"):
+        if suffix in (".txt", ".log", ".md"):
             with candidate.open("r", encoding="utf-8") as stream:
                 return [line.rstrip("\r\n") for line in stream] if as_lines else stream.read()
         if suffix in (".ini", ".cfg", ".properties"):
@@ -353,7 +353,7 @@ def save(
                 writer = csv.DictWriter(stream, fieldnames=columns)
                 writer.writeheader()
                 writer.writerows(data)
-        elif suffix in (".txt", ".log"):
+        elif suffix in (".txt", ".log", ".md"):
             with destination.open("w", encoding="utf-8") as stream:
                 stream.write("\n".join(str(item) for item in data) + "\n" if isinstance(data, (list, tuple)) else str(data))
         elif suffix in (".ini", ".cfg", ".properties"):

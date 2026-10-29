@@ -15,3 +15,7 @@ with TemporaryDirectory() as directory:
     labels = files.path(directory) / "labels.txt"
     files.save(labels, ["cat", "dog"], verbose=False)
     assert files.load(labels, as_lines=True, verbose=False) == ["cat", "dog"]
+
+    report = files.path(directory) / "report.md"
+    files.save(report, "# Report\n\nReady", verbose=False)
+    assert files.load(report, verbose=False) == "# Report\n\nReady"

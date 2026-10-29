@@ -16,6 +16,10 @@ with TemporaryDirectory() as directory:
     files.save(root / "nested" / "records.jsonl", [{"id": 1}, {"id": 2}], verbose=False)
     assert files.load(root / "nested" / "records.jsonl", verbose=False) == [{"id": 1}, {"id": 2}]
 
+    report = root / "report.md"
+    files.save(report, "# Report\n\nReady", verbose=False)
+    assert files.load(report, verbose=False) == "# Report\n\nReady"
+
 # Publish a complete replacement only after serialization succeeds.
 with TemporaryDirectory() as directory:
     output = files.path(directory) / "config.json"

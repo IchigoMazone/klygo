@@ -13,6 +13,8 @@ symlink, unless `overwrite=True`. The default `atomic=True` protects an existing
 destination when serialization fails. Set `atomic=False` only when direct writing
 and the possibility of a partial file are acceptable.
 
+Markdown (`.md`) is written as UTF-8 text without parsing or rendering it.
+
 With `atomic=True`, serialization completes in a sibling temporary file before
 publication. Serialization failure leaves an existing destination unchanged.
 The temporary file is removed on success or failure. With `overwrite=True`,
@@ -75,6 +77,12 @@ with TemporaryDirectory() as directory:
     root = files.path(directory)
     files.save(root / "nested" / "records.jsonl", [{"id": 1}, {"id": 2}], verbose=False)
     assert files.load(root / "nested" / "records.jsonl", verbose=False) == [{"id": 1}, {"id": 2}]
+
+# Save Markdown without bypassing the public files API.
+with TemporaryDirectory() as directory:
+    report = files.path(directory) / "report.md"
+    files.save(report, "# Report\n\nReady", verbose=False)
+    assert files.load(report, verbose=False) == "# Report\n\nReady"
 
 # Publish a complete replacement only after serialization succeeds.
 with TemporaryDirectory() as directory:

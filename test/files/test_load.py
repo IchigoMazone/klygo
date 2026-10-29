@@ -13,8 +13,11 @@ class TestLoad(unittest.TestCase):
             root = Path(directory)
             files.save(root / "data.json", {"a": 1}, verbose=False)
             files.save(root / "lines.txt", ["a", "b"], verbose=False)
+            files.save(root / "report.md", "# Report\n\nReady", verbose=False)
             self.assertEqual(files.load(root / "data.json", verbose=False), {"a": 1})
             self.assertEqual(files.load(root / "lines.txt", as_lines=True, verbose=False), ["a", "b"])
+            self.assertEqual(files.load(root / "report.md", verbose=False), "# Report\n\nReady")
+            self.assertEqual(files.load(root / "report.md", as_lines=True, verbose=False), ["# Report", "", "Ready"])
 
     def test_errors(self):
         with TemporaryDirectory() as directory:
