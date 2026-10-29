@@ -110,8 +110,7 @@ class TestClassRegistryBackends(unittest.TestCase):
         self.assertEqual(result["class_ids"], [6])
         self.assertEqual(result["labels"], ["6"])
 
-    def test_yolo_world_keeps_only_init_and_forward_wrappers(self):
-        fake_ultralytics = SimpleNamespace(YOLOWorld=_YOLOWorld)
+    def test_yolo_world_keeps_a_short_forward_contract(self):
         metadata = {
             "model_id": "fake-world.pt",
             "details": {
@@ -129,7 +128,7 @@ class TestClassRegistryBackends(unittest.TestCase):
                 "agnostic_nms": True,
             },
         }
-        with patch.dict("sys.modules", {"ultralytics": fake_ultralytics}):
+        with patch("klygo.models.detection.yolo_world.YOLOWorld", _YOLOWorld):
             model = YOLOWorldDetect(metadata)
 
         own_methods = {
@@ -137,7 +136,7 @@ class TestClassRegistryBackends(unittest.TestCase):
             for name, value in YOLOWorldDetect.__dict__.items()
             if callable(value)
         }
-        self.assertTrue({"__init__", "forward"}.issubset(own_methods))
+        self.assertEqual(own_methods, {"__init__", "forward"})
 
         model.forward([Image.new("RGB", (8, 8))], prompt=["cat", "dog"])
         self.assertEqual(model.original_names, {0: "person", 1: "car"})
@@ -158,7 +157,6 @@ class TestClassRegistryBackends(unittest.TestCase):
         self.assertEqual(model.names, model.original_names)
 
     def test_fixed_yolo_uses_current_wrapper_and_native_class_ids(self):
-        fake_ultralytics = SimpleNamespace(YOLO=_YOLO)
         metadata = {
             "model_id": "fake-yolo.pt",
             "details": {
@@ -176,7 +174,7 @@ class TestClassRegistryBackends(unittest.TestCase):
                 "agnostic_nms": True,
             },
         }
-        with patch.dict("sys.modules", {"ultralytics": fake_ultralytics}):
+        with patch("klygo.models.detection.yolo.YOLO", _YOLO):
             model = YOLODetect(metadata)
 
         own_methods = {
@@ -184,7 +182,7 @@ class TestClassRegistryBackends(unittest.TestCase):
             for name, value in YOLODetect.__dict__.items()
             if callable(value)
         }
-        self.assertTrue({"__init__", "forward"}.issubset(own_methods))
+        self.assertEqual(own_methods, {"__init__", "forward"})
 
         model.forward([Image.new("RGB", (8, 8))], prompt=["car"])
         self.assertEqual(model.names, {0: "person", 1: "car"})

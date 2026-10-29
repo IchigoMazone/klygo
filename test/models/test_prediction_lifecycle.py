@@ -264,7 +264,12 @@ class TestWrapperLifecycle(unittest.TestCase):
         self.image = Image.new("RGB", (12, 12))
 
     def wrapper(self, cls):
-        with patch.dict("sys.modules", {"ultralytics": SimpleNamespace(YOLO=FakeYOLO, YOLOWorld=FakeYOLO)}):
+        target = (
+            "klygo.models.detection.yolo_world.YOLOWorld"
+            if cls is YOLOWorldDetect
+            else "klygo.models.detection.yolo.YOLO"
+        )
+        with patch(target, FakeYOLO):
             return cls(definition("Ultralytics"))
 
     def test_fixed_vocabulary_filter_reuse_clear_and_unknown_label(self):
@@ -278,6 +283,19 @@ class TestWrapperLifecycle(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unknown YOLO"):
             model(self.image, prompt="dog")
         self.assertEqual(model.names, {0: "person", 1: "car"})
+
+    def test_managed_yolo_exposes_priority_and_prefixed_groups_to_forward(self):
+        model = self.wrapper(YOLODetect)
+
+        model.predict(
+            self.image,
+            threshold=0.4,
+            post_agnostic_nms=True,
+            verbose=False,
+        )
+
+        self.assertEqual(model.model.options[-1]["conf"], 0.4)
+        self.assertTrue(model.model.options[-1]["agnostic_nms"])
 
     def test_native_yolo_routes_backend_options_and_normalizes_results(self):
         model = self.wrapper(YOLODetect)

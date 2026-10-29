@@ -222,6 +222,20 @@ def build_yolo_detector(device_str: str, imgsz: int = 320) -> Tuple[models.Detec
     return det, None
 
 
+def build_yolo11_detector(device_str: str, imgsz: int = 320) -> Tuple[models.Detector, None]:
+    """Instantiate an Ultralytics YOLO11n detector."""
+    return models.load(
+        "yolo11n.pt", device=device_str, imgsz=imgsz, threshold=0.25, iou=0.7
+    ), None
+
+
+def build_yolo26_detector(device_str: str, imgsz: int = 320) -> Tuple[models.Detector, None]:
+    """Instantiate an Ultralytics YOLO26n detector."""
+    return models.load(
+        "yolo26n.pt", device=device_str, imgsz=imgsz, threshold=0.25, iou=0.7
+    ), None
+
+
 def build_yolo_world_detector(device_str: str, imgsz: int = 320) -> Tuple[models.Detector, List[str]]:
     """Instantiate Ultralytics YOLO-World v2 detector with standard COCO prompt."""
     det = models.load("yolov8s-worldv2.pt", device=device_str, imgsz=imgsz, threshold=0.2, iou=0.7)
@@ -306,6 +320,8 @@ def build_kerashub_detector(device_str: str, imgsz: int = 320) -> Tuple[models.D
 
 MODEL_REGISTRY = {
     "yolo": ("YOLOv8n", "Ultralytics", build_yolo_detector, True),
+    "yolo11": ("YOLO11n", "Ultralytics", build_yolo11_detector, True),
+    "yolo26": ("YOLO26n", "Ultralytics", build_yolo26_detector, True),
     "yolo-world": ("YOLO-World v2", "Ultralytics", build_yolo_world_detector, True),
     "grounding-dino": ("Grounding DINO tiny", "Hugging Face", build_grounding_dino_detector, True),
     "faster-rcnn": ("Faster R-CNN MobileNetV3", "Torchvision", build_torchvision_detector, True),
@@ -357,6 +373,13 @@ def make_raw_ultralytics_runner(
     imgsz: int,
     stream: bool = False,
 ):
+    config = detector.predict_config
+    runtime = {
+        "device": config.get("device", device_str),
+        "imgsz": config.get("imgsz", imgsz),
+        "conf": config.get("threshold", 0.25),
+        "iou": config.get("iou", 0.7),
+    }
     if stream:
         def runner():
             synchronize_device(device_str)
@@ -365,10 +388,7 @@ def make_raw_ultralytics_runner(
                 source=paths,
                 stream=True,
                 verbose=False,
-                device=device_str,
-                imgsz=imgsz,
-                conf=0.25,
-                iou=0.7,
+                **runtime,
             )
             it = iter(raw_stream)
             first = next(it)
@@ -389,10 +409,7 @@ def make_raw_ultralytics_runner(
                 source=paths,
                 stream=False,
                 verbose=False,
-                device=device_str,
-                imgsz=imgsz,
-                conf=0.25,
-                iou=0.7,
+                **runtime,
             )
             synchronize_device(device_str)
             total_ms = (time.perf_counter() - t0) * 1000.0
@@ -608,7 +625,7 @@ def make_raw_runner(
     stream: bool = False,
 ):
     """Build the matching upstream-framework runner for one model family."""
-    if model_key in {"yolo", "yolo-world"}:
+    if model_key in {"yolo", "yolo11", "yolo26", "yolo-world"}:
         return make_raw_ultralytics_runner(detector, paths, prompt, device_str, imgsz, stream=stream)
     if model_key == "grounding-dino":
         return make_raw_grounding_dino_runner(detector, paths, prompt, device_str, stream=stream)
@@ -682,7 +699,7 @@ def generate_markdown_report(report_data: Dict[str, Any]) -> str:
         "",
         "## Multi-Model & Multi-Mode Performance Scorecard",
         "",
-        "For non-Ultralytics backends, `native=True` currently uses the managed-compatible execution path; the JSON report records this as `native_execution`.",
+        "All backends support pure native execution (`native=True`) receiving direct inputs without media preprocessing or coordinate traces.",
         "",
         r"| Device | Model Architecture | Backend | Execution Mode | Throughput (FPS) | First-Frame | Latency/Frame | Peak Heap | $\Delta$ RSS | Boxes | Raw Parity |",
         "| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |",
@@ -901,11 +918,7 @@ def run_benchmark(
                 "model_key": model_key,
                 "model_name": name,
                 "backend": backend,
-                "native_execution": (
-                    "backend-owned"
-                    if backend == "Ultralytics"
-                    else "managed-compatible"
-                ),
+                "native_execution": "backend-native",
                 "modes": {},
             }
 
@@ -1006,7 +1019,7 @@ def run_benchmark(
 def main():
     parser = argparse.ArgumentParser(description="Klygo Unified Multi-Backend & Multi-GPU Benchmark Tool")
     parser.add_argument("--device", type=str, default="auto", help="Device: 'auto', 'all-gpus', 'cuda:0', 'cuda:1', 'cpu', 'mps'")
-    parser.add_argument("--models", type=str, default="all", help="Models: 'all' or comma-separated 'yolo,yolo-world,grounding-dino,faster-rcnn,d-fine'")
+    parser.add_argument("--models", type=str, default="all", help="Models: 'all' or comma-separated 'yolo,yolo11,yolo26,yolo-world,grounding-dino,faster-rcnn,d-fine'")
     parser.add_argument("--modes", type=str, default="all", help="Modes: 'all' or comma-separated 'raw-non-stream,raw-stream,native-non-stream,native-stream,managed-non-stream,managed-stream'")
     parser.add_argument("--source", type=str, default=None, help="Path to image directory, video, or image file")
     parser.add_argument("--max-frames", type=int, default=10, help="Maximum number of frames/images to evaluate per run")

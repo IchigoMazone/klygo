@@ -58,6 +58,7 @@ import os
 os.environ.setdefault("KERAS_BACKEND", "torch")
 
 import numpy as np
+import keras
 import keras_hub
 from klygo import models, outputs
 
@@ -71,6 +72,7 @@ class KerasHubDFineDetector(models.Detector):
         self.names = {0: "person", 1: "bicycle", 2: "car", 9: "traffic light", 20: "elephant", 77: "teddy bear"}
 
     def forward(self, images, prompt=None):
+        model_cfg = dict(self.metadata.get("model", {}))
         post_cfg = dict(self.metadata.get("post", {}))
         threshold = float(post_cfg.get("threshold", 0.25))
         allowed = set(models.utils.normalize_prompt(prompt)) if prompt else None
@@ -78,9 +80,16 @@ class KerasHubDFineDetector(models.Detector):
         # 1. Stack PIL images as float32 RGB batch [B, H, W, 3]
         batch = np.stack([np.asarray(img.convert("RGB"), dtype=np.float32) for img in images], axis=0)
 
-        # 2. Delegate to Klygo's Keras backend pipeline
+        # 2. Cast, preprocess, call the model, and decode predictions explicitly
         inputs = self.cast_inputs(batch)
-        raw_outputs = self.run_inference(inputs)
+        preprocessor = self.model.preprocessor
+        target_size = preprocessor.image_converter.image_size
+        prepared = preprocessor(keras.ops.image.resize(inputs, target_size))
+        raw_predictions = self.model(prepared, training=False, **model_cfg)
+        raw_outputs = dict(self.model.decode_predictions(raw_predictions, inputs))
+        raw_outputs["_bounding_box_format"] = str(
+            self.model.prediction_decoder.bounding_box_format
+        )
         formatted = self.format_results(raw_outputs)
 
         # 3. Filter by confidence threshold and optional prompt

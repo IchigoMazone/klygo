@@ -41,7 +41,7 @@ All functions are automatically invoked when `Detector` dispatches through [`kly
 
 ```python
 from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
-from klygo import models, outputs
+from klygo import models, outputs, utils
 
 
 class CustomGroundingDinoDetector(models.Detector):
@@ -55,6 +55,8 @@ class CustomGroundingDinoDetector(models.Detector):
         ).eval()
 
     def forward(self, images, prompt=None):
+        model_cfg = dict(self.metadata.get("model", {}))
+        processor_cfg = dict(self.metadata.get("processor", {}))
         post_cfg = dict(self.metadata.get("post", {}))
         labels = models.utils.normalize_prompt(prompt or ["object"])
 
@@ -63,13 +65,19 @@ class CustomGroundingDinoDetector(models.Detector):
             images=images,
             text=[labels] * len(images),
             return_tensors="pt",
+            **processor_cfg,
         )
 
         # 2. Cast floating tensors to model device/dtype while keeping input_ids int64
         inputs = self.cast_inputs(inputs)
 
-        # 3. Run forward pass with automatic AMP autocast
-        raw_outputs = self.run_inference(inputs)
+        # 3. Remove load-only options and call the native Transformers model
+        loading_keys = [
+            "device_map", "torch_dtype", "dtype", "low_cpu_mem_usage",
+            "cache_dir", "revision", "local_files_only", "trust_remote_code", "token",
+        ]
+        model_options = utils.exclude_keys(model_cfg, loading_keys)
+        raw_outputs = self.model(**inputs, **model_options)
 
         # 4. Sync input_ids to output device (multi-GPU safe) and post-process
         out_dev = self.get_output_device(raw_outputs)

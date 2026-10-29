@@ -139,8 +139,8 @@ def _values_match(left: Any, right: Any) -> bool:
 class Detector(BaseModel):
     """Backend-neutral detector wrapper for image and video prediction.
 
-    Concrete subclasses implement ``forward`` and inherit batching, streaming,
-    caching, lifecycle hooks, and backend dispatch.
+    Subclasses implement ``forward`` with shared option resolution, backend
+    inference, and output-building helpers while inheriting the prediction lifecycle.
     """
 
     def __init__(
@@ -376,8 +376,8 @@ class Detector(BaseModel):
         )
         frame.metadata.update({
             "native": True,
-            "prompt": deepcopy(prompt),
-            "predict_config": deepcopy(self._config_snapshot(metadata, prompt)),
+            "prompt": list(prompt) if prompt is not None else None,
+            "predict_config": self._config_snapshot(metadata, prompt),
             "model_id": self.model_id,
             "backend": self.backend,
             "source_path": frame.source_path,
@@ -537,13 +537,14 @@ class Detector(BaseModel):
                 self._restore_prediction_state(previous)
                 raise
             self._remember_prediction(metadata, prompts)
+            isolate_native_stream = self._stream_state_isolation_required()
 
         def frames():
             iterator = iter(raw)
             index = 0
             try:
                 while True:
-                    if backend_stream:
+                    if backend_stream and isolate_native_stream:
                         with self._prediction_lock:
                             current = self._snapshot_prediction_state()
                             try:
@@ -799,7 +800,27 @@ class Detector(BaseModel):
 
     def run_inference(self, inputs: Any, **model_kwargs) -> Any:
         """Execute a forward pass using the native runtime of the selected backend."""
-        return common.run_inference(self.backend, self.model, inputs, cur_dtype=self.current_dtype(), **model_kwargs)
+        if common.backend_family(self.backend) == "Ultralytics":
+            options = dict(model_kwargs)
+            model_kwargs["_reuse_predictor"] = (
+                getattr(self, "_prepared_predict_options", None) == options
+            )
+            outputs = common.run_inference(
+                self.backend,
+                self.model,
+                inputs,
+                cur_dtype=self.current_dtype(),
+                **model_kwargs,
+            )
+            self._prepared_predict_options = options
+            return outputs
+        return common.run_inference(
+            self.backend,
+            self.model,
+            inputs,
+            cur_dtype=self.current_dtype(),
+            **model_kwargs,
+        )
 
     def get_output_device(self, outputs: Any) -> Any:
         """Detect the device of the model's output tensors."""
@@ -896,10 +917,7 @@ class Detector(BaseModel):
                 det._image_size = target_size
         else:
             fresh_output = bool(det.__dict__.pop("_klygo_fresh_output", False))
-            if (
-                det._owner is not None
-                or not (fresh_output or self._adopt_forward_detections())
-            ):
+            if det._owner is not None or not fresh_output:
                 det = det._clone()
             det._source_path = str(img_path) if img_path is not None else det._source_path
             det._image_size = target_size if target_size is not None else final_image.size
@@ -924,11 +942,12 @@ class Detector(BaseModel):
 
     def _stream_state_isolation_required(self) -> bool:
         """Return whether each lazy batch must restore mutable backend state."""
+        family = common.backend_family(self.backend)
+        if family == "Ultralytics":
+            return hasattr(self, "original_names")
+        if family == "Torchvision" or family in common.KERAS_BACKENDS:
+            return False
         return True
-
-    def _adopt_forward_detections(self) -> bool:
-        """Return whether fresh unowned forward results may be finalized in place."""
-        return False
 
     def _resolve_prediction(self, prompt: Any, kwargs: Dict[str, Any], *, validate: bool = True, runtime: bool = True) -> Any:
         base = deepcopy(dict(self._metadata))
@@ -988,7 +1007,11 @@ class Detector(BaseModel):
                     raise ValueError(f"{name} is an execution control, not a persistent inference option")
 
     def _snapshot_prediction_state(self) -> Dict[str, Any]:
-        state = {name: deepcopy(getattr(self, name)) for name in ("names", "_result_names", "_active_prompt") if hasattr(self, name)}
+        state = {
+            name: copy(getattr(self, name))
+            for name in ("names", "_result_names", "_active_prompt")
+            if hasattr(self, name)
+        }
         if hasattr(getattr(self, "model", None), "names"):
             state["native_names"] = dict(self.model.names)
         return state
@@ -996,7 +1019,7 @@ class Detector(BaseModel):
     def _restore_prediction_state(self, state: Dict[str, Any]) -> None:
         for name, value in state.items():
             if name != "native_names":
-                setattr(self, name, deepcopy(value))
+                setattr(self, name, copy(value))
         if "native_names" in state and hasattr(getattr(self, "model", None), "set_classes"):
             native = state["native_names"]
             if dict(self.model.names) != native:

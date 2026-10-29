@@ -52,27 +52,23 @@ class CustomYOLODetector(models.Detector):
         self.model = YOLO(self.model_id)
         self.names = dict(self.model.names)
 
-    def forward(self, images, prompt=None):
-        model_cfg = dict(self.metadata.get("model", {}))
-        post_cfg = dict(self.metadata.get("post", {}))
-        classes = model_cfg.get("classes")
-
-        if prompt:
-            requested = [prompt] if isinstance(prompt, str) else list(prompt)
-            class_ids = utils.invert(self.names)
-            classes = [class_ids[name] for name in requested if name in class_ids]
-
-        results = self.model(
-            images,
-            conf=post_cfg.get("threshold", 0.25),
-            iou=post_cfg.get("iou", 0.7),
-            classes=classes,
-            verbose=False,
-        )
+    def forward(self, images, prompt=None, **kwargs):
+        model_config = dict(self.metadata.get("model", {}))
+        post_config = dict(self.metadata.get("post", {}))
+        threshold = float(post_config.get("threshold", 0.25))
+        iou = float(post_config.get("iou", 0.7))
+        options = {
+            **model_config,
+            **utils.exclude_keys(post_config, ["threshold", "iou", "conf"]),
+            "conf": threshold,
+            "iou": iou,
+            "verbose": False,
+        }
+        results = self.model(images, **options)
         return outputs.build_detections(
             images,
             self.format_results(results),
-            metadata={"prompt": prompt, **post_cfg},
+            metadata={"prompt": prompt, "threshold": threshold, "iou": iou},
             names=self.names,
         )
 ```
@@ -81,35 +77,45 @@ class CustomYOLODetector(models.Detector):
 
 ```python
 from ultralytics import YOLOWorld
-from klygo import models, outputs
+from klygo import models, outputs, utils
 
 
 class CustomYOLOWorldDetector(models.Detector):
     def __init__(self, metadata=None, **kwargs):
         super().__init__(metadata=metadata, backend="Ultralytics", **kwargs)
         self.model = YOLOWorld(self.model_id)
-        self.names = dict(self.model.names)
+        self.original_names = dict(self.model.names)
+        self.names = dict(self.original_names)
 
-    def forward(self, images, prompt=None):
-        if prompt is not None:
-            classes = [prompt] if isinstance(prompt, str) else list(prompt)
-            self.model.set_classes([str(c).strip() for c in classes if str(c).strip()])
+    def forward(self, images, prompt=None, **kwargs):
+        model_config = dict(self.metadata.get("model", {}))
+        post_config = dict(self.metadata.get("post", {}))
+        classes = list(self.original_names.values()) if prompt is None else list(prompt)
+        if list(self.model.names.values()) != classes:
+            self.model.set_classes(classes)
         self.names = dict(self.model.names)
-
-        post_cfg = dict(self.metadata.get("post", {}))
-        results = self.model(
-            images,
-            conf=post_cfg.get("threshold", 0.25),
-            iou=post_cfg.get("iou", 0.7),
-            verbose=False,
-        )
+        threshold = float(post_config.get("threshold", 0.25))
+        iou = float(post_config.get("iou", 0.7))
+        options = {
+            **model_config,
+            **utils.exclude_keys(post_config, ["threshold", "iou", "conf"]),
+            "conf": threshold,
+            "iou": iou,
+            "verbose": False,
+        }
+        results = self.model(images, **options)
         return outputs.build_detections(
             images,
             self.format_results(results),
-            metadata={"prompt": list(self.names.values()), **post_cfg},
+            metadata={"prompt": list(self.names.values()), "threshold": threshold, "iou": iou},
             names=self.names,
         )
 ```
+
+`predict()` first routes registered priority names and prefixed parameters into
+the active metadata groups. The wrapper deliberately shows those groups, the
+native model call, result formatting, and `Detection` construction so each step
+can be customized without replacing the prediction engine.
 
 ---
 

@@ -45,7 +45,7 @@ from torchvision.models.detection import (
     fasterrcnn_mobilenet_v3_large_fpn,
 )
 from torchvision.transforms.functional import pil_to_tensor
-from klygo import models, outputs
+from klygo import models, outputs, utils
 
 
 class FasterRCNNDetector(models.Detector):
@@ -63,6 +63,7 @@ class FasterRCNNDetector(models.Detector):
         }
 
     def forward(self, images, prompt=None):
+        model_cfg = dict(self.metadata.get("model", {}))
         post_cfg = dict(self.metadata.get("post", {}))
         threshold = float(post_cfg.get("threshold", 0.25))
         allowed = set(models.utils.normalize_prompt(prompt)) if prompt else None
@@ -70,9 +71,10 @@ class FasterRCNNDetector(models.Detector):
         # 1. Convert PIL images to [C, H, W] float tensors in [0, 1]
         tensors = [pil_to_tensor(img.convert("RGB")).float() / 255.0 for img in images]
 
-        # 2. Cast tensors -> run forward -> format results via Torchvision backend
+        # 2. Cast tensors, call the native model, then normalize its tensors
         inputs = self.cast_inputs(tensors)
-        raw_outputs = self.run_inference(inputs)
+        forward_options = utils.exclude_keys(model_cfg, ["device", "weights"])
+        raw_outputs = self.model(inputs, **forward_options)
         formatted = self.format_results(raw_outputs)
 
         # 3. Filter by confidence threshold and optional class prompt

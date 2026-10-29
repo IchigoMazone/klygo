@@ -35,7 +35,7 @@ Focused guides:
 2. **Layer 2 — Task Engine ([`Detector`](api/Detector.md) in `detection/base.py` & [`backend.common`](backend/README.md))**:
    Implements the complete object-detection pipeline (`predict()`, backend-owned Ultralytics inference via `native=True`, compact materialized results via `packed=True`, streaming via `stream=True`, coordinate restoration, benchmarking, persistence, and lifecycle controls) and delegates low-level tensor/device operations to [`klygo.models.backend.common`](backend/api/common.md).
 3. **Layer 3 — Concrete & Application Wrappers (`detection/*.py` & custom subclasses)**:
-   Built-in registry wrappers (`YOLODetect`, `YOLOWorldDetect`, `GroundingDinoDetect`, `LocateAnythingDetect`) or application-owned [`Detector`](api/Detector.md) subclasses implement `forward(images, prompt=None)` using `self.cast_inputs()`, `self.run_inference()`, and `self.format_results()` (or by calling [`klygo.models.backend.common`](backend/api/common.md) directly).
+   Before `forward()` runs, `predict()` resolves priority names and `<group>_` prefixes into `self.metadata`. Wrappers then read visible `model_config`, `processor_config`, and `post_config` dictionaries, call the native model explicitly, format its output, and call `outputs.build_detections()`. This keeps routing and model behavior editable in every backend.
 
 See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](backend/README.md) and [`common` API Reference](backend/api/common.md) for all 15 unified backend functions (`backend_family`, `current_device`, `current_dtype`, `is_accelerator_available`, `inference_context`, `synchronize`, `clear_cache`, `cast_inputs`, `run_inference`, `get_output_device`, `sync_device`, `format_results`, `save`, `reset`, `unload`).
 
@@ -146,9 +146,9 @@ Every model in Klygo follows a standardized **4-step pattern** when subclassing 
 
 1. **`__init__(self, metadata=None, **kwargs)`**: Call `super().__init__(metadata=metadata, backend="...", **kwargs)`, instantiate the underlying framework model into `self.model` (and `self.processor` if needed), and set `self.names` (`dict[int, str]`).
 2. **`forward(self, images, prompt=None) -> list[Detection]`**:
-   - Read active runtime settings from `self.metadata["model"]`, `self.metadata.get("processor", {})`, and `self.metadata["post"]`.
+   - Read active runtime settings from `self.metadata["model"]`, `self.metadata.get("processor", {})`, and `self.metadata["post"]`. `predict()` has already routed priority and prefixed arguments into these groups.
    - Preprocess `images` (`list[PIL.Image.Image]`) and cast tensors with `self.cast_inputs(...)`.
-   - Execute the forward pass with `self.run_inference(...)`.
+   - Call the framework model explicitly (`self.model(...)`, `self.model(**inputs)`, or `self.model(..., training=False)`).
    - Normalize outputs with `self.format_results(...)` and pack into `Detection` frames via [`outputs.build_detections()`](../outputs/api/build_detections.md).
 3. **Define schema (`flags`, `priority`, `details`, `metadata`)**: Declare which parameter groups (`model`, `processor`, `post`) are locked vs overridable at `predict()` time.
 4. **Bind & Load (`configure` $\rightarrow$ `load`)**: Bind `implementation=YourDetectorClass` in [`models.configure()`](api/configure.md) and instantiate via [`models.load()`](api/load.md).
@@ -162,7 +162,7 @@ from torchvision.models.detection import (
     fasterrcnn_mobilenet_v3_large_fpn,
 )
 from torchvision.transforms.functional import pil_to_tensor
-from klygo import models, outputs
+from klygo import models, outputs, utils
 
 
 class TorchvisionFasterRCNN(models.Detector):
@@ -173,12 +173,14 @@ class TorchvisionFasterRCNN(models.Detector):
         self.names = {i: name for i, name in enumerate(weights.meta["categories"])}
 
     def forward(self, images, prompt=None):
+        model_cfg = dict(self.metadata.get("model", {}))
         post_cfg = dict(self.metadata.get("post", {}))
         threshold = float(post_cfg.get("threshold", 0.25))
 
         tensors = [pil_to_tensor(img.convert("RGB")).float() / 255.0 for img in images]
         inputs = self.cast_inputs(tensors)
-        raw_outputs = self.run_inference(inputs)
+        forward_options = utils.exclude_keys(model_cfg, ["device", "weights"])
+        raw_outputs = self.model(inputs, **forward_options)
         formatted = self.format_results(raw_outputs)
 
         for item in formatted:
@@ -203,6 +205,7 @@ class TorchvisionFasterRCNN(models.Detector):
 
 ```python
 import numpy as np
+import keras
 import keras_hub
 from klygo import models, outputs
 
@@ -214,14 +217,20 @@ class KerasHubDFineDetector(models.Detector):
         self.names = {0: "person", 1: "bicycle", 2: "car", 7: "truck"}  # COCO mapping
 
     def forward(self, images, prompt=None):
+        model_cfg = dict(self.metadata.get("model", {}))
         post_cfg = dict(self.metadata.get("post", {}))
         threshold = float(post_cfg.get("threshold", 0.25))
 
         batch = np.stack([np.asarray(img.convert("RGB"), dtype=np.float32) for img in images], axis=0)
-        # Keras backend automatically resizes to converter target, runs decode_predictions,
-        # filters -1 padding, and converts yxyx -> xyxy boxes.
         inputs = self.cast_inputs(batch)
-        raw_outputs = self.run_inference(inputs)
+        preprocessor = self.model.preprocessor
+        target_size = preprocessor.image_converter.image_size
+        prepared = preprocessor(keras.ops.image.resize(inputs, target_size))
+        raw_predictions = self.model(prepared, training=False, **model_cfg)
+        raw_outputs = dict(self.model.decode_predictions(raw_predictions, inputs))
+        raw_outputs["_bounding_box_format"] = str(
+            self.model.prediction_decoder.bounding_box_format
+        )
         formatted = self.format_results(raw_outputs)
 
         for item in formatted:
@@ -246,7 +255,7 @@ class KerasHubDFineDetector(models.Detector):
 
 ```python
 from ultralytics import YOLO
-from klygo import models, outputs
+from klygo import models, outputs, utils
 
 
 class CustomUltralyticsDetector(models.Detector):
@@ -256,13 +265,18 @@ class CustomUltralyticsDetector(models.Detector):
         self.names = dict(self.model.names)
 
     def forward(self, images, prompt=None):
+        model_cfg = dict(self.metadata.get("model", {}))
         post_cfg = dict(self.metadata.get("post", {}))
-        results = self.model(
-            images,
-            conf=post_cfg.get("threshold", 0.25),
-            iou=post_cfg.get("iou", 0.7),
-            verbose=False,
-        )
+        threshold = float(post_cfg.get("threshold", 0.25))
+        iou = float(post_cfg.get("iou", 0.7))
+        options = {
+            **model_cfg,
+            **utils.exclude_keys(post_cfg, ["threshold", "iou", "conf"]),
+            "conf": threshold,
+            "iou": iou,
+            "verbose": False,
+        }
+        results = self.model(images, **options)
         return outputs.build_detections(
             images,
             self.format_results(results),
@@ -278,7 +292,7 @@ class CustomUltralyticsDetector(models.Detector):
 
 ```python
 from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
-from klygo import models, outputs
+from klygo import models, outputs, utils
 
 
 class CustomHFZeroShotDetector(models.Detector):
@@ -288,11 +302,22 @@ class CustomHFZeroShotDetector(models.Detector):
         self.model = AutoModelForZeroShotObjectDetection.from_pretrained(self.model_id).eval()
 
     def forward(self, images, prompt=None):
+        model_cfg = dict(self.metadata.get("model", {}))
+        processor_cfg = dict(self.metadata.get("processor", {}))
         post_cfg = dict(self.metadata.get("post", {}))
         labels = models.utils.normalize_prompt(prompt or ["object"])
-        inputs = self.processor(images=images, text=[labels] * len(images), return_tensors="pt")
+        inputs = self.processor(
+            images=images,
+            text=[labels] * len(images),
+            return_tensors="pt",
+            **processor_cfg,
+        )
         inputs = self.cast_inputs(inputs)
-        raw_outputs = self.run_inference(inputs)
+        loading_keys = [
+            "device_map", "torch_dtype", "dtype", "low_cpu_mem_usage",
+            "cache_dir", "revision", "local_files_only", "trust_remote_code", "token",
+        ]
+        raw_outputs = self.model(**inputs, **utils.exclude_keys(model_cfg, loading_keys))
 
         out_dev = self.get_output_device(raw_outputs)
         input_ids = self.sync_device(inputs.get("input_ids"), out_dev)

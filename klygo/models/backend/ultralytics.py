@@ -56,7 +56,16 @@ def format_results(ultra_results: Any) -> List[Dict[str, Any]]:
             boxes_data, scores_data, labels_data, class_ids = [], [], [], []
             boxes = getattr(res, "boxes", None)
             if boxes is not None and len(boxes):
-                if hasattr(boxes, "xyxy"):
+                if hasattr(boxes, "data") and boxes.data.shape[-1] >= 6:
+                    # Copy the contiguous detection payload to the host once.
+                    # Separate ``xyxy``, ``conf``, and ``cls`` transfers force
+                    # three accelerator synchronizations for every frame.
+                    packed = boxes.data[:, :6].detach().to(device="cpu").numpy()
+                    boxes_data = packed[:, :4]
+                    scores_data = packed[:, 4]
+                    class_ids = packed[:, 5].astype(np.int32, copy=False)
+                    labels_data = [res.names.get(int(class_id), str(int(class_id))) for class_id in class_ids]
+                elif hasattr(boxes, "xyxy"):
                     boxes_data = boxes.xyxy.detach().cpu().numpy()
                     scores_data = boxes.conf.detach().cpu().numpy()
                     class_ids = boxes.cls.detach().to(dtype=torch_runtime.torch.int32).cpu().numpy()

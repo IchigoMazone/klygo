@@ -1,7 +1,4 @@
-"""
-Grounding DINO Zero-Shot Object Detection (klygo.models.detection.grounding_dino).
-LAYER 3: Explicit model & processor configuration; ``forward()`` is concise thanks to Detector helpers.
-"""
+"""Grounding DINO with explicit configuration, preprocessing, and inference."""
 
 from typing import Any, List, Dict, Optional, Union
 from collections.abc import Mapping
@@ -77,12 +74,13 @@ class GroundingDinoDetect(Detector):
         )
         inputs = self.cast_inputs(inputs)
 
-        # Inference with AMP and device casting
+        # Loading-only options never belong to the model's forward call.
         loading_keys = [
             "device_map", "torch_dtype", "dtype", "low_cpu_mem_usage", "cache_dir",
             "revision", "local_files_only", "trust_remote_code", "token",
         ]
-        outputs = self.run_inference(inputs, **utils.exclude_keys(model_config, loading_keys))
+        model_options = utils.exclude_keys(model_config, loading_keys)
+        outputs = self.model(**inputs, **model_options)
 
         thresh = float(post_opts.get("threshold", 0.25))
         text_thresh = float(post_opts.get("text_threshold", 0.3))

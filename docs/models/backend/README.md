@@ -118,12 +118,18 @@ class CustomKerasDetector(models.Detector):
         self.names = {0: "person", 1: "bicycle", 2: "car"}
 
     def forward(self, images, prompt=None):
+        model_config = dict(self.metadata.get("model", {}))
+        post_config = dict(self.metadata.get("post", {}))
         batch = np.stack([np.asarray(img.convert("RGB"), dtype=np.float32) for img in images], axis=0)
-        # Delegate to common.cast_inputs -> common.run_inference -> common.format_results
         inputs = self.cast_inputs(batch)
-        raw_outputs = self.run_inference(inputs)
+        raw_outputs = self.model(inputs, training=False, **model_config)
         formatted = self.format_results(raw_outputs)
-        return outputs.build_detections(images, formatted, names=self.names)
+        return outputs.build_detections(
+            images,
+            formatted,
+            metadata={"prompt": prompt, **post_config},
+            names=self.names,
+        )
 ```
 
 ---

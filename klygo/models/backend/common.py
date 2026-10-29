@@ -122,6 +122,14 @@ def cast_inputs(backend: str, inputs: Any, dev: Any, dtype: Any) -> Any:
 def run_inference(backend: str, model: Any, inputs: Any, cur_dtype: Any, **model_kwargs) -> Any:
     """Dispatch model forward execution (including AMP/preprocessing where applicable) to the selected backend adapter."""
     family = backend_family(backend)
+    if family == "Ultralytics":
+        adapter = _import_adapter("ultralytics")
+        reuse_predictor = model_kwargs.pop("_reuse_predictor", False)
+        if reuse_predictor:
+            outputs = adapter.predict_prepared(model, inputs, options=model_kwargs)
+            if outputs is not None:
+                return outputs
+        return model(inputs, **model_kwargs)
     if family == "Hugging Face":
         return _import_adapter("huggingface").run_inference(
             model, inputs, cur_dtype=cur_dtype, **model_kwargs

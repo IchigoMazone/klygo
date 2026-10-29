@@ -13,7 +13,7 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
 
 ## Contract
 
-`Detector` subclasses [`models.BaseModel`](BaseModel.md) and sets `task="Object-Detection"`. Concrete detectors (such as `YOLODetect`, `YOLOWorldDetect`, `GroundingDinoDetect`, `LocateAnythingDetect`, or application-defined subclasses for Torchvision Faster R-CNN and KerasHub RT-DETR / D-FINE) implement `forward(images, prompt=None)` while inheriting the full Klygo detection lifecycle:
+`Detector` subclasses [`models.BaseModel`](BaseModel.md) and sets `task="Object-Detection"`. Every detector implements `forward(images, prompt=None)`. Before that method runs, `predict()` resolves priority arguments and `<group>_` prefixes into the active `self.metadata` groups. A wrapper reads those groups explicitly, performs preprocessing, calls its native model, formats the result, and passes it to `outputs.build_detections()`. `run_inference()` remains an optional adapter for framework-specific execution, not a required wrapper pattern.
 
 1. **Persistent Prediction Configuration & Public Properties**:
    - `self.device`: Query the active accelerator device of `self.model` via `common.current_device()`.

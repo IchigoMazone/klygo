@@ -78,6 +78,23 @@ class TestBackendRuntimeDispatch(unittest.TestCase):
         )
         predictor.preprocess.assert_not_called()
 
+    def test_common_dispatch_reuses_ultralytics_predictor(self):
+        model = Mock()
+        images = [np.zeros((8, 12, 3), dtype=np.uint8)]
+        with patch.object(ultralytics, "predict_prepared", return_value=["result"]) as prepared:
+            actual = common.run_inference(
+                "Ultralytics",
+                model,
+                images,
+                cur_dtype=None,
+                _reuse_predictor=True,
+                conf=0.25,
+            )
+
+        self.assertEqual(actual, ["result"])
+        prepared.assert_called_once_with(model, images, options={"conf": 0.25})
+        model.assert_not_called()
+
     def test_offline_backend_names_keep_their_framework_dispatch(self):
         with patch.object(huggingface, "synchronize") as synchronize:
             common.synchronize("Hugging Face (Offline)", device="cuda:0")
