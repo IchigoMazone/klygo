@@ -18,7 +18,7 @@ class TestOptionalModelDependencies(unittest.TestCase):
         dependencies = {item.split("<", 1)[0].split(">", 1)[0] for item in project["dependencies"]}
         self.assertNotIn("torch", dependencies)
         self.assertNotIn("transformers", dependencies)
-        self.assertNotIn("ultralytics", dependencies)
+        self.assertIn("ultralytics", dependencies)
         self.assertNotIn("torchvision", dependencies)
         self.assertNotIn("keras-hub", dependencies)
 

@@ -30,6 +30,13 @@ class TestVisual(unittest.TestCase):
         self.assertIsInstance(annotated, Image.Image)
         self.assertEqual(image.getpixel((10, 10)), (255, 255, 255))
 
+    def test_draw_box_alias_and_annotator_integration(self):
+        pixels = np.full((100, 100, 3), 200, dtype=np.uint8)
+        self.assertTrue(callable(visual.draw_box))
+        res = visual.draw_box(pixels, [[10, 10, 60, 60]], labels=["0 person"], scores=[0.88])
+        self.assertIsInstance(res, np.ndarray)
+        self.assertFalse(np.array_equal(res, pixels))
+
     def test_show_image_auto_uses_desktop_viewer_outside_notebook(self):
         image = Image.new("RGB", (20, 10))
         with patch("klygo.visual.show_image._is_notebook", return_value=False):
