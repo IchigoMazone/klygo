@@ -8,6 +8,7 @@ from . import media
 from . import outputs
 from . import postprocessing
 from . import preprocessing
+from . import mining
 from . import utils
 from . import validators
 from . import visual
@@ -37,6 +38,7 @@ __all__ = [
     "datasets",
     "files",
     "media",
+    "mining",
     "models",
     "outputs",
     "postprocessing",

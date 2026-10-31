@@ -206,7 +206,8 @@ model_options = utils.exclude_keys(options, ["dtype", "device"])
 | `klygo.models` | Detector lifecycle, metadata, loading, and backend hooks | [Guide](docs/models/README.md) |
 | `klygo.outputs` | Structured detection results and normalized-result construction | [Guide](docs/outputs/README.md) |
 | `klygo.postprocessing` | Backend-independent detection transformations | [Guide](docs/postprocessing/README.md) |
-| `klygo.datasets` | Load, inspect, partition, merge, split, and relabel datasets | [Guide](docs/datasets/README.md) |
+| `klygo.datasets` | Convert, load, inspect, partition, merge, split, and relabel datasets | [Guide](docs/datasets/README.md) |
+| `klygo.mining` | Analyze, deduplicate, cluster, select, and balance detection datasets | [Guide](docs/mining/README.md) |
 | `klygo.visual` | Display images, boxes, and dataset statistics | [Guide](docs/visual/README.md) |
 | `klygo.utils` | Shared formatting, mapping, and progress helpers | [Guide](docs/utils/README.md) |
 | `klygo.validators` | Reusable runtime validation | [Guide](docs/validators/README.md) |

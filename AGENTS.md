@@ -4,12 +4,12 @@ This document provides authoritative architectural context, API conventions, dog
 
 ---
 
-## 1. Architecture & 12 Public Modules
+## 1. Architecture & 13 Public Modules
 
-Klygo is a modular, composable Python toolkit (`Python >= 3.10`) organized into four cooperative layers across **12 public modules**:
+Klygo is a modular, composable Python toolkit (`Python >= 3.10`) organized into four cooperative layers across **13 public modules**:
 
 ```text
-1. Storage, Config & Datasets : klygo.files • klygo.archive • klygo.config • klygo.datasets
+1. Storage, Config & Datasets : klygo.files • klygo.archive • klygo.config • klygo.datasets • klygo.mining
 2. Media & Preprocessing      : klygo.media (LazyImage, MediaFrames) • klygo.preprocessing (trace)
 3. Multi-Backend AI Models    : klygo.models (BaseModel -> Detector -> backend.common)
                                 ├── Ultralytics (YOLOv8/v11, YOLO-World v2)
@@ -25,7 +25,8 @@ Klygo is a modular, composable Python toolkit (`Python >= 3.10`) organized into 
 | `files` | `from klygo import files` | 43 path, filesystem, checksum, download, and 14-format structured data I/O helpers | [`docs/files/README.md`](docs/files/README.md) |
 | `archive` | `from klygo import archive` | Create, inspect, extract, search, convert, merge, and split ZIP, TAR, GZip, 7z, and RAR archives | [`docs/archive/README.md`](docs/archive/README.md) |
 | `config` | `from klygo import config, Config` | Immutable functional config helpers (`load`, `get`, `set`, `merge`, `diff`, `from_env`) & stateful `Config` | [`docs/config/README.md`](docs/config/README.md) |
-| `datasets` | `from klygo import datasets` | Inspect (`info`), load (`load`), partition, repartition, unpartition, merge, split, and remap YOLO datasets | [`docs/datasets/README.md`](docs/datasets/README.md) |
+| `datasets` | `from klygo import datasets` | Convert, inspect, load, partition, repartition, unpartition, merge, split, and remap YOLO datasets | [`docs/datasets/README.md`](docs/datasets/README.md) |
+| `mining` | `from klygo import mining` | Analyze, deduplicate, cluster, select, balance, and compare object-detection datasets at image level | [`docs/mining/README.md`](docs/mining/README.md) |
 | `media` | `from klygo import media` | Lazy image (`LazyImage`) and unified indexed/streaming frames (`MediaFrames`), frame iteration, and PIL/NumPy/Tensor conversion | [`docs/media/README.md`](docs/media/README.md) |
 | `preprocessing` | `from klygo import preprocessing as p` | 137 lazy transforms, image quality metrics/predicates, and automatic coordinate restoration (`trace`) | [`docs/preprocessing/README.md`](docs/preprocessing/README.md) |
 | `models` | `from klygo import models` | 3-tier model wrappers (`BaseModel`, `Detector`), schema builders (`metadata`, `flags`, `priority`, `details`, `configure`), and `load` | [`docs/models/README.md`](docs/models/README.md) |
@@ -42,7 +43,7 @@ Klygo is a modular, composable Python toolkit (`Python >= 3.10`) organized into 
 ### Rule 1: Always Import Public Package Facades
 Import modules from top-level `klygo`:
 ```python
-from klygo import archive, config, datasets, files, media, models, outputs, postprocessing, preprocessing, utils, validators, visual
+from klygo import archive, config, datasets, files, media, mining, models, outputs, postprocessing, preprocessing, utils, validators, visual
 ```
 Never import private internal helpers (`_helper`) in user-facing examples, tutorials, or workflows.
 
@@ -211,7 +212,7 @@ When adding or modifying a public API in `klygo/<module>/<submodule>.py`, keep a
 Always run these commands from the repository root (`c:\Users\Mine\Downloads\klygo`) before finishing a task:
 
 ```powershell
-# 1. Audit all 12 modules (docstrings, API docs, runnable examples, dogfooding, links, and Colab notebooks)
+# 1. Audit all 13 modules (docstrings, API docs, runnable examples, dogfooding, links, and Colab notebooks)
 .venv\Scripts\python .agents/skills/klygo-module-guides/scripts/audit_public_api.py --all
 
 # 2. Audit a single module during focused edits

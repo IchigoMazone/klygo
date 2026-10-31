@@ -40,12 +40,12 @@ def dataset_workspace(prefix: str) -> Iterator[Path]:
 
 
 def set_output_metadata_path(metadata: dict, destination: str | Path) -> None:
-    """Use a local path for directories and no machine-specific path for ZIPs."""
+    """Keep generated dataset metadata portable across output locations."""
     output = files.path(destination)
     if files.extension(output).lower() == ".zip":
         metadata.pop("path", None)
     else:
-        metadata["path"] = files.as_posix(files.resolve(output))
+        metadata["path"] = "."
 
 
 def publish_output(staging: Path, destination: Path, temporary_root: Path) -> None:

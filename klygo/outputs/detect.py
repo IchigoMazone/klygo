@@ -446,6 +446,75 @@ def _to_cpu(value: Any) -> np.ndarray:
     return value if isinstance(value, np.ndarray) else _cupy().asnumpy(value)
 
 
+def _array_copy(value: Any) -> Any:
+    """Copy a contiguous NumPy or CuPy array without a CUDA JIT kernel."""
+    if isinstance(value, np.ndarray):
+        return value.copy()
+    module = _cupy()
+    if not value.flags.c_contiguous:
+        return value.copy()
+    result = module.empty_like(value)
+    if value.nbytes:
+        stream = module.cuda.get_current_stream()
+        module.cuda.runtime.memcpyAsync(
+            result.data.ptr,
+            value.data.ptr,
+            value.nbytes,
+            module.cuda.runtime.memcpyDeviceToDevice,
+            stream.ptr,
+        )
+    return result
+
+
+def _array_take_copy(value: Any, indices: Sequence[int]) -> Any:
+    """Copy selected rows without compiling a CuPy indexing kernel."""
+    if isinstance(value, np.ndarray):
+        return value[list(indices)].copy()
+    module = _cupy()
+    if not value.flags.c_contiguous:
+        return value[list(indices)].copy()
+    shape = (len(indices),) + value.shape[1:]
+    result = module.empty(shape, dtype=value.dtype)
+    if not indices or not value.nbytes:
+        return result
+    row_bytes = value.dtype.itemsize * math.prod(value.shape[1:] or (1,))
+    stream = module.cuda.get_current_stream()
+    for destination, source in enumerate(indices):
+        module.cuda.runtime.memcpyAsync(
+            result.data.ptr + destination * row_bytes,
+            value.data.ptr + source * row_bytes,
+            row_bytes,
+            module.cuda.runtime.memcpyDeviceToDevice,
+            stream.ptr,
+        )
+    return result
+
+
+def _array_concatenate(values: Sequence[Any]) -> Any:
+    """Concatenate contiguous arrays without a CuPy join kernel."""
+    first = values[0]
+    if isinstance(first, np.ndarray):
+        return np.concatenate(values, axis=0)
+    module = _cupy()
+    if any(not value.flags.c_contiguous for value in values):
+        return module.concatenate(values, axis=0)
+    shape = (sum(len(value) for value in values),) + first.shape[1:]
+    result = module.empty(shape, dtype=first.dtype)
+    stream = module.cuda.get_current_stream()
+    offset = 0
+    for value in values:
+        if value.nbytes:
+            module.cuda.runtime.memcpyAsync(
+                result.data.ptr + offset,
+                value.data.ptr,
+                value.nbytes,
+                module.cuda.runtime.memcpyDeviceToDevice,
+                stream.ptr,
+            )
+            offset += value.nbytes
+    return result
+
+
 def _empty_arrays(bits: int, device: str = "cpu") -> tuple[Any, Any, Any, Any]:
     module = _array_module(device)
     float_dtype = _float_dtype(module, bits)
@@ -745,18 +814,15 @@ class Detection:
                 raise ValueError("box indices must not contain duplicates")
             normalized.append(position)
 
-        module = _array_module(self._device)
-        selected = module.asarray(normalized, dtype=module.int64)
-        class_ids = module.asarray(self.class_ids, dtype=module.int32)
         track_ids = None if self._track_ids is None else [self._track_ids[i] for i in normalized]
         metas = None if self._metas is None else [deepcopy(self._metas[i]) for i in normalized]
         registry = self._owner._registry if self._owner is not None else self._registry
         label_ids = self._owner._label_ids if self._owner is not None else self._label_ids
         return Detection._from_arrays(
-            self._xyxy[selected].copy(),
-            self._scores[selected].copy(),
-            class_ids[selected].copy(),
-            self._uids[selected].copy(),
+            _array_take_copy(self._xyxy, normalized),
+            _array_take_copy(self._scores, normalized),
+            _array_take_copy(self._class_ids, normalized),
+            _array_take_copy(self._uids, normalized),
             [self._labels[i] for i in normalized],
             track_ids=track_ids,
             metas=metas,
@@ -1097,8 +1163,7 @@ class Detection:
                 device=self._device,
                 restore_trace=self._restore_trace,
             )
-        module = _array_module(self._device)
-        cids = module.asarray(self.class_ids, dtype=module.int32) if self._owner is not None else self._class_ids.copy()
+        cids = _array_copy(self._class_ids)
         cache = self._boxes_cache
         tids = None
         if cache is not None and any(b is not None and b._track_id is not None for b in cache):
@@ -1120,10 +1185,10 @@ class Detection:
             metas = [deepcopy(m) if m else None for m in self._metas]
 
         return Detection._from_arrays(
-            self._xyxy.copy(),
-            self._scores.copy(),
+            _array_copy(self._xyxy),
+            _array_copy(self._scores),
             cids,
-            self._uids.copy(),
+            _array_copy(self._uids),
             list(self._labels),
             track_ids=tids,
             metas=metas,
@@ -1653,22 +1718,22 @@ class _PackedDetectionStore:
             dtype=module.int64,
         )
         self.xyxy = (
-            module.concatenate([frame._xyxy for frame in frames], axis=0)
+            _array_concatenate([frame._xyxy for frame in frames if len(frame)])
             if any(lengths)
             else module.empty((0, 4), dtype=_float_dtype(module, owner._precision))
         )
         self.scores = (
-            module.concatenate([frame._scores for frame in frames])
+            _array_concatenate([frame._scores for frame in frames if len(frame)])
             if any(lengths)
             else module.empty((0,), dtype=_float_dtype(module, owner._precision))
         )
         self.class_ids = (
-            module.concatenate([frame._class_ids for frame in frames])
+            _array_concatenate([frame._class_ids for frame in frames if len(frame)])
             if any(lengths)
             else module.empty((0,), dtype=module.int32)
         )
         self.uids = (
-            module.concatenate([frame._uids for frame in frames])
+            _array_concatenate([frame._uids for frame in frames if len(frame)])
             if any(lengths)
             else module.empty((0,), dtype=module.int64)
         )

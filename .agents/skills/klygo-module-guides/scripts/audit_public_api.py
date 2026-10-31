@@ -21,6 +21,7 @@ ALL_MODULES = [
     "config",
     "datasets",
     "media",
+    "mining",
     "models",
     "outputs",
     "postprocessing",

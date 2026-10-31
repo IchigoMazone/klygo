@@ -15,6 +15,7 @@ benchmarks/
 ├── outputs_cpu_gpu/                   # NumPy/CuPy Detections microbenchmarks
 │   ├── README.md                      # Methodology, tables, and conclusions
 │   └── metrics/                       # Raw NMS and storage-operation measurements
+├── mining/                            # Image-level mining CPU/GPU parity benchmark
 ├── round_1/                           # Round 1: Pipeline Smoke Test (Historical Baseline)
 │   ├── README.md                      # Round 1 summary & methodology retrospective
 │   ├── metrics/
@@ -39,6 +40,7 @@ benchmarks/
 | **Round 1** | Completed | Initial API pipeline smoke test verifying end-to-end execution of all 6 modes across backends. Identified 9 core methodology limitations (model load in raw timer, lack of warmup, small 4-frame dataset, memory tracking asymmetry). | [`benchmarks/round_1/README.md`](round_1/README.md) |
 | **Round 2** | Architecture Ready | Rigorous multi-process benchmark with subprocess isolation, symmetric warmup, memory delta tracking, 30–60 real frames, 5 repeats, detection parity verification, and full 5-model coverage. | [`benchmarks/round_2/README.md`](round_2/README.md) |
 | **Outputs CPU/GPU** | Completed | Focused NumPy/CuPy benchmark for NMS, device transfers, precision conversion, and threshold operations on `Detections`. | [`benchmarks/outputs_cpu_gpu/README.md`](outputs_cpu_gpu/README.md) |
+| **Mining CPU/GPU** | Reproducible | NumPy/CuPy parity and latency for statistics, scoring, selection, balancing, quality, duplicate search, and clustering. | [`benchmarks/mining/README.md`](mining/README.md) |
 
 ---
 

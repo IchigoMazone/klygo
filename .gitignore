@@ -42,6 +42,7 @@ temp_*/
 !tutorials/validators/*.ipynb
 !tutorials/visual/*.ipynb
 !tutorials/media/*.ipynb
+!tutorials/mining/*.ipynb
 !tutorials/models/*.ipynb
 !tutorials/outputs/*.ipynb
 !tutorials/postprocessing/*.ipynb

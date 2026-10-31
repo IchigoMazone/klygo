@@ -1,6 +1,6 @@
 # `klygo.datasets` Documentation
 
-`klygo.datasets` provides 8 focused APIs for loading, inspecting, partitioning, flattening, merging, splitting, and relabeling YOLO-style detection datasets across directories and `.zip` archives.
+`klygo.datasets` provides 9 focused APIs for converting, loading, inspecting, partitioning, flattening, merging, splitting, and relabeling YOLO-style detection datasets.
 
 Interactive Google Colab Tutorial:
 [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/datasets/Document_Datasets_Overview.ipynb)
@@ -9,6 +9,7 @@ Local Tutorial Notebooks (`tutorials/datasets/`, 1-to-1 with `klygo/datasets/` s
 - [`Document_Datasets_Overview.ipynb`](../../tutorials/datasets/Document_Datasets_Overview.ipynb)
 - [`Document_Datasets_Load.ipynb`](../../tutorials/datasets/Document_Datasets_Load.ipynb) (`klygo/datasets/load.py`)
 - [`Document_Datasets_Info.ipynb`](../../tutorials/datasets/Document_Datasets_Info.ipynb) (`klygo/datasets/info.py`)
+- [`Document_Datasets_Convert.ipynb`](../../tutorials/datasets/Document_Datasets_Convert.ipynb) (`klygo/datasets/convert.py`)
 - [`Document_Datasets_Partition.ipynb`](../../tutorials/datasets/Document_Datasets_Partition.ipynb) (`klygo/datasets/partition.py`)
 - [`Document_Datasets_Repartition.ipynb`](../../tutorials/datasets/Document_Datasets_Repartition.ipynb) (`klygo/datasets/repartition.py`)
 - [`Document_Datasets_Unpartition.ipynb`](../../tutorials/datasets/Document_Datasets_Unpartition.ipynb) (`klygo/datasets/unpartition.py`)
@@ -31,9 +32,9 @@ Local Tutorial Notebooks (`tutorials/datasets/`, 1-to-1 with `klygo/datasets/` s
 2. **`data.yaml` & Sparse Class IDs**:
    - Nested dataset roots inside archives or subdirectories are discovered automatically by locating `data.yaml` alongside an `images` directory.
    - Contiguous class definitions (`names: ["apple", "banana"]`) and sparse numeric class mappings (`names: {0: "apple", 3: "banana"}`, where `nc` equals the highest class ID plus one) are preserved across [`info()`](api/info.md), [`unpartition()`](api/unpartition.md), [`merge()`](api/merge.md), [`split()`](api/split.md), and [`remap_classes()`](api/remap_classes.md).
-3. **Atomic Staging & Portable `.zip` Outputs**:
+3. **Atomic Staging & Portable Outputs**:
    - Every transformation stages its output in an isolated temporary workspace and publishes to the target directory or `.zip` archive only after completion.
-   - Generated `.zip` archives omit machine-specific absolute `path` entries in `data.yaml` so archives remain portable across machines.
+   - Generated directories use `path: .`; `.zip` archives omit `path`. Neither output stores machine-specific absolute paths.
 
 </details>
 
@@ -50,6 +51,7 @@ Local Tutorial Notebooks (`tutorials/datasets/`, 1-to-1 with `klygo/datasets/` s
 | **Print dataset summary as a Rich table** | [`info()`](api/info.md) | `datasets.info("dataset.zip", verbose=True)` |
 | **Flatten `train`/`val`/`test` splits into one folder** | [`unpartition()`](api/unpartition.md) | `flat = datasets.unpartition("dataset.zip", "flat_data")` |
 | **Load a flat dataset into `Detections` for viewing/cropping** | [`load()`](api/load.md) | `dets = datasets.load(flat, format="yolo")` |
+| **Normalize raw image and label trees into a flat dataset** | [`convert()`](api/convert.md) | `datasets.convert("raw", "flat", tree={"i": "*/images", "l": "*/labels"}, classes={0: "car"})` |
 | **Partition a raw dataset into `train`/`val`/`test`** | [`partition()`](api/partition.md) | `datasets.partition("raw", "split_ds", (0.8, 0.1, 0.1))` |
 | **Partition directly into a portable `.zip` archive** | [`partition()`](api/partition.md) | `datasets.partition("raw", "split_ds.zip", (0.8, 0.2))` |
 | **Rebalance split ratios of an already partitioned dataset** | [`repartition()`](api/repartition.md) | `datasets.repartition("old_ds", "new_ds.zip", (0.7, 0.2, 0.1))` |
@@ -63,12 +65,13 @@ Local Tutorial Notebooks (`tutorials/datasets/`, 1-to-1 with `klygo/datasets/` s
 
 ---
 
-## 3. Public APIs Reference (8 Functions across 8 Submodules)
+## 3. Public APIs Reference (9 Functions across 9 Submodules)
 
 | API | Submodule | Return Type | Description | Example |
 | :--- | :--- | :--- | :--- | :--- |
 | [`load(source, format='yolo', verbose=True)`](api/load.md) | `load.py` | `Detections` | Load all images and YOLO annotations from a flat dataset into memory. | [`load.py`](../../examples/datasets/load.py) |
 | [`info(source, format='yolo', verbose=False)`](api/info.md) | `info.py` | `dict[str, Any]` | Inspect class names, IDs, image/label counts, and split distribution. | [`info.py`](../../examples/datasets/info.py) |
+| [`convert(source, target, ...)`](api/convert.md) | `convert.py` | `Path` | Normalize mapped raw sources into a flat YOLO dataset. | [`convert.py`](../../examples/datasets/convert.py) |
 | [`partition(source, target, ratios, ...)`](api/partition.md) | `partition.py` | `Path` | Create deterministic `train`, `val`, and `test` partitions. | [`partition.py`](../../examples/datasets/partition.py) |
 | [`repartition(source, target, ratios, ...)`](api/repartition.md) | `repartition.py` | `Path` | Flatten existing splits and rebuild with new deterministic ratios. | [`repartition.py`](../../examples/datasets/repartition.py) |
 | [`unpartition(source, target, ...)`](api/unpartition.md) | `unpartition.py` | `Path` | Flatten `train`/`val`/`test` split folders into a single dataset root. | [`unpartition.py`](../../examples/datasets/unpartition.py) |

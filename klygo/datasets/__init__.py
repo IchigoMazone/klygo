@@ -3,7 +3,7 @@
 Colab tutorial:
     https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/datasets/Document_Datasets_Overview.ipynb
 
-Public API (8 functions):
+Public API (9 functions):
     Loading and inspection:
          1. load(...)                 Flatten and load all images and annotations.
          2. info(...)                 Report classes, files, and split statistics.
@@ -14,17 +14,19 @@ Public API (8 functions):
          5. unpartition(...)          Flatten partitioned data into one dataset.
 
     Combination and splitting:
-         6. merge(...)                Combine datasets and reconcile class IDs.
-         7. split(...)                Create class-based or ratio-based ZIP archives.
+         6. convert(...)              Normalize mapped sources into a flat YOLO dataset.
+         7. merge(...)                Combine datasets and reconcile class IDs.
+         8. split(...)                Create class-based or ratio-based ZIP archives.
 
     Relabeling:
-         8. remap_classes(...)        Rename classes or remap numeric IDs.
+         9. remap_classes(...)        Rename classes or remap numeric IDs.
 
 Uses klygo.files, klygo.config, klygo.archive, and klygo.media
 for filesystem, metadata, archive, and image operations.
 """
 
 from .info import get_dataset_info, info
+from .convert import convert
 from .load import load
 from .merge import merge
 from .partition import partition
@@ -36,6 +38,7 @@ from .unpartition import unpartition
 __all__ = [
     "load",
     "info",
+    "convert",
     "partition",
     "repartition",
     "unpartition",

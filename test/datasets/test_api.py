@@ -50,6 +50,7 @@ class TestDatasetsAPI(unittest.TestCase):
         expected = {
             "load",
             "info",
+            "convert",
             "partition",
             "repartition",
             "unpartition",
