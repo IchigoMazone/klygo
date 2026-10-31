@@ -32,6 +32,27 @@ def _validate_transfer(source: Path, target: Path) -> None:
         raise ValueError("Source and destination cannot contain each other")
 
 
+def _win_rename_or_replace(src: Path, dst: Path, *, replace: bool = False) -> None:
+    import time
+
+    op = os.replace if replace else os.rename
+    for attempt in range(10):
+        try:
+            op(src, dst)
+            return
+        except PermissionError:
+            if os.name != "nt":
+                raise
+            time.sleep(0.05 * (attempt + 1))
+    if os.name == "nt" and src.is_dir():
+        if replace and dst.exists():
+            shutil.rmtree(dst, ignore_errors=True)
+        shutil.copytree(src, dst, dirs_exist_ok=replace)
+        shutil.rmtree(src, ignore_errors=True)
+        return
+    op(src, dst)
+
+
 def _publish_staged(staged: Path, target: Path, overwrite: bool) -> None:
     if not overwrite:
         if is_symlink(staged):
@@ -42,7 +63,7 @@ def _publish_staged(staged: Path, target: Path, overwrite: bool) -> None:
             if _entry_exists(target):
                 raise FileExistsError(f"Target already exists: {target}")
             if os.name == "nt":
-                os.rename(staged, target)
+                _win_rename_or_replace(staged, target, replace=False)
             else:
                 target.mkdir()
                 try:
@@ -53,13 +74,13 @@ def _publish_staged(staged: Path, target: Path, overwrite: bool) -> None:
         return
     backup = parent(staged) / "previous"
     if _entry_exists(target):
-        os.replace(target, backup)
+        _win_rename_or_replace(target, backup, replace=True)
     try:
-        os.replace(staged, target)
+        _win_rename_or_replace(staged, target, replace=True)
     except BaseException:
         if _entry_exists(backup):
             try:
-                os.replace(backup, target)
+                _win_rename_or_replace(backup, target, replace=True)
             except OSError as rollback_error:
                 raise OSError(
                     f"Could not restore the previous destination; backup retained at {backup}"
