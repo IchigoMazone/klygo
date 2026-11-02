@@ -204,7 +204,12 @@ class MiningOperationsTest(unittest.TestCase):
             sorted((row["score"] for row in rows), reverse=True),
         )
 
-        comparison = mining.compare(self.data, self.data[:3])
+        after = Detections(
+            list(self.data[:3]),
+            names=self.data.names,
+            metadata=self.data.metadata,
+        )
+        comparison = mining.compare(self.data, after)
         rows = comparison._rows()
         self.assertEqual(rows[0]["metric"], "images")
         self.assertEqual(set(rows[0]), {"metric", "before", "after", "delta"})
