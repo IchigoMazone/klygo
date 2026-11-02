@@ -253,6 +253,37 @@ class MiningOperationsTest(unittest.TestCase):
         self.assertTrue(hash_mock.called)
         self.assertTrue(all(call.kwargs.get("algorithm") == "sha256" for call in hash_mock.call_args_list))
 
+
+    def test_score_normalizes_exposure_with_other_quality_metrics(self) -> None:
+        quality_rows = [
+            {"sharpness": 0.0, "contrast": 0.0, "entropy": 0.0, "noise": 0.0, "exposure": 10.0},
+            {"sharpness": 10.0, "contrast": 10.0, "entropy": 10.0, "noise": 10.0, "exposure": 20.0},
+            {"sharpness": 5.0, "contrast": 5.0, "entropy": 5.0, "noise": 5.0, "exposure": 15.0},
+            {"sharpness": 2.0, "contrast": 2.0, "entropy": 2.0, "noise": 2.0, "exposure": 12.0},
+            {"sharpness": 8.0, "contrast": 8.0, "entropy": 8.0, "noise": 8.0, "exposure": 18.0},
+            {"sharpness": 4.0, "contrast": 4.0, "entropy": 4.0, "noise": 4.0, "exposure": 14.0},
+        ]
+        with patch("klygo.mining.analysis._quality", return_value=quality_rows):
+            scored = mining.score(self.data, weights={"quality": 1.0})
+        self.assertAlmostEqual(scored.details[0]["quality"], 0.2)
+        self.assertAlmostEqual(scored.details[1]["quality"], 0.8)
+
+    def test_duplicate_detection_skips_frames_without_pixel_sources(self) -> None:
+        metadata_only = Detections(
+            [
+                Detection(
+                    [Box((1, 1, 8, 8), label="object", class_id=0)],
+                    source_id="metadata-only",
+                    image_size=(16, 16),
+                    names={0: "object"},
+                )
+            ],
+            names={0: "object"},
+        )
+        report = mining.find_duplicates(metadata_only, exact=True)
+        self.assertEqual(report.hashes, [""])
+        self.assertEqual(report.groups, [])
+
     @unittest.skipUnless(_CUDA_READY, "CuPy CUDA runtime is unavailable")
     def test_gpu_detections_are_preserved_across_mining(self) -> None:
         gpu = self.data.copy().cuda()
