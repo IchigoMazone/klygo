@@ -39,27 +39,39 @@ def _require(data: Detections) -> None:
         raise ValueError("mining requires materialized Detections")
 
 
+class _InMemoryImage:
+    """Small adapter exposing the LazyImage.to_pil() interface for memory sources."""
+
+    def __init__(self, source: Any) -> None:
+        self.source = source
+
+    def to_pil(self, cache: bool = False):
+        from PIL import Image
+
+        if isinstance(self.source, Image.Image):
+            return self.source.convert("RGB")
+        array = np.asarray(self.source)
+        if array.ndim == 2:
+            return Image.fromarray(array).convert("RGB")
+        if array.ndim == 3 and array.shape[2] in (3, 4):
+            return Image.fromarray(array).convert("RGB")
+        raise RuntimeError("in-memory image source must be a PIL image or HxW/HxWxC array")
+
+
 def _image(frame: Any) -> Any:
-    """Load and return the underlying LazyImage for a single frame.
+    """Load image pixels from a path or the in-memory source retained by Detection.
 
-    Parameters
-    ----------
-    frame : Detection
-        Single detection frame containing a source path.
-
-    Returns
-    -------
-    LazyImage
-        Loaded image wrapper ready for conversion.
-
-    Raises
-    ------
-    RuntimeError
-        If `source_path` is missing or None.
+    Raises RuntimeError only when neither a source path nor an image source exists.
     """
-    if frame.source_path is None:
-        raise RuntimeError("image pixels are unavailable because source_path is missing")
-    return media.load(frame.source_path, verbose=False)[0]
+    if frame.source_path is not None:
+        return media.load(frame.source_path, verbose=False)[0]
+
+    source = getattr(frame, "_source", None)
+    if source is None:
+        raise RuntimeError("image pixels are unavailable: source_path and source are missing")
+    if hasattr(source, "to_pil"):
+        return source
+    return _InMemoryImage(source)
 
 
 def _subset(data: Detections, indices: Sequence[int], operation: str) -> Detections:
@@ -285,7 +297,7 @@ class _UnionFind:
 
 
 def _phash(frame: Any) -> tuple[str, np.ndarray]:
-    """Calculate 64-bit perceptual hash (pHash) for an image frame.
+    """Calculate 63-bit perceptual hash (pHash) for an image frame.
 
     Converts image to 32x32 grayscale, computes 2D Discrete Cosine Transform (DCT),
     and thresholds the low-frequency 8x8 DCT coefficients against their median.
@@ -346,6 +358,7 @@ def _feature_matrix(data: Detections, features: tuple[str, ...]) -> np.ndarray:
 
     labels = [data.names[key] for key in sorted(data.names)]
     rows: list[np.ndarray] = []
+    block_widths: list[int] = []
 
     for frame in data:
         pil_image = _image(frame).to_pil(cache=False).convert("RGB")
@@ -358,7 +371,7 @@ def _feature_matrix(data: Detections, features: tuple[str, ...]) -> np.ndarray:
             hist = cv2.calcHist([hsv], [0, 1], None, [8, 8], [0, 180, 0, 256]).ravel()
             parts.append(cv2.normalize(hist, None).ravel())
 
-        # 2. Histogram of Oriented Gradients (HOG) (72 features)
+        # 2. Histogram of Oriented Gradients (HOG): 8x8 cells * 9 bins = 576 features
         if "hog" in features:
             gray = cv2.cvtColor(cv2.resize(image, (64, 64)), cv2.COLOR_RGB2GRAY)
             gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0)
@@ -405,14 +418,22 @@ def _feature_matrix(data: Detections, features: tuple[str, ...]) -> np.ndarray:
             present = set(frame.labels)
             parts.append(np.asarray([label in present for label in labels], dtype=np.float32))
 
+        block_widths = [len(part) for part in parts]
         rows.append(np.concatenate(parts).astype(np.float32))
 
     matrix = np.vstack(rows)
 
-    # Standardize feature matrix with zero-variance protection
+    # Standardize each feature dimension, then normalize each modality block
+    # by sqrt(width) so a 576-D HOG descriptor does not dominate 3-D box data
+    # merely because it contributes many more dimensions.
     deviation = matrix.std(axis=0)
     deviation[deviation == 0] = 1.0
-    return (matrix - matrix.mean(axis=0)) / deviation
+    matrix = (matrix - matrix.mean(axis=0)) / deviation
+    offset = 0
+    for width in block_widths:
+        matrix[:, offset:offset + width] /= np.sqrt(float(width))
+        offset += width
+    return matrix
 
 
 def _class_filter(data: Detections, classes: Sequence[str], match: str) -> list[int]:
@@ -461,6 +482,7 @@ def _quota(
     limit: Optional[int],
     *,
     count_by: str = "images",
+    seed: Optional[int] = None,
 ) -> list[int]:
     """Greedily select frames to fulfill specified per-class target quotas.
 
@@ -474,6 +496,9 @@ def _quota(
         Maximum total images to select.
     count_by : {'images', 'boxes'}, default='images'
         Whether quota targets count total images containing the class or total boxes.
+    seed : int or None, default=None
+        Optional seed used only to resolve equal-gain candidate ties. None preserves
+        stable input-order tie-breaking.
 
     Returns
     -------
@@ -491,29 +516,41 @@ def _quota(
     counts: Counter[str] = Counter()
     remaining = set(range(len(data)))
     chosen: list[int] = []
+    contributions = {
+        index: (
+            Counter(data[index].labels)
+            if count_by == "boxes"
+            else Counter(set(data[index].labels))
+        )
+        for index in range(len(data))
+    }
+    if seed is None:
+        tie_rank = {index: index for index in range(len(data))}
+    else:
+        tie_rank = {
+            int(index): rank
+            for rank, index in enumerate(np.random.default_rng(seed).permutation(len(data)))
+        }
 
     while remaining and (limit is None or len(chosen) < limit):
         deficits = {label: max(0, target - counts[label]) for label, target in quotas.items()}
         if not any(deficits.values()):
             break
 
-        def contribution(index: int) -> Counter[str]:
-            return (
-                Counter(data[index].labels)
-                if count_by == "boxes"
-                else Counter(set(data[index].labels))
-            )
-
-        # Greedily pick the candidate maximizing deficit fulfillment
+        # Greedily pick the candidate maximizing deficit fulfillment.
+        # Seeded tie ranks make undersampling reproducible without changing non-ties.
         candidate = max(
             remaining,
             key=lambda index: (
-                sum(min(deficits.get(label, 0), amount) for label, amount in contribution(index).items()),
-                -index,
+                sum(
+                    min(deficits.get(label, 0), amount)
+                    for label, amount in contributions[index].items()
+                ),
+                -tie_rank[index],
             ),
         )
 
-        values = contribution(candidate)
+        values = contributions[candidate]
         gain = sum(min(deficits.get(label, 0), amount) for label, amount in values.items())
         if gain <= 0:
             break
