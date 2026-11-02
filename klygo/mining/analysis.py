@@ -104,9 +104,10 @@ class MiningScores(_Report):
     identities: list[list[Any]]
 
     def _rows(self) -> list[dict[str, Any]]:
+        ranked = sorted(range(len(self.values)), key=lambda index: (-self.values[index], index))
         return [
-            {"index": index, "score": value, **self.details[index]}
-            for index, value in enumerate(self.values)
+            {"rank": rank, "index": index, "score": self.values[index], **self.details[index]}
+            for rank, index in enumerate(ranked, start=1)
         ]
 
 
@@ -137,6 +138,18 @@ class MiningComparison(_Report):
     before: MiningStats
     after: MiningStats
     changes: dict[str, float]
+
+    def _rows(self) -> list[dict[str, Any]]:
+        metrics = ("images", "boxes", "classes", "imbalance_ratio")
+        return [
+            {
+                "metric": metric,
+                "before": getattr(self.before, metric),
+                "after": getattr(self.after, metric),
+                "delta": self.changes[metric],
+            }
+            for metric in metrics
+        ]
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible dictionary."""
@@ -310,7 +323,11 @@ def score(
     """
     _require(data)
 
-    active = dict(weights or {"quality": 0.4, "rarity": 0.3, "coverage": 0.2, "boxes": 0.1})
+    active = dict(
+        {"quality": 0.4, "rarity": 0.3, "coverage": 0.2, "boxes": 0.1}
+        if weights is None
+        else weights
+    )
     allowed = {"quality", "rarity", "coverage", "boxes"}
 
     if not active or set(active) - allowed or any(v < 0 for v in active.values()) or sum(active.values()) <= 0:
@@ -325,6 +342,7 @@ def score(
     contrast = _normalize([row.get("contrast", 0.0) for row in quality_rows])
     entropy = _normalize([row.get("entropy", 0.0) for row in quality_rows])
     noise = _normalize([row.get("noise", 0.0) for row in quality_rows])
+    exposure = _normalize([row.get("exposure", 0.0) for row in quality_rows])
     box_values = _normalize([float(len(frame)) for frame in data])
 
     # 3. Assemble per-frame component breakdowns
@@ -333,12 +351,16 @@ def score(
         labels = set(frame.labels)
         rarity = float(np.mean([1.0 / image_counts[label] for label in labels])) if labels else 0.0
         quality_value = (
-            sharp[index]
-            + contrast[index]
-            + entropy[index]
-            + (1.0 - noise[index])
-            + quality_rows[index].get("exposure", 0.0)
-        ) / 5.0
+            (
+                sharp[index]
+                + contrast[index]
+                + entropy[index]
+                + (1.0 - noise[index])
+                + exposure[index]
+            ) / 5.0
+            if active.get("quality", 0.0) > 0
+            else 0.0
+        )
 
         details.append({
             "quality": quality_value,
