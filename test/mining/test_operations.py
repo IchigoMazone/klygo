@@ -7,6 +7,9 @@ import unittest
 import numpy as np
 from PIL import Image
 from rich.console import Console
+from unittest.mock import patch
+
+from klygo.mining.curation import ClusterResult
 
 from klygo import files, mining
 from klygo.outputs import Box, Detection, Detections
@@ -128,6 +131,127 @@ class MiningOperationsTest(unittest.TestCase):
             mining.balance(self.data, strategy="oversample")
         with self.assertRaisesRegex(ValueError, "clusters"):
             mining.cluster(self.data, clusters=99)
+
+
+    def test_diversity_seed_is_used_and_limit_covers_distinct_clusters(self) -> None:
+        groups = {index: [index] for index in range(len(self.data))}
+        result = ClusterResult(
+            labels=list(range(len(self.data))),
+            groups=groups,
+            representatives={index: index for index in groups},
+            features=("histogram",),
+            clusters=len(groups),
+            seed=0,
+            feature_vectors=np.zeros((len(self.data), 1), dtype=np.float32),
+        )
+        first = mining.select(
+            self.data, method="diversity", cluster_result=result, limit=3, seed=1
+        )
+        second = mining.select(
+            self.data, method="diversity", cluster_result=result, limit=3, seed=999
+        )
+        self.assertEqual(len(first), 3)
+        self.assertEqual(len(second), 3)
+        self.assertNotEqual(
+            {frame.source_id for frame in first},
+            {frame.source_id for frame in second},
+        )
+
+        with patch("klygo.mining.curation.cluster", return_value=result) as cluster_mock:
+            mining.select(self.data, method="diversity", limit=3, seed=17)
+        self.assertEqual(cluster_mock.call_args.kwargs["seed"], 17)
+
+    def test_diversity_limit_zero_returns_no_frames(self) -> None:
+        result = mining.select(self.data, method="diversity", limit=0, seed=2)
+        self.assertEqual(len(result), 0)
+
+    def test_balance_preserves_background_and_seeded_ties(self) -> None:
+        balanced = mining.balance(self.data, target="min", keep_background=True)
+        self.assertTrue(any(len(frame) == 0 for frame in balanced))
+        dropped = mining.balance(self.data, target="min", keep_background=False)
+        self.assertFalse(any(len(frame) == 0 for frame in dropped))
+
+        tie_frames = [
+            Detection(
+                [Box((1, 1, 10, 10), label="object", class_id=0)],
+                source_id=f"tie-{index}",
+                image_size=(32, 32),
+                names={0: "object"},
+            )
+            for index in range(8)
+        ]
+        tied = Detections(tie_frames, names={0: "object"})
+        first = mining.balance(tied, target=1, strategy="undersample", seed=1)
+        second = mining.balance(tied, target=1, strategy="undersample", seed=999)
+        self.assertEqual(len(first), 1)
+        self.assertEqual(len(second), 1)
+        self.assertNotEqual(first[0].source_id, second[0].source_id)
+
+    def test_score_validates_empty_weights_and_zero_quality_weight(self) -> None:
+        with self.assertRaisesRegex(ValueError, "weights"):
+            mining.score(self.data, weights={})
+
+        with patch("klygo.mining.analysis._quality", side_effect=AssertionError("quality should be skipped")):
+            scored = mining.score(self.data, weights={"quality": 0.0, "rarity": 1.0})
+        self.assertTrue(all(row["quality"] == 0.0 for row in scored.details))
+
+    def test_score_rows_are_ranked_and_comparison_exports_are_tabular(self) -> None:
+        scored = mining.score(self.data, weights={"rarity": 1.0})
+        rows = scored._rows()
+        self.assertEqual([row["rank"] for row in rows], list(range(1, len(rows) + 1)))
+        self.assertEqual(
+            [row["score"] for row in rows],
+            sorted((row["score"] for row in rows), reverse=True),
+        )
+
+        comparison = mining.compare(self.data, self.data[:3])
+        rows = comparison._rows()
+        self.assertEqual(rows[0]["metric"], "images")
+        self.assertEqual(set(rows[0]), {"metric", "before", "after", "delta"})
+        csv_path = files.path(self.temporary.name) / "comparison.csv"
+        md_path = files.path(self.temporary.name) / "comparison.md"
+        comparison.save(csv_path)
+        comparison.save(md_path)
+        csv_text = files.load(csv_path, verbose=False)
+        md_text = files.load(md_path, verbose=False)
+        self.assertIn("before", str(csv_text))
+        self.assertIn("delta", str(csv_text))
+        self.assertIn("| metric | before | after | delta |", md_text)
+
+    def test_duplicate_detection_supports_memory_backed_images(self) -> None:
+        image = Image.new("RGB", (32, 32), (120, 80, 40))
+        frames = [
+            Detection(
+                [Box((1, 1, 10, 10), label="object", class_id=0)],
+                source_id=f"memory-{index}",
+                source=image.copy(),
+                image_size=(32, 32),
+                names={0: "object"},
+            )
+            for index in range(2)
+        ]
+        memory_data = Detections(frames, names={0: "object"})
+        report = mining.find_duplicates(memory_data, exact=True, threshold=1.0)
+        self.assertEqual(report.groups, [[0, 1]])
+
+    def test_hog_feature_dimension_is_576_and_modality_blocks_are_balanced(self) -> None:
+        from klygo.mining._common import _feature_matrix
+
+        matrix = _feature_matrix(
+            self.data, ("histogram", "hog", "quality", "boxes", "classes")
+        )
+        self.assertEqual(matrix.shape, (len(self.data), 652))
+        block_norms = [
+            float(np.mean(np.linalg.norm(matrix[:, start:end], axis=1)))
+            for start, end in ((0, 64), (64, 640), (640, 646), (646, 649), (649, 652))
+        ]
+        self.assertLess(max(block_norms) / max(min(block_norms), 1e-8), 3.0)
+
+    def test_duplicate_report_uses_sha256_for_exact_file_hashes(self) -> None:
+        with patch("klygo.mining.duplicates.files.hash", return_value="same") as hash_mock:
+            mining.find_duplicates(self.data, exact=True, threshold=1.0)
+        self.assertTrue(hash_mock.called)
+        self.assertTrue(all(call.kwargs.get("algorithm") == "sha256" for call in hash_mock.call_args_list))
 
     @unittest.skipUnless(_CUDA_READY, "CuPy CUDA runtime is unavailable")
     def test_gpu_detections_are_preserved_across_mining(self) -> None:
