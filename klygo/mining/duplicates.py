@@ -1,6 +1,6 @@
 """Cryptographic and perceptual duplicate image detection and filtering.
 
-This submodule detects identical duplicate images via MD5 hashing and near-duplicate
+This submodule detects identical duplicate images via SHA-256 hashing and near-duplicate
 images via perceptual Discrete Cosine Transform (DCT) pHash similarity.
 """
 
@@ -29,7 +29,7 @@ class DuplicateReport(_Report):
         List of duplicate groups, where each group is a list of frame indices
         determined to be exact or near-duplicates.
     exact_groups : list[list[int]]
-        Subset of groups containing bit-for-bit identical files (matching MD5).
+        Subset of groups containing bit-for-bit identical files (matching SHA-256).
     similarities : dict[str, float]
         Pairwise perceptual similarity scores between image index pairs `"i:j"`.
     hashes : list[str]
@@ -81,7 +81,7 @@ def find_duplicates(
     """Detect exact and near-duplicate images across a detection dataset.
 
     Identifies duplicate image clusters using two cooperative passes:
-    1. Bit-for-bit file hashing via MD5 (when `exact=True`).
+    1. Bit-for-bit file hashing via SHA-256 (when `exact=True`).
     2. Perceptual hashing (pHash) based on low-frequency 2D DCT coefficients
        with normalized Hamming similarity.
 
@@ -137,7 +137,7 @@ def find_duplicates(
     if exact:
         for index, frame in enumerate(data):
             if frame.source_path is not None:
-                exact_map[files.hash(frame.source_path)].append(index)
+                exact_map[files.hash(frame.source_path, algorithm="sha256")].append(index)
         for group in exact_map.values():
             for index in group[1:]:
                 union.union(group[0], index)
@@ -195,7 +195,8 @@ def deduplicate(
         Materialized detection collection.
     keep : {'best', 'first', 'quality', 'annotations'}, default='best'
         Disambiguation policy for choosing which frame to keep in each duplicate group:
-        - `'best'`: maximize composite quality and rarity score, breaking ties by box count.
+        - `'best'`: maximize the composite score (quality, rarity, coverage, and boxes),
+          breaking ties by box count and then input order.
         - `'first'`: keep the frame with lowest positional index in the dataset.
         - `'quality'`: maximize visual image quality score (sharpness, contrast, entropy).
         - `'annotations'`: keep the frame with highest bounding box count.
@@ -234,7 +235,7 @@ def deduplicate(
     report = find_duplicates(data, threshold=threshold)
     ranking = (
         score(data, weights={"quality": 1.0} if keep == "quality" else None)
-        if keep in {"best", "quality"}
+        if report.groups and keep in {"best", "quality"}
         else None
     )
 
