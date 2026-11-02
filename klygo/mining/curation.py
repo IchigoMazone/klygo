@@ -344,6 +344,8 @@ def select(
     elif method == "diversity":
         if per_cluster <= 0:
             raise ValueError("per_cluster must be positive")
+        if limit == 0:
+            return _subset(data, [], f"select:{method}")
 
         result = cluster_result or cluster(
             data,
@@ -368,8 +370,6 @@ def select(
             for key in cluster_keys
         }
         chosen = []
-        if limit == 0:
-            return _subset(data, [], f"select:{method}")
         for position in range(per_cluster):
             for key in cluster_keys:
                 candidates = per_group[key]
