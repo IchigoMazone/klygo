@@ -368,6 +368,8 @@ def select(
             for key in cluster_keys
         }
         chosen = []
+        if limit == 0:
+            return _subset(data, [], f"select:{method}")
         for position in range(per_cluster):
             for key in cluster_keys:
                 candidates = per_group[key]
