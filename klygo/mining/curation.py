@@ -344,7 +344,7 @@ def select(
     elif method == "diversity":
         if per_cluster <= 0:
             raise ValueError("per_cluster must be positive")
-        if limit == 0:
+        if limit == 0 or not len(data):
             return _subset(data, [], f"select:{method}")
 
         result = cluster_result or cluster(
