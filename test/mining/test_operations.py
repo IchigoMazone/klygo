@@ -165,6 +165,16 @@ class MiningOperationsTest(unittest.TestCase):
         result = mining.select(self.data, method="diversity", limit=0, seed=2)
         self.assertEqual(len(result), 0)
 
+    def test_diversity_on_empty_dataset_returns_empty_detections(self) -> None:
+        empty = Detections([], names=self.data.names, metadata=self.data.metadata)
+        for limit in (None, 0, 3):
+            with self.subTest(limit=limit):
+                result = mining.select(empty, method="diversity", limit=limit)
+                self.assertIsInstance(result, Detections)
+                self.assertEqual(len(result), 0)
+                self.assertEqual(result.names, empty.names)
+                self.assertEqual(result.metadata["mining"]["operation"], "select:diversity")
+
     def test_balance_preserves_background_and_seeded_ties(self) -> None:
         balanced = mining.balance(self.data, target="min", keep_background=True)
         self.assertTrue(any(len(frame) == 0 for frame in balanced))
