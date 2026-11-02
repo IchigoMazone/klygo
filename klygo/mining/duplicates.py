@@ -33,7 +33,8 @@ class DuplicateReport(_Report):
     similarities : dict[str, float]
         Pairwise perceptual similarity scores between image index pairs `"i:j"`.
     hashes : list[str]
-        Computed 63-bit perceptual hash binary strings for all frames in the dataset.
+        Computed 63-bit perceptual hash strings. Empty strings mark frames whose
+        source pixels were unavailable and therefore could not be hashed.
     total_images : int
         Total number of images inspected.
 
@@ -143,12 +144,24 @@ def find_duplicates(
                 union.union(group[0], index)
 
     # 2. Perceptual pass: compute 63-bit DCT pHash for each frame
-    computed = [_phash(frame) for frame in data]
+    computed = []
+    for frame in data:
+        try:
+            computed.append(_phash(frame))
+        except RuntimeError:
+            # A metadata-only Detection can still participate in exact path
+            # hashing, but cannot contribute to perceptual comparisons.
+            computed.append(("", np.zeros(63, dtype=bool)))
+
     similarities: dict[str, float] = {}
 
-    # Pairwise comparison across frames
+    # Pairwise comparison across frames with available pixel data
     for first in range(len(computed)):
+        if not computed[first][0]:
+            continue
         for second in range(first + 1, len(computed)):
+            if not computed[second][0]:
+                continue
             similarity = float(1.0 - np.mean(computed[first][1] != computed[second][1]))
             if similarity >= threshold:
                 union.union(first, second)
