@@ -36,7 +36,7 @@ class ClusterResult(_Report):
     features : tuple[str, ...]
         Active feature modalities used during feature extraction.
     clusters : int
-        Total number of clusters generated.
+        Number of non-empty clusters actually produced (which may be below the requested target).
     seed : int
         RNG seed used for deterministic K-Means initialization.
     feature_vectors : np.ndarray
@@ -104,9 +104,9 @@ def cluster(
     features : Sequence[str], default=('histogram', 'hog', 'quality', 'boxes', 'classes')
         Feature modalities to extract. Allowed choices:
         - `'histogram'`: 64-bin HSV color histogram capturing overall lighting and palette.
-        - `'hog'`: 72-bin gradient orientation histogram capturing contours and textures.
+        - `'hog'`: 576-dimensional gradient descriptor (8x8 cells, 9 bins per cell).
         - `'quality'`: 6 classical quality metrics (sharpness, contrast, noise, etc.).
-        - `'boxes'`: box count and relative area percentiles.
+        - `'boxes'`: box count, mean relative area, and maximum relative area.
         - `'classes'`: binary indicator flags for label presence.
     clusters : int, default=100
         Target number of clusters. Must be between 1 and `len(data)`.
@@ -186,7 +186,7 @@ def cluster(
         groups=dict(sorted(groups.items())),
         representatives=dict(sorted(representatives.items())),
         features=names,
-        clusters=clusters,
+        clusters=len(groups),
         seed=seed,
         feature_vectors=matrix,
     )
@@ -219,7 +219,7 @@ def select(
     - `'diversity'`: sample visual cluster representatives across K-Means groups.
     - `'boxes'`: filter images by annotation box count and relative area constraints.
     - `'quota'`: greedy selection to fulfill explicit target quotas per class.
-    - `'coverage'`: greedy selection to maximize distinct class coverage.
+    - `'coverage'`: alias of the greedy per-class quota selection used by `'quota'`.
     - `'class'`: filter images by specified class names with inclusion/exclusion rules.
 
     Parameters
@@ -245,7 +245,7 @@ def select(
     max_boxes : int, optional
         Maximum annotation box count allowed when `method='boxes'`.
     min_area_ratio : float, default=0.0
-        Minimum relative box area required when `method='boxes'`.
+        Minimum relative area required for the largest box in an image when `method='boxes'`.
     per_class : int or Mapping[str, int], default=1
         Target quota per class when `method='quota'` or `method='coverage'`.
     scores : MiningScores, optional
@@ -348,19 +348,35 @@ def select(
         result = cluster_result or cluster(
             data,
             clusters=min(len(data), limit or min(100, len(data))),
+            seed=seed,
         )
         if len(result.labels) != len(data):
             raise ValueError("cluster_result length must match data length")
 
+        rng = np.random.default_rng(seed)
+        cluster_keys = sorted(result.groups)
+        rng.shuffle(cluster_keys)
+
+        # Round-robin across clusters: take one item from every cluster before
+        # taking second/third items, so a small global limit retains broad coverage.
+        per_group = {
+            key: [result.representatives[key]]
+            + [
+                index for index in result.groups[key]
+                if index != result.representatives[key]
+            ][:per_cluster - 1]
+            for key in cluster_keys
+        }
         chosen = []
-        for key in sorted(result.groups):
-            representative = result.representatives[key]
-            chosen.extend(
-                [representative]
-                + [index for index in result.groups[key] if index != representative][:per_cluster - 1]
-            )
-        if limit is not None:
-            chosen = chosen[:limit]
+        for position in range(per_cluster):
+            for key in cluster_keys:
+                candidates = per_group[key]
+                if position < len(candidates):
+                    chosen.append(candidates[position])
+                    if limit is not None and len(chosen) >= limit:
+                        break
+            if limit is not None and len(chosen) >= limit:
+                break
         indices = sorted(chosen)
 
     else:
@@ -400,6 +416,7 @@ def balance(
     strategy: str = "select",
     count_by: str = "images",
     seed: int = 42,
+    keep_background: bool = True,
 ) -> Detections:
     """Mitigate dataset class imbalance without duplicating frames.
 
@@ -417,12 +434,15 @@ def balance(
         - `'mean'`: target the arithmetic mean class frequency.
         - int: explicit maximum quota limit per class.
     strategy : {'select', 'undersample'}, default='select'
-        Balancing policy. Currently both strategies select existing whole images.
+        Tie-breaking policy. 'select' preserves input order for equal-gain choices;
+        'undersample' uses reproducible seeded tie-breaking.
     count_by : {'images', 'boxes'}, default='images'
         Whether quota targets are evaluated by total images containing the class
         or total bounding box count.
     seed : int, default=42
-        RNG seed for deterministic tie-breaking.
+        RNG seed used for tie-breaking when strategy='undersample'.
+    keep_background : bool, default=True
+        Preserve images with no boxes. Background images do not contribute to class quotas.
 
     Returns
     -------
@@ -456,6 +476,8 @@ def balance(
         raise ValueError("strategy must be 'select' or 'undersample'")
     if count_by not in {"images", "boxes"}:
         raise ValueError("count_by must be 'images' or 'boxes'")
+    if not isinstance(keep_background, bool):
+        raise TypeError("keep_background must be a boolean")
 
     summary = stats(data, quality=False, cooccurrence=False)
     counts = summary.images_per_class if count_by == "images" else summary.boxes_per_class
@@ -482,7 +504,16 @@ def balance(
         raise ValueError("target must be non-negative")
 
     quotas = {label: min(resolved, value) for label, value in counts.items()}
-    indices = _quota(data, quotas, None, count_by=count_by)
+    indices = _quota(
+        data,
+        quotas,
+        None,
+        count_by=count_by,
+        seed=seed if strategy == "undersample" else None,
+    )
+    if keep_background:
+        indices.extend(index for index, frame in enumerate(data) if len(frame) == 0)
+    indices = sorted(set(indices))
     result = _subset(data, indices, f"balance:{strategy}")
 
     # Record actual versus target counts in metadata
