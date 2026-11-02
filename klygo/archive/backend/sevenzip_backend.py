@@ -1,15 +1,63 @@
-import shutil
-from pathlib import Path
-from typing import Iterator, Any, Dict, List, Optional, Union, Literal
+"""Optional 7-Zip backend powered by :mod:`py7zr`."""
 
-from klygo.archive.backend.base import ArchiveBackend
-from klygo.archive.human_size import human_size
+import fnmatch
+import re
+from pathlib import Path
+from typing import Iterator, Any, Dict, List, Optional, Union
+
+import klygo.files as file_utils
+from klygo.archive.backend.base import ArchiveBackend, BackendCapabilities
+from klygo.utils.formatting import human_size
+from klygo.utils.progress import ProgressBar
 
 
 class SevenZipBackend(ArchiveBackend):
+    """Read and create 7-Zip archives through the optional ``py7zr`` package.
+
+    The adapter can be imported and inspected without ``py7zr`` installed.
+    Operations that open a 7-Zip archive raise an actionable :class:`ImportError`
+    when the dependency is unavailable. Mutation operations are intentionally
+    disabled until they can provide the same conflict and atomicity guarantees
+    as ZIP and TAR.
+
+    Attributes
+    ----------
+    format_name : str
+        Always ``"7z"``.
+    capabilities : BackendCapabilities
+        Enables creation, password extraction, and root-layout selection.
+
+    Raises
+    ------
+    ImportError
+        When an operation needs the optional ``py7zr`` dependency. Install it
+        with ``pip install "klygo[py7zr]"``.
+    UnsupportedOptionError
+        When an unimplemented compression or extraction option is changed.
+    FileExistsError
+        When output replacement is not authorized.
+
+    Notes
+    -----
+    The class remains importable without ``py7zr`` so capability discovery and
+    documentation generation do not force optional dependencies to be present.
+
+    Examples
+    --------
+    >>> from klygo.archive.backend import SevenZipBackend
+    >>> backend = SevenZipBackend()
+    >>> backend.capabilities.compress
+    True
+    >>> backend.capabilities.add
+    False
     """
-    7z Archive Backend supporting .7z format (requires optional py7zr library).
-    """
+
+    format_name = "7z"
+    capabilities = BackendCapabilities(
+        compress=True,
+        compress_options=frozenset({"include_root"}),
+        extract_options=frozenset({"password"}),
+    )
 
     def _check_py7zr(self):
         try:
@@ -18,7 +66,7 @@ class SevenZipBackend(ArchiveBackend):
         except ImportError:
             raise ImportError(
                 "Support for .7z format requires the 'py7zr' package. "
-                "Please install it using 'pip install py7zr'."
+                "Install it using 'pip install \"klygo[py7zr]\"'."
             )
 
     def compress(
@@ -27,22 +75,38 @@ class SevenZipBackend(ArchiveBackend):
         output_path: Path,
         compresslevel: int = 6,
         method: Optional[str] = None,
-        preserve_timestamp: bool = True,
-        preserve_permissions: bool = True,
         follow_symlinks: bool = False,
+        include_root: bool = True,
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
+        """Create a 7-Zip archive through ``py7zr``.
+
+        ``include_root`` controls directory layout. Changed compression method,
+        level, and symlink options are rejected until implemented explicitly.
+        """
+        self.validate_option("compress", "compresslevel", compresslevel, 6)
+        self.validate_option("compress", "method", method, None)
+        self.validate_option("compress", "follow_symlinks", follow_symlinks, False)
         py7zr = self._check_py7zr()
-        if output_path.exists() and not overwrite:
+        if file_utils.exists(output_path) and not overwrite:
             raise FileExistsError(f"output_path already exists: {output_path}")
 
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with py7zr.SevenZipFile(output_path, mode="w") as archive:
-            if source.is_dir():
-                archive.writeall(source, arcname=source.name)
-            else:
-                archive.write(source, arcname=source.name)
+        file_utils.mkdir(file_utils.parent(output_path))
+        with ProgressBar(total=1, desc=f"{file_utils.name(output_path)}: compressing", verbose=verbose) as progress:
+            with py7zr.SevenZipFile(output_path, mode="w") as archive:
+                if file_utils.is_dir(source):
+                    if include_root:
+                        archive.writeall(source, arcname=file_utils.name(source))
+                    else:
+                        for child in sorted(file_utils.list_entries(source)):
+                            if file_utils.is_dir(child):
+                                archive.writeall(child, arcname=file_utils.name(child))
+                            else:
+                                archive.write(child, arcname=file_utils.name(child))
+                else:
+                    archive.write(source, arcname=file_utils.name(source))
+            progress.update()
 
     def extract(
         self,
@@ -51,16 +115,30 @@ class SevenZipBackend(ArchiveBackend):
         password: Optional[str] = None,
         include: Optional[Union[str, List[str]]] = None,
         exclude: Optional[Union[str, List[str]]] = None,
-        preserve_timestamp: bool = True,
-        preserve_permissions: bool = True,
         overwrite: bool = False,
         verbose: bool = True,
     ) -> None:
+        """Extract every 7-Zip member, optionally using a password.
+
+        Include and exclude filters are currently unsupported and changed
+        values raise ``UnsupportedOptionError``.
+        """
+        self.validate_option("extract", "include", include, None)
+        self.validate_option("extract", "exclude", exclude, None)
         py7zr = self._check_py7zr()
-        output_dir.mkdir(parents=True, exist_ok=True)
+        file_utils.mkdir(output_dir)
 
         with py7zr.SevenZipFile(archive_path, mode="r", password=password) as archive:
-            archive.extractall(path=output_dir)
+            names = archive.getnames()
+            if not overwrite:
+                existing = [name for name in names if file_utils.exists(file_utils.join(output_dir, name))]
+                if existing:
+                    raise FileExistsError(
+                        f"Archive members already exist: {existing[:5]}. Use overwrite=True."
+                    )
+            with ProgressBar(total=1, desc=f"{file_utils.name(archive_path)}: extracting", verbose=verbose) as progress:
+                archive.extractall(path=output_dir)
+                progress.update()
 
     def extract_file(
         self,
@@ -70,18 +148,24 @@ class SevenZipBackend(ArchiveBackend):
         password: Optional[str] = None,
         overwrite: bool = False,
     ) -> None:
+        """Extract one exact 7-Zip member through ``py7zr``."""
         py7zr = self._check_py7zr()
-        output_dir.mkdir(parents=True, exist_ok=True)
+        file_utils.mkdir(output_dir)
+        target = file_utils.join(output_dir, file_utils.name(filename))
+        if file_utils.exists(target) and not overwrite:
+            raise FileExistsError(f"File already exists: {target}. Use overwrite=True.")
 
         with py7zr.SevenZipFile(archive_path, mode="r", password=password) as archive:
             archive.extract(path=output_dir, targets=[filename])
 
     def list_files(self, archive_path: Path) -> List[str]:
+        """Return member names reported by ``py7zr``."""
         py7zr = self._check_py7zr()
         with py7zr.SevenZipFile(archive_path, mode="r") as archive:
             return archive.getnames()
 
     def iter_files(self, archive_path: Path) -> Iterator[str]:
+        """Yield 7-Zip member names from the managed list result."""
         yield from self.list_files(archive_path)
 
     def search(
@@ -91,7 +175,7 @@ class SevenZipBackend(ArchiveBackend):
         regex: bool = False,
         case_sensitive: bool = True,
     ) -> List[str]:
-        import fnmatch, re
+        """Search 7-Zip member names using glob or regex matching."""
         results = []
         for name in self.iter_files(archive_path):
             n = name if case_sensitive else name.lower()
@@ -103,11 +187,12 @@ class SevenZipBackend(ArchiveBackend):
         return results
 
     def get_info(self, archive_path: Path) -> Dict[str, Any]:
+        """Normalize 7-Zip metadata, sizes, encryption, and member counts."""
         py7zr = self._check_py7zr()
         with py7zr.SevenZipFile(archive_path, mode="r") as archive:
             info = archive.archiveinfo()
             files = archive.getnames()
-            size = archive_path.stat().st_size
+            size = file_utils.size(archive_path)
             return {
                 "path": str(archive_path),
                 "format": "7z",
@@ -128,6 +213,7 @@ class SevenZipBackend(ArchiveBackend):
             }
 
     def test(self, archive_path: Path, raise_exception: bool = False) -> bool:
+        """Delegate archive integrity testing to ``py7zr``."""
         py7zr = self._check_py7zr()
         try:
             with py7zr.SevenZipFile(archive_path, mode="r") as archive:
@@ -136,37 +222,3 @@ class SevenZipBackend(ArchiveBackend):
             if raise_exception:
                 raise ValueError(f"7z archive corrupted: {e}")
             return False
-
-    def add(
-        self,
-        archive_path: Path,
-        files: List[Path],
-        on_conflict: Literal["rename", "overwrite", "skip"] = "rename",
-        verbose: bool = True,
-    ) -> None:
-        py7zr = self._check_py7zr()
-        with py7zr.SevenZipFile(archive_path, mode="a") as archive:
-            for fp in files:
-                archive.write(fp, arcname=fp.name)
-
-    def remove(self, archive_path: Path, files: List[str]) -> None:
-        raise NotImplementedError("Removing files from 7z archive is not directly supported.")
-
-    def merge(
-        self,
-        archive_paths: List[Path],
-        output_path: Path,
-        overwrite: bool = False,
-        verbose: bool = True,
-    ) -> None:
-        raise NotImplementedError("Merging 7z archives is not supported directly.")
-
-    def split_by_size(
-        self,
-        archive_path: Path,
-        size: float,
-        output_dir: Path,
-        overwrite: bool = False,
-        verbose: bool = True,
-    ) -> List[str]:
-        raise NotImplementedError("Splitting 7z archive is not supported.")

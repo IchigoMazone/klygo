@@ -1,0 +1,26 @@
+{
+  "100": {
+    "cpu_to_gpu_ms": 0.704,
+    "gpu_to_cpu_ms": 1.306,
+    "cpu_float16_ms": 0.06,
+    "gpu_float16_ms": 1.038,
+    "cpu_threshold_ms": 0.151,
+    "gpu_threshold_ms": 2.28
+  },
+  "1000": {
+    "cpu_to_gpu_ms": 0.776,
+    "gpu_to_cpu_ms": 1.646,
+    "cpu_float16_ms": 0.104,
+    "gpu_float16_ms": 1.105,
+    "cpu_threshold_ms": 0.579,
+    "gpu_threshold_ms": 3.923
+  },
+  "2000": {
+    "cpu_to_gpu_ms": 0.864,
+    "gpu_to_cpu_ms": 1.943,
+    "cpu_float16_ms": 0.125,
+    "gpu_float16_ms": 1.265,
+    "cpu_threshold_ms": 0.85,
+    "gpu_threshold_ms": 3.29
+  }
+}

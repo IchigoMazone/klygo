@@ -1,0 +1,342 @@
+{
+  "cpu": {
+    "YOLOv8n": {
+      "Raw Non-stream": {
+        "fps": 0.22,
+        "ms_per_frame": 4467.96,
+        "first_frame_ms": 17193.68,
+        "total_sec": 17.872,
+        "ram_mb": 713.35,
+        "peak_heap_mb": 79.41,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      },
+      "Raw Stream": {
+        "fps": 2.85,
+        "ms_per_frame": 350.98,
+        "first_frame_ms": 806.82,
+        "total_sec": 1.404,
+        "ram_mb": 715.27,
+        "peak_heap_mb": 3.71,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      },
+      "Klygo Native Non-stream": {
+        "fps": 3.43,
+        "ms_per_frame": 291.5,
+        "first_frame_ms": 1165.97,
+        "total_sec": 1.166,
+        "ram_mb": 712.97,
+        "peak_heap_mb": 3.29,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      },
+      "Klygo Native Stream": {
+        "fps": 8.43,
+        "ms_per_frame": 118.67,
+        "first_frame_ms": 474.64,
+        "total_sec": 0.475,
+        "ram_mb": 697.83,
+        "peak_heap_mb": 2.26,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      },
+      "Klygo Managed Non-stream": {
+        "fps": 7.93,
+        "ms_per_frame": 126.09,
+        "first_frame_ms": 504.33,
+        "total_sec": 0.504,
+        "ram_mb": 717.75,
+        "peak_heap_mb": 2.5,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      },
+      "Klygo Managed Stream": {
+        "fps": 5.2,
+        "ms_per_frame": 192.26,
+        "first_frame_ms": 285.47,
+        "total_sec": 0.769,
+        "ram_mb": 717.94,
+        "peak_heap_mb": 2.49,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      }
+    },
+    "YOLO-World": {
+      "Raw Non-stream": {
+        "fps": 0.35,
+        "ms_per_frame": 2861.7,
+        "first_frame_ms": 1883.44,
+        "total_sec": 11.447,
+        "ram_mb": 838.12,
+        "peak_heap_mb": 360.62,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      },
+      "Raw Stream": {
+        "fps": 0.46,
+        "ms_per_frame": 2175.51,
+        "first_frame_ms": 1132.84,
+        "total_sec": 8.702,
+        "ram_mb": 883.59,
+        "peak_heap_mb": 338.63,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      },
+      "Klygo Native Non-stream": {
+        "fps": 0.44,
+        "ms_per_frame": 2267.48,
+        "first_frame_ms": 9069.89,
+        "total_sec": 9.07,
+        "ram_mb": 874.12,
+        "peak_heap_mb": 337.62,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      },
+      "Klygo Native Stream": {
+        "fps": 3.76,
+        "ms_per_frame": 266.17,
+        "first_frame_ms": 1064.64,
+        "total_sec": 1.065,
+        "ram_mb": 840.44,
+        "peak_heap_mb": 2.26,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      },
+      "Klygo Managed Non-stream": {
+        "fps": 4.07,
+        "ms_per_frame": 245.61,
+        "first_frame_ms": 982.42,
+        "total_sec": 0.982,
+        "ram_mb": 843.2,
+        "peak_heap_mb": 2.49,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      },
+      "Klygo Managed Stream": {
+        "fps": 3.84,
+        "ms_per_frame": 260.69,
+        "first_frame_ms": 285.11,
+        "total_sec": 1.043,
+        "ram_mb": 843.96,
+        "peak_heap_mb": 2.5,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      }
+    },
+    "Grounding DINO Tiny": {
+      "Raw Non-stream": {
+        "fps": 0.63,
+        "ms_per_frame": 1585.4,
+        "first_frame_ms": 6306.52,
+        "total_sec": 6.342,
+        "ram_mb": 1421.22,
+        "peak_heap_mb": 1.29,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      },
+      "Raw Stream": "Not Supported by Upstream",
+      "Klygo Native Non-stream": {
+        "fps": 0.52,
+        "ms_per_frame": 1916.49,
+        "first_frame_ms": 7665.94,
+        "total_sec": 7.666,
+        "ram_mb": 2083.25,
+        "peak_heap_mb": 0.79,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      },
+      "Klygo Native Stream": "Not Supported (No Upstream Engine)",
+      "Klygo Managed Non-stream": {
+        "fps": 0.53,
+        "ms_per_frame": 1888.81,
+        "first_frame_ms": 7555.23,
+        "total_sec": 7.555,
+        "ram_mb": 1983.77,
+        "peak_heap_mb": 1.17,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      },
+      "Klygo Managed Stream": {
+        "fps": 0.5,
+        "ms_per_frame": 1983.76,
+        "first_frame_ms": 4125.2,
+        "total_sec": 7.935,
+        "ram_mb": 2077.54,
+        "peak_heap_mb": 1.17,
+        "peak_vram_mb": 0.0,
+        "frames": 4
+      }
+    }
+  },
+  "cuda:0": {
+    "YOLOv8n": {
+      "Raw Non-stream": {
+        "fps": 1.18,
+        "ms_per_frame": 849.28,
+        "first_frame_ms": 3117.75,
+        "total_sec": 3.397,
+        "ram_mb": 1281.55,
+        "peak_heap_mb": 4.16,
+        "peak_vram_mb": 37.83,
+        "frames": 4
+      },
+      "Raw Stream": {
+        "fps": 2.73,
+        "ms_per_frame": 365.79,
+        "first_frame_ms": 896.3,
+        "total_sec": 1.463,
+        "ram_mb": 1292.73,
+        "peak_heap_mb": 3.94,
+        "peak_vram_mb": 37.82,
+        "frames": 4
+      },
+      "Klygo Native Non-stream": {
+        "fps": 3.2,
+        "ms_per_frame": 312.48,
+        "first_frame_ms": 1249.81,
+        "total_sec": 1.25,
+        "ram_mb": 1283.4,
+        "peak_heap_mb": 3.29,
+        "peak_vram_mb": 37.83,
+        "frames": 4
+      },
+      "Klygo Native Stream": {
+        "fps": 6.13,
+        "ms_per_frame": 163.26,
+        "first_frame_ms": 652.91,
+        "total_sec": 0.653,
+        "ram_mb": 1284.79,
+        "peak_heap_mb": 2.48,
+        "peak_vram_mb": 37.82,
+        "frames": 4
+      },
+      "Klygo Managed Non-stream": {
+        "fps": 7.2,
+        "ms_per_frame": 138.98,
+        "first_frame_ms": 555.78,
+        "total_sec": 0.556,
+        "ram_mb": 1284.65,
+        "peak_heap_mb": 2.5,
+        "peak_vram_mb": 27.81,
+        "frames": 4
+      },
+      "Klygo Managed Stream": {
+        "fps": 6.87,
+        "ms_per_frame": 145.64,
+        "first_frame_ms": 287.58,
+        "total_sec": 0.583,
+        "ram_mb": 1284.74,
+        "peak_heap_mb": 2.49,
+        "peak_vram_mb": 27.81,
+        "frames": 4
+      }
+    },
+    "YOLO-World": {
+      "Raw Non-stream": {
+        "fps": 0.39,
+        "ms_per_frame": 2562.31,
+        "first_frame_ms": 3069.27,
+        "total_sec": 10.249,
+        "ram_mb": 1512.93,
+        "peak_heap_mb": 338.63,
+        "peak_vram_mb": 121.5,
+        "frames": 4
+      },
+      "Raw Stream": {
+        "fps": 0.43,
+        "ms_per_frame": 2314.97,
+        "first_frame_ms": 1540.82,
+        "total_sec": 9.26,
+        "ram_mb": 1640.29,
+        "peak_heap_mb": 338.63,
+        "peak_vram_mb": 121.5,
+        "frames": 4
+      },
+      "Klygo Native Non-stream": {
+        "fps": 0.45,
+        "ms_per_frame": 2241.57,
+        "first_frame_ms": 8966.15,
+        "total_sec": 8.966,
+        "ram_mb": 1370.19,
+        "peak_heap_mb": 337.62,
+        "peak_vram_mb": 121.5,
+        "frames": 4
+      },
+      "Klygo Native Stream": {
+        "fps": 3.41,
+        "ms_per_frame": 292.97,
+        "first_frame_ms": 1171.79,
+        "total_sec": 1.172,
+        "ram_mb": 1370.27,
+        "peak_heap_mb": 2.47,
+        "peak_vram_mb": 121.5,
+        "frames": 4
+      },
+      "Klygo Managed Non-stream": {
+        "fps": 3.74,
+        "ms_per_frame": 267.49,
+        "first_frame_ms": 1069.85,
+        "total_sec": 1.07,
+        "ram_mb": 1370.29,
+        "peak_heap_mb": 2.49,
+        "peak_vram_mb": 114.84,
+        "frames": 4
+      },
+      "Klygo Managed Stream": {
+        "fps": 3.7,
+        "ms_per_frame": 270.12,
+        "first_frame_ms": 399.35,
+        "total_sec": 1.08,
+        "ram_mb": 1370.29,
+        "peak_heap_mb": 2.49,
+        "peak_vram_mb": 114.84,
+        "frames": 4
+      }
+    },
+    "Grounding DINO Tiny": {
+      "Raw Non-stream": {
+        "fps": 0.76,
+        "ms_per_frame": 1317.66,
+        "first_frame_ms": 5270.42,
+        "total_sec": 5.271,
+        "ram_mb": 1610.65,
+        "peak_heap_mb": 1.11,
+        "peak_vram_mb": 1093.73,
+        "frames": 4
+      },
+      "Raw Stream": "Not Supported by Upstream",
+      "Klygo Native Non-stream": {
+        "fps": 1.02,
+        "ms_per_frame": 983.97,
+        "first_frame_ms": 3935.74,
+        "total_sec": 3.936,
+        "ram_mb": 1626.59,
+        "peak_heap_mb": 0.96,
+        "peak_vram_mb": 1551.43,
+        "frames": 4
+      },
+      "Klygo Native Stream": "Not Supported (No Upstream Engine)",
+      "Klygo Managed Non-stream": {
+        "fps": 1.02,
+        "ms_per_frame": 976.32,
+        "first_frame_ms": 3905.14,
+        "total_sec": 3.905,
+        "ram_mb": 1627.04,
+        "peak_heap_mb": 0.94,
+        "peak_vram_mb": 1551.43,
+        "frames": 4
+      },
+      "Klygo Managed Stream": {
+        "fps": 1.03,
+        "ms_per_frame": 974.07,
+        "first_frame_ms": 2031.44,
+        "total_sec": 3.896,
+        "ram_mb": 1602.89,
+        "peak_heap_mb": 1.17,
+        "peak_vram_mb": 1551.43,
+        "frames": 4
+      }
+    }
+  }
+}

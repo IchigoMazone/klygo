@@ -1,14 +1,22 @@
-"""
-Grounding DINO Zero-Shot Object Detection (klygo.models.detection.grounding_dino).
-TANG 3: Cau hinh model & processor ro rang, forward() ngan gon nho cac helper cua Detector.
-"""
+"""Grounding DINO with explicit configuration, preprocessing, and inference."""
 
-from typing import Any, List, Dict, Union, Sequence
-import torch
+from typing import Any, List, Dict, Optional, Union
+from collections.abc import Mapping
 import PIL.Image
-from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
+try:
+    import torch
+    from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
+except ImportError as exc:
+    raise ImportError(
+        "Grounding DINO requires the Hugging Face model extra. "
+        "Install it using 'pip install \"klygo[transformers]\"'."
+    ) from exc
+
+from klygo import utils
 from klygo.models.detection.base import Detector
+from klygo.models.utils import normalize_prompt
+from klygo.outputs import build_detections
 from klygo.outputs.detect import Detection
 
 
@@ -18,19 +26,21 @@ class GroundingDinoDetect(Detector):
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
         super().__init__(
             metadata=metadata,
-            flags=("model", "processor", "post"),
-            unsupported=("train", "val"),
             **kwargs,
         )
+        self._active_prompt = None
 
-        # 1. Boc tach 3 nhom cau hinh tu metadata
-        mod_kw, proc_kw, _ = self.parse_config()
+        model_config = dict(self.metadata["model"])
+        processor_config = dict(self.metadata["processor"])
 
-        # 2. Khoi tao Processor & Model tu Hugging Face
+        # Initialise Processor & Model from Hugging Face
         with self.suppress_warnings():
-            self.processor = AutoProcessor.from_pretrained(self.model_id, **proc_kw)
-            self.model = AutoModelForZeroShotObjectDetection.from_pretrained(self.model_id, **mod_kw)
-            if "device_map" not in mod_kw:
+            self.processor = AutoProcessor.from_pretrained(self.model_id, **processor_config)
+            self.model = AutoModelForZeroShotObjectDetection.from_pretrained(
+                self.model_id,
+                **model_config,
+            )
+            if "device_map" not in model_config:
                 self.model.to("cpu")
             self.model.eval()
 
@@ -40,33 +50,46 @@ class GroundingDinoDetect(Detector):
         prompt: Union[str, List[str]],
         **kwargs,
     ) -> List[Detection]:
-        # 1. Boc tach 3 nhom kwargs tu **kwargs
-        mod_kw, proc_kw, post_kw = self.split_kwargs(kwargs)
 
-        # 2. Tiền xử lý tại chỗ (Đặc thù riêng của Grounding DINO)
-        raw_prompt = [prompt] if isinstance(prompt, str) else list(prompt) if prompt else []
-        text_str = ". ".join([str(p).strip().rstrip(".").lower() for p in raw_prompt if str(p).strip()]) + "."
-        text_batch = [text_str] * len(images) if text_str != "." else None
+        if not prompt:
+            raise ValueError("Grounding DINO requires a non-empty text prompt; use reset() to clear saved state")
+
+        prompt_list = normalize_prompt(prompt)
+        self.names = {class_id: label for class_id, label in enumerate(prompt_list)}
+        self._active_prompt = list(prompt_list)
+
+        model_config = dict(self.metadata["model"])
+        processor_config = dict(self.metadata["processor"])
+        post_config = dict(self.metadata["post"])
+
+        proc_opts = {**processor_config, **kwargs}
+        post_opts = {**post_config, **kwargs}
+
+        # Format prompts and tokenize text batch
+        text_str = ". ".join(prompt_list) + "."
+        text_batch = [text_str] * len(images)
 
         inputs = self.processor(
             images=images,
             text=text_batch,
             return_tensors="pt",
-            **proc_kw
+            **utils.exclude_keys(proc_opts, ["threshold", "text_threshold"]),
         )
         inputs = self.cast_inputs(inputs)
 
-        # 3. Inference (AMP, GPU sync tu dong)
-        outputs = self.run_inference(inputs, **mod_kw)
+        # Loading-only options never belong to the model's forward call.
+        loading_keys = [
+            "device_map", "torch_dtype", "dtype", "low_cpu_mem_usage", "cache_dir",
+            "revision", "local_files_only", "trust_remote_code", "token",
+        ]
+        model_options = utils.exclude_keys(model_config, loading_keys)
+        outputs = self.model(**inputs, **model_options)
 
-        # 4. Postprocess đặc thù của Grounding DINO
-        thresh = post_kw.get("threshold", 0.25)
-        text_thresh = post_kw.get("text_threshold", 0.3)
+        thresh = float(post_opts.get("threshold", 0.25))
+        text_thresh = float(post_opts.get("text_threshold", 0.3))
 
-        # Tường minh: Chỉ đồng bộ duy nhất 'input_ids' về cùng device của outputs khi cần thiết (Multi-GPU).
-        # Tuyệt đối không sao chép thừa thãi các tensor ảnh lớn (pixel_values) làm nghẽn PCIe / hao phí VRAM.
         target_dev = self.get_output_device(outputs)
-        raw_input_ids = inputs.get("input_ids") if isinstance(inputs, dict) else None
+        raw_input_ids = inputs.get("input_ids") if isinstance(inputs, Mapping) else None
         input_ids = self.sync_device(raw_input_ids, target_device=target_dev)
 
         with self.suppress_warnings():
@@ -76,8 +99,40 @@ class GroundingDinoDetect(Detector):
                 threshold=thresh,
                 text_threshold=text_thresh,
                 target_sizes=[img.size[::-1] for img in images],
-                **self.filter_kwargs(post_kw, "threshold", "text_threshold", "target_sizes"),
+                **utils.exclude_keys(post_opts, ["threshold", "text_threshold", "target_sizes"]),
             )
 
-        # 5. Pack output
-        return self.build_detections(images, raw, prompt=prompt, **post_kw)
+        # Filter out empty or whitespace-only labels
+        cleaned_raw = []
+        for item in raw:
+            boxes = item.get("boxes", [])
+            scores = item.get("scores", [])
+            labels = item.get("labels", [])
+            valid_indices = [
+                i for i, lbl in enumerate(labels)
+                if lbl is not None and str(lbl).strip()
+            ]
+            if len(valid_indices) == len(labels):
+                cleaned_raw.append(item)
+            else:
+                cleaned_raw.append({
+                    "boxes": [boxes[i] for i in valid_indices],
+                    "scores": [scores[i] for i in valid_indices],
+                    "labels": [str(labels[i]).strip() for i in valid_indices],
+                })
+
+        # Pack into Detection objects
+        results = build_detections(
+            images,
+            cleaned_raw,
+            metadata={
+                "prompt": prompt_list,
+                "threshold": thresh,
+                "text_threshold": text_thresh,
+            },
+            names=self.names,
+        )
+        if results:
+            self.names = dict(results[0]._registry)
+
+        return results

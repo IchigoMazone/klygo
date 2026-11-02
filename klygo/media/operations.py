@@ -1,4 +1,10 @@
 import builtins
+import importlib
+import math
+import os
+import threading
+import uuid
+import weakref
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union, Optional, Generator, Iterable, Callable, Iterator
 
@@ -7,14 +13,28 @@ import numpy as np
 from PIL import Image
 
 from klygo.utils.progress import ProgressBar
-from klygo.validators import validate_type
+from klygo.validators import validate_type, validate_count
 from klygo import files
 
-try:
-    import torch
-    _HAS_TORCH = True
-except ImportError:
-    _HAS_TORCH = False
+__all__ = [
+    "load", "save", "convert", "copy", "save_video", "save_images",
+    "iter_frames", "probe", "to_array", "to_tensor", "to_pil",
+    "MediaFrames", "LazyImage", "VideoReader",
+    "compose",
+]
+
+
+def _optional_torch(required: bool = False):
+    """Load PyTorch only for media operations that explicitly need tensors."""
+    try:
+        return importlib.import_module("torch")
+    except ImportError as exc:
+        if required:
+            raise ImportError(
+                "PyTorch tensor conversion requires the 'torch' extra. "
+                "Install it using 'pip install \"klygo[torch]\"'."
+            ) from exc
+        return None
 
 IMAGE_SUFFIXES = {
     ".bmp",
@@ -36,27 +56,68 @@ VIDEO_SUFFIXES = {
 }
 
 
+def _operation_size(operation: Any, size: Optional[Tuple[int, int]]) -> Optional[Tuple[int, int]]:
+    """Return lazy output dimensions for a known preprocessing operation."""
+    if size is None or not getattr(operation, "changes_geometry", False):
+        return size
+    width, height = size
+    params = operation.params
+    if operation.name == "crop":
+        left, top, right, bottom = params["box"]
+        return max(0, right - left), max(0, bottom - top)
+    if operation.name in ("resize", "thumbnail", "contain") and params.get("keep_ratio", operation.name != "resize"):
+        target_width, target_height = params["size"]
+        scale = min(target_width / max(1, width), target_height / max(1, height))
+        return max(1, round(width * scale)), max(1, round(height * scale))
+    if operation.name in ("resize", "fit", "cover", "letterbox", "center_crop"):
+        return tuple(params["size"])
+    if operation.name == "pad":
+        padding = params["padding"]
+        if isinstance(padding, int):
+            left = top = right = bottom = padding
+        elif len(padding) == 2:
+            left = right = padding[0]
+            top = bottom = padding[1]
+        else:
+            left, top, right, bottom = padding
+        return width + left + right, height + top + bottom
+    if operation.name in ("affine", "perspective", "warp") and params.get("size"):
+        return tuple(params["size"])
+    if operation.name == "transpose" and params.get("method") in (
+        "rotate_90", "rotate_270", "transpose", "transverse",
+    ):
+        return height, width
+    return None
+
+
 # =========================================================================
 # 0A. VideoReader: Smart Sequential & Random Access Video Seeker
 # =========================================================================
 
 class VideoReader:
-    """
-    Trình quản lý đọc video thông minh, tối ưu tốc độ đọc tuần tự và nhảy frame.
-    Duy trì kết nối cv.VideoCapture duy nhất, tự động theo dõi con trỏ vị trí frame `_current_pos`.
-    - Đọc tuần tự (frame sau = frame trước + 1): Gọi trực tiếp `cap.read()` đạt tốc độ gốc OpenCV
-      (300-500+ FPS), hoàn toàn loại bỏ độ trễ seek của `cap.set()`.
-    - Truy cập ngẫu nhiên (vd: frames[500] hoặc frames[-1]): Tự động gọi `cap.set(CAP_PROP_POS_FRAMES, index)`
-      rồi tiếp tục đọc tuần tự từ vị trí đó.
-    - Zero-RAM: Khởi tạo tức thì không decode bất kỳ frame pixel nào vào bộ nhớ RAM.
-    """
+    """Read video frames through one reusable OpenCV capture.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Existing video path.
+
+    Returns
+    -------
+    VideoReader
+        Open reader; call close() to release the capture.
+
+    Raises
+    ------
+    FileNotFoundError
+        The video is missing or unreadable."""
 
     def __init__(self, path: Union[str, Path]) -> None:
         self.path = files.resolve(path)
-        if not self.path.exists():
+        if not files.exists(self.path):
             raise FileNotFoundError(f"Could not find video file: {self.path}")
 
-        # Thăm dò nhanh metadata của video 1 lần duy nhất lúc mở
+        # Probe video metadata once during initialization
         cap = cv.VideoCapture(str(self.path))
         if not cap.isOpened():
             raise FileNotFoundError(f"Could not open video file: {self.path}")
@@ -69,6 +130,7 @@ class VideoReader:
 
         self._cap: Optional[cv.VideoCapture] = None
         self._current_pos: int = 0
+        self._lock = threading.Lock()
 
     @property
     def cap(self) -> cv.VideoCapture:
@@ -79,32 +141,33 @@ class VideoReader:
 
     def read_frame(self, index: int) -> Optional[np.ndarray]:
         """
-        Đọc frame pixel tại vị trí `index` với cơ chế Seeker thông minh.
+        Read frame pixels at `index` using accurate frame seeking.
         """
-        if index < 0 or (self.total_frames > 0 and index >= self.total_frames):
+        with self._lock:
+            if index < 0 or (self.total_frames > 0 and index >= self.total_frames):
+                return None
+
+            c = self.cap
+            if self._current_pos != index:
+                c.set(cv.CAP_PROP_POS_FRAMES, index)
+                self._current_pos = index
+
+            ret, frame = c.read()
+            if ret:
+                self._current_pos += 1
+                return frame
+
+            # Retry seek once if stream synchronization is lost.
+            c.set(cv.CAP_PROP_POS_FRAMES, index)
+            ret, frame = c.read()
+            if ret:
+                self._current_pos = index + 1
+                return frame
+
             return None
 
-        c = self.cap
-        if self._current_pos != index:
-            c.set(cv.CAP_PROP_POS_FRAMES, index)
-            self._current_pos = index
-
-        ret, frame = c.read()
-        if ret:
-            self._current_pos += 1
-            return frame
-
-        # Thử seek lại một lần nếu luồng bị mất đồng bộ
-        c.set(cv.CAP_PROP_POS_FRAMES, index)
-        ret, frame = c.read()
-        if ret:
-            self._current_pos = index + 1
-            return frame
-
-        return None
-
     def release(self) -> None:
-        if self._cap is not None:
+        if getattr(self, "_cap", None) is not None:
             try:
                 self._cap.release()
             except Exception:
@@ -123,15 +186,17 @@ class VideoReader:
 # =========================================================================
 
 class LazyImage(Image.Image):
-    """
-    Đại diện cho một bức ảnh hoặc frame video theo cơ chế nạp lười (Zero-RAM URL/Path Proxy).
-    Lưu trữ đường dẫn/URL file ảnh hoặc vị trí frame video với chi phí RAM = 0.
-    Hỗ trợ Zero-RAM Lazy Crop mặc định: Cắt vùng ảnh con chỉ bằng cách lưu (URL/Frame, bounding_box),
-    không decode pixel vào RAM và tính toán size bằng hiệu tọa độ tức thì.
-    Kế thừa PIL.Image.Image để giữ 100% khả năng tương thích với isinstance(x, Image.Image).
-    Hỗ trợ đầy đủ cú pháp của cả PIL Image (.size, .crop, .show, .save, .convert)
-    và NumPy ndarray (.shape, .dtype, np.array).
-    """
+    """Represent source pixels without decoding them until requested.
+
+    Parameters
+    ----------
+    source : str, pathlib.Path, or LazyImage
+        Source file or another lazy frame reference.
+
+    Returns
+    -------
+    LazyImage
+        Lazy image proxy with conversion and crop methods."""
 
     def __init__(
         self,
@@ -143,12 +208,13 @@ class LazyImage(Image.Image):
     ) -> None:
         self._im = None
         self._image: Optional[Union[Image.Image, np.ndarray]] = None
+        self._processed_cache: Optional[Any] = None
         self._cached_size: Optional[Tuple[int, int]] = None
         self._cached_mode: str = "RGB"
         self._instructions: List[Tuple[str, tuple, dict]] = []
-        self._processing_ops: List[Any] = []
-        self._processing_trace: List[Dict[str, Any]] = []
-        self._processing_original_size: Optional[Tuple[int, int]] = None
+        self._preprocessing_ops: List[Any] = []
+        self._preprocessing_trace: List[Dict[str, Any]] = []
+        self._preprocessing_original_size: Optional[Tuple[int, int]] = None
 
         if isinstance(path, LazyImage):
             self._path = path.path
@@ -157,9 +223,9 @@ class LazyImage(Image.Image):
             self.frame_index = path.frame_index if frame_index is None else frame_index
             self.reader = path.reader if reader is None else reader
             self._instructions = list(path._instructions)
-            self._processing_ops = list(path._processing_ops)
-            self._processing_trace = [dict(item) for item in path._processing_trace]
-            self._processing_original_size = path._processing_original_size
+            self._preprocessing_ops = list(path._preprocessing_ops)
+            self._preprocessing_trace = [dict(item) for item in path._preprocessing_trace]
+            self._preprocessing_original_size = path._preprocessing_original_size
             self._cached_mode = path._cached_mode
             self._cached_size = path._cached_size
             if path.crop_box is not None and crop_box is not None:
@@ -178,7 +244,7 @@ class LazyImage(Image.Image):
 
     @property
     def path(self) -> Path:
-        """Đường dẫn tệp ảnh hoặc video nguồn."""
+        """Path to source image or video file."""
         return self._path
 
     @path.setter
@@ -186,11 +252,12 @@ class LazyImage(Image.Image):
         self._path = files.resolve(new_path)
         self._url = str(self._path)
         self._image = None
+        self._processed_cache = None
         self._cached_size = None
 
     @property
     def url(self) -> str:
-        """URL hoặc chuỗi đường dẫn ảnh/video nguồn."""
+        """Source image or video URL/path."""
         return self._url
 
     @url.setter
@@ -199,20 +266,21 @@ class LazyImage(Image.Image):
 
     @property
     def crop_box(self) -> Optional[Tuple[int, int, int, int]]:
-        """Tọa độ vùng cắt (xmin, ymin, xmax, ymax)."""
+        """Bounding box crop coordinates (xmin, ymin, xmax, ymax)."""
         return self._crop_box
 
     @crop_box.setter
     def crop_box(self, box: Optional[Tuple[int, int, int, int]]) -> None:
         self._crop_box = tuple(int(x) for x in box) if box is not None else None
         self._image = None
+        self._processed_cache = None
         self._cached_size = None
 
     def load(self, cache: bool = True) -> Union[Image.Image, np.ndarray]:
-        """Thực sự nạp ảnh hoặc frame video từ đĩa vào bộ nhớ RAM."""
+        """Materialize image or video frame pixels from disk into RAM."""
         if self._image is not None:
             return self._image
-        
+
         result = None
         if self.frame_index is not None:
             # Video frame decoding via reader
@@ -245,35 +313,38 @@ class LazyImage(Image.Image):
                 if self.crop_box is not None:
                     source_image = source_image.crop(self.crop_box)
                 result = source_image
-                
+
         if cache:
             self._image = result
-            if isinstance(result, np.ndarray):
-                self._cached_size = (result.shape[1], result.shape[0])
-            else:
-                self._cached_size = result.size
+            if not self._preprocessing_ops:
+                if isinstance(result, np.ndarray):
+                    self._cached_size = (result.shape[1], result.shape[0])
+                else:
+                    self._cached_size = result.size
         return result
 
     def unload(self) -> None:
-        """Giải phóng bộ nhớ pixel, đưa đối tượng về trạng thái URL thuần túy."""
+        """Release pixel memory and revert proxy to unloaded state."""
         self._image = None
+        self._processed_cache = None
 
     def clear(self) -> None:
-        """Alias cho unload()."""
+        """Alias for :meth:`unload`."""
         self.unload()
 
     @property
     def is_loaded(self) -> bool:
-        """Kiểm tra ảnh đã nạp pixel vào RAM hay chưa."""
+        """Check whether pixel data is currently loaded in memory."""
         return self._image is not None
 
     @property
     def image(self) -> Union[Image.Image, np.ndarray]:
-        """Truy cập hoặc gán lại dữ liệu ảnh (hỗ trợ sửa ảnh trực tiếp)."""
+        """Access or assign underlying pixel image data."""
         return self.load()
 
     @image.setter
     def image(self, value: Union[Image.Image, np.ndarray, "LazyImage"]) -> None:
+        self._processed_cache = None
         if isinstance(value, LazyImage):
             self._image = value.load()
             self.path = value.path
@@ -311,7 +382,7 @@ class LazyImage(Image.Image):
 
     @property
     def size(self) -> Tuple[int, int]:
-        """Kích thước (width, height) theo chuẩn PIL Image (Zero-RAM calculation)."""
+        """Dimensions (width, height) following PIL convention without decoding pixels."""
         if self._cached_size is not None:
             return self._cached_size
         if self.crop_box is not None:
@@ -349,7 +420,7 @@ class LazyImage(Image.Image):
 
     @property
     def shape(self) -> Tuple[int, ...]:
-        """Kích thước (height, width, channels) theo chuẩn NumPy ndarray."""
+        """Dimensions (height, width, channels) following NumPy ndarray convention."""
         if self.mode in ("L", "1", "I", "F"):
             return (self.height, self.width)
         elif self.mode == "RGBA":
@@ -358,7 +429,7 @@ class LazyImage(Image.Image):
 
     @property
     def dtype(self) -> np.dtype:
-        """Kiểu dữ liệu chuẩn NumPy (uint8)."""
+        """NumPy data type (uint8)."""
         return np.dtype("uint8")
 
     @property
@@ -366,28 +437,28 @@ class LazyImage(Image.Image):
         return self._cached_mode
 
     def to_pil(self, cache: bool = False) -> Image.Image:
-        """Chuyển thành PIL Image thật (thực thi Lazy Pipeline)."""
-        from klygo.processing.core import _to_pil
+        """Materialize the pipeline as a PIL image; optionally cache its result."""
+        from klygo.preprocessing.core import _to_pil
 
-        return _to_pil(self._execute_processing(cache=cache))
+        return _to_pil(self._execute_preprocessing(cache=cache))
 
     def to_array(self, cache: bool = False) -> np.ndarray:
-        """Chuyển thành NumPy array thật."""
-        from klygo.processing.core import _to_array
+        """Materialize the pipeline as a NumPy array; optionally cache its result."""
+        from klygo.preprocessing.core import _to_array
 
-        return _to_array(self._execute_processing(cache=cache))
+        return _to_array(self._execute_preprocessing(cache=cache))
 
     def to_tensor(self, cache: bool = False) -> Any:
-        """Materialize LazyImage thành PyTorch Tensor."""
+        """Materialize LazyImage into a PyTorch Tensor."""
         try:
             import torch
         except ImportError as exc:
             raise ImportError("PyTorch is required for LazyImage.to_tensor()") from exc
 
-        result = self._execute_processing(cache=cache)
+        result = self._execute_preprocessing(cache=cache)
         if isinstance(result, torch.Tensor):
             return result
-        from klygo.processing.core import _to_array
+        from klygo.preprocessing.core import _to_array
 
         array = np.array(_to_array(result), copy=True, order="C")
         tensor = torch.from_numpy(array)
@@ -395,8 +466,10 @@ class LazyImage(Image.Image):
             tensor = tensor.permute(2, 0, 1)
         return tensor
 
-    def _execute_processing(self, cache: bool = False) -> Any:
-        """Decode nguồn và thực thi toàn bộ instruction theo đúng thứ tự."""
+    def _execute_preprocessing(self, cache: bool = False) -> Any:
+        """Decode and apply queued operations, reusing the result when cached."""
+        if cache and self._processed_cache is not None:
+            return self._processed_cache
         loaded = self.load(cache=cache)
         if isinstance(loaded, Image.Image):
             result: Any = loaded
@@ -406,33 +479,52 @@ class LazyImage(Image.Image):
         for op, args, kwargs in self._instructions:
             result = getattr(result, op)(*args, **kwargs)
 
-        if self._processing_ops:
-            from klygo.processing.core import execute_pipeline
+        if self._preprocessing_ops:
+            from klygo.preprocessing.core import execute_pipeline
 
             trace: List[Dict[str, Any]] = []
-            result, trace = execute_pipeline(result, self._processing_ops, trace)
-            self._processing_trace = trace
+            result, trace = execute_pipeline(result, self._preprocessing_ops, trace)
+            self._preprocessing_trace = trace
+            if isinstance(result, Image.Image):
+                self._cached_size = result.size
+                self._cached_mode = result.mode
+                try:
+                    result._preprocessing_trace = list(self._preprocessing_trace)
+                except Exception:
+                    pass
+            elif isinstance(result, np.ndarray) and result.ndim >= 2:
+                self._cached_size = (int(result.shape[1]), int(result.shape[0]))
         else:
-            self._processing_trace = []
+            self._preprocessing_trace = []
+        if cache:
+            self._processed_cache = result
         return result
 
     def process(self, operation_or_pipeline: Any) -> "LazyImage":
-        """Gắn một processing operation/pipeline mà không decode pixel."""
-        from klygo.processing import apply
+        """Attach a preprocessing transform without decoding pixel data."""
+        from klygo.preprocessing import apply
+
+        return apply(self, operation_or_pipeline)
+
+    def transform(self, operation_or_pipeline: Any) -> "LazyImage":
+        """Apply a callable transform or pipeline to this image lazily."""
+        if callable(operation_or_pipeline):
+            return operation_or_pipeline(self)
+        from klygo.preprocessing import apply
 
         return apply(self, operation_or_pipeline)
 
     @property
     def trace(self) -> List[Dict[str, Any]]:
-        return [dict(item) for item in self._processing_trace]
+        return [dict(item) for item in self._preprocessing_trace]
 
     def lazy_crop(self, box: Tuple[int, int, int, int]) -> "LazyImage":
         """
-        Zero-RAM Lazy Cropping: Tạo ảnh con từ vùng cắt mà KHÔNG nạp pixel vào RAM.
-        Chỉ lưu tọa độ bounding box và đường dẫn file ảnh gốc/frame index.
+        Zero-RAM Lazy Cropping: Create a cropped sub-image proxy without allocating pixels.
+        Only crop coordinates and source image references are recorded.
         """
-        if self._processing_ops:
-            from klygo.processing import crop
+        if self._preprocessing_ops:
+            from klygo.preprocessing import crop
 
             return crop(box)(self)
         return LazyImage(
@@ -445,9 +537,11 @@ class LazyImage(Image.Image):
 
     def crop(self, *args, lazy: Optional[bool] = None, **kwargs) -> Any:
         """
-        Cắt ảnh. Mặc định hoạt động theo cơ chế Zero-RAM Lazy Crop:
-        Trả về một LazyImage mới giữ nguyên URL/path/frame_index và tính toán size tức thì mà không nạp RAM.
-        Nếu truyền lazy=False rõ ràng, trả về đối tượng PIL Image thật.
+        Crop image.
+
+        By default operates via Zero-RAM lazy cropping: returns a new LazyImage
+        maintaining URL/path/frame_index without decoding pixels into RAM.
+        When lazy=False is explicitly specified, materializes and returns a PIL Image.
         """
         if lazy is False:
             return self.to_pil().crop(*args, **kwargs)
@@ -461,8 +555,8 @@ class LazyImage(Image.Image):
             box = tuple(int(x) for x in kwargs["box"])
 
         if box is not None and len(box) == 4:
-            if self._processing_ops:
-                from klygo.processing import crop
+            if self._preprocessing_ops:
+                from klygo.preprocessing import crop
 
                 return crop(box)(self)
             return self.lazy_crop(box)
@@ -470,7 +564,7 @@ class LazyImage(Image.Image):
         return self.to_pil().crop(*args, **kwargs)
 
     def __array__(self, dtype=None) -> np.ndarray:
-        """Hỗ trợ tự động chuyển đổi khi gọi np.array(lazy_img)."""
+        """Support automatic conversion via np.array(lazy_img)."""
         arr = self.to_array()
         if dtype is not None:
             return arr.astype(dtype)
@@ -481,7 +575,7 @@ class LazyImage(Image.Image):
         return self.to_pil(cache=False).__array_interface__
 
     def __getattr__(self, name: str) -> Any:
-        """Chuyển tiếp tất cả các method và attribute của ảnh thật khi được gọi."""
+        """Forward attribute and method lookups to the materialized image."""
         loaded = self.load()
         return getattr(loaded, name)
 
@@ -496,190 +590,87 @@ class LazyImage(Image.Image):
         w, h = self.size
         crop_info = f" crop={self.crop_box}" if self.crop_box is not None else ""
         frame_info = f" frame={self.frame_index}" if self.frame_index is not None else ""
-        return f"<LazyImage [{status}] url='{self.path.name}'{frame_info}{crop_info} size=({w}, {h})>"
+        return f"<LazyImage [{status}] url='{files.name(self.path)}'{frame_info}{crop_info} size=({w}, {h})>"
 
 
 # =========================================================================
-# 0C. MediaFrames: Lazy-pixel List-like Media Container
+# 0C. MediaFrames: Unified Streaming & Materialized Container
 # =========================================================================
 
 class MediaFrames(list):
-    """
-    Tập hợp lazy-pixel trả về từ :func:`klygo.media.load`.
+    """Represent media as indexed lazy frames or a bounded-memory stream.
 
-    Container giữ một ``LazyImage`` proxy cho mỗi mục để hỗ trợ truy cập ngẫu
-    nhiên và slicing, nhưng chưa giữ pixel cho tới khi ảnh được materialize.
-    Với nguồn rất lớn cần bộ nhớ giới hạn theo từng frame, dùng ``media.stream``.
+    Parameters
+    ----------
+    source : str or os.PathLike[str], default=""
+        Image, video, or image-directory source.
+    sample_rate : int, default=1
+        Yield every nth frame.
+    max_frames : int or None, default=None
+        Maximum frames to yield.
+    recursive : bool, default=False
+        Traverse subdirectories for images.
+    backend : str, default='pil'
+        Pixel backend, either 'pil' or 'opencv'.
+    verbose : bool, default=False
+        Show progress output.
+    stream : bool, default=True
+        Whether to stream sequentially (True) or load materialized frames (False).
+
+    Returns
+    -------
+    MediaFrames
+        Unified media container with materialized and streaming modes.
+
+    Raises
+    ------
+    FileNotFoundError
+        The source does not exist.
+    ValueError
+        Invalid backend or source format.
     """
+
+    is_stream: bool = True
+
+    def __new__(cls, *args: Any, stream: bool = False, **kwargs: Any) -> Any:
+        if cls is MediaFrames and not stream:
+            return load(*args, stream=False, **kwargs)
+        return list.__new__(cls)
 
     def __init__(
         self,
-        items: Optional[Iterable] = None,
-        *,
-        fps: float = 30.0,
-        source_path: Optional[Union[str, Path]] = None,
-        width: Optional[int] = None,
-        height: Optional[int] = None,
-        source_type: str = "video",
-        reader: Optional[VideoReader] = None,
-    ) -> None:
-        super().__init__(items if items is not None else [])
-        self.fps = float(fps) if fps else 30.0
-        self.source_path = str(source_path) if source_path is not None else None
-        self.width = width
-        self.height = height
-        self.source_type = source_type
-        self.reader = reader
-
-    @property
-    def total_frames(self) -> int:
-        """Số mục hiện tại; luôn đúng cả sau các thao tác sửa list."""
-        return super().__len__()
-
-    @property
-    def source(self) -> Optional[str]:
-        """Alias ngắn gọn cho ``source_path``."""
-        return self.source_path
-
-    @property
-    def loaded_count(self) -> int:
-        """Số ảnh đang giữ pixel đã decode trong RAM."""
-        return sum(bool(getattr(item, "is_loaded", False)) for item in self)
-
-    def _new(self, items: Iterable[Any], *, fps: Optional[float] = None) -> "MediaFrames":
-        """Tạo collection mới và giữ metadata của nguồn."""
-        return MediaFrames(
-            items,
-            fps=self.fps if fps is None else fps,
-            source_path=self.source_path,
-            width=self.width,
-            height=self.height,
-            source_type=self.source_type,
-            reader=self.reader,
-        )
-
-    def __len__(self) -> int:
-        return super().__len__()
-
-    def __getitem__(self, index: Union[int, slice]) -> Any:
-        if isinstance(index, slice):
-            sub_items = super().__getitem__(index)
-            step = index.step or 1
-            new_fps = self.fps / abs(step) if abs(step) > 1 else self.fps
-            return self._new(sub_items, fps=new_fps)
-        return super().__getitem__(index)
-
-    def map(self, func: Callable[[Any], Any]) -> "MediaFrames":
-        """Áp dụng callable lên từng mục và giữ metadata của collection."""
-        if not callable(func):
-            raise TypeError("func must be callable")
-        return self._new(func(frame) for frame in self)
-
-    def transform(self, operation_or_pipeline: Any) -> "MediaFrames":
-        """Gắn một processing operation/pipeline vào mọi ảnh theo cơ chế lazy."""
-        from klygo.processing import Compose, Operation
-
-        if not isinstance(operation_or_pipeline, (Operation, Compose)):
-            raise TypeError("operation_or_pipeline must be a processing Operation or Compose")
-        return self.map(operation_or_pipeline)
-
-    def filter(self, func: Callable[[Any], bool]) -> "MediaFrames":
-        """Alias tương thích của :meth:`where`."""
-        return self.where(func)
-
-    def where(self, predicate: Callable[[Any], bool]) -> "MediaFrames":
-        """Giữ lại các mục thỏa ``predicate(item)`` và giữ metadata nguồn."""
-        if not callable(predicate):
-            raise TypeError("predicate must be callable")
-        return self._new(frame for frame in self if predicate(frame))
-
-    def copy(self) -> "MediaFrames":
-        """Sao chép collection mà không decode pixel và không làm mất metadata."""
-        return self._new(self)
-
-    def to_list(self) -> List[Any]:
-        """Chuyển đổi thành standard list."""
-        return list(self)
-
-    def unload(self) -> None:
-        """Giải phóng pixel cache của mọi mục nhưng giữ collection để tái sử dụng."""
-        for item in self:
-            unload = getattr(item, "unload", None)
-            if callable(unload):
-                unload()
-
-    def save_video(self, output_path: Union[str, Path], fps: Optional[float] = None, **kwargs) -> Path:
-        """Đóng gói toàn bộ frames thành file video mp4/avi."""
-        target_fps = fps if fps is not None else self.fps
-        return globals()["save_video"](output_path, self, fps=target_fps, **kwargs)
-
-    def save_images(self, output_dir: Union[str, Path], prefix: str = "frame", **kwargs) -> Path:
-        """Lưu toàn bộ frames ra thư mục ảnh."""
-        return globals()["save_images"](output_dir, self, prefix=prefix, **kwargs)
-
-    def close(self) -> None:
-        """Giải phóng pixel cache và reader dùng chung, nếu có."""
-        self.unload()
-        if self.reader is not None:
-            try:
-                self.reader.release()
-            except Exception:
-                pass
-            self.reader = None
-
-    def __del__(self) -> None:
-        self.close()
-
-    def __enter__(self) -> "MediaFrames":
-        return self
-
-    def __exit__(self, *args) -> None:
-        self.close()
-
-    def __repr__(self) -> str:
-        return (
-            f"<MediaFrames: {len(self)} frames, loaded={self.loaded_count}, "
-            f"type='{self.source_type}', fps={self.fps}>"
-        )
-
-
-class MediaStream:
-    """
-    Luồng media tuần tự, không tạo danh sách ``LazyImage`` cho toàn bộ nguồn.
-
-    Mỗi lần lặp chỉ tạo proxy cho frame hiện tại. Pixel vẫn chỉ được decode khi
-    ``LazyImage`` được materialize bởi ``load()``, ``to_pil()`` hoặc model.
-    """
-
-    def __init__(
-        self,
-        source: Union[str, Path],
+        source: Union[str, os.PathLike[str]] = "",
         *,
         sample_rate: int = 1,
         max_frames: Optional[int] = None,
         recursive: bool = False,
         backend: str = "pil",
         verbose: bool = False,
+        stream: bool = False,
+        indexed: bool = False,
+        **kwargs: Any,
     ) -> None:
-        validate_type(source, (str, Path), "source")
-        validate_type(sample_rate, int, "sample_rate")
+        if getattr(self, "_initialized", False):
+            return
+        self._initialized = True
+        list.__init__(self)
+        validate_type(source, (str, os.PathLike), "source")
+        validate_count(sample_rate, "sample_rate")
         validate_type(recursive, bool, "recursive")
         validate_type(backend, str, "backend")
         validate_type(verbose, bool, "verbose")
+        validate_type(indexed, bool, "indexed")
+        if indexed:
+            raise ValueError("stream and indexed modes are mutually exclusive")
         if max_frames is not None:
-            validate_type(max_frames, int, "max_frames")
-
-        if sample_rate < 1:
-            raise ValueError("sample_rate must be an integer >= 1")
-        if max_frames is not None and max_frames < 1:
-            raise ValueError("max_frames must be None or an integer >= 1")
+            validate_count(max_frames, "max_frames")
 
         backend = backend.lower()
         if backend not in ("pil", "opencv"):
             raise ValueError("backend must be 'pil' or 'opencv'")
 
         path = files.path(source)
-        if not path.exists():
+        if not files.exists(path):
             raise FileNotFoundError(f"source does not exist: {path}")
 
         self.source_path = str(path)
@@ -690,17 +681,18 @@ class MediaStream:
         self.backend = backend
         self.verbose = verbose
         self.is_stream = True
+        self.is_indexed = False
         self.width: Optional[int] = None
         self.height: Optional[int] = None
         self.fps = 30.0
         self._active_readers: List[VideoReader] = []
-        self._processing_ops: List[Any] = []
+        self._preprocessing_ops: List[Any] = []
         self._predicates: List[Callable[[Any], bool]] = []
         self._motion_threshold: Optional[float] = None
         self._deduplicate_threshold: Optional[float] = None
 
-        if path.is_file():
-            suffix = path.suffix.lower()
+        if files.is_file(path):
+            suffix = files.extension(path).lower()
             if suffix in VIDEO_SUFFIXES:
                 self.source_type = "video"
                 reader = VideoReader(path)
@@ -721,62 +713,446 @@ class MediaStream:
                     pass
             else:
                 raise ValueError(f"source is not a supported image or video file: {path}")
-        elif path.is_dir():
+        elif files.is_dir(path):
             self.source_type = "folder"
-            source_total = sum(1 for _ in self._iter_image_paths())
+            self._cached_paths = tuple(self._iter_image_paths())
+            source_total = len(self._cached_paths)
             if source_total == 0:
                 raise ValueError(f"No supported image files found in directory: {path}")
         else:
             raise ValueError(f"source must be a file or directory: {path}")
 
         if self.source_type == "video" and source_total <= 0:
-            self.total_frames = None
+            self._total_frames = None
         else:
             sampled_total = (source_total + sample_rate - 1) // sample_rate
-            self.total_frames = min(sampled_total, max_frames) if max_frames is not None else sampled_total
+            self._total_frames = min(sampled_total, max_frames) if max_frames is not None else sampled_total
+
+    @classmethod
+    def _from_items(
+        cls,
+        items: Iterable[Any],
+        *,
+        fps: float = 30.0,
+        source_path: Optional[Union[str, Path]] = None,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        source_type: str = "video",
+        reader: Optional[VideoReader] = None,
+    ) -> "MediaFrames":
+        """Build materialized storage without reloading the source."""
+        instance = list.__new__(cls)
+        list.__init__(instance, items)
+        instance._initialized = True
+        instance.fps = float(fps) if fps else 30.0
+        instance.source_path = str(source_path) if source_path is not None else None
+        instance.path = files.path(source_path) if source_path is not None else None
+        instance.width = width
+        instance.height = height
+        instance.source_type = source_type
+        instance.reader = reader
+        instance.is_stream = False
+        instance.is_indexed = False
+        instance.sample_rate = 1
+        instance.max_frames = None
+        instance._active_readers = []
+        instance._preprocessing_ops = []
+        instance._predicates = []
+        instance._motion_threshold = None
+        instance._deduplicate_threshold = None
+        return instance
+
+    @classmethod
+    def _from_index(
+        cls,
+        entries: Iterable[Any],
+        *,
+        fps: float = 30.0,
+        source_path: Optional[Union[str, Path]] = None,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        source_type: str = "folder",
+        backend: str = "pil",
+        reader: Optional[VideoReader] = None,
+    ) -> "MediaFrames":
+        """Build path-backed indexed storage without creating frame proxies."""
+        instance = list.__new__(cls)
+        list.__init__(instance)
+        instance._initialized = True
+        instance.fps = float(fps) if fps else 30.0
+        instance.source_path = str(source_path) if source_path is not None else None
+        instance.path = files.path(source_path) if source_path is not None else None
+        instance.width = width
+        instance.height = height
+        instance.source_type = source_type
+        instance.backend = backend
+        instance.reader = reader
+        instance.is_stream = False
+        instance.is_indexed = True
+        instance.sample_rate = 1
+        instance.max_frames = None
+        instance.recursive = False
+        instance.verbose = False
+        instance._active_readers = []
+        instance._preprocessing_ops = []
+        instance._predicates = []
+        instance._motion_threshold = None
+        instance._deduplicate_threshold = None
+        instance._indexed_entries = list(entries)
+        instance._indexed_cache = weakref.WeakValueDictionary()
+        instance._indexed_generation = 0
+        return instance
+
+    def _indexed_proxy(self, index: int) -> Any:
+        """Return one cached indexed item, creating its lazy proxy on demand."""
+        length = len(self._indexed_entries)
+        position = index + length if index < 0 else index
+        if position < 0 or position >= length:
+            raise IndexError("list index out of range")
+        entry = self._indexed_entries[position]
+        if not isinstance(entry, (str, os.PathLike, int)) or isinstance(entry, bool):
+            return entry
+        key = (self._indexed_generation, position)
+        cached = self._indexed_cache.get(key)
+        if cached is not None:
+            return cached
+        if self.source_type == "video":
+            proxy = LazyImage(
+                self.path,
+                backend=self.backend,
+                frame_index=int(entry),
+                reader=self.reader,
+            )
+        else:
+            proxy = LazyImage(entry, backend=self.backend)
+        for operation in self._preprocessing_ops:
+            proxy = operation(proxy)
+        self._indexed_cache[key] = proxy
+        return proxy
+
+    def _invalidate_index_cache(self) -> None:
+        """Invalidate positional proxy keys after structural edits."""
+        self._indexed_generation += 1
+        self._indexed_cache = weakref.WeakValueDictionary()
+
+    def _new(self, items: Iterable[Any], *, fps: Optional[float] = None) -> "MediaFrames":
+        """Create a materialized container while preserving source metadata."""
+        materialized = list(items)
+        width, height = self.width, self.height
+        if materialized:
+            sizes = set()
+            for item in materialized:
+                operations = getattr(item, "_preprocessing_ops", ())
+                if any(
+                    getattr(operation, "changes_geometry", False)
+                    and _operation_size(operation, (1, 1)) is None
+                    for operation in operations
+                ):
+                    sizes.clear()
+                    break
+                item_size = getattr(item, "size", None)
+                if isinstance(item_size, (tuple, list)) and len(item_size) == 2:
+                    sizes.add((int(item_size[0]), int(item_size[1])))
+                    continue
+                shape = getattr(item, "shape", ())
+                if len(shape) >= 2:
+                    if len(shape) == 3 and shape[0] in (1, 3, 4):
+                        sizes.add((int(shape[2]), int(shape[1])))
+                    else:
+                        sizes.add((int(shape[1]), int(shape[0])))
+            width, height = next(iter(sizes)) if len(sizes) == 1 else (None, None)
+        return type(self)._from_items(
+            materialized,
+            fps=self.fps if fps is None else fps,
+            source_path=self.source_path,
+            width=width,
+            height=height,
+            source_type=self.source_type,
+            reader=self.reader,
+        )
+
+    def _require_materialized(self, operation: str) -> None:
+        """Ensure random-access operation is only performed on materialized frames."""
+        if getattr(self, "is_stream", False):
+            raise TypeError(f"{operation} is unavailable for a stream; load with stream=False")
+
+    @property
+    def total_frames(self) -> Optional[int]:
+        """Estimated or exact total frames in collection."""
+        if not getattr(self, "is_stream", False):
+            if getattr(self, "is_indexed", False):
+                return len(self._indexed_entries)
+            return list.__len__(self)
+        return getattr(self, "_total_frames", None)
+
+    @total_frames.setter
+    def total_frames(self, value: Optional[int]) -> None:
+        self._total_frames = value
+
+    @property
+    def source(self) -> Optional[str]:
+        """Short alias for ``source_path``."""
+        return self.source_path
+
+    @property
+    def loaded_count(self) -> int:
+        """Number of frames currently holding decoded pixels in RAM."""
+        self._require_materialized("loaded_count")
+        if getattr(self, "is_indexed", False):
+            return sum(
+                bool(getattr(item, "is_loaded", False))
+                for item in tuple(self._indexed_cache.values())
+            )
+        return sum(bool(getattr(item, "is_loaded", False)) for item in self)
+
+    def unload(self) -> None:
+        """Release cached pixels across all items while preserving the collection."""
+        self._require_materialized("unload()")
+        items = tuple(self._indexed_cache.values()) if getattr(self, "is_indexed", False) else self
+        for item in items:
+            unload = getattr(item, "unload", None)
+            if callable(unload):
+                unload()
+
+    def to_list(self) -> List[Any]:
+        """Convert items to a standard list."""
+        self._require_materialized("to_list()")
+        return list(self)
+
+    def __getitem__(self, index: Union[int, slice]) -> Any:
+        self._require_materialized("indexing and slicing")
+        if getattr(self, "is_indexed", False):
+            if isinstance(index, slice):
+                indices = range(*index.indices(len(self._indexed_entries)))
+                entries = [self._indexed_entries[position] for position in indices]
+                step = index.step or 1
+                result = type(self)._from_index(
+                    entries,
+                    fps=self.fps / abs(step) if abs(step) > 1 else self.fps,
+                    source_path=self.source_path,
+                    width=self.width,
+                    height=self.height,
+                    source_type=self.source_type,
+                    backend=self.backend,
+                    reader=self.reader,
+                )
+                result._preprocessing_ops = list(self._preprocessing_ops)
+                return result
+            if isinstance(index, bool) or not isinstance(index, int):
+                raise TypeError("frame index must be an integer or slice")
+            return self._indexed_proxy(index)
+        if isinstance(index, slice):
+            sub_items = list.__getitem__(self, index)
+            step = index.step or 1
+            new_fps = self.fps / abs(step) if abs(step) > 1 else self.fps
+            return self._new(sub_items, fps=new_fps)
+        return list.__getitem__(self, index)
+
+    def __len__(self) -> int:
+        self._require_materialized("len()")
+        if getattr(self, "is_indexed", False):
+            return len(self._indexed_entries)
+        return list.__len__(self)
+
+    def __contains__(self, item: Any) -> bool:
+        self._require_materialized("membership testing")
+        return any(candidate == item for candidate in self)
+
+    def __eq__(self, other: Any) -> bool:
+        if getattr(self, "is_stream", False):
+            return self is other
+        try:
+            return list(self) == list(other)
+        except TypeError:
+            return False
+
+    def __add__(self, other: Iterable[Any]) -> list[Any]:
+        self._require_materialized("concatenation")
+        return list(self) + list(other)
+
+    def __iadd__(self, other: Iterable[Any]) -> "MediaFrames":
+        self.extend(other)
+        return self
+
+    def __reversed__(self) -> Iterator[Any]:
+        self._require_materialized("reversed iteration")
+        return (self[index] for index in range(len(self) - 1, -1, -1))
+
+    def index(self, item: Any, start: int = 0, stop: Optional[int] = None) -> int:
+        """Return the first matching item position."""
+        self._require_materialized("index()")
+        limit = len(self) if stop is None else min(stop, len(self))
+        for position in range(*slice(start, limit).indices(len(self))):
+            if self[position] == item:
+                return position
+        raise ValueError(f"{item!r} is not in MediaFrames")
+
+    def count(self, item: Any) -> int:
+        """Return the number of matching items."""
+        self._require_materialized("count()")
+        return sum(candidate == item for candidate in self)
+
+    def reverse(self) -> None:
+        """Reverse frames in place."""
+        self._require_materialized("reverse()")
+        if getattr(self, "is_indexed", False):
+            self._indexed_entries.reverse()
+            self._invalidate_index_cache()
+            return
+        list.reverse(self)
+
+    def sort(self, *, key: Optional[Callable[[Any], Any]] = None, reverse: bool = False) -> None:
+        """Sort frames in place using list-compatible semantics."""
+        self._require_materialized("sort()")
+        if getattr(self, "is_indexed", False):
+            decorated = [(self[index], self._indexed_entries[index]) for index in range(len(self))]
+            decorated.sort(key=(lambda pair: key(pair[0])) if key is not None else (lambda pair: pair[0]), reverse=reverse)
+            self._indexed_entries = [entry for _item, entry in decorated]
+            self._invalidate_index_cache()
+            return
+        list.sort(self, key=key, reverse=reverse)
+
+    def append(self, item: Any) -> None:
+        self._require_materialized("append()")
+        if getattr(self, "is_indexed", False):
+            self._indexed_entries.append(item)
+            return
+        list.append(self, item)
+
+    def extend(self, items: Iterable[Any]) -> None:
+        self._require_materialized("extend()")
+        if getattr(self, "is_indexed", False):
+            self._indexed_entries.extend(items)
+            return
+        list.extend(self, items)
+
+    def insert(self, index: int, item: Any) -> None:
+        self._require_materialized("insert()")
+        if getattr(self, "is_indexed", False):
+            self._indexed_entries.insert(index, item)
+            self._invalidate_index_cache()
+            return
+        list.insert(self, index, item)
+
+    def pop(self, index: int = -1) -> Any:
+        self._require_materialized("pop()")
+        if getattr(self, "is_indexed", False):
+            item = self[index]
+            self._indexed_entries.pop(index)
+            self._invalidate_index_cache()
+            return item
+        return list.pop(self, index)
+
+    def remove(self, item: Any) -> None:
+        self._require_materialized("remove()")
+        if getattr(self, "is_indexed", False):
+            for index, candidate in enumerate(self):
+                if candidate == item:
+                    self._indexed_entries.pop(index)
+                    self._invalidate_index_cache()
+                    return
+            raise ValueError("MediaFrames.remove(x): x not in collection")
+        list.remove(self, item)
+
+    def clear(self) -> None:
+        self._require_materialized("clear()")
+        if getattr(self, "is_indexed", False):
+            self._indexed_entries.clear()
+            self._invalidate_index_cache()
+            return
+        list.clear(self)
+
+    def __setitem__(self, index: Any, value: Any) -> None:
+        self._require_materialized("item assignment")
+        if getattr(self, "is_indexed", False):
+            if isinstance(index, slice):
+                self._indexed_entries[index] = list(value)
+            else:
+                self._indexed_entries[index] = value
+            self._invalidate_index_cache()
+            return
+        list.__setitem__(self, index, value)
+
+    def __delitem__(self, index: Any) -> None:
+        self._require_materialized("item deletion")
+        if getattr(self, "is_indexed", False):
+            del self._indexed_entries[index]
+            self._invalidate_index_cache()
+            return
+        list.__delitem__(self, index)
 
     def _iter_image_paths(self) -> Iterator[Path]:
-        iterator = self.path.rglob("*") if self.recursive else self.path.glob("*")
-        paths = (p for p in iterator if p.is_file() and p.suffix.lower() in IMAGE_SUFFIXES)
+        iterator = files.iter_find(self.path, recursive=self.recursive)
+        paths = (p for p in iterator if files.is_file(p) and files.extension(p).lower() in IMAGE_SUFFIXES)
         yield from sorted(paths, key=lambda p: str(p).lower())
 
-    def _clone(self) -> "MediaStream":
-        cloned = MediaStream(
-            self.path,
-            sample_rate=self.sample_rate,
-            max_frames=self.max_frames,
-            recursive=self.recursive,
-            backend=self.backend,
-            verbose=self.verbose,
-        )
-        cloned._processing_ops = list(self._processing_ops)
+    def _clone(self) -> "MediaFrames":
+        # Reuse validated source metadata instead of scanning a large folder or
+        # probing a video again whenever a lazy stream operation is attached.
+        cloned = list.__new__(MediaFrames)
+        cloned.__dict__.update(self.__dict__)
+        cloned._active_readers = []
+        cloned._preprocessing_ops = list(self._preprocessing_ops)
         cloned._predicates = list(self._predicates)
         cloned._motion_threshold = self._motion_threshold
         cloned._deduplicate_threshold = self._deduplicate_threshold
+        cloned._cached_paths = getattr(self, "_cached_paths", None)
+        if getattr(self, "is_indexed", False):
+            cloned._indexed_entries = list(self._indexed_entries)
+            cloned._indexed_cache = weakref.WeakValueDictionary()
+            cloned._indexed_generation = self._indexed_generation
         return cloned
 
-    def transform(self, operation_or_pipeline: Any) -> "MediaStream":
-        """Gắn processing operation/pipeline vào từng frame mà không decode trước."""
-        from klygo.processing import Compose, Operation
+    def transform(self, operation_or_pipeline: Any) -> Any:
+        """Apply a preprocessing transform, media pipeline, or callable function."""
+        from klygo.preprocessing import Compose, Operation
+
+        if type(operation_or_pipeline).__name__ == "MediaCompose" or isinstance(operation_or_pipeline, globals().get("MediaCompose", tuple)):
+            return operation_or_pipeline(self)
 
         if isinstance(operation_or_pipeline, Operation):
             operations = [operation_or_pipeline]
         elif isinstance(operation_or_pipeline, Compose):
             operations = list(operation_or_pipeline.operations)
+        elif callable(operation_or_pipeline):
+            return operation_or_pipeline(self)
         else:
-            raise TypeError("transform expects processing.Operation or processing.Compose")
+            raise TypeError("transform expects preprocessing.Operation, preprocessing.Compose, media.compose, or callable")
+
+        if self.is_stream or getattr(self, "is_indexed", False):
+            cloned = self._clone()
+            cloned._preprocessing_ops.extend(operations)
+            size = None if cloned.width is None or cloned.height is None else (cloned.width, cloned.height)
+            for operation in operations:
+                size = _operation_size(operation, size)
+            cloned.width, cloned.height = size if size is not None else (None, None)
+            return cloned
+        return self.map(operation_or_pipeline)
+
+    def map(self, func: Callable[[Any], Any]) -> "MediaFrames":
+        """Attach a custom frame-level callable transform lazily."""
+        if not callable(func):
+            raise TypeError("func must be callable")
+        if not self.is_stream:
+            return self._new(func(frame) for frame in self)
         cloned = self._clone()
-        cloned._processing_ops.extend(operations)
+        cloned._preprocessing_ops.append(func)
         return cloned
 
-    def where(self, predicate: Callable[[Any], bool]) -> "MediaStream":
-        """Giữ frame thỏa predicate; predicate được đánh giá tuần tự."""
+    def where(self, predicate: Callable[[Any], bool]) -> Any:
+        """Retain items satisfying predicate evaluated sequentially."""
         if not callable(predicate):
             raise TypeError("predicate must be callable")
-        cloned = self._clone()
-        cloned._predicates.append(predicate)
-        cloned.total_frames = None
-        return cloned
+        if self.is_stream:
+            cloned = self._clone()
+            cloned._predicates.append(predicate)
+            cloned.total_frames = None
+            return cloned
+        return self._new(frame for frame in self if predicate(frame))
+
+    def filter(self, func: Callable[[Any], bool]) -> Any:
+        """Compatibility alias for :meth:`where`."""
+        return self.where(func)
 
     def where_quality(
         self,
@@ -788,8 +1164,9 @@ class MediaStream:
         max_blur: Optional[float] = None,
         min_entropy: Optional[float] = None,
         preview_size: Tuple[int, int] = (160, 160),
-    ) -> "MediaStream":
-        from klygo import processing as p
+    ) -> Any:
+        """Filter frames based on image quality metrics."""
+        from klygo import preprocessing as p
 
         conditions = []
         if min_brightness is not None:
@@ -804,26 +1181,107 @@ class MediaStream:
             conditions.append(p.blur_score(preview_size=preview_size) <= max_blur)
         if min_entropy is not None:
             conditions.append(p.entropy_score(preview_size) >= min_entropy)
-        return self.where(p.all_of(*conditions)) if conditions else self._clone()
+        return self.where(p.all_of(*conditions)) if conditions else (self._clone() if self.is_stream else self.copy())
 
-    def where_motion(self, threshold: float = 0.02) -> "MediaStream":
+    def where_motion(self, threshold: float = 0.02) -> Any:
+        """Filter frames that show motion difference above threshold."""
+        if self.is_stream:
+            cloned = self._clone()
+            cloned._motion_threshold = float(threshold)
+            cloned.total_frames = None
+            return cloned
+        from klygo import preprocessing as p
+        filtered = []
+        previous = None
+        for frame in self:
+            if previous is not None and p.motion_score(previous)(frame) < threshold:
+                continue
+            previous = frame
+            filtered.append(frame)
+        return self._new(filtered)
+
+    def deduplicate(self, threshold: float = 0.95) -> Any:
+        """Filter consecutive frames that have similarity above threshold."""
+        if self.is_stream:
+            cloned = self._clone()
+            cloned._deduplicate_threshold = float(threshold)
+            cloned.total_frames = None
+            return cloned
+        from klygo import preprocessing as p
+        filtered = []
+        previous = None
+        for frame in self:
+            was_loaded = getattr(frame, "is_loaded", False)
+            if previous is not None and p.similarity_score(previous)(frame) >= threshold:
+                if not was_loaded:
+                    frame.unload()
+                continue
+            if previous is not None and not getattr(previous, "_initially_loaded", False):
+                previous.unload()
+            frame._initially_loaded = was_loaded
+            previous = frame
+            filtered.append(frame)
+        if previous is not None and not getattr(previous, "_initially_loaded", False):
+            previous.unload()
+        for f in filtered:
+            if hasattr(f, "_initially_loaded"):
+                delattr(f, "_initially_loaded")
+        return self._new(filtered)
+
+    def sample(self, sample_rate: int) -> "MediaFrames":
+        """Sample every nth frame."""
+        validate_count(sample_rate, "sample_rate")
+        if not self.is_stream:
+            return self[::sample_rate]
         cloned = self._clone()
-        cloned._motion_threshold = float(threshold)
-        cloned.total_frames = None
+        cloned.sample_rate = self.sample_rate * sample_rate
+        cloned.fps = self.fps / sample_rate
+        if cloned.total_frames is not None:
+            cloned.total_frames = (cloned.total_frames + sample_rate - 1) // sample_rate
         return cloned
 
-    def deduplicate(self, threshold: float = 0.95) -> "MediaStream":
+    def limit(self, max_frames: Optional[int]) -> "MediaFrames":
+        """Limit maximum frames yielded or retained."""
+        if max_frames is not None:
+            validate_count(max_frames, "max_frames")
+        if not self.is_stream:
+            return self.copy() if max_frames is None else self[:max_frames]
         cloned = self._clone()
-        cloned._deduplicate_threshold = float(threshold)
-        cloned.total_frames = None
+        if max_frames is None:
+            return cloned
+        cloned.max_frames = min(cloned.max_frames, max_frames) if cloned.max_frames is not None else max_frames
+        if cloned.total_frames is not None and max_frames is not None:
+            cloned.total_frames = min(cloned.total_frames, max_frames)
         return cloned
+
+    def save_video(self, output_path: Union[str, Path], fps: Optional[float] = None, **kwargs: Any) -> Path:
+        """Encode and save all frames into an MP4/AVI video file."""
+        target_fps = fps if fps is not None else getattr(self, "fps", 30.0)
+        return globals()["save_video"](output_path, self, fps=target_fps, **kwargs)
+
+    def save_images(self, output_dir: Union[str, Path], prefix: str = "frame", **kwargs: Any) -> Path:
+        """Save all frames into an image directory."""
+        return globals()["save_images"](output_dir, self, prefix=prefix, **kwargs)
+
+    def copy(self) -> Any:
+        """Copy collection without decoding pixels or losing metadata."""
+        if self.is_stream or getattr(self, "is_indexed", False):
+            return self._clone()
+        return self._new(self)
 
     def __iter__(self) -> Iterator[LazyImage]:
+        if not self.is_stream:
+            if getattr(self, "is_indexed", False):
+                for index in range(len(self._indexed_entries)):
+                    yield self._indexed_proxy(index)
+                return
+            yield from list.__iter__(self)
+            return
         previous_frame: Optional[LazyImage] = None
 
         def prepare(frame: LazyImage) -> Optional[LazyImage]:
             nonlocal previous_frame
-            from klygo import processing as p
+            from klygo import preprocessing as p
 
             if any(not predicate(frame) for predicate in self._predicates):
                 return None
@@ -834,8 +1292,11 @@ class MediaStream:
                 if p.similarity_score(previous_frame)(frame) >= self._deduplicate_threshold:
                     return None
             previous_frame = frame
-            if self._processing_ops:
-                return p.compose(self._processing_ops)(frame)
+            if self._preprocessing_ops:
+                res = frame
+                for op in self._preprocessing_ops:
+                    res = op(res)
+                return res
             return frame
 
         if self.source_type == "video":
@@ -855,8 +1316,8 @@ class MediaStream:
                         reader=reader,
                     )
 
-                    # Một số container/stream không khai báo frame count. Khi đó
-                    # phải đọc thử để phát hiện EOF, nhưng chỉ giữ đúng một frame.
+                    # Some streams lack frame counts in container headers.
+                    # Read ahead one frame to detect EOF while bounding memory.
                     if reader.total_frames <= 0:
                         frame = reader.read_frame(frame_index)
                         if frame is None:
@@ -883,6 +1344,8 @@ class MediaStream:
         paths: Iterable[Path]
         if self.source_type == "image":
             paths = (self.path,)
+        elif getattr(self, "_cached_paths", None) is not None:
+            paths = self._cached_paths
         else:
             paths = self._iter_image_paths()
 
@@ -898,25 +1361,153 @@ class MediaStream:
                 emitted += 1
 
     def close(self) -> None:
-        for reader in tuple(self._active_readers):
+        """Release underlying video captures, readers, and cached pixels."""
+        for reader in tuple(getattr(self, "_active_readers", ())):
             reader.release()
-        self._active_readers.clear()
+        if hasattr(self, "_active_readers"):
+            self._active_readers.clear()
+        if hasattr(self, "reader") and self.reader is not None:
+            try:
+                self.reader.release()
+            except Exception:
+                pass
+            self.reader = None
+        if not getattr(self, "is_stream", False):
+            items = (
+                tuple(self._indexed_cache.values())
+                if getattr(self, "is_indexed", False)
+                else getattr(self, "__iter__", lambda: ())()
+            )
+            for item in items:
+                unload = getattr(item, "unload", None)
+                if callable(unload):
+                    unload()
 
-    def __enter__(self) -> "MediaStream":
+    def __enter__(self) -> "MediaFrames":
         return self
 
-    def __exit__(self, *args) -> None:
+    def __exit__(self, *args: Any) -> None:
         self.close()
 
     def __del__(self) -> None:
         self.close()
 
     def __repr__(self) -> str:
+        if self.is_stream:
+            return (
+                f"<MediaFrames: stream=True, type='{self.source_type}', total_frames={self.total_frames}, "
+                f"fps={self.fps}>"
+            )
         return (
-            f"<MediaStream: type='{self.source_type}', total_frames={self.total_frames}, "
-            f"fps={self.fps}>"
+            f"<MediaFrames: {len(self)} frames, loaded={self.loaded_count}, "
+            f"indexed={getattr(self, 'is_indexed', False)}, "
+            f"type='{self.source_type}', fps={self.fps}>"
         )
 
+
+# =========================================================================
+# 0D. MediaCompose: Pipeline Composition for Media Operations
+# =========================================================================
+
+class MediaCompose:
+    """Chain media stream or frames filtering, sampling, and transform steps.
+
+    Parameters
+    ----------
+    steps : iterable or varargs of callables
+        Sequence of filtering steps, transform pipelines, or container functions.
+
+    Returns
+    -------
+    MediaCompose
+        Callable pipeline that executes steps sequentially on media containers.
+    """
+
+    def __init__(self, *steps: Any) -> None:
+        if len(steps) == 1 and isinstance(steps[0], (list, tuple)):
+            steps = steps[0]
+        self.steps = tuple(steps)
+
+    def __call__(self, target: Any) -> Any:
+        from klygo import preprocessing as p
+
+        if isinstance(target, (str, os.PathLike)):
+            target = globals()["load"](target)
+
+        result = target
+        for step in self.steps:
+            if isinstance(step, (p.Operation, p.Compose)):
+                result = result.transform(step)
+            elif callable(step):
+                result = step(result)
+            else:
+                raise TypeError(f"Expected callable step or preprocessing operation, got {type(step).__name__}")
+        return result
+
+    def __repr__(self) -> str:
+        return f"<MediaCompose: {len(self.steps)} steps>"
+
+
+class _ComposeStep:
+    """Hold a named lazy filtering step for media.compose."""
+
+    def __init__(self, func: Callable[[Any], Any], name: str) -> None:
+        self.func = func
+        self.name = name
+
+    def __call__(self, target: Any) -> Any:
+        return self.func(target)
+
+    def __repr__(self) -> str:
+        return f"<ComposeStep: {self.name}>"
+
+
+def compose(*steps: Any) -> MediaCompose:
+    """Create a composite filtering and transformation pipeline for media.
+
+    Parameters
+    ----------
+    *steps : callable, preprocessing.Compose, or list thereof
+        Sequential filtering steps or transforms. Accepts varargs or a list.
+
+    Returns
+    -------
+    MediaCompose
+        Callable pipeline applicable to ``MediaFrames`` or file paths.
+
+    Examples
+    --------
+    >>> from klygo import media, preprocessing as p
+    >>> pipeline = media.compose(
+    ...     media.compose.quality(min_brightness=0.3),
+    ...     media.compose.sample(2),
+    ...     p.resize((640, 640)),
+    ... )
+    >>> stream = media.load("video.mp4", stream=True)
+    >>> processed = pipeline(stream)
+    """
+    return MediaCompose(*steps)
+
+
+compose.where = lambda predicate: _ComposeStep(lambda c: c.where(predicate), f"where({getattr(predicate, '__name__', 'predicate')})")
+compose.filter = compose.where
+compose.quality = lambda **kwargs: _ComposeStep(lambda c: c.where_quality(**kwargs), f"quality({kwargs})")
+compose.where_quality = compose.quality
+compose.motion = lambda threshold=0.02: _ComposeStep(lambda c: c.where_motion(threshold), f"motion({threshold})")
+compose.where_motion = compose.motion
+compose.deduplicate = lambda threshold=0.95: _ComposeStep(lambda c: c.deduplicate(threshold), f"deduplicate({threshold})")
+compose.sample = lambda sample_rate=1: _ComposeStep(lambda c: c.sample(sample_rate), f"sample({sample_rate})")
+compose.limit = lambda max_frames=None: _ComposeStep(lambda c: c.limit(max_frames), f"limit({max_frames})")
+
+# Top-level step builders for media.compose
+quality = compose.quality
+where_quality = compose.where_quality
+motion = compose.motion
+where_motion = compose.where_motion
+deduplicate = compose.deduplicate
+sample = compose.sample
+limit = compose.limit
+where = compose.where
 
 
 # =========================================================================
@@ -944,7 +1535,7 @@ def _read_video_frames(
         for i in range(total_frames)
     ]
 
-    return MediaFrames(
+    return MediaFrames._from_items(
         lazy_frames,
         fps=fps,
         source_path=path,
@@ -956,64 +1547,128 @@ def _read_video_frames(
 
 
 def load(
-    source: Union[str, Path],
+    source: Union[str, os.PathLike[str]],
     recursive: bool = False,
     backend: str = "pil",
     verbose: bool = False,
+    *,
+    stream: bool = False,
+    indexed: bool = False,
+    sample_rate: int = 1,
+    max_frames: Optional[int] = None,
 ) -> MediaFrames:
-    """
-    Tác dụng:
-    - Đọc 1 file ảnh, file video, hoặc toàn bộ thư mục chứa ảnh.
-    - Luôn trả về `MediaFrames` (kế thừa list), chỉ giữ các proxy lazy-pixel.
+    """Load an image, video, or image directory as lazy media frames.
 
-    Định dạng tương thích:
-    - Ảnh: .png, .jpg, .jpeg, .webp, .bmp, .tif, .tiff
-    - Video: .mp4, .avi, .mov, .mkv, .m4v, .webm
+    By default, return a list-like collection for indexing and slicing. With
+    ``stream=True``, return a bounded-memory iterator over the source.
 
-    Đầu vào:
-    - source [str | Path]: Đường dẫn file ảnh, file video hoặc thư mục chứa ảnh.
-    - recursive [bool]: Duyệt đệ quy qua các thư mục con (khi source là thư mục). Mặc định: False.
-    - backend [str]: 'pil' (mặc định) hoặc 'opencv'.
-    - verbose [bool]: Hiển thị thanh tiến trình khi đọc. Mặc định: False.
+    Parameters
+    ----------
+    source : str or os.PathLike[str]
+        Image file, video file, or directory of images.
+    recursive : bool, default=False
+        Search subdirectories when ``source`` is a directory.
+    backend : str, default='pil'
+        Pixel backend, either ``'pil'`` or ``'opencv'``.
+    verbose : bool, default=False
+        Enable progress output where supported.
+    stream : bool, default=False
+        Yield frames sequentially instead of storing all frame proxies.
+    indexed : bool, default=False
+        Store only paths or video frame numbers and create ``LazyImage``
+        proxies on demand. This mode preserves random access without eagerly
+        allocating one proxy per frame.
+    sample_rate : int, default=1
+        Use every nth frame when ``stream=True``.
+    max_frames : int or None, default=None
+        Maximum number of yielded frames when ``stream=True``.
 
-    Đầu ra:
-    - [MediaFrames]: Danh sách lazy-pixel hỗ trợ indexing [0], [-1], slicing [10:20], len(frames).
+    Returns
+    -------
+    MediaFrames
+        Unified container in materialized-proxy mode by default, path-indexed
+        mode with ``indexed=True``, or streaming mode with ``stream=True``.
 
-    Ví dụ:
+    Raises
+    ------
+    TypeError
+        If an argument has an unsupported type.
+    FileNotFoundError
+        If ``source`` does not exist.
+    ValueError
+        If the source or backend is unsupported, or streaming options are
+        invalid or supplied without ``stream=True``.
+
+    Examples
+    --------
     >>> import klygo.media as media
-    >>> imgs = media.load("image.jpg")
     >>> frames = media.load("video.mp4")
-    >>> len(frames)        # Tổng số frame của video tức thì
-    >>> first = frames[0]  # Pixel chỉ được decode khi thực sự materialize ảnh
+    >>> first = frames[0]
+    >>> streamed = media.load("video.mp4", stream=True, sample_rate=2)
+    >>> first_sampled = next(iter(streamed))
     """
-    validate_type(source, (str, Path), "source")
+    validate_type(source, (str, os.PathLike), "source")
     validate_type(recursive, bool, "recursive")
     validate_type(backend, str, "backend")
     validate_type(verbose, bool, "verbose")
+    validate_type(stream, bool, "stream")
+    validate_type(indexed, bool, "indexed")
+
+    if stream and indexed:
+        raise ValueError("stream and indexed modes are mutually exclusive")
+
+    if stream:
+        return MediaFrames(
+            source,
+            stream=True,
+            sample_rate=sample_rate,
+            max_frames=max_frames,
+            recursive=recursive,
+            backend=backend,
+            verbose=verbose,
+        )
+    if sample_rate != 1 or max_frames is not None:
+        raise ValueError("sample_rate and max_frames require stream=True")
 
     backend = backend.lower()
     if backend not in ("pil", "opencv"):
         raise ValueError("backend must be 'pil' or 'opencv'")
 
     p = files.path(source)
-    if not p.exists():
+    if not files.exists(p):
         raise FileNotFoundError(f"source does not exist: {p}")
 
-    if p.is_file():
-        suf = p.suffix.lower()
+    if files.is_file(p):
+        suf = files.extension(p).lower()
         if suf in VIDEO_SUFFIXES:
+            if indexed:
+                reader = VideoReader(p)
+                total_frames = reader.total_frames
+                if total_frames <= 0:
+                    reader.release()
+                    raise ValueError("indexed video loading requires a known frame count")
+                return MediaFrames._from_index(
+                    range(total_frames),
+                    fps=reader.fps,
+                    source_path=p,
+                    width=reader.width,
+                    height=reader.height,
+                    source_type="video",
+                    backend=backend,
+                    reader=reader,
+                )
             return _read_video_frames(p, backend=backend, verbose=verbose)
         elif suf in IMAGE_SUFFIXES:
             image_paths = [p]
         else:
             raise ValueError(f"source is not a supported image or video file: {p}")
-    elif p.is_dir():
-        iterator = p.rglob("*") if recursive else p.glob("*")
+    elif files.is_dir(p):
+        iterator = files.iter_find(p, recursive=recursive)
         image_paths = sorted(
             (
                 f
                 for f in iterator
-                if f.is_file() and f.suffix.lower() in IMAGE_SUFFIXES
+                if files.is_file(f) and files.extension(f).lower() in IMAGE_SUFFIXES
             ),
             key=lambda f: str(f).lower(),
         )
@@ -1022,32 +1677,21 @@ def load(
     else:
         raise ValueError(f"source must be a file or directory: {p}")
 
-    # Zero-RAM Lazy Loading: wrap each path in a LazyImage (URL/Path Proxy)
+    if indexed:
+        return MediaFrames._from_index(
+            image_paths,
+            source_path=p,
+            source_type="folder" if files.is_dir(p) else "image",
+            backend=backend,
+        )
+
+    # Lazy pixel loading: proxies are materialized while pixels remain deferred.
     lazy_frames = [LazyImage(f, backend=backend) for f in image_paths]
 
-    return MediaFrames(
+    return MediaFrames._from_items(
         lazy_frames,
         source_path=p,
-        source_type="folder" if p.is_dir() else "image",
-    )
-
-
-def stream(
-    source: Union[str, Path],
-    sample_rate: int = 1,
-    max_frames: Optional[int] = None,
-    recursive: bool = False,
-    backend: str = "pil",
-    verbose: bool = False,
-) -> MediaStream:
-    """Mở nguồn media dưới dạng iterator tuần tự bounded-memory."""
-    return MediaStream(
-        source,
-        sample_rate=sample_rate,
-        max_frames=max_frames,
-        recursive=recursive,
-        backend=backend,
-        verbose=verbose,
+        source_type="folder" if files.is_dir(p) else "image",
     )
 
 
@@ -1057,24 +1701,44 @@ def save(
     overwrite: bool = False,
     verbose: bool = False,
 ) -> Path:
-    """
-    Tác dụng:
-    - Lưu một đối tượng ảnh (PIL Image, NumPy array, PyTorch Tensor) ra tập tin đĩa.
-    """
-    validate_type(path, (str, Path), "path")
+    """Save one image to the requested path.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Destination image file.
+image : PIL.Image.Image, numpy.ndarray, or LazyImage
+        Pixels to write.
+overwrite : bool
+        Replace an existing file when true.
+verbose : bool
+        Show progress when true.
+
+    Returns
+    -------
+    pathlib.Path
+        Destination path.
+
+    Raises
+    ------
+    FileExistsError
+        Destination exists without overwrite.
+TypeError
+        Image type is unsupported."""
+    validate_type(path, (str, os.PathLike), "path")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
 
     p = files.path(path)
-    if p.exists() and not overwrite:
+    if files.exists(p) and not overwrite:
         raise FileExistsError(f"File already exists: {p}. Use overwrite=True to replace it.")
 
-    p.parent.mkdir(parents=True, exist_ok=True)
+    files.mkdir(files.parent(p))
 
     if isinstance(image, LazyImage):
         image = image.to_pil(cache=False)
 
-    with ProgressBar(total=1, desc=f"Saving image {p.name}", unit="file", verbose=verbose, colour="cyan") as pbar:
+    with ProgressBar(total=1, desc=f"Saving image {files.name(p)}", unit="file", verbose=verbose, colour="cyan") as pbar:
         if isinstance(image, Image.Image):
             image.save(p)
         elif isinstance(image, np.ndarray):
@@ -1099,28 +1763,52 @@ def convert(
     overwrite: bool = False,
     verbose: bool = False,
 ) -> Path:
-    """
-    Tác dụng:
-    - Chuyển đổi định dạng file ảnh (.png -> .jpg) hoặc file video (.avi -> .mp4, .mkv -> .webm...).
-    - Tự động nhận diện nhóm chuyển đổi Web-ready, Storage, Modern Web, hoặc Demo.
-    - Tự động phát hiện và tận dụng GPU (NVIDIA NVENC) nếu máy/Colab có sẵn (`gpu=None`), hoặc chỉ định rõ `gpu=True`/`gpu=False`.
-    """
-    validate_type(source, (str, Path), "source")
-    validate_type(target, (str, Path), "target")
+    """Convert an image format or transcode a video file.
+
+    Parameters
+    ----------
+    source, target : str or pathlib.Path
+        Existing input and requested output.
+codec : str, optional
+        Video codec override.
+crf : int
+        Video quality control.
+fps : float, optional
+        Output frame rate.
+gpu : bool, optional
+        Select or autodetect GPU encoding.
+preset : str, optional
+        Video encoder preset.
+overwrite, verbose : bool
+        Replacement and progress options.
+
+    Returns
+    -------
+    pathlib.Path
+        Converted output path.
+
+    Raises
+    ------
+    FileNotFoundError
+        Source is missing.
+ValueError
+        Input and output are incompatible media kinds."""
+    validate_type(source, (str, os.PathLike), "source")
+    validate_type(target, (str, os.PathLike), "target")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
 
     src_p = files.path(source)
     tgt_p = files.path(target)
 
-    if not src_p.exists():
+    if not files.exists(src_p):
         raise FileNotFoundError(f"source file does not exist: {src_p}")
 
-    src_suf = src_p.suffix.lower()
-    tgt_suf = tgt_p.suffix.lower()
+    src_suf = files.extension(src_p).lower()
+    tgt_suf = files.extension(tgt_p).lower()
 
     if src_suf in IMAGE_SUFFIXES and tgt_suf in IMAGE_SUFFIXES:
-        with ProgressBar(total=1, desc=f"Converting image {src_p.name} -> {tgt_p.name}", unit="file", verbose=verbose, colour="cyan") as pbar:
+        with ProgressBar(total=1, desc=f"Converting image {files.name(src_p)} -> {files.name(tgt_p)}", unit="file", verbose=verbose, colour="cyan") as pbar:
             imgs = load(src_p, verbose=False)
             res = save(tgt_p, imgs[0], overwrite=overwrite, verbose=False)
             pbar.update(1)
@@ -1129,10 +1817,11 @@ def convert(
         import shutil
         import subprocess
 
-        # Tự động nhận diện GPU nếu gpu=None
+        # Auto-detect GPU if gpu=None
         use_gpu = gpu
         if use_gpu is None:
-            if _HAS_TORCH and torch.cuda.is_available():
+            torch = _optional_torch()
+            if torch is not None and torch.cuda.is_available():
                 use_gpu = True
             elif shutil.which("nvidia-smi"):
                 use_gpu = True
@@ -1192,11 +1881,11 @@ def convert(
             if fps:
                 cmd.extend(["-r", str(fps)])
             cmd.append(str(tgt_p))
-            
+
             try:
                 v_info = probe(src_p)
                 total_frames = v_info.get("frame_count") or 1
-                with ProgressBar(total=total_frames, desc=f"Converting {src_p.name} (FFmpeg)", unit="frame", verbose=verbose, colour="cyan") as pbar:
+                with ProgressBar(total=total_frames, desc=f"Converting {files.name(src_p)} (FFmpeg)", unit="frame", verbose=verbose, colour="cyan") as pbar:
                     # Run FFmpeg with progress monitoring if verbose, or silent if not
                     if not verbose:
                         result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -1245,10 +1934,10 @@ def convert(
                 pass
 
         # 2. Fallback to OpenCV (frame-by-frame)
-        frames = stream(src_p, verbose=False)
+        frames = load(src_p, stream=True, verbose=False)
         v_info = probe(src_p)
         target_fps = fps if fps is not None else v_info.get("fps", 30.0)
-        
+
         try:
             return save_video(tgt_p, frames, fps=target_fps, fourcc=fourcc, overwrite=overwrite, verbose=verbose)
         except ValueError as e:
@@ -1268,28 +1957,32 @@ def copy(
     target: Union[str, Path],
     overwrite: bool = False,
 ) -> Path:
-    """
-    Tác dụng:
-    - Sao chép tập tin ảnh/video hoặc thư mục media sang vị trí mới với kiểm tra tính toàn vẹn media.
+    """Copy a media file or directory to another location.
 
-    Đầu vào:
-    - source [str | Path]: Đường dẫn file hoặc thư mục media nguồn.
-    - target [str | Path]: Đường dẫn file hoặc thư mục media đích.
-    - overwrite [bool]: Ghi đè nếu mục tiêu đã tồn tại. Mặc định: False.
+    Parameters
+    ----------
+    source, target : str or pathlib.Path
+        Existing input and requested output.
+overwrite : bool
+        Allow replacement of an existing target.
 
-    Đầu ra:
-    - [Path]: Đường dẫn vị trí mới sau khi copy.
+    Returns
+    -------
+    pathlib.Path
+        Copied destination.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> media.copy("image.jpg", "backup/image.jpg", overwrite=True)
-    """
-    validate_type(source, (str, Path), "source")
-    validate_type(target, (str, Path), "target")
+    Raises
+    ------
+    FileNotFoundError
+        Source does not exist.
+FileExistsError
+        Destination exists without overwrite."""
+    validate_type(source, (str, os.PathLike), "source")
+    validate_type(target, (str, os.PathLike), "target")
     validate_type(overwrite, bool, "overwrite")
 
     src_p = files.path(source)
-    if not src_p.exists():
+    if not files.exists(src_p):
         raise FileNotFoundError(f"Media source does not exist: {src_p}")
 
     return files.copy(src_p, target, overwrite=overwrite)
@@ -1303,34 +1996,49 @@ def save_video(
     overwrite: bool = False,
     verbose: bool = False,
 ) -> Path:
-    """
-    Tác dụng:
-    - Lưu danh sách hoặc Generator các khung hình (frames) thành tập tin video (.mp4, .avi, .mkv...).
+    """Encode an iterable of image frames as a video.
 
-    Đầu vào:
-    - output_path [str | Path]: Đường dẫn file video đầu ra.
-    - frames [Iterable]: Danh sách hoặc Generator các ảnh/frames.
-    - fps [float]: Số khung hình trên giây. Mặc định: 30.0.
-    - fourcc [str]: Mã codec video OpenCV (vd: 'mp4v', 'xvid'). Mặc định: 'mp4v'.
-    - overwrite [bool]: Ghi đè file nếu đã tồn tại. Mặc định: False.
-    - verbose [bool]: Hiển thị thanh tiến trình ProgressBar khi đóng gói video. Mặc định: True.
+    Parameters
+    ----------
+    output_path : str or pathlib.Path
+        Output video path.
+frames : iterable
+        Frames with matching dimensions.
+fps : float
+        Playback frame rate.
+fourcc : str
+        Four-character OpenCV codec.
+overwrite, verbose : bool
+        Replacement and progress options.
 
-    Đầu ra:
-    - [Path]: Đường dẫn file video đã lưu.
+    Returns
+    -------
+    pathlib.Path
+        Encoded video path.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> media.save_video("output.mp4", frames_list, fps=30, overwrite=True)
-    """
-    validate_type(output_path, (str, Path), "output_path")
+    Raises
+    ------
+    ValueError
+        Frames iterable is empty.
+RuntimeError
+        Video writer cannot be opened."""
+    validate_type(output_path, (str, os.PathLike), "output_path")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
+    if isinstance(fps, bool) or not isinstance(fps, (int, float)):
+        raise TypeError("fps must be a number")
+    if not math.isfinite(float(fps)) or float(fps) <= 0:
+        raise ValueError("fps must be a finite positive number")
+    if not isinstance(fourcc, str):
+        raise TypeError("fourcc must be a string")
+    if len(fourcc) != 4:
+        raise ValueError("fourcc must contain exactly four characters")
 
     p = files.path(output_path)
-    if p.exists() and not overwrite:
+    if files.exists(p) and not overwrite:
         raise FileExistsError(f"Video file already exists: {p}. Use overwrite=True to replace it.")
 
-    p.parent.mkdir(parents=True, exist_ok=True)
+    files.mkdir(files.parent(p))
 
     frame_iter = iter(frames)
     try:
@@ -1338,32 +2046,52 @@ def save_video(
     except StopIteration:
         raise ValueError("frames iterable is empty")
 
-    arr = to_array(first_frame)
-    height, width = arr.shape[:2]
+    def _video_frame(value: Any, expected: Optional[Tuple[int, int]] = None) -> np.ndarray:
+        array = np.asarray(to_array(value))
+        if array.ndim == 2:
+            array = cv.cvtColor(array, cv.COLOR_GRAY2RGB)
+        elif array.ndim == 3 and array.shape[2] == 1:
+            array = cv.cvtColor(array[..., 0], cv.COLOR_GRAY2RGB)
+        elif array.ndim == 3 and array.shape[2] == 4:
+            array = cv.cvtColor(array, cv.COLOR_RGBA2RGB)
+        elif array.ndim != 3 or array.shape[2] != 3:
+            raise ValueError("video frames must have one, three, or four channels")
+        if array.dtype != np.uint8:
+            raise TypeError("video frames must use uint8 pixels")
+        current = int(array.shape[1]), int(array.shape[0])
+        if expected is not None and current != expected:
+            raise ValueError(f"all video frames must have size {expected}; received {current}")
+        return np.ascontiguousarray(cv.cvtColor(array, cv.COLOR_RGB2BGR))
+
+    first_bgr = _video_frame(first_frame)
+    height, width = first_bgr.shape[:2]
+    frame_size = (width, height)
+    extension = files.extension(p) or ".mp4"
+    temporary = files.join(
+        files.parent(p), f".{files.stem(p)}.{uuid.uuid4().hex}.tmp{extension}"
+    )
 
     fourcc_code = cv.VideoWriter_fourcc(*fourcc)
-    writer = cv.VideoWriter(str(p), fourcc_code, float(fps), (width, height))
+    writer = cv.VideoWriter(str(temporary), fourcc_code, float(fps), frame_size)
     if not writer.isOpened():
+        files.remove(temporary, missing_ok=True)
         raise RuntimeError(f"Could not open VideoWriter for {p} with fourcc {fourcc!r}")
 
-    def _write_frame(f):
-        f_arr = to_array(f)
-        if isinstance(f, (Image.Image, LazyImage)) or (f_arr.ndim == 3 and f_arr.shape[2] == 3):
-            f_bgr = cv.cvtColor(f_arr, cv.COLOR_RGB2BGR)
-        else:
-            f_bgr = f_arr
-        writer.write(f_bgr)
-
     try:
-        with ProgressBar(total=None, desc=f"Encoding video {p.name}", unit="frame", verbose=verbose, colour="cyan") as pbar:
-            _write_frame(first_frame)
+        with ProgressBar(total=None, desc=f"Encoding video {files.name(p)}", unit="frame", verbose=verbose, colour="cyan") as pbar:
+            writer.write(first_bgr)
             pbar.update(1)
             for frame in frame_iter:
-                _write_frame(frame)
+                writer.write(_video_frame(frame, frame_size))
                 pbar.update(1)
+    except Exception:
+        writer.release()
+        files.remove(temporary, missing_ok=True)
+        raise
     finally:
         writer.release()
 
+    files.move(temporary, p, overwrite=overwrite)
     return p
 
 
@@ -1375,40 +2103,44 @@ def save_images(
     overwrite: bool = False,
     verbose: bool = False,
 ) -> List[Path]:
-    """
-    Tác dụng:
-    - Lưu chuỗi ảnh/frames vào một thư mục với tên tăng dần (vd: frame_000001.jpg).
+    """Save an iterable of images to numbered files.
 
-    Đầu vào:
-    - output_dir [str | Path]: Thư mục xuất các file ảnh.
-    - images [Iterable]: Danh sách ảnh hoặc frames.
-    - prefix [str]: Tiền tố tên file. Mặc định: 'frame'.
-    - extension [str]: Đuôi file ảnh (.jpg, .png, .webp...). Mặc định: '.jpg'.
-    - overwrite [bool]: Ghi đè nếu file ảnh đã tồn tại. Mặc định: False.
-    - verbose [bool]: Hiển thị thanh tiến trình ProgressBar khi lưu. Mặc định: True.
+    Parameters
+    ----------
+    output_dir : str or pathlib.Path
+        Output directory.
+images : iterable
+        Images to write.
+prefix, extension : str
+        Generated filename components.
+overwrite, verbose : bool
+        Replacement and progress options.
 
-    Đầu ra:
-    - [List[Path]]: Danh sách đường dẫn tới từng file ảnh đã được lưu.
+    Returns
+    -------
+    list of pathlib.Path
+        Paths written in input order.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> media.save_images("extracted_frames", frames_list, extension=".jpg")
-    """
-    validate_type(output_dir, (str, Path), "output_dir")
+    Raises
+    ------
+    FileExistsError
+        A generated file already exists without overwrite."""
+    validate_type(output_dir, (str, os.PathLike), "output_dir")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
 
     out_p = files.path(output_dir)
-    out_p.mkdir(parents=True, exist_ok=True)
+    files.mkdir(out_p)
 
     if not extension.startswith("."):
         extension = f".{extension}"
 
     saved_paths: List[Path] = []
-    total = len(images) if isinstance(images, (builtins.list, tuple)) else getattr(images, "total_frames", None)
-    with ProgressBar(total=total, desc=f"Saving image batch to {out_p.name}", unit="file", verbose=verbose, colour="cyan") as pbar:
+    is_sequential = bool(getattr(images, "is_stream", False))
+    total = len(images) if isinstance(images, (builtins.list, tuple)) and not is_sequential else getattr(images, "total_frames", None)
+    with ProgressBar(total=total, desc=f"Saving image batch to {files.name(out_p)}", unit="file", verbose=verbose, colour="cyan") as pbar:
         for idx, img in enumerate(images, start=1):
-            file_path = out_p / f"{prefix}_{idx:06d}{extension}"
+            file_path = files.join(out_p, f"{prefix}_{idx:06d}{extension}")
             save(file_path, img, overwrite=overwrite, verbose=False)
             saved_paths.append(file_path)
             pbar.update(1)
@@ -1423,44 +2155,50 @@ def iter_frames(
     backend: str = "pil",
     verbose: bool = False,
 ) -> Generator[Union[Image.Image, np.ndarray], None, None]:
-    """
-    Tác dụng:
-    - Generator duyệt từng khung hình (frame) từ file video hoặc thư mục ảnh với tham số bước nhảy (sample_rate).
+    """Yield sampled frames from a video or image directory.
 
-    Đầu vào:
-    - source [str | Path]: Đường dẫn file video hoặc thư mục ảnh.
-    - sample_rate [int]: Bước nhảy duyệt (vd: 1 = duyệt từng frame, 5 = lấy 1 frame mỗi 5 frame). Mặc định: 1.
-    - recursive [bool]: Duyệt đệ quy (nếu source là thư mục). Mặc định: False.
-    - backend [str]: 'pil' (mặc định) hoặc 'opencv'.
-    - verbose [bool]: Hiển thị thanh tiến trình. Mặc định: False.
+    Parameters
+    ----------
+    source : str or pathlib.Path
+        Existing media source.
+sample_rate : int
+        Yield every nth frame.
+recursive : bool
+        Traverse image subdirectories.
+backend : str
+        PIL or OpenCV pixel backend.
+verbose : bool
+        Show progress when true.
 
-    Đầu ra:
-    - [Generator]: Generator phát ra từng khung hình dạng PIL Image hoặc NumPy array.
+    Returns
+    -------
+    generator
+        Frames decoded as they are requested.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> for frame in media.iter_frames("video.mp4", sample_rate=5):
-    ...     process(frame)
-    """
-    if sample_rate < 1:
-        raise ValueError("sample_rate must be an integer >= 1")
+    Raises
+    ------
+    ValueError
+        Sampling rate is below one.
+FileNotFoundError
+        Source is missing."""
+    validate_count(sample_rate, "sample_rate")
 
     p = files.path(source)
-    if not p.exists():
+    if not files.exists(p):
         raise FileNotFoundError(f"source does not exist: {p}")
 
     backend = backend.lower()
     if backend not in ("pil", "opencv"):
         raise ValueError("backend must be 'pil' or 'opencv'")
 
-    if p.is_file() and p.suffix.lower() in VIDEO_SUFFIXES:
+    if files.is_file(p) and files.extension(p).lower() in VIDEO_SUFFIXES:
         cap = cv.VideoCapture(str(p))
         if not cap.isOpened():
             raise FileNotFoundError(f"Could not open video file: {p}")
 
         total_frames = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
         try:
-            with ProgressBar(total=total_frames if total_frames > 0 else None, desc=f"Iterating video {p.name}", unit="frame", verbose=verbose, colour="cyan") as pbar:
+            with ProgressBar(total=total_frames if total_frames > 0 else None, desc=f"Iterating video {files.name(p)}", unit="frame", verbose=verbose, colour="cyan") as pbar:
                 frame_idx = 0
                 while True:
                     ret, frame = cap.read()
@@ -1482,29 +2220,35 @@ def iter_frames(
                 yield img
 
 
-def probe(path: Union[str, Path]) -> Dict[str, Any]:
-    """
-    Tác dụng:
-    - Trích xuất thông tin metadata chi tiết của một tập tin ảnh hoặc video (soi định dạng).
+def probe(path: Union[str, Path], *, verbose: bool = False) -> Dict[str, Any]:
+    """Read image or video metadata from a media file.
 
-    Đầu vào:
-    - path [str | Path]: Đường dẫn file ảnh hoặc file video.
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Existing media file.
+    verbose : bool, default=False
+        Print the metadata as a Rich table while returning the dictionary.
 
-    Đầu ra:
-    - [Dict[str, Any]]: Dictionary chứa metadata (name, path, format, width, height, size, fps...).
+    Returns
+    -------
+    dict
+        Format, dimensions, and video timing where available.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> v_info = media.probe("video.mp4")
-    >>> print(v_info['fps'], v_info['frame_count'])
+    Raises
+    ------
+    FileNotFoundError
+        Path does not exist.
+    ValueError
+        Path is a directory.
     """
     p = files.path(path)
-    if not p.exists():
+    if not files.exists(p):
         raise FileNotFoundError(f"Path does not exist: {p}")
-    if not p.is_file():
+    if not files.is_file(p):
         raise ValueError(f"Path must be a file: {p}")
 
-    suf = p.suffix.lower()
+    suf = files.extension(p).lower()
 
     if suf in VIDEO_SUFFIXES:
         cap = cv.VideoCapture(str(p))
@@ -1520,7 +2264,6 @@ def probe(path: Union[str, Path]) -> Dict[str, Any]:
         codec_raw = "".join([chr((fourcc_int >> (8 * i)) & 0xFF) for i in range(4)]).strip().lower()
         cap.release()
 
-        # Map to friendly codec names
         codec_map = {
             "avc1": "h264",
             "h264": "h264",
@@ -1538,8 +2281,8 @@ def probe(path: Union[str, Path]) -> Dict[str, Any]:
         codec = codec_map.get(codec_raw, codec_raw if codec_raw else "unknown")
         web_ready = codec in ("h264", "vp8", "vp9", "av1") and suf in (".mp4", ".webm")
 
-        return {
-            "name": p.name,
+        result = {
+            "name": files.name(p),
             "path": p,
             "type": "video",
             "format": suf.lstrip("."),
@@ -1552,40 +2295,55 @@ def probe(path: Union[str, Path]) -> Dict[str, Any]:
             "frame_count": frame_count,
             "duration_seconds": round(duration, 2),
         }
+    else:
+        with Image.open(p) as img:
+            width, height = img.size
+            result = {
+                "name": files.name(p),
+                "path": p,
+                "type": "image",
+                "format": img.format,
+                "mode": img.mode,
+                "width": width,
+                "height": height,
+                "size": (width, height),
+            }
 
-    with Image.open(p) as img:
-        width, height = img.size
-        return {
-            "name": p.name,
-            "path": p,
-            "type": "image",
-            "format": img.format,
-            "mode": img.mode,
-            "width": width,
-            "height": height,
-            "size": (width, height),
-        }
+    if verbose:
+        from rich.console import Console
+        from rich.table import Table
 
+        table = Table(title=f"Media Information: {files.name(p)}")
+        table.add_column("Property", style="cyan", no_wrap=True)
+        table.add_column("Value", style="green")
+        for key, val in result.items():
+            label = str(key).replace("_", " ").title()
+            table.add_row(label, str(val))
+        Console().print(table)
+
+    return result
 
 # =========================================================================
 # 2. Format Conversions (to_array, to_tensor, to_pil)
 # =========================================================================
 
 def to_array(image: Any) -> np.ndarray:
-    """
-    Tác dụng:
-    - Chuyển đổi linh hoạt hình ảnh từ PIL Image, PyTorch Tensor, NumPy array hoặc LazyImage sang mảng NumPy ndarray (dạng [H, W, C]).
+    """Convert supported image data to a NumPy array.
 
-    Đầu vào:
-    - image [Image.Image | torch.Tensor | np.ndarray | LazyImage]: Đối tượng dữ liệu ảnh.
+    Parameters
+    ----------
+    image : PIL image, numpy.ndarray, LazyImage, or torch.Tensor
+        Input image representation.
 
-    Đầu ra:
-    - [np.ndarray]: Mảng NumPy ndarray.
+    Returns
+    -------
+    numpy.ndarray
+        Independent pixel array.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> arr = media.to_array(pil_img)
-    """
+    Raises
+    ------
+    TypeError
+        Image representation is unsupported."""
     if isinstance(image, LazyImage):
         return image.to_array()
 
@@ -1595,7 +2353,8 @@ def to_array(image: Any) -> np.ndarray:
     if isinstance(image, Image.Image):
         return np.array(image)
 
-    if _HAS_TORCH and isinstance(image, torch.Tensor):
+    torch = _optional_torch()
+    if torch is not None and isinstance(image, torch.Tensor):
         t = image.detach().cpu()
         if t.ndim == 4:
             t = t.squeeze(0)
@@ -1610,23 +2369,27 @@ def to_array(image: Any) -> np.ndarray:
 
 
 def to_tensor(image: Any, normalize: bool = True) -> Any:
-    """
-    Tác dụng:
-    - Chuyển đổi hình ảnh (PIL Image, NumPy array hoặc LazyImage) sang PyTorch Tensor dạng chuẩn mô hình AI [C, H, W].
+    """Convert supported image data to a CHW PyTorch tensor.
 
-    Đầu vào:
-    - image [Image.Image | np.ndarray | torch.Tensor | LazyImage]: Dữ liệu ảnh.
-    - normalize [bool]: Tự động chuẩn hóa giá trị về dải 0.0 - 1.0 (float32). Mặc định: True.
+    Parameters
+    ----------
+    image : PIL image, numpy.ndarray, LazyImage, or torch.Tensor
+        Input image representation.
+    normalize : bool
+        Scale uint8 pixels to floating-point values in 0-1.
 
-    Đầu ra:
-    - [torch.Tensor]: Đối tượng PyTorch Tensor.
+    Returns
+    -------
+    torch.Tensor
+        CHW tensor.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> tensor = media.to_tensor(pil_img)
-    """
-    if not _HAS_TORCH:
-        raise RuntimeError("PyTorch is not installed in current environment.")
+    Raises
+    ------
+    ImportError
+        PyTorch is unavailable.
+TypeError
+        Image representation is unsupported."""
+    torch = _optional_torch(required=True)
 
     if isinstance(image, LazyImage):
         tensor = image.to_tensor(cache=False)
@@ -1657,20 +2420,24 @@ def to_tensor(image: Any, normalize: bool = True) -> Any:
 
 
 def to_pil(image: Any) -> Image.Image:
-    """
-    Tác dụng:
-    - Chuyển đổi mảng NumPy ndarray, PyTorch Tensor hoặc LazyImage sang đối tượng PIL Image.
+    """Convert supported image data to a PIL image.
 
-    Đầu vào:
-    - image [np.ndarray | torch.Tensor | Image.Image | LazyImage]: Dữ liệu ảnh.
+    Parameters
+    ----------
+    image : PIL image, numpy.ndarray, LazyImage, or torch.Tensor
+        Input image representation.
 
-    Đầu ra:
-    - [Image.Image]: Đối tượng PIL Image.
+    Returns
+    -------
+    PIL.Image.Image
+        Independent PIL image.
 
-    Ví dụ:
-    >>> import klygo.media as media
-    >>> pil_img = media.to_pil(np_array)
-    """
+    Raises
+    ------
+    TypeError
+        Image representation is unsupported.
+ValueError
+        Array shape is unsupported."""
     if isinstance(image, LazyImage):
         return image.to_pil()
 
@@ -1696,33 +2463,33 @@ def to_pil(image: Any) -> Image.Image:
 LAZY_OPS = {"resize", "convert", "rotate", "transpose", "filter", "point", "quantize", "transform"}
 
 for attr in dir(Image.Image):
-    if attr.startswith("_") or not callable(getattr(Image.Image, attr)): 
+    if attr.startswith("_") or not callable(getattr(Image.Image, attr)):
         continue
-    if attr in ["crop", "show", "save", "load", "copy", "thumbnail", "tobytes"]: 
+    if attr in ["crop", "show", "save", "load", "copy", "thumbnail", "tobytes"]:
         continue
 
     def _make_forwarder(name):
         def forwarder(self, *args, **kwargs):
             if name in LAZY_OPS:
-                # Trả về một LazyImage mới, ghi nhận chỉ thị để không tốn RAM
+                # Return a new LazyImage proxy without allocating RAM
                 new_lazy = LazyImage(self)
-                if self._processing_ops:
-                    from klygo.processing.core import Operation
+                if self._preprocessing_ops:
+                    from klygo.preprocessing.core import Operation
 
-                    new_lazy._processing_ops = list(self._processing_ops) + [
+                    new_lazy._preprocessing_ops = list(self._preprocessing_ops) + [
                         Operation("pil_method", {"method": name, "args": args, "kwargs": kwargs}, "pil")
                     ]
                 else:
                     new_lazy._instructions = list(self._instructions) + [(name, args, kwargs)]
-                
-                # Cập nhật size và mode tức thì
+
+                # Update size and mode immediately
                 if name == "resize":
                     new_lazy._cached_size = kwargs.get("size", args[0] if args else self._cached_size)
                 elif name == "convert":
                     new_lazy._cached_mode = kwargs.get("mode", args[0] if args else self._cached_mode)
                 return new_lazy
             else:
-                # Hàm thực thi cuối (ví dụ: getpixel, histogram), tự động nhả RAM sau khi chạy
+                # Terminal executor (e.g., getpixel, histogram); releases RAM after execution
                 return getattr(self.to_pil(cache=False), name)(*args, **kwargs)
         return forwarder
 
@@ -1734,7 +2501,7 @@ def _lazy_show(self, *args, **kwargs):
 
 def _lazy_save(self, *args, **kwargs):
     return self.to_pil(cache=False).save(*args, **kwargs)
-    
+
 def _lazy_copy(self):
     return LazyImage(self)
 

@@ -5,28 +5,32 @@ from __future__ import annotations
 import configparser
 import csv
 import json
+import os
 import pickle
+import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any, Generator, List, Optional
 
 import yaml
 
 from klygo.utils.progress import ProgressBar
 from klygo.validators import validate_type
 
-PathInput = Union[str, Path]
+from ._typing import PathInput
+from .filesystem import exists, is_file, is_symlink, mkdir, remove
+from .paths import extension, name, parent, path as _to_path
 
 _DATA_SUFFIXES = {
-    ".yaml", ".yml", ".json", ".jsonl", ".toml", ".csv", ".txt",
+    ".yaml", ".yml", ".json", ".jsonl", ".toml", ".csv", ".txt", ".md",
     ".log", ".ini", ".cfg", ".properties", ".env", ".xml", ".pkl",
     ".pickle",
 }
 
 
-def _suffix(path: Path) -> str:
-    suffix = path.suffix.lower()
-    return ".env" if not suffix and path.name.lower().startswith(".env") else suffix
+def _suffix(candidate: Path) -> str:
+    suffix = extension(candidate).lower()
+    return ".env" if not suffix and name(candidate).lower().startswith(".env") else suffix
 
 
 def _run_with_progress(verbose: bool, description: str, function):
@@ -76,14 +80,14 @@ def _data_to_xml(tag: str, value: Any) -> ET.Element:
 def load(path: PathInput, as_lines: bool = False, verbose: bool = True) -> Any:
     """Load structured data from a file using its filename extension.
 
-    The format is inferred from the final extension. Text formats use UTF-8. YAML, JSON, JSON Lines, TOML, CSV, text, INI-like, ENV, XML, and Pickle files are supported.
+    The format is inferred from the final extension. Text formats use UTF-8. YAML, JSON, JSON Lines, TOML, CSV, text, Markdown, INI-like, ENV, XML, and Pickle files are supported.
 
     Parameters
     ----------
-    path : str or pathlib.Path
+    path : str or os.PathLike[str]
         Path to inspect or operate on.
     as_lines : bool, default=False
-        Return TXT and LOG files as lines without newline characters.
+        Return TXT, LOG, and Markdown files as lines without newline characters.
     verbose : bool, default=True
         Display a progress indicator.
 
@@ -116,11 +120,10 @@ def load(path: PathInput, as_lines: bool = False, verbose: bool = True) -> Any:
     >>> from klygo import files
     >>> config = files.load("config.json", verbose=False)
     """
-    validate_type(path, (str, Path), "path")
-    candidate = Path(path)
-    if not candidate.exists():
+    candidate = _to_path(path)
+    if not exists(candidate):
         raise FileNotFoundError(f"Path does not exist: {candidate}")
-    if not candidate.is_file():
+    if not is_file(candidate):
         raise ValueError(f"Path must be a file: {candidate}")
     suffix = _suffix(candidate)
     if suffix not in _DATA_SUFFIXES:
@@ -144,7 +147,7 @@ def load(path: PathInput, as_lines: bool = False, verbose: bool = True) -> Any:
         if suffix == ".csv":
             with candidate.open("r", encoding="utf-8", newline="") as stream:
                 return list(csv.DictReader(stream))
-        if suffix in (".txt", ".log"):
+        if suffix in (".txt", ".log", ".md"):
             with candidate.open("r", encoding="utf-8") as stream:
                 return [line.rstrip("\r\n") for line in stream] if as_lines else stream.read()
         if suffix in (".ini", ".cfg", ".properties"):
@@ -168,6 +171,76 @@ def load(path: PathInput, as_lines: bool = False, verbose: bool = True) -> Any:
     return _run_with_progress(verbose, f"Reading {suffix.lstrip('.').upper()}", read)
 
 
+def iter_load(path: PathInput) -> Generator[Any, None, None]:
+    """Yield individual JSONL values or CSV rows using UTF-8 decoding.
+
+    JSONL blank lines are ignored. CSV records are dictionaries of strings,
+    with the first record supplying field names, as in ``load``.
+
+    Parameters
+    ----------
+    path : str or os.PathLike[str]
+        Existing JSONL or CSV file. Other formats are intentionally unsupported.
+
+    Returns
+    -------
+    generator[Any, None, None]
+        JSON values or CSV row dictionaries, read one record at a time.
+
+    Raises
+    ------
+    TypeError
+        If ``path`` is not a string or a text-returning path-like object.
+    FileNotFoundError
+        If the file does not exist.
+    ValueError
+        If the input is not a file or its format is unsupported.
+    json.JSONDecodeError
+        If a JSONL record is invalid; raised when that record is consumed.
+    OSError
+        If the file cannot be opened or read during iteration.
+
+    Notes
+    -----
+    The path and format are validated immediately. The stream opens when
+    iteration starts and closes on exhaustion, an error, or ``close()``.
+    Use ``contextlib.closing`` if iteration may stop early. Memory use depends
+    on the current record, not the complete file.
+
+    See Also
+    --------
+    load
+    save
+
+    Examples
+    --------
+    >>> from contextlib import closing
+    >>> from klygo import files
+    >>> with closing(files.iter_load("records.jsonl")) as records:
+    ...     for record in records:
+    ...         print(record)
+    """
+    candidate = _to_path(path)
+    if not exists(candidate):
+        raise FileNotFoundError(f"Path does not exist: {candidate}")
+    if not is_file(candidate):
+        raise ValueError(f"Path must be a file: {candidate}")
+    suffix = _suffix(candidate)
+    if suffix not in (".jsonl", ".csv"):
+        raise ValueError("iter_load() supports only .jsonl and .csv files")
+
+    def generate():
+        with candidate.open("r", encoding="utf-8", newline="") as stream:
+            if suffix == ".csv":
+                yield from csv.DictReader(stream)
+            else:
+                for line in stream:
+                    if line.strip():
+                        yield json.loads(line)
+
+    return generate()
+
+
 def save(
     path: PathInput,
     data: Any,
@@ -175,6 +248,8 @@ def save(
     verbose: bool = True,
     indent: int = 4,
     fieldnames: Optional[List[str]] = None,
+    *,
+    atomic: bool = True,
 ) -> None:
     """Save structured data using the destination filename extension.
 
@@ -182,7 +257,7 @@ def save(
 
     Parameters
     ----------
-    path : str or pathlib.Path
+    path : str or os.PathLike[str]
         Path to inspect or operate on.
     data : Any
         Python object to serialize.
@@ -194,6 +269,8 @@ def save(
         Number of spaces used to indent JSON output.
     fieldnames : list[str] or None, default=None
         Ordered CSV column names; inferred from the first row when omitted.
+    atomic : bool, default=True
+        Serialize to a sibling temporary file, then publish the completed file.
 
     Returns
     -------
@@ -208,6 +285,19 @@ def save(
         If the destination exists and overwrite is disabled.
     ValueError
         If the destination format is unsupported.
+    OSError
+        If writing or publication fails, including unsupported hard links.
+
+    Notes
+    -----
+    Atomic mode leaves an existing destination unchanged if serialization fails.
+    With ``overwrite=True`` the destination entry (including a symlink) is
+    replaced, rather than writing through a symlink. With ``overwrite=False``
+    publication uses a hard link and refuses even a concurrently created target.
+    Filesystems without hard-link support raise ``OSError`` in that mode.
+    Temporary files are removed after success or failure. Atomic mode uses the
+    temporary file's permissions, does not preserve destination metadata, and
+    does not guarantee durability across power loss.
 
     See Also
     --------
@@ -219,34 +309,34 @@ def save(
     >>> from klygo import files
     >>> files.save("config.json", {"batch": 16}, verbose=False)
     """
-    validate_type(path, (str, Path), "path")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
-    candidate = Path(path)
+    validate_type(atomic, bool, "atomic")
+    candidate = _to_path(path)
     suffix = _suffix(candidate)
     if suffix not in _DATA_SUFFIXES:
         raise ValueError(
             f"Unsupported export format: {suffix!r}, supported: {sorted(_DATA_SUFFIXES)}"
         )
-    if candidate.exists() and not overwrite:
+    if (exists(candidate) or is_symlink(candidate)) and not overwrite:
         raise FileExistsError(
             f"File already exists: {candidate}. Use overwrite=True to replace it."
         )
-    candidate.parent.mkdir(parents=True, exist_ok=True)
+    mkdir(parent(candidate), parents=True, exist_ok=True)
 
-    def write():
+    def write(destination):
         if suffix in (".yaml", ".yml"):
-            with candidate.open("w", encoding="utf-8") as stream:
+            with destination.open("w", encoding="utf-8") as stream:
                 stream.write(data) if isinstance(data, str) else yaml.safe_dump(
                     data, stream, sort_keys=False, allow_unicode=True
                 )
         elif suffix == ".json":
-            with candidate.open("w", encoding="utf-8") as stream:
+            with destination.open("w", encoding="utf-8") as stream:
                 stream.write(data) if isinstance(data, str) else json.dump(
                     data, stream, ensure_ascii=False, indent=indent
                 )
         elif suffix == ".jsonl":
-            with candidate.open("w", encoding="utf-8") as stream:
+            with destination.open("w", encoding="utf-8") as stream:
                 if isinstance(data, str):
                     stream.write(data)
                 else:
@@ -255,16 +345,16 @@ def save(
         elif suffix == ".toml":
             import tomlkit
 
-            with candidate.open("w", encoding="utf-8") as stream:
+            with destination.open("w", encoding="utf-8") as stream:
                 stream.write(data) if isinstance(data, str) else tomlkit.dump(data, stream)
         elif suffix == ".csv":
             columns = fieldnames or (list(data[0].keys()) if data and isinstance(data[0], dict) else [])
-            with candidate.open("w", encoding="utf-8", newline="") as stream:
+            with destination.open("w", encoding="utf-8", newline="") as stream:
                 writer = csv.DictWriter(stream, fieldnames=columns)
                 writer.writeheader()
                 writer.writerows(data)
-        elif suffix in (".txt", ".log"):
-            with candidate.open("w", encoding="utf-8") as stream:
+        elif suffix in (".txt", ".log", ".md"):
+            with destination.open("w", encoding="utf-8") as stream:
                 stream.write("\n".join(str(item) for item in data) + "\n" if isinstance(data, (list, tuple)) else str(data))
         elif suffix in (".ini", ".cfg", ".properties"):
             parser = configparser.ConfigParser()
@@ -272,10 +362,10 @@ def save(
                 for section, options in data.items():
                     if isinstance(options, dict):
                         parser[section] = {str(key): str(value) for key, value in options.items()}
-            with candidate.open("w", encoding="utf-8") as stream:
+            with destination.open("w", encoding="utf-8") as stream:
                 parser.write(stream)
         elif suffix == ".env":
-            with candidate.open("w", encoding="utf-8") as stream:
+            with destination.open("w", encoding="utf-8") as stream:
                 if isinstance(data, dict):
                     for key, value in data.items():
                         stream.write(f"{key}={value}\n")
@@ -285,12 +375,32 @@ def save(
                 root = _data_to_xml(root_tag, data[root_tag])
             else:
                 root = _data_to_xml("root", data)
-            ET.ElementTree(root).write(candidate, encoding="utf-8", xml_declaration=True)
+            ET.ElementTree(root).write(destination, encoding="utf-8", xml_declaration=True)
         else:
-            with candidate.open("wb") as stream:
+            with destination.open("wb") as stream:
                 pickle.dump(data, stream)
 
-    _run_with_progress(verbose, f"Writing {suffix.lstrip('.').upper()}", write)
+    def publish():
+        if not atomic:
+            write(candidate)
+            return
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{name(candidate)}.", suffix=".tmp", dir=parent(candidate)
+        )
+        temporary = _to_path(temporary_name, expand_user=False)
+        try:
+            os.close(descriptor)
+            write(temporary)
+            if overwrite:
+                os.replace(temporary, candidate)
+            else:
+                # Link publication fails if any entry already occupies the name.
+                # An exists-then-replace sequence could overwrite another writer.
+                os.link(temporary, candidate)
+        finally:
+            remove(temporary, missing_ok=True)
+
+    _run_with_progress(verbose, f"Writing {suffix.lstrip('.').upper()}", publish)
 
 
 def convert(
@@ -305,9 +415,9 @@ def convert(
 
     Parameters
     ----------
-    source : str or pathlib.Path
+    source : str or os.PathLike[str]
         Source URL or filesystem path.
-    target : str or pathlib.Path
+    target : str or os.PathLike[str]
         Destination filesystem path.
     overwrite : bool, default=False
         Allow an existing destination to be replaced.
@@ -340,13 +450,7 @@ def convert(
     """
     data = load(source, verbose=verbose)
     save(target, data, overwrite=overwrite, verbose=verbose)
-    return Path(target)
+    return _to_path(target)
 
 
-__all__ = ["load", "save", "convert"]
-
-
-
-
-
-
+__all__ = ["load", "iter_load", "save", "convert"]

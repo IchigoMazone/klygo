@@ -1,0 +1,30 @@
+# `preprocessing.threshold`
+
+Defined in `transforms.py`.
+
+```python
+preprocessing.threshold(value: 'float', mode: 'str' = 'binary', max_value: 'float' = 255) -> 'Operation'
+```
+
+Build a threshold image preprocessing operation.
+
+**Parameters**
+
+- `value` (float): Input value or numeric setting.
+- `mode` (str; default `'binary'`): Value passed to the operation or evaluator.
+- `max_value` (float; default `255`): Value passed to the operation or evaluator.
+
+**Returns and effects:** Operation; `from_input_spec` returns Compose. Image operations remain deferred when applied to a `media.LazyImage`; calling `materialize` decodes pixels.
+
+**Errors:** Invalid options or shapes can raise `TypeError` or `ValueError` while building or executing the operation. Pillow, OpenCV, or Torch may report unsupported pixel data.
+
+```python
+from PIL import Image
+from klygo import preprocessing as p, media
+image = Image.new('RGB', (64, 48), (120, 80, 40))
+operation = p.threshold(127)
+result = operation(image)
+print(operation.name, type(result).__name__)
+```
+
+Run [the standalone example](../../../examples/preprocessing/threshold.py) and see the [module index](../README.md).

@@ -2,9 +2,11 @@ from typing import Tuple, Union, Optional
 import PIL.Image
 import numpy as np
 
+__all__ = ["show_image"]
+
 
 def _is_notebook() -> bool:
-    """Kiểm tra môi trường có phải là Jupyter Notebook / Colab / Kaggle hay không."""
+    """Check whether the active runtime environment is Jupyter Notebook / Colab / Kaggle."""
     try:
         from IPython import get_ipython
         ip = get_ipython()
@@ -25,19 +27,30 @@ def show_image(
     backend: str = "auto",
     figsize: Tuple[int, int] = (10, 10),
 ) -> None:
-    """
-    Tác dụng:
-    - Hiển thị ảnh thông minh, tự động nhận diện Jupyter Notebook / Colab / Desktop.
+    """Display an image using the notebook, desktop, or selected backend.
 
-    Đầu vào:
-    - image: Ảnh PIL hoặc mảng NumPy
-    - title: Tiêu đề của cửa sổ hiển thị
-    - width: Chiều rộng hiển thị (pixels)
-    - backend: 'auto', 'matplotlib', hoặc 'opencv'
-    - figsize: Kích thước figure của Matplotlib
+    Parameters
+    ----------
+    image : PIL.Image.Image or numpy.ndarray
+        Image to display. NumPy images use RGB channel order.
+    title : str
+        Window or plot title.
+    width : int, optional
+        Positive display width; height is scaled proportionally.
+    backend : str
+        ``"auto"`` displays inline in a notebook and opens a desktop viewer
+        elsewhere. ``"matplotlib"`` uses pyplot; other values use OpenCV.
+    figsize : tuple of int
+        Matplotlib figure size in inches.
 
-    Đầu ra:
-    - Không trả về dữ liệu (hiển thị trực tiếp)
+    Returns
+    -------
+    None
+        Displays the image without changing the input.
+
+    Notes
+    -----
+    The OpenCV backend blocks until a key is pressed.
     """
     is_np = isinstance(image, np.ndarray)
     if is_np:
@@ -45,7 +58,7 @@ def show_image(
     else:
         pil_img = image
 
-    # 1. Nếu chỉ định width -> scale tỉ lệ ảnh
+    # 1. Proportional resize if width is specified
     if width is not None and width > 0:
         w_orig, h_orig = pil_img.size
         if w_orig > 0:
@@ -53,7 +66,7 @@ def show_image(
             new_h = max(1, int(h_orig * scale))
             pil_img = pil_img.resize((width, new_h), PIL.Image.Resampling.BILINEAR)
 
-    # 2. Xử lý backend hiển thị
+    # 2. Display backend dispatch
     if backend == "auto":
         if _is_notebook():
             try:
@@ -62,7 +75,7 @@ def show_image(
                 return
             except Exception:
                 pass
-        # Desktop mặc định
+        # Default desktop viewer
         pil_img.show(title=title)
         return
 

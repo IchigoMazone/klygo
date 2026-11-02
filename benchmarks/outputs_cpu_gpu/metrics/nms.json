@@ -1,0 +1,14 @@
+{
+  "non_overlap": {
+    "100": {"kept": 25, "numpy_ms": 1.419, "cupy_ms": 2.851},
+    "500": {"kept": 125, "numpy_ms": 8.9, "cupy_ms": 3.954},
+    "1000": {"kept": 250, "numpy_ms": 20.655, "cupy_ms": 6.086},
+    "2000": {"kept": 500, "numpy_ms": 52.648, "cupy_ms": 12.28}
+  },
+  "overlap": {
+    "100": {"kept": 4, "numpy_ms": 0.358, "cupy_ms": 3.053},
+    "500": {"kept": 20, "numpy_ms": 1.555, "cupy_ms": 3.353},
+    "1000": {"kept": 41, "numpy_ms": 3.47, "cupy_ms": 4.505},
+    "2000": {"kept": 80, "numpy_ms": 9.5, "cupy_ms": 7.257}
+  }
+}

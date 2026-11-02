@@ -1,51 +1,29 @@
+"""Top-level public API checks."""
+import unittest
 from PIL import Image
-
 import klygo
-from klygo import archive, config, datasets, files, media, models, outputs, postprocessing, processing, visual
-from klygo.outputs.detect import Box, Crops, Detection, Detections
+from klygo import archive, config, datasets, files, media, models, outputs, postprocessing, preprocessing, visual
 
+class TestPublicApi(unittest.TestCase):
+    def test_public_modules(self):
+        self.assertEqual(klygo.__version__, "2.1.0")
+        for module in (archive, config, datasets, files, media, models, outputs, postprocessing, preprocessing, visual):
+            self.assertIsNotNone(module)
 
-def test_top_level_public_modules():
-    assert klygo.__version__ == "2.0.20"
-    assert klygo.visualize is visual
-    assert klygo.Config is config.Config
+    def test_model_and_media_exports(self):
+        for function in (models.load, models.configure, models.details, models.flags,
+                         media.probe, media.load, preprocessing.compose,
+                         postprocessing.compose, datasets.load):
+            self.assertTrue(callable(function))
 
-    for module in (archive, config, datasets, files, media, models, outputs, postprocessing, processing, visual):
-        assert module is not None
+    def test_three_level_outputs(self):
+        image = Image.new("RGB", (64, 48), "white")
+        box = outputs.Box([4,5,20,25], label="object", score=.9)
+        detection = outputs.Detection([box], image_size=image.size, source=image)
+        results = outputs.Detections([detection])
+        self.assertIs(results[0][0], box)
+        self.assertEqual(results.total_objects, 1)
+        self.assertEqual(results[0].labels, ["object"])
+        self.assertEqual(results[0].boxes, [(4.,5.,20.,25.)])
 
-
-def test_current_model_api_exports():
-    assert callable(models.load)
-    assert callable(models.init)
-    assert callable(models.set_backend)
-    assert callable(models.get_backend)
-    assert models.BaseModel is not None
-    assert models.Detector is not None
-
-
-def test_archive_and_media_public_exports():
-    assert archive.human_size(0) == "0.00 B"
-    assert archive.human_size(1024) == "1.00 KB"
-    assert callable(media.probe)
-    assert callable(media.stream)
-    assert "probe" in media.__all__
-    assert "stream" in media.__all__
-    assert callable(processing.compose)
-    assert callable(processing.materialize)
-    assert callable(processing.letterbox)
-    assert callable(processing.restore_boxes)
-    assert callable(postprocessing.compose)
-    assert callable(postprocessing.relabel)
-
-
-def test_detection_output_types():
-    image = Image.new("RGB", (64, 48), "white")
-    box = Box(id=0, label="object", score=0.9, box=[4, 5, 20, 25], parent_image=image)
-    detection = Detection(source_image=image, objects=[box])
-    results = Detections([detection], source_type="image")
-
-    assert isinstance(detection.crops, Crops)
-    assert results.count == 1
-    assert results.total_objects == 1
-    assert results.labels == ["object"]
-    assert results.boxes == [[4.0, 5.0, 20.0, 25.0]]
+if __name__ == "__main__": unittest.main()
