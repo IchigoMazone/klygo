@@ -212,10 +212,10 @@ class MiningOperationsTest(unittest.TestCase):
         md_path = files.path(self.temporary.name) / "comparison.md"
         comparison.save(csv_path)
         comparison.save(md_path)
-        csv_text = files.load(csv_path, verbose=False)
-        md_text = files.load(md_path, verbose=False)
-        self.assertIn("before", str(csv_text))
-        self.assertIn("delta", str(csv_text))
+        csv_text = csv_path.read_text(encoding="utf-8")
+        md_text = md_path.read_text(encoding="utf-8")
+        self.assertIn("before", csv_text)
+        self.assertIn("delta", csv_text)
         self.assertIn("| metric | before | after | delta |", md_text)
 
     def test_duplicate_detection_supports_memory_backed_images(self) -> None:
