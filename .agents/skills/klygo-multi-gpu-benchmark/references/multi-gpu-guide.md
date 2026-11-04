@@ -44,14 +44,14 @@ python examples/integration/multi_backend_benchmark.py --device cuda:0
 
 ## 3. Managing Model Lifecycles Across GPUs
 
-### 3.1. Clean Memory Teardown (`unload()` & Cache Eviction)
+### 3.1. Releasing Models Between Runs
 When switching models or devices in the same process:
-1. Call `detector.unload()` on the Klygo detector.
+1. Close any active prediction streams.
 2. Synchronize the active GPU:
    ```python
    torch.cuda.synchronize(device_str)
    ```
-3. PyTorch automatically frees unreferenced tensors, and `detector.unload()` purges framework references.
+3. Release the detector and any benchmark runners that retain it. PyTorch frees tensors when their references are released.
 
 ### 3.2. Preventing Out-Of-Memory (OOM) and System Freezing
 - Grounding DINO tiny and large Transformer models require substantial CPU/GPU memory. On constrained hardware (CPU or 4 GB GPUs like Quadro M1200):

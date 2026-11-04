@@ -95,8 +95,6 @@ class TestPredictionLifecycle(unittest.TestCase):
         self.assertEqual(first[0].metadata["threshold"], .5)
         self.model(self.image, prompt=None, verbose=False)
         self.assertIsNone(self.model.predict_config["prompt"])
-        self.model.reset()
-        self.assertEqual(self.model.predict_config, {"prompt": None, "threshold": .25, "iou": .5})
 
     def test_nested_snapshot_and_execution_controls(self):
         self.model(self.image, prompt=["dog"], post_options={"values": [1]}, verbose=False,
@@ -216,16 +214,12 @@ class TestPredictionLifecycle(unittest.TestCase):
             with self.subTest(kwargs=kwargs), self.assertRaises((ValueError, TypeError)):
                 self.model.benchmark(self.image, verbose=False, **kwargs)
 
-    def test_info_device_dtype_read_only_and_unloaded_stream(self):
+    def test_info_device_dtype_read_only(self):
         self.assertEqual(self.model.device, "cpu")
         self.assertEqual(self.model.dtype, "float32")
         for attribute in ("device", "dtype", "predict_config"):
             with self.assertRaises(AttributeError):
                 setattr(self.model, attribute, None)
-        stream = self.model([self.image], stream=True)
-        self.model.unload()
-        with self.assertRaises(models.errors.InvalidStateError):
-            list(stream)
         output = StringIO()
         with redirect_stdout(output):
             self.model.info()
@@ -432,9 +426,6 @@ class TestWrapperLifecycle(unittest.TestCase):
         self.assertEqual(model.model.names, {0: "dog", 1: "cat"})
         model.model.fail = False
         model(self.image, prompt=None, verbose=False)
-        self.assertEqual(model.model.names, model.original_names)
-        model(self.image, prompt="dog", verbose=False)
-        model.reset()
         self.assertEqual(model.model.names, model.original_names)
 
     def test_world_old_stream_restores_new_vocabulary_between_batches(self):

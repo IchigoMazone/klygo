@@ -12,7 +12,7 @@ class ModelFrameworkError(Exception):
 
 
 class InvalidStateError(ModelFrameworkError):
-    """Raised when a model operation is invoked in an invalid lifecycle state (e.g., calling ``predict()`` after ``unload()``)."""
+    """Raised when a model operation is invoked in an invalid lifecycle state."""
     pass
 
 

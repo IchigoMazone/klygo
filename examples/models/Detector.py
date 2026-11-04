@@ -68,5 +68,5 @@ report = detector.benchmark(
 )
 print("Benchmark configuration:", report["predict_config"])
 print("Configuration after benchmark:", detector.predict_config)
-detector.reset()
-print("Default configuration:", detector.predict_config)
+config_path = detector.export("artifacts/models/demo-config.json", overwrite=True)
+print("Exported configuration:", config_path)

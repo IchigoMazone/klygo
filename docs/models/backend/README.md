@@ -20,7 +20,7 @@ Every [`models.Detector`](../api/Detector.md) instance delegates its hardware, i
 models.Detector (or custom Task Base Class)
        │
        ▼
-klygo.models.backend.common (15 Unified Dispatch Functions)
+klygo.models.backend.common (12 Unified Dispatch Functions)
        ├──► backend.huggingface ("Hugging Face")  ──► torch_runtime
        ├──► backend.ultralytics ("Ultralytics")   ──► torch_runtime
        ├──► backend.torchvision ("Torchvision")   ──► torch_runtime
@@ -30,13 +30,13 @@ klygo.models.backend.common (15 Unified Dispatch Functions)
 ### Two Ways to Use `common` Functions
 
 1. **Inside a `Detector` subclass (Recommended for Detection)**:
-   Call the bound convenience methods on `self` (`self.current_device`, `self.current_dtype`, `self.cast_inputs()`, `self.run_inference()`, `self.get_output_device()`, `self.sync_device()`, `self.format_results()`, `self.save()`, `self.reset()`, `self.unload()`), which automatically pass `self.backend` and `self.model` to `common.*`.
+   Call the bound convenience methods on `self` (`self.current_device`, `self.current_dtype`, `self.cast_inputs()`, `self.run_inference()`, `self.get_output_device()`, `self.sync_device()`, `self.format_results()`), which automatically pass `self.backend` and `self.model` to `common.*`.
 2. **Directly via `from klygo.models.backend import common` (For New Tasks & Low-Level Orchestration)**:
    When authoring a new task base class (such as a custom `Segmenter`, `Classifier`, or standalone benchmark harness), call `common.<func>(backend, ...)` directly to dispatch across all 4 frameworks without writing `if/elif` branches.
 
 ---
 
-## 2. Complete Inventory of `klygo.models.backend.common` (15 Functions)
+## 2. Complete Inventory of `klygo.models.backend.common` (12 Functions)
 
 See the [full `common` API reference](api/common.md) for detailed signatures, parameters, and edge cases.
 
@@ -55,7 +55,7 @@ See the [full `common` API reference](api/common.md) for detailed signatures, pa
 | :--- | :--- | :--- |
 | [`common.inference_context(backend)`](api/common.md#commoninference_context) | *(used by `predict` & `benchmark`)* | Return `torch.inference_mode()` for PyTorch-backed frameworks or `nullcontext()` when no runtime context applies. |
 | [`common.synchronize(backend, device=None, value=None)`](api/common.md#commonsynchronize) | *(used by `benchmark`)* | Synchronize queued CUDA kernels (`torch.cuda.synchronize()`) or materialize lazy Keras/JAX/TF tensors (`ops.convert_to_numpy(value)`) for accurate latency timing. |
-| [`common.clear_cache(backend)`](api/common.md#commonclear_cache) | *(used by `reset` & `unload`)* | Release unused cached GPU memory blocks (`torch.cuda.empty_cache()`) without clearing live weights or the Keras graph session. |
+| [`common.clear_cache(backend)`](api/common.md#commonclear_cache) | `self.clear_cache()` | Release unused cached GPU memory blocks (`torch.cuda.empty_cache()`) without clearing live weights or the Keras graph session. |
 
 ### C. Inference Pipeline Dispatchers
 
@@ -66,14 +66,6 @@ See the [full `common` API reference](api/common.md) for detailed signatures, pa
 | [`common.get_output_device(backend, outputs, default_device)`](api/common.md#commonget_output_device) | `self.get_output_device(outputs)` | Inspect `outputs.logits` or `outputs.pred_boxes` to determine which GPU holds the output tensors in multi-GPU setups. |
 | [`common.sync_device(backend, tensor, target_device)`](api/common.md#commonsync_device) | `self.sync_device(tensor, target_device)` | Move auxiliary tensors (such as `input_ids`) to `target_device` when `device_map="auto"` places input and output layers on different GPUs. |
 | [`common.format_results(backend, raw_outputs)`](api/common.md#commonformat_results) | `self.format_results(raw_outputs)` | Convert raw outputs from Ultralytics `Results`, Torchvision `list[dict]`, or KerasHub `decode_predictions` (including `yxyx` $\rightarrow$ `xyxy` conversion and `-1` padding removal) into standard `[{'boxes', 'scores', 'labels', 'class_ids'}]` for [`outputs.build_detections()`](../../outputs/api/build_detections.md). |
-
-### D. Lifecycle & Persistence Dispatchers
-
-| Function in `common.py` | `Detector` Equivalent | Purpose |
-| :--- | :--- | :--- |
-| [`common.save(backend, model, output_dir, metadata, class_module, processor=None)`](api/common.md#commonsave) | `self.save(output_dir)` | Save a complete Klygo model directory: writes `klygo.json`, copies custom `model.py` if outside `klygo.models.*`, and saves framework weights (`save_pretrained`, `.save`, `state_dict`, or `.weights.h5`). |
-| [`common.reset(backend, model, processor=None)`](api/common.md#commonreset) | `self.reset()` | Move `model` back to CPU (`model.cpu()`) and call `clear_cache(backend)`. |
-| [`common.unload(backend, model, processor=None)`](api/common.md#commonunload) | `self.unload()` | Release accelerator resources for `model` and `processor` and call `clear_cache(backend)`. |
 
 ---
 
@@ -138,9 +130,9 @@ class CustomKerasDetector(models.Detector):
 
 | Adapter Module | Guide & Reference | Import Path | Optional Extra | Responsibility |
 | :--- | :--- | :--- | :--- | :--- |
-| [`common.py`](api/common.md) | [Common Dispatchers](api/common.md) | `klygo.models.backend.common` | None (lazy) | Unified dispatcher routing all 15 operations to the active adapter. |
-| [`ultralytics.py`](api/ultralytics.md) | [Ultralytics Guide](api/ultralytics.md) | `klygo.models.backend.ultralytics` (`backend.ul`) | `klygo[ultralytics]` | `Results.boxes` extraction (`xyxy`, `conf`, `cls`), `.save()`. |
-| [`huggingface.py`](api/huggingface.md) | [Hugging Face Guide](api/huggingface.md) | `klygo.models.backend.huggingface` (`backend.hf`) | `klygo[transformers]` | `BatchFeature` float casting, AMP `autocast`, `ModelOutput` device inspection, `save_pretrained`. |
-| [`torchvision.py`](api/torchvision.md) | [Torchvision Guide](api/torchvision.md) | `klygo.models.backend.torchvision` | `klygo[torchvision]` | `list[Tensor]` device/dtype casting, tensor-to-Python list formatting, `state_dict` saving. |
+| [`common.py`](api/common.md) | [Common Dispatchers](api/common.md) | `klygo.models.backend.common` | None (lazy) | Unified dispatcher routing all 12 operations to the active adapter. |
+| [`ultralytics.py`](api/ultralytics.md) | [Ultralytics Guide](api/ultralytics.md) | `klygo.models.backend.ultralytics` (`backend.ul`) | `klygo[ultralytics]` | `Results.boxes` extraction (`xyxy`, `conf`, `cls`). |
+| [`huggingface.py`](api/huggingface.md) | [Hugging Face Guide](api/huggingface.md) | `klygo.models.backend.huggingface` (`backend.hf`) | `klygo[transformers]` | `BatchFeature` float casting, AMP `autocast`, and `ModelOutput` device inspection. |
+| [`torchvision.py`](api/torchvision.md) | [Torchvision Guide](api/torchvision.md) | `klygo.models.backend.torchvision` | `klygo[torchvision]` | `list[Tensor]` device/dtype casting and tensor-to-Python list formatting. |
 | [`keras.py`](api/keras.md) | [Keras & KerasHub Guide](api/keras.md) | `klygo.models.backend.keras` (`backend.kerashub`) | `klygo[keras]` | Multi-engine (`torch`/`jax`/`tensorflow`) tensor casting, `KerasHub` `ObjectDetector` resize + `decode_predictions`, `yxyx` $\rightarrow$ `xyxy` conversion, `-1` padding filter. |
 | `torch_runtime.py` | *(Shared PyTorch runtime)* | `klygo.models.backend.torch_runtime` | `torch` | Shared CUDA/CPU device detection, `torch.cuda.synchronize`, `torch.cuda.empty_cache`, `torch.amp.autocast`, and `torch.inference_mode`. |

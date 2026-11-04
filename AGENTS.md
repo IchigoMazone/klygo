@@ -83,8 +83,8 @@ Inside Klygo modules, examples (`examples/`), tutorials (`tutorials/`), and inte
 ## 3. Working with `klygo.models` & Multi-Backend Detection
 
 ### 3.1. 3-Tier Model Hierarchy
-1. **Layer 1 (`models.BaseModel` in `klygo/models/base.py`)**: Manages `metadata`, `details`, `flags`, `state` (`LOADING`, `READY`, `UNLOADED`), `info()`, and post-unload access guards (calling `predict()` after `unload()` raises `models.errors.InvalidStateError`).
-2. **Layer 2 (`models.Detector` in `klygo/models/detection/base.py` & `klygo.models.backend.common`)**: Implements `predict(source, prompt=None, stream=False, **kwargs)`, automatic coordinate restoration from `klygo.preprocessing` traces, `warmup()`, `benchmark()`, `save()`, `reset()`, `unload()`, and delegates tensor/device operations to [`klygo.models.backend.common`](docs/models/backend/api/common.md).
+1. **Layer 1 (`models.BaseModel` in `klygo/models/base.py`)**: Manages `metadata`, `details`, `flags`, `state` (`LOADING`, `READY`), and `info()`.
+2. **Layer 2 (`models.Detector` in `klygo/models/detection/base.py` & `klygo.models.backend.common`)**: Implements `predict(source, prompt=None, stream=False, **kwargs)`, automatic coordinate restoration from `klygo.preprocessing` traces, `warmup()`, `benchmark()`, and delegates tensor/device operations to [`klygo.models.backend.common`](docs/models/backend/api/common.md).
 3. **Layer 3 (Concrete Wrappers & Custom Subclasses)**: Implement `forward(self, images: list[PIL.Image.Image], prompt=None) -> list[Detection]`.
 
 ### 3.2. Standard 4-Step Pattern for Subclassing `models.Detector`

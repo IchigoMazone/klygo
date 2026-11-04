@@ -31,8 +31,6 @@ Torchvision detection models expect a `list[torch.Tensor]` (where each tensor ha
 - `torchvision.cast_inputs(inputs, dev, dtype) -> list[torch.Tensor]`: Move and cast every image tensor in `inputs` via `[image.to(device=dev, dtype=dtype) for image in inputs]`.
 - `torchvision.run_inference(model, inputs, **kwargs) -> list[dict[str, torch.Tensor]]`: Execute `model(inputs, **kwargs)`.
 - `torchvision.format_results(raw_outputs) -> list[dict[str, Any]]`: Detach and move `"boxes"`, `"scores"`, and `"labels"` to CPU Python lists and populate both `"labels"` and `"class_ids"`.
-- `torchvision.save(model, output_dir) -> None`: Save `model.state_dict()` to `<output_dir>/model.pt`.
-- `torchvision.reset(model) -> None` / `torchvision.unload(model) -> None`: Move `model` back to CPU (`model.cpu()`).
 
 ---
 

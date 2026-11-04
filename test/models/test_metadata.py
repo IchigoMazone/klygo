@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 
 import PIL.Image
 
-from klygo import Config, files, models
+from klygo import Config, config, files, models
 from klygo.models import utils
 from klygo.models.detection.base import Detector
 from klygo.models.load import _resolve
@@ -366,6 +366,8 @@ class TestModelMetadata(unittest.TestCase):
         self.assertNotIn("config", yolo)
         self.assertNotIn("processor", yolo)
         self.assertIn("threshold", yolo["priority"]["post"])
+        self.assertIsNone(yolo["model"]["weights"])
+        self.assertIsNone(grounding_dino["model"]["weights"])
         self.assertEqual(grounding_dino["details"]["num_params"], "232M")
         self.assertEqual(
             tuple(grounding_dino["flags"]),
@@ -413,27 +415,40 @@ class TestModelMetadata(unittest.TestCase):
         self.assertIsNone(_resolve("yolo11n-seg.pt"))
         self.assertIsNone(_resolve("yolo26n-cls.pt"))
 
-    def test_official_and_short_name_aliases(self):
-        cases = [
-            ("ultralytics/yolo11n.pt", "yolo11n.pt"),
-            ("yolo11n", "yolo11n.pt"),
+    def test_registry_equivalent_names_resolve_to_backend_model_ids(self):
+        equivalent_names = [
             ("yolo11n.pt", "yolo11n.pt"),
-            (files.path("ultralytics/yolo11n.pt"), "yolo11n.pt"),
             (files.path("yolo11n.pt"), "yolo11n.pt"),
-            ("IDEA-Research/grounding-dino-base", "IDEA-Research/grounding-dino-base"),
+            ("ultralytics/yolo11n.pt", "yolo11n.pt"),
+            (files.path("ultralytics/yolo11n.pt"), "yolo11n.pt"),
             ("grounding-dino-base", "IDEA-Research/grounding-dino-base"),
-            (files.path("IDEA-Research/grounding-dino-base"), "IDEA-Research/grounding-dino-base"),
-            ("nvidia/LocateAnything-3B", "nvidia/LocateAnything-3B"),
+            (files.path("grounding-dino-base"), "IDEA-Research/grounding-dino-base"),
+            ("IDEA-Research/grounding-dino-base", "IDEA-Research/grounding-dino-base"),
             ("locate-anything", "nvidia/LocateAnything-3B"),
-            (files.path("nvidia/LocateAnything-3B"), "nvidia/LocateAnything-3B"),
-            ("ultralytics/yolov8n.pt", "yolov8n.pt"),
-            ("yolov8n", "yolov8n.pt"),
+            (files.path("locate-anything"), "nvidia/LocateAnything-3B"),
+            ("nvidia/LocateAnything-3B", "nvidia/LocateAnything-3B"),
+            ("yolov8n.pt", "yolov8n.pt"),
         ]
-        for name, expected_id in cases:
+        for name, expected_id in equivalent_names:
             with self.subTest(name=str(name)):
                 entry = _resolve(name)
                 self.assertIsNotNone(entry, f"Could not resolve {name}")
                 self.assertEqual(entry["model_id"], expected_id)
+
+        invalid_names = (
+            "yolo11n",
+            "idea-research/grounding-dino-base",
+            "idea-reseach/grounding-dino-base",
+            "locateanything",
+            "nvidia/locate-anything-3b",
+            "nvidia/locateanything-3b",
+            "yolov8n",
+        )
+        for name in invalid_names:
+            with self.subTest(name=name):
+                self.assertIsNone(_resolve(name))
+                with self.assertRaisesRegex(ValueError, "does not exist in registry"):
+                    models.load(name)
 
     def test_load_configures_registry_entries_through_the_canonical_pipeline(self):
         load_module = importlib.import_module("klygo.models.load")
@@ -443,7 +458,7 @@ class TestModelMetadata(unittest.TestCase):
             return_value=RecordingDetector,
         ):
             detector = models.load(
-                "yolo11n.pt",
+                "ultralytics/yolo11n.pt",
                 device="cpu",
                 threshold=0.4,
             )
@@ -454,27 +469,12 @@ class TestModelMetadata(unittest.TestCase):
         self.assertEqual(detector.metadata.post.threshold, 0.4)
         self.assertEqual(detector.details.library, "ultralytics")
 
-    def test_local_registered_yolo_weights_keep_registry_parameters(self):
-        load_module = importlib.import_module("klygo.models.load")
+    def test_load_does_not_auto_detect_local_yolo_weights(self):
         with TemporaryDirectory() as directory:
             weight_path = files.join(directory, "yolo11n.pt")
-            Path(weight_path).touch()
-            with patch.object(
-                load_module,
-                "_resolve_class",
-                return_value=RecordingDetector,
-            ):
-                detector = models.load(
-                    weight_path,
-                    device="cpu",
-                    nms=True,
-                    threshold=0.4,
-                )
-
-        self.assertEqual(detector.metadata.model.device, "cpu")
-        self.assertTrue(detector.metadata.model.nms)
-        self.assertEqual(detector.metadata.post.threshold, 0.4)
-        self.assertIn("nms", detector.metadata.priority.model)
+            files.copy(__file__, weight_path)
+            with self.assertRaisesRegex(ValueError, "does not exist in registry"):
+                models.load(weight_path)
 
     def test_detector_resolves_metadata_once_before_forward(self):
         detector = RecordingDetector(
@@ -539,29 +539,175 @@ class TestModelMetadata(unittest.TestCase):
             with self.assertRaisesRegex(TypeError, "config.load"):
                 models.load(path)
 
-    def test_saved_model_folder_round_trips_through_load(self):
+    def test_load_rejects_directory_paths(self):
+        with TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "does not accept directory"):
+                models.load(directory)
+
+    def test_export_writes_reloadable_config_json(self):
+        load_module = importlib.import_module("klygo.models.load")
+
+        with patch.object(load_module, "_resolve_class", return_value=RecordingDetector):
+            detector = models.load(
+                "yolo11n.pt",
+                device="cpu",
+                threshold=0.55,
+            )
+
+            with TemporaryDirectory() as directory:
+                output_path = detector.export(files.join(directory, "detector.json"))
+                exported = files.load(output_path, verbose=False)
+
+                self.assertEqual(output_path, files.path(directory) / "detector.json")
+                self.assertEqual(exported["model_id"], "yolo11n.pt")
+                self.assertEqual(
+                    exported["class"],
+                    "klygo.models.detection.YOLODetect",
+                )
+                self.assertEqual(exported["details"]["library"], "ultralytics")
+                self.assertEqual(exported["model"]["device"], "cpu")
+                self.assertEqual(exported["post"]["threshold"], 0.55)
+                restored = models.load(output_path)
+                self.assertIsInstance(restored, RecordingDetector)
+                self.assertEqual(restored.model_id, "yolo11n.pt")
+                self.assertEqual(restored.metadata.post.threshold, 0.55)
+                with self.assertRaises(FileExistsError):
+                    detector.export(output_path)
+                self.assertEqual(
+                    detector.export(output_path, overwrite=True),
+                    output_path,
+                )
+
+                with self.assertRaisesRegex(ValueError, "requires a .json file"):
+                    detector.export(files.join(directory, "detector.yaml"))
+
+    def test_export_resolves_registry_names_without_loading_weights(self):
+        load_module = importlib.import_module("klygo.models.load")
+        with TemporaryDirectory() as directory:
+            output_path = files.join(directory, "yolo.json")
+            result = models.export(
+                "ultralytics/yolo11n.pt",
+                output_path,
+                device="cpu",
+                threshold=0.6,
+            )
+            exported = files.load(result, verbose=False)
+
+            self.assertEqual(result, files.path(output_path))
+            self.assertEqual(exported["model_id"], "yolo11n.pt")
+            self.assertEqual(exported["class"], "klygo.models.detection.YOLODetect")
+            self.assertEqual(exported["model"]["device"], "cpu")
+            self.assertIsNone(exported["model"]["weights"])
+            self.assertEqual(exported["post"]["threshold"], 0.6)
+            with patch.object(
+                load_module,
+                "_resolve_class",
+                return_value=RecordingDetector,
+            ):
+                restored = models.load(result)
+            self.assertIsInstance(restored, RecordingDetector)
+            self.assertEqual(restored.model_id, "yolo11n.pt")
+
+            with self.assertRaisesRegex(ValueError, "does not exist in registry"):
+                models.export("missing-model", files.join(directory, "missing.json"))
+
+    def test_load_rejects_json_not_created_by_model_export(self):
+        with TemporaryDirectory() as directory:
+            path = files.join(directory, "other.json")
+            files.save(path, {"model_id": "incomplete"}, verbose=False)
+            with self.assertRaisesRegex(ValueError, "only accepts JSON files created"):
+                models.load(path)
+
+    def test_loaded_yolo_export_can_point_to_trained_pt_weights(self):
+        load_module = importlib.import_module("klygo.models.load")
+        with TemporaryDirectory() as directory:
+            export_path = files.join(directory, "yolo.json")
+            weight_path = files.join(directory, "trained.pt")
+            models.export("yolo11n.pt", export_path)
+            files.copy(__file__, weight_path)
+            edited = config.set(
+                config.load(export_path, verbose=False),
+                "model.weights",
+                str(weight_path),
+            )
+
+            with patch.object(
+                load_module,
+                "_resolve_class",
+                return_value=RecordingDetector,
+            ):
+                restored = models.load(edited)
+
+            self.assertEqual(restored.model_id, "yolo11n.pt")
+            self.assertEqual(restored.metadata.model.weights, str(weight_path))
+
+    def test_load_accepts_weight_priority_and_prefixed_overrides(self):
+        flags = models.flags(model=False, post=True)
+        definition = models.metadata(
+            flags=flags,
+            priority=models.priority(
+                flags,
+                model=("weights",),
+                post=("threshold",),
+            ),
+            details=models.details(
+                name="Recording detector",
+                task="Object-Detection",
+                backend="Test",
+                library="unittest",
+            ),
+        )
         configured = models.configure(
             "recording",
-            metadata=self.definition,
-            device="cpu",
-            threshold=0.55,
+            metadata=definition,
+            implementation=RecordingDetector,
+            model={"weights": None},
+            post={"threshold": 0.25},
         )
-        detector = RecordingDetector(configured)
 
+        loaded_weights = models.load(configured, weights="trained_weights.pt")
+        self.assertEqual(loaded_weights.metadata.model.weights, "trained_weights.pt")
+
+        loaded_prefixed = models.load(configured, model_weights="trained_prefixed.pt")
+        self.assertEqual(loaded_prefixed.metadata.model.weights, "trained_prefixed.pt")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "neither a priority parameter nor prefixed",
+        ):
+            models.load(configured, weight="trained_weight.pt")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "was provided more than once",
+        ):
+            models.load(configured, weights="a.pt", model_weights="b.pt")
+
+    def test_hugging_face_exports_preserve_weight_sources_in_config(self):
+        load_module = importlib.import_module("klygo.models.load")
+        cases = (
+            "grounding-dino-base",
+            "locate-anything",
+        )
         with TemporaryDirectory() as directory:
-            output_dir = Path(directory) / "exported"
-            detector.save(output_dir)
-            restored = models.load(output_dir)
-
-        self.assertEqual(type(restored).__name__, "RecordingDetector")
-        self.assertIsInstance(restored, Detector)
-        self.assertEqual(restored.flags, detector.flags)
-        self.assertEqual(restored.metadata.model.device, "cpu")
-        self.assertEqual(restored.metadata.post.threshold, 0.55)
-        self.assertEqual(
-            restored.metadata["class"],
-            f"{RecordingDetector.__module__}.RecordingDetector",
-        )
+            local_path = files.join(directory, "local-model.bin")
+            files.copy(__file__, local_path)
+            for index, model_name in enumerate(cases):
+                with self.subTest(model_name=model_name):
+                    export_path = files.join(directory, f"model-{index}.json")
+                    models.export(model_name, export_path)
+                    edited = config.set(
+                        config.load(export_path, verbose=False),
+                        "model.weights",
+                        str(local_path),
+                    )
+                    with patch.object(
+                        load_module,
+                        "_resolve_class",
+                        return_value=RecordingDetector,
+                    ):
+                        restored = models.load(edited)
+                    self.assertEqual(restored.metadata.model.weights, str(local_path))
 
     def test_create_default_rejects_mixed_default_and_metadata_modes(self):
         with TemporaryDirectory() as directory:

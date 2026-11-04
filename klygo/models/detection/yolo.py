@@ -20,12 +20,14 @@ class YOLODetect(Detector):
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
         super().__init__(metadata=metadata, **kwargs)
         
-        self.model = YOLO(self.model_id)
+        weights = self.metadata.get("model", {}).get("weights")
+        self.model = YOLO(weights or self.model_id)
         self.names = dict(self.model.names)
 
     def forward(self, images, prompt=None, **kwargs):
         """Run YOLO and return standard detection frames."""
         model_config = dict(self.metadata.get("model", {}))
+        model_config.pop("weights", None)
         post_config = dict(self.metadata.get("post", {}))
 
         if self.names != self.model.names:

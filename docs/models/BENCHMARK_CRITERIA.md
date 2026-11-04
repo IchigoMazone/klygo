@@ -319,7 +319,7 @@ deployment:
 | Long-stream RAM growth after warmup | At most 5% |
 | P95 latency | Within the deployment frame budget |
 | Stream exceptions during stability run | 0 |
-| Resource cleanup after close or unload | Complete |
+| Resource cleanup after closing streams and releasing model references | Complete |
 
 For a fast nano model at batch size one, fixed output-construction costs may be
 more visible. Any exception to the target must include a stage-level profile and

@@ -21,8 +21,6 @@ Subclasses must implement three abstract methods:
 - `benchmark(*args, **kwargs)`
 - `help() -> None`
 
-Once an instance transitions to `state == "UNLOADED"` (for example after calling `Detector.unload()`), `__getattribute__` blocks calls to operational methods (`predict`, `forward`, `benchmark`, `warmup`, `save`) and raises `models.errors.InvalidStateError`. Introspection and recovery methods (`reset`, `unload`, `info`, `help`, `supports`, `methods`) remain accessible while unloaded.
-
 ## Parameters
 
 - `metadata`: `Mapping[str, Any] | None`, default `None` — model metadata mapping or `Box` created by `models.metadata()` / `models.configure()`.
@@ -43,6 +41,7 @@ Once an instance transitions to `state == "UNLOADED"` (for example after calling
 - `model.has_flag(name: str) -> bool`: Check whether a parameter group is declared in `self.flags`.
 - `model.methods() -> list[str]`: Return sorted public method names.
 - `model.info() -> None`: Print a formatted Rich table summarizing the model's class, ID, backend, task, state, flags, and parameters.
+- `model.export(output_path="config.json", overwrite=False) -> pathlib.Path`: Write the resolved Klygo metadata directly to a JSON file and return its path.
 
 ## Returns
 
@@ -51,7 +50,8 @@ Instantiating a concrete subclass returns a `BaseModel` instance with `state == 
 ## Errors and edge cases
 
 - Raises `TypeError` if instantiated directly without implementing `predict`, `benchmark`, and `help`.
-- Raises `models.errors.InvalidStateError` when calling operational methods after the model's `state` is set to `"UNLOADED"`.
+- Raises `FileExistsError` when the destination already exists and `overwrite=False`.
+- Raises `ValueError` when the destination does not end in `.json`.
 
 ## Example
 
@@ -96,4 +96,5 @@ wrapper = EchoModel(metadata=schema)
 print(wrapper.model_id, wrapper.backend, wrapper.state)
 print(wrapper.has_flag("post"), wrapper.supports("predict"))
 print(wrapper.predict("sample"))
+print(wrapper.export("artifacts/models/echo-config.json", overwrite=True))
 ```

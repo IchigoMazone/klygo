@@ -31,19 +31,19 @@ Focused guides:
 `klygo.models` separates metadata/state management, task-level inference orchestration, and framework-specific runtime execution into three clean layers:
 
 1. **Layer 1 — Abstract Contract ([`BaseModel`](api/BaseModel.md) in `base.py`)**:
-   Manages lifecycle state (`LOADING`, `READY`, `UNLOADED`), `metadata`, `details`, `flags`, call-local runtime parameter overrides (`_use_metadata`), Rich terminal inspection (`info()`), and post-unload access guards (`InvalidStateError`).
+   Manages lifecycle state (`LOADING`, `READY`), `metadata`, `details`, `flags`, call-local runtime parameter overrides (`_use_metadata`), Rich terminal inspection (`info()`).
 2. **Layer 2 — Task Engine ([`Detector`](api/Detector.md) in `detection/base.py` & [`backend.common`](backend/README.md))**:
    Implements the complete object-detection pipeline (`predict()`, backend-owned Ultralytics inference via `native=True`, compact materialized results via `packed=True`, streaming via `stream=True`, coordinate restoration, benchmarking, persistence, and lifecycle controls) and delegates low-level tensor/device operations to [`klygo.models.backend.common`](backend/api/common.md).
 3. **Layer 3 — Concrete & Application Wrappers (`detection/*.py` & custom subclasses)**:
    Before `forward()` runs, `predict()` resolves priority names and `<group>_` prefixes into `self.metadata`. Wrappers then read visible `model_config`, `processor_config`, and `post_config` dictionaries, call the native model explicitly, format its output, and call `outputs.build_detections()`. This keeps routing and model behavior editable in every backend.
 
-See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](backend/README.md) and [`common` API Reference](backend/api/common.md) for all 15 unified backend functions (`backend_family`, `current_device`, `current_dtype`, `is_accelerator_available`, `inference_context`, `synchronize`, `clear_cache`, `cast_inputs`, `run_inference`, `get_output_device`, `sync_device`, `format_results`, `save`, `reset`, `unload`).
+See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](backend/README.md) and [`common` API Reference](backend/api/common.md) for all 12 unified backend functions (`backend_family`, `current_device`, `current_dtype`, `is_accelerator_available`, `inference_context`, `synchronize`, `clear_cache`, `cast_inputs`, `run_inference`, `get_output_device`, `sync_device`, `format_results`).
 
 ### Supported Backend Families
 
 | Backend Family | Dedicated Guide | `backend` Identifier | Upstream Libraries | Representative Models | Built-in / Adapter Capabilities |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Ultralytics** | [Ultralytics Guide](backend/api/ultralytics.md) | `"Ultralytics"` | `ultralytics`, `torch` | YOLOv8, YOLOv9, YOLOv10, YOLO11, YOLO-World v2 | Built-in `YOLODetect` & `YOLOWorldDetect`, `.pt` direct file loading, open-vocabulary `set_classes` |
+| **Ultralytics** | [Ultralytics Guide](backend/api/ultralytics.md) | `"Ultralytics"` | `ultralytics`, `torch` | YOLOv8, YOLOv9, YOLOv10, YOLO11, YOLO-World v2 | Built-in `YOLODetect` & `YOLOWorldDetect`, registry loading, open-vocabulary `set_classes` |
 | **Hugging Face / PyTorch** | [Hugging Face Guide](backend/api/huggingface.md) | `"Hugging Face"` / `"PyTorch"` | `transformers`, `torch` | Grounding DINO, Locate Anything, DETR, RT-DETR, custom `nn.Module` | Built-in `GroundingDinoDetect` and optional CUDA-only `LocateAnythingDetect`, AMP `autocast`, `BatchFeature` float casting, multi-GPU `sync_device` |
 | **Torchvision** | [Torchvision Guide](backend/api/torchvision.md) | `"Torchvision"` | `torchvision`, `torch` | Faster R-CNN (`fasterrcnn_mobilenet_v3_large_fpn`), RetinaNet, FCOS, SSD | List-of-tensor `cast_inputs`, `run_inference`, and `format_results` (`boxes`, `scores`, `labels`) |
 | **Keras 3 / KerasHub** | [Keras & KerasHub Guide](backend/api/keras.md) | `"Keras"` / `"KerasHub"` | `keras`, `keras-hub` | D-FINE / RT-DETR (`dfine_small_coco`), RetinaNet, custom `keras.Model` | Native `KERAS_BACKEND=torch`/`jax`/`tensorflow` support, `ObjectDetector` aspect-preserving resize & `decode_predictions`, automatic `yxyx` $\rightarrow$ `xyxy` conversion |
@@ -59,9 +59,9 @@ See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](back
 
 | I want to... | Recommended API | Key Parameters / Example |
 | :--- | :--- | :--- |
-| **Load a built-in registered model by name** | [`load()`](api/load.md) | `detector = models.load("yolov8n.pt")` |
-| **Load a local Ultralytics `.pt` checkpoint directly** | [`load()`](api/load.md) | `detector = models.load("weights/yolov8n.pt", threshold=0.35)` |
-| **Load a saved Klygo model directory (`klygo.json`)** | [`load()`](api/load.md) | `detector = models.load("artifacts/saved_detector")` |
+| **Load a built-in registered model by name** | [`load()`](api/load.md) | `detector = models.load("ultralytics/yolov8n.pt")` |
+| **Load an exported model JSON file** | [`load()`](api/load.md) | `detector = models.load("artifacts/models/yolo.json")` |
+| **Load compatible weights separately from the model definition** | [`load()`](api/load.md) | `cfg = config.set(config.load("model.json"), "model.weights", "trained.pt"); detector = models.load(cfg)` |
 | **Load a model from a persisted `klygo.config` file** | [`load()`](api/load.md) | `detector = models.load(config.load("model.yaml"))` |
 | **Wrap an in-memory PyTorch `nn.Module`** | [`load()`](api/load.md) | `wrapper = models.load(torch_module)` |
 | **Declare parameter groups and runtime permissions** | [`flags()`](api/flags.md) | `f = models.flags(model=False, processor=True, post=True)` |
@@ -79,9 +79,10 @@ See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](back
 | **Use the Ultralytics native source pipeline** | [`Detector.predict()`](api/Detector.md) | `results = detector.predict("video.mp4", native=True, threshold=0.35)` |
 | **Pack large finite outputs into shared arrays** | [`Detector.predict()`](api/Detector.md) | `results = detector.predict("images/", packed=True)` |
 | **Measure model latency (ms) and throughput in isolation** | [`Detector.benchmark()`](api/Detector.md) | `stats = detector.benchmark("sample.jpg", iterations=10, warmup=3)` |
-| **Clear remembered prompt or restore defaults** | [`Detector.predict()`](api/Detector.md) / [`reset()`](api/Detector.md) | `detector.predict(img, prompt=None)` or `detector.reset()` |
-| **Export a self-contained model bundle to disk** | [`Detector.save()`](api/Detector.md) | `detector.save("exported_model/")` |
-| **Release GPU/CPU memory and lock the instance** | [`Detector.unload()`](api/Detector.md) | `detector.unload()  # Subsequent predict() raises InvalidStateError` |
+| **Clear an optional remembered prompt** | [`Detector.predict()`](api/Detector.md) | `detector.predict(img, prompt=None)` |
+| **Export a loaded model's Klygo configuration** | [`BaseModel.export()`](api/BaseModel.md) | `path = detector.export("artifacts/model.json")` |
+| **Export a registry entry without loading weights** | [`models.export()`](api/export.md) | `path = models.export("ultralytics/yolo11n.pt", "artifacts/yolo.json")` |
+| **Save using the backend** | [Native model persistence](api/Detector.md#native-model-persistence) | `detector.model.save("model.pt")` for Ultralytics |
 | **Set or inspect the default backend environment** | [`set_backend()`](api/set_backend.md) / [`get_backend()`](api/get_backend.md) | `models.set_backend("Keras", engine="torch")` |
 | **Silence noisy framework logs and warnings** | [`suppress_warnings()`](api/suppress_warnings.md) / [`suppress_ai_warnings()`](api/suppress_ai_warnings.md) | `with models.suppress_warnings(): ...` |
 
@@ -89,7 +90,7 @@ See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](back
 
 ---
 
-## 3. Public APIs Reference (15 Exports across 5 Submodules)
+## 3. Public APIs Reference (16 Exports across 5 Submodules)
 
 <details open>
 <summary><b>Base contract and detection engine — <code>base.py</code> &amp; <code>detection/base.py</code> (3 exports)</b> <i>(Click to expand)</i></summary>
@@ -97,17 +98,18 @@ See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](back
 | API | Description | Example |
 | :--- | :--- | :--- |
 | [`base`](api/base.md) | Submodule namespace exposing [`BaseModel`](api/BaseModel.md). | [Run](../../examples/models/base.py) |
-| [`BaseModel`](api/BaseModel.md) | Abstract base wrapper managing `metadata`, `details`, `flags`, `state`, and post-unload access guards. | [Run](../../examples/models/BaseModel.py) |
-| [`Detector`](api/Detector.md) | Base object-detection engine providing `predict()`, `stream=True`, `benchmark()`, `warmup()`, `save()`, `unload()`, and backend dispatch helpers. | [Run](../../examples/models/Detector.py) |
+| [`BaseModel`](api/BaseModel.md) | Abstract base wrapper managing `metadata`, `details`, `flags`, `state`, and configuration export. | [Run](../../examples/models/BaseModel.py) |
+| [`Detector`](api/Detector.md) | Base object-detection engine providing `predict()`, `stream=True`, `benchmark()`, `warmup()`, configuration export, and backend dispatch helpers. | [Run](../../examples/models/Detector.py) |
 
 </details>
 
 <details open>
-<summary><b>Model resolution, configuration, and backend selection — <code>load.py</code> (4 functions)</b> <i>(Click to expand)</i></summary>
+<summary><b>Model resolution, configuration, and backend selection — <code>load.py</code> (5 functions)</b> <i>(Click to expand)</i></summary>
 
 | API | Description | Example |
 | :--- | :--- | :--- |
-| [`load(model, **kwargs)`](api/load.md) | Resolve and instantiate a model from a metadata mapping, `Config`, offline directory, `.pt` file, registry name, or in-memory module. | [Run](../../examples/models/load.py) |
+| [`load(model, **kwargs)`](api/load.md) | Resolve and instantiate a model from exported JSON, metadata, `Config`, a registry name, or an in-memory module. Weight files and directories are rejected. | [Run](../../examples/models/load.py) |
+| [`export(model, output_path="config.json", ...)`](api/export.md) | Resolve a registered model name and write its configuration without loading weights. | [Run](../../examples/models/export.py) |
 | [`configure(model_id, ...)`](api/configure.md) | Bind a `model_id`, `implementation` class, and parameter overrides to a validated metadata schema. | [Run](../../examples/models/configure.py) |
 | [`set_backend(backend, engine=None)`](api/set_backend.md) | Configure `KLYGO_BACKEND` and optional `KERAS_BACKEND` environment variables. | [Run](../../examples/models/set_backend.py) |
 | [`get_backend()`](api/get_backend.md) | Return the active `KLYGO_BACKEND` environment setting or `"auto"`. | [Run](../../examples/models/get_backend.py) |

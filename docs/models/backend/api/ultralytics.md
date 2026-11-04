@@ -32,8 +32,6 @@ All functions are automatically invoked when `Detector` dispatches through [`kly
 - `ultralytics.synchronize(device=None, value=None) -> None`: Synchronize CUDA streams via `torch.cuda.synchronize()`.
 - `ultralytics.clear_cache() -> None`: Release unused PyTorch CUDA cache blocks.
 - `ultralytics.format_results(ultra_results) -> list[dict[str, Any]]`: Extract `b.xyxy[0]`, `b.conf[0]`, `b.cls[0]`, and `res.names[cls_id]` from Ultralytics `Results` objects into Klygo's standard `[{'boxes', 'scores', 'labels', 'class_ids'}]` format.
-- `ultralytics.save(model, output_dir) -> None`: Save weights to `output_dir` via `model.save()`.
-- `ultralytics.reset(model) -> None` / `ultralytics.unload(model) -> None`: Move the Ultralytics model back to CPU (`model.cpu()`).
 
 ---
 
@@ -144,6 +142,21 @@ configured = models.configure(
 )
 # Pass `configured` to models.load(configured) when weights are present.
 print(configured.model_id, configured.details.backend, configured.post.threshold)
+```
+
+Registered YOLO configs include `model.weights`. It selects the checkpoint
+passed to `YOLO(...)` or `YOLOWorld(...)`, while `model_id` remains the exported
+model definition. Set it in the config before loading:
+
+```python
+from klygo import config, models
+
+configured = config.set(
+    configured,
+    "model.weights",
+    "artifacts/weights/trained.pt",
+)
+detector = models.load(configured)
 ```
 
 See [`examples/integration/multi_backend_workflow.py`](../../../../examples/integration/multi_backend_workflow.py) for a full evaluation of both `YOLODetect` and `YOLOWorldDetect` on COCO15.

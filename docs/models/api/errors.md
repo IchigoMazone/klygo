@@ -11,7 +11,7 @@ Public submodule namespace defining the exception hierarchy raised by Klygo mode
 `klygo.models.errors` provides specific, catchable exceptions so applications can distinguish Klygo model lifecycle and configuration faults from generic runtime errors. All exceptions inherit from `ModelFrameworkError`:
 
 - `errors.ModelFrameworkError(Exception)`: Root exception for all `klygo.models` errors.
-- `errors.InvalidStateError(ModelFrameworkError)`: Raised when calling an operational method (`predict`, `forward`, `benchmark`, `warmup`, `save`) on a model whose `state` is `"UNLOADED"`.
+- `errors.InvalidStateError(ModelFrameworkError)`: Signals an invalid model lifecycle state.
 - `errors.InvalidConfigError(ModelFrameworkError, ValueError)`: Raised when model metadata or configuration settings violate schema rules (also catchable as `ValueError`).
 - `errors.InvalidDeviceError(ModelFrameworkError, ValueError)`: Raised when an unsupported or unavailable hardware device is requested (also catchable as `ValueError`).
 - `errors.InvalidDtypeError(ModelFrameworkError, ValueError)`: Raised when an unsupported numerical precision (`dtype`) is requested (also catchable as `ValueError`).
@@ -38,14 +38,6 @@ See [`test_class_registry_backends.py`](../../../test/models/test_class_registry
 """Executable example for klygo.models.errors."""
 
 from klygo import models
-
-detector = models.Detector()
-detector.unload()
-
-try:
-    detector.predict([])
-except models.errors.InvalidStateError as exc:
-    print("Caught expected InvalidStateError:", exc)
 
 print(issubclass(models.errors.InvalidConfigError, models.errors.ModelFrameworkError))
 ```

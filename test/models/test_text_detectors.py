@@ -96,7 +96,7 @@ class TestGroundingDino(unittest.TestCase):
         self.assertEqual(self.model.predict_config["prompt"], ["dog", "cat"])
         self.assertEqual(self.model.names, {0: "dog", 1: "cat"})
 
-    def test_missing_prompt_clear_and_reset_have_explicit_errors(self):
+    def test_missing_and_cleared_prompts_raise_explicit_errors(self):
         with self.assertRaisesRegex(ValueError, "requires"):
             self.model(self.image)
         self.model(self.image, prompt="dog", verbose=False)
@@ -104,9 +104,42 @@ class TestGroundingDino(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "requires"):
             self.model(self.image, prompt=None)
         self.assertEqual(self.model.predict_config, before)
-        self.model.reset()
-        self.assertIsNone(self.model.predict_config["prompt"])
-        self.assertEqual(self.model.names, {})
+
+    def test_weight_override_keeps_the_model_id_architecture(self):
+        from klygo.models.detection import grounding_dino
+
+        metadata = {
+            "model_id": "architecture-id",
+            "flags": {"model": False, "processor": True, "post": True},
+            "priority": {"model": ["weights"]},
+            "model": {"weights": "compatible-weights"},
+            "processor": {},
+            "post": {"threshold": .25, "text_threshold": .3},
+        }
+        architecture = SimpleNamespace(model_type="grounding-dino")
+        model_loader = Mock(return_value=FakeModel())
+        with patch.object(
+            grounding_dino.AutoConfig,
+            "from_pretrained",
+            return_value=architecture,
+        ) as config_loader, patch.object(
+            grounding_dino.AutoProcessor,
+            "from_pretrained",
+            return_value=FakeProcessor(),
+        ), patch.object(
+            grounding_dino.AutoModelForZeroShotObjectDetection,
+            "from_pretrained",
+            model_loader,
+        ):
+            detector = grounding_dino.GroundingDinoDetect(metadata)
+
+        config_loader.assert_called_once_with("architecture-id")
+        model_loader.assert_called_once_with(
+            "compatible-weights",
+            config=architecture,
+        )
+        detector(Image.new("RGB", (8, 8)), prompt="object", verbose=False)
+        self.assertNotIn("weights", detector.model.last_inputs)
 
 
 class TestLocateAnything(unittest.TestCase):
@@ -115,7 +148,7 @@ class TestLocateAnything(unittest.TestCase):
         entry["model"]["trust_remote_code"] = consent
         return entry
 
-    def make_model(self):
+    def make_model(self, weights=None):
         self.processor, self.native = FakeProcessor(), FakeModel()
         self.loader = Mock(return_value=self.native)
         self.transformers = SimpleNamespace(
@@ -124,8 +157,10 @@ class TestLocateAnything(unittest.TestCase):
             AutoTokenizer=SimpleNamespace(from_pretrained=Mock(return_value=object())),
             AutoProcessor=SimpleNamespace(from_pretrained=Mock(return_value=self.processor)),
             AutoModel=SimpleNamespace(from_pretrained=self.loader))
+        metadata = self.metadata()
+        metadata["model"]["weights"] = weights
         with patch.dict("sys.modules", {"transformers": self.transformers}), patch.object(torch.cuda, "is_available", return_value=True), patch.object(torch.cuda, "is_bf16_supported", return_value=True):
-            return LocateAnythingDetect(self.metadata())
+            return LocateAnythingDetect(metadata)
 
     def test_loader_consent_optional_dependency_version_and_family(self):
         with self.assertRaisesRegex(ValueError, "trust_remote_code"):
@@ -136,7 +171,23 @@ class TestLocateAnything(unittest.TestCase):
             LocateAnythingDetect(self.metadata())
         entry = self.metadata()
         entry["model_id"] = "some-other-model"
-        with self.assertRaisesRegex(ValueError, "local copy"):
+        native_error = OSError("Native loader rejected the model identifier")
+        transformers = SimpleNamespace(
+            __version__="4.57.1",
+            AutoConfig=SimpleNamespace(from_pretrained=Mock(side_effect=native_error)),
+            AutoTokenizer=object(),
+            AutoProcessor=object(),
+            AutoModel=object(),
+        )
+        with patch.dict("sys.modules", {"transformers": transformers}), patch.object(
+            torch.cuda,
+            "is_available",
+            return_value=True,
+        ), patch.object(
+            torch.cuda,
+            "is_bf16_supported",
+            return_value=True,
+        ), self.assertRaisesRegex(OSError, "Native loader rejected"):
             LocateAnythingDetect(entry)
 
     def test_pinned_loader_and_real_output_schema(self):
@@ -157,6 +208,10 @@ class TestLocateAnything(unittest.TestCase):
         model(image, max_new_tokens=32, verbose=False)
         self.assertEqual(model.predict_config["max_new_tokens"], 32)
         self.assertEqual(result.metadata, before)
+
+    def test_weight_override_uses_the_native_model_loader(self):
+        self.make_model("compatible-weights")
+        self.assertEqual(self.loader.call_args.args[0], "compatible-weights")
 
     def test_empty_malformed_coordinates_and_options(self):
         model = self.make_model()
@@ -187,10 +242,6 @@ class TestLocateAnything(unittest.TestCase):
             model.benchmark(image, prompt="cat", iterations=1, warmup=0, verbose=False)
         self.assertEqual(model.predict_config, before)
         self.assertEqual(model.names, {0: "dog"})
-        model.reset()
-        self.assertIsNone(model.predict_config["prompt"])
-        model.unload()
-        self.assertIsNone(model.tokenizer)
 
 
 if __name__ == "__main__":

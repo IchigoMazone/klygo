@@ -371,8 +371,7 @@ def clear_cache() -> None:
     """Clear safe runtime caches for the active Keras engine.
 
     TensorFlow has no public equivalent to PyTorch's allocator cache operation,
-    so active models are left untouched. Keras session cleanup remains part of
-    ``reset`` and ``unload`` where invalidating framework state is expected.
+    so active models are left untouched.
     """
     active_backend = get_active_backend()
     if active_backend == "torch":
@@ -386,48 +385,3 @@ def clear_cache() -> None:
                 clear()
         except Exception:
             pass
-
-
-def save(model: Any, output_dir: str) -> None:
-    """Save a Keras 3 or KerasHub model to `output_dir`."""
-    from klygo import files
-    abs_out = str(files.resolve(output_dir))
-    files.mkdir(abs_out)
-
-    if model is not None:
-        # 1. KerasHub preset export
-        if hasattr(model, "save_to_preset") and callable(model.save_to_preset):
-            try:
-                model.save_to_preset(abs_out)
-                return
-            except Exception:
-                pass
-
-        # 2. Standard .keras format
-        if hasattr(model, "save") and callable(model.save):
-            try:
-                keras_file = str(files.join(abs_out, "model.keras"))
-                model.save(keras_file)
-                return
-            except Exception:
-                pass
-
-
-def reset(model: Any) -> None:
-    """Clear the Keras session when resetting model state."""
-    try:
-        import keras
-        if hasattr(keras.backend, "clear_session"):
-            keras.backend.clear_session()
-    except Exception:
-        pass
-
-
-def unload(model: Any) -> None:
-    """Release Keras model resources."""
-    try:
-        import keras
-        if hasattr(keras.backend, "clear_session"):
-            keras.backend.clear_session()
-    except Exception:
-        pass

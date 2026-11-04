@@ -20,13 +20,15 @@ class YOLOWorldDetect(Detector):
     def __init__(self, metadata: Dict[str, Any], **kwargs) -> None:
         super().__init__(metadata=metadata, **kwargs)
         
-        self.model = YOLOWorld(self.model_id)
+        weights = self.metadata.get("model", {}).get("weights")
+        self.model = YOLOWorld(weights or self.model_id)
         self.original_names = dict(self.model.names)
         self.names = dict(self.original_names)
 
     def forward(self, images, prompt=None, **kwargs):
         """Run YOLO-World and return standard detection frames."""
         model_config = dict(self.metadata.get("model", {}))
+        model_config.pop("weights", None)
         post_config = dict(self.metadata.get("post", {}))
 
         classes = list(self.original_names.values()) if prompt is None else list(prompt)

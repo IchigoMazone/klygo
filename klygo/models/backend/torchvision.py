@@ -61,22 +61,3 @@ def format_results(raw_outputs: Any) -> list[dict[str, Any]]:
             }
         )
     return results
-
-
-def reset(model: Any) -> None:
-    if model is not None:
-        model.cpu()
-
-
-def unload(model: Any) -> None:
-    reset(model)
-
-
-def save(model: Any, output_dir: str) -> None:
-    """Save a caller-owned Torchvision state dict without choosing its class."""
-    from klygo import files
-
-    if model is not None:
-        torch.save(model.state_dict(), files.join(output_dir, "model.pt"))
-
-

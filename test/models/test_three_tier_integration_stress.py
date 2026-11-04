@@ -1,7 +1,7 @@
 """Comprehensive stress tests for the 3-Tier Model Hierarchy and 3-Level Outputs Contract.
 
 Tests the interaction across:
-- Layer 1: BaseModel (metadata, state transitions, unload guards)
+- Layer 1: BaseModel (metadata, state transitions)
 - Layer 2: Detector (predict, preprocessing trace restoration, parameter isolation, benchmark)
 - Layer 3: Concrete wrappers returning dicts or Detection instances
 - Level 1-3 Outputs: Box -> Detection -> Detections synchronization, COW tracking, and postprocessing.
@@ -13,7 +13,6 @@ from PIL import Image
 import numpy as np
 
 from klygo import files, media, models, outputs, postprocessing, preprocessing
-from klygo.models import errors
 
 
 DEFAULT_METADATA = {
@@ -156,8 +155,8 @@ class TestThreeTierIntegrationStress(unittest.TestCase):
             self.assertLessEqual(b.box[2], 400.0)
             self.assertLessEqual(b.box[3], 300.0)
 
-    def test_base_model_lifecycle_guards_and_state_isolation(self):
-        """Verify Layer 1 BaseModel state transitions, unload guards, and output persistence."""
+    def test_base_model_state_and_output_persistence(self):
+        """Verify Layer 1 BaseModel state transitions and output persistence."""
         model = MockDetectionDetector()
         self.assertEqual(model.state, "READY")
 
@@ -171,21 +170,7 @@ class TestThreeTierIntegrationStress(unittest.TestCase):
         model.predict(img, threshold=0.99, verbose=False)
         self.assertEqual(model.metadata.get("post", {}), orig_post)
 
-        # 3. Unload model
-        model.unload()
-        self.assertEqual(model.state, "UNLOADED")
-
-        # 4. Calling predict, warmup, or benchmark after unload must raise InvalidStateError
-        with self.assertRaises(errors.InvalidStateError):
-            model.predict(img)
-
-        with self.assertRaises(errors.InvalidStateError):
-            model.warmup()
-
-        with self.assertRaises(errors.InvalidStateError):
-            model.benchmark(img)
-
-        # 5. Output persistence: previously returned results must remain fully alive and mutable!
+        # 3. Output persistence: previously returned results must remain fully alive and mutable!
         self.assertEqual(len(results), 1)
         results[0].add_box([5, 5, 50, 50], label="pedestrian", score=0.7)
         self.assertEqual(len(results[0]), 2)

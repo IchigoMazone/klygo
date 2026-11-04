@@ -6,7 +6,7 @@ import PIL.Image
 
 try:
     import torch
-    from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
+    from transformers import AutoConfig, AutoProcessor, AutoModelForZeroShotObjectDetection
 except ImportError as exc:
     raise ImportError(
         "Grounding DINO requires the Hugging Face model extra. "
@@ -32,12 +32,32 @@ class GroundingDinoDetect(Detector):
 
         model_config = dict(self.metadata["model"])
         processor_config = dict(self.metadata["processor"])
+        weights = model_config.pop("weights", None)
 
         # Initialise Processor & Model from Hugging Face
         with self.suppress_warnings():
             self.processor = AutoProcessor.from_pretrained(self.model_id, **processor_config)
+            model_architecture = None
+            if weights:
+                loading_keys = (
+                    "cache_dir",
+                    "revision",
+                    "local_files_only",
+                    "trust_remote_code",
+                    "token",
+                )
+                config_options = {
+                    key: model_config[key]
+                    for key in loading_keys
+                    if key in model_config
+                }
+                model_architecture = AutoConfig.from_pretrained(
+                    self.model_id,
+                    **config_options,
+                )
             self.model = AutoModelForZeroShotObjectDetection.from_pretrained(
-                self.model_id,
+                weights or self.model_id,
+                config=model_architecture,
                 **model_config,
             )
             if "device_map" not in model_config:
@@ -52,7 +72,7 @@ class GroundingDinoDetect(Detector):
     ) -> List[Detection]:
 
         if not prompt:
-            raise ValueError("Grounding DINO requires a non-empty text prompt; use reset() to clear saved state")
+            raise ValueError("Grounding DINO requires a non-empty text prompt")
 
         prompt_list = normalize_prompt(prompt)
         self.names = {class_id: label for class_id, label in enumerate(prompt_list)}
@@ -80,7 +100,7 @@ class GroundingDinoDetect(Detector):
         # Loading-only options never belong to the model's forward call.
         loading_keys = [
             "device_map", "torch_dtype", "dtype", "low_cpu_mem_usage", "cache_dir",
-            "revision", "local_files_only", "trust_remote_code", "token",
+            "revision", "local_files_only", "trust_remote_code", "token", "weights",
         ]
         model_options = utils.exclude_keys(model_config, loading_keys)
         outputs = self.model(**inputs, **model_options)

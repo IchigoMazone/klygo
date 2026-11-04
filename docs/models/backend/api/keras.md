@@ -45,7 +45,6 @@ When `Detector` dispatches through [`klygo.models.backend.common`](common.md) wi
   - Extracts `"boxes"`, `"scores"` (or `"confidence"`), and `"labels"` (or `"classes"`).
   - Respects `num_detections` and filters out padded `-1` detection slots (`score < 0` or `class_id < 0`).
   - Automatically converts `yxyx` (`[ymin, xmin, ymax, xmax]`) bounding boxes from KerasHub into Klygo's standard `xyxy` (`[xmin, ymin, xmax, ymax]`) format.
-- `keras.save(model, output_dir) -> None`: Saves via `model.save_to_preset(output_dir)`, `model.save("<output_dir>/model.keras")`, or `model.save_weights("<output_dir>/model.weights.h5")`.
 - `keras.synchronize(device=None, value=None)` / `keras.clear_cache()`: Materializes lazy outputs with `keras.ops.convert_to_numpy()` and clears Torch CUDA cache when running on the `"torch"` backend engine without destroying the global Keras session.
 
 ---

@@ -205,75 +205,15 @@ Normalize backend-specific predictions into Klygo's standard per-frame dictionar
 
 ---
 
-## 4. Lifecycle & Persistence Dispatchers
-
-### `common.save`
-
-```python
-common.save(
-    backend: str,
-    model: Any,
-    output_dir: str,
-    metadata: Dict[str, Any],
-    class_module: str,
-    processor: Optional[Any] = None,
-) -> None
-```
-
-Persist a complete, reloadable Klygo model directory at `output_dir`:
-1. Writes `klygo.json` containing the model's `metadata` (excluding transient `num_params`).
-2. Copies the Python source file defining the wrapper class to `output_dir/model.py` whenever `class_module` is a custom module outside `klygo.models.*`.
-3. Delegates weight serialization to the backend adapter:
-   - `"Hugging Face"`: `model.save_pretrained(output_dir)` and `processor.save_pretrained(output_dir)`.
-   - `"Ultralytics"`: `model.save(output_dir)`.
-   - `"Torchvision"`: `torch.save(model.state_dict(), "<output_dir>/model.pt")`.
-   - `"Keras"`: `model.save_to_preset(output_dir)`, `model.save("<output_dir>/model.keras")`, or `model.save_weights("<output_dir>/model.weights.h5")`.
-
----
-
-### `common.reset`
-
-```python
-common.reset(backend: str, model: Any, processor: Optional[Any] = None) -> None
-```
-
-Move `model` back to CPU (`model.cpu()` where supported) and call `common.clear_cache(backend)`.
-
----
-
-### `common.unload`
-
-```python
-common.unload(backend: str, model: Any, processor: Optional[Any] = None) -> None
-```
-
-Release accelerator resources held by `model` and `processor`, then call `common.clear_cache(backend)`.
-
----
-
 ## Complete Executable Example
 
 ```python
 """Executable example for klygo.models.backend.common."""
 
-from tempfile import TemporaryDirectory
-from klygo import files
 from klygo.models.backend import common
 
-# 1. Inspect backend family normalization and default device/dtype fallbacks
+# Inspect backend family normalization and default device/dtype fallbacks
 print("Family:", common.backend_family("Ultralytics (Offline)"))
 print("Device:", common.current_device(None, backend="Custom"))
 print("Dtype:", common.current_dtype(None, backend="Custom"))
-
-# 2. Dispatch inference and save a custom model bundle via common.save()
-with TemporaryDirectory() as tmp:
-    out_dir = files.path(tmp) / "bundle"
-    common.save(
-        backend="Custom",
-        model=None,
-        output_dir=str(out_dir),
-        metadata={"model_id": "demo", "class": "klygo.models.detection.Detector"},
-        class_module="klygo.models.detection.base",
-    )
-    print("Saved klygo.json:", files.exists(out_dir / "klygo.json"))
 ```

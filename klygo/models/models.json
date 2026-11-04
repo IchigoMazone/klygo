@@ -14,6 +14,7 @@
     },
     "priority": {
       "model": [
+        "weights",
         "device",
         "imgsz",
         "half",
@@ -24,7 +25,9 @@
         "iou"
       ]
     },
-    "model": {},
+    "model": {
+      "weights": null
+    },
     "post": {
       "threshold": 0.25,
       "iou": 0.7
@@ -71,6 +74,7 @@
     },
     "priority": {
       "model": [
+        "weights",
         "device",
         "imgsz",
         "half",
@@ -84,7 +88,9 @@
         "iou"
       ]
     },
-    "model": {},
+    "model": {
+      "weights": null
+    },
     "post": {
       "threshold": 0.25,
       "iou": 0.7
@@ -137,6 +143,7 @@
     },
     "priority": {
       "model": [
+        "weights",
         "device",
         "imgsz",
         "half",
@@ -150,7 +157,9 @@
         "iou"
       ]
     },
-    "model": {},
+    "model": {
+      "weights": null
+    },
     "post": {
       "threshold": 0.25,
       "iou": 0.7
@@ -203,6 +212,7 @@
     },
     "priority": {
       "model": [
+        "weights",
         "device",
         "imgsz",
         "half",
@@ -216,7 +226,9 @@
         "iou"
       ]
     },
-    "model": {},
+    "model": {
+      "weights": null
+    },
     "post": {
       "threshold": 0.25,
       "iou": 0.7
@@ -269,6 +281,9 @@
       "generation": true
     },
     "priority": {
+      "model": [
+        "weights"
+      ],
       "generation": [
         "generation_mode",
         "max_new_tokens",
@@ -279,6 +294,7 @@
       ]
     },
     "model": {
+      "weights": null,
       "trust_remote_code": false,
       "revision": "c32291ca5e996f5a7a485845b4f57a233936bba0"
     },
@@ -307,6 +323,7 @@
     },
     "priority": {
       "model": [
+        "weights",
         "device_map",
         "torch_dtype",
         "low_cpu_mem_usage"
@@ -319,7 +336,9 @@
         "text_threshold"
       ]
     },
-    "model": {},
+    "model": {
+      "weights": null
+    },
     "processor": {},
     "post": {
       "threshold": 0.25,

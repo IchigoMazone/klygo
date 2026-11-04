@@ -106,7 +106,7 @@ def evaluate(dataset_root=None, artifact_root=None):
                     )
                     media.save(files.join(preview_root, f"{label}.jpg"), overlay, overwrite=True)
     finally:
-        model.unload()
+        del model
 
     totals = {key: sum(row[key] for row in rows) for key in ("tp", "fp", "fn")}
     report = {"backend": "Torchvision", "model": "torchvision-ssdlite320-mobilenet-v3-large",

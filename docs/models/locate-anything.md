@@ -35,7 +35,7 @@ The default download directory is `artifacts/weights/locate-anything`.
 from klygo import models
 
 detector = models.load(
-    "locate-anything",
+    "nvidia/LocateAnything-3B",
     model_trust_remote_code=True,
     model_device="cuda",
     model_torch_dtype="bfloat16",
@@ -43,13 +43,32 @@ detector = models.load(
 results = detector("image.jpg", prompt=["person", "car"], max_new_tokens=8192)
 later = detector("next-image.jpg")
 report = detector.benchmark("image.jpg", iterations=5, warmup=1)
-detector.unload()
 ```
 
 If the GPU lacks bfloat16, choose `model_torch_dtype="float16"` explicitly.
-Loading supports the official identifier or a local copy with
-`model_type="locateanything"`. A saved Klygo bundle includes the tokenizer.
+Loading passes the configured model identifier or local path to Transformers.
+Missing repositories, invalid revisions, and inaccessible checkpoints retain
+the native Hugging Face error. A successfully resolved checkpoint must declare
+`model_type="locateanything"`. Save the tokenizer with
+`detector.tokenizer.save_pretrained(output_dir)` when exporting a native checkpoint.
 Use `model_local_files_only=True` to prohibit checkpoint downloads.
+
+Set `weights` to load compatible native weights separately while keeping the
+config, tokenizer, and processor selected by `model_id`. Because the same pinned
+revision is passed to both sources, a local pretrained directory is the practical
+override for custom Locate Anything weights.
+
+```python
+from klygo import config, models
+
+configured = config.load("locate-anything.json", verbose=False)
+configured = config.set(
+    configured,
+    "model.weights",
+    "artifacts/weights/custom-locate",
+)
+detector = models.load(configured)
+```
 
 ## Supported inference
 
@@ -83,7 +102,7 @@ Raw model responses and the checkpoint revision are retained in result metadata.
 
 Reset clears Klygo prompt/configuration state while keeping the CUDA model on
 its device. Cache clearing uses the existing PyTorch backend helper. Benchmark
-overrides are isolated; unload releases model, processor and tokenizer.
+overrides are isolated.
 
 ## Test scope
 

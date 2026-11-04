@@ -1,5 +1,6 @@
 """Behavioral contract for klygo.files.copy."""
 
+import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -45,14 +46,23 @@ class TestCopy(unittest.TestCase):
             (target / "old.txt").write_text("old", encoding="utf-8")
             from klygo.files import filesystem
 
-            real_replace = filesystem.os.replace
+            target_func = (
+                "klygo.files.filesystem._win_rename_or_replace"
+                if os.name == "nt"
+                else "klygo.files.filesystem.os.replace"
+            )
+            real_replace = (
+                filesystem._win_rename_or_replace
+                if os.name == "nt"
+                else filesystem.os.replace
+            )
 
-            def fail_publish(src, dst):
+            def fail_publish(src, dst, **kwargs):
                 if Path(src).name == "payload":
                     raise PermissionError("locked destination")
-                return real_replace(src, dst)
+                return real_replace(src, dst, **kwargs)
 
-            with patch("klygo.files.filesystem.os.replace", side_effect=fail_publish):
+            with patch(target_func, side_effect=fail_publish):
                 with self.assertRaises(PermissionError):
                     files.copy(source, target, overwrite=True)
             self.assertEqual((source / "new.txt").read_text(encoding="utf-8"), "new")
@@ -68,14 +78,23 @@ class TestCopy(unittest.TestCase):
             (target / "old.txt").write_text("old", encoding="utf-8")
             from klygo.files import filesystem
 
-            real_replace = filesystem.os.replace
+            target_func = (
+                "klygo.files.filesystem._win_rename_or_replace"
+                if os.name == "nt"
+                else "klygo.files.filesystem.os.replace"
+            )
+            real_replace = (
+                filesystem._win_rename_or_replace
+                if os.name == "nt"
+                else filesystem.os.replace
+            )
 
-            def fail_publish_and_rollback(src, dst):
+            def fail_publish_and_rollback(src, dst, **kwargs):
                 if Path(src).name in ("payload", "previous"):
                     raise PermissionError("locked")
-                return real_replace(src, dst)
+                return real_replace(src, dst, **kwargs)
 
-            with patch("klygo.files.filesystem.os.replace", side_effect=fail_publish_and_rollback):
+            with patch(target_func, side_effect=fail_publish_and_rollback):
                 with self.assertRaisesRegex(OSError, "backup retained"):
                     files.copy(source, target, overwrite=True)
             backups = list(root.glob(".target.*/previous/old.txt"))

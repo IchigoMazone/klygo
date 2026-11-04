@@ -138,25 +138,3 @@ def sync_device(tensor: Any, target_device: Any) -> Any:
         if tensor.device != target_device:
             return tensor.to(target_device, non_blocking=(target_device.type == "cuda"))
     return tensor
-
-
-def save(model: Any, processor: Optional[Any], output_dir: str) -> None:
-    """Save the model and processor using Hugging Face ``save_pretrained()``."""
-    from klygo import files
-    abs_out = files.resolve(output_dir)
-    if model is not None and hasattr(model, "save_pretrained"):
-        model.save_pretrained(abs_out)
-    if processor is not None and hasattr(processor, "save_pretrained"):
-        processor.save_pretrained(abs_out)
-
-
-def reset(model: Any, processor: Optional[Any] = None) -> None:
-    """Move a Hugging Face model back to CPU."""
-    if model is not None and hasattr(model, "cpu"):
-        model.cpu()
-
-
-def unload(model: Any, processor: Optional[Any] = None) -> None:
-    """Release Hugging Face model and processor accelerator resources."""
-    if model is not None and hasattr(model, "cpu"):
-        model.cpu()

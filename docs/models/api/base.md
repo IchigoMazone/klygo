@@ -12,7 +12,7 @@ Public submodule namespace defining [`BaseModel`](BaseModel.md), the Layer-1 abs
 
 ## Exported Symbols
 
-- [`BaseModel`](BaseModel.md): Abstract base class providing lifecycle state tracking (`LOADING`, `READY`, `UNLOADED`), `metadata` and `flags` normalization, call-local runtime metadata context (`_use_metadata`), Rich terminal inspection (`info()`), and post-unload access guards.
+- [`BaseModel`](BaseModel.md): Abstract base class providing lifecycle state tracking (`LOADING`, `READY`), `metadata` and `flags` normalization, call-local runtime metadata context (`_use_metadata`), Rich terminal inspection (`info()`).
 
 ## Returns
 

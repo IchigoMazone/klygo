@@ -32,8 +32,6 @@ All functions are automatically invoked when `Detector` dispatches through [`kly
 - `huggingface.run_inference(model, inputs, cur_dtype, **model_kwargs) -> Any`: Execute `model(**inputs, **model_kwargs)` inside a PyTorch AMP `autocast` context matching `cur_dtype`.
 - `huggingface.get_output_device(outputs, default_device=None) -> torch.device`: Detect the actual device of `outputs.logits` or `outputs.pred_boxes` (essential when `device_map="auto"` shards a model across multiple GPUs).
 - `huggingface.sync_device(tensor, target_device) -> Any`: Move `tensor` (such as `input_ids`) to `target_device` without copying large `pixel_values` tensors across PCIe.
-- `huggingface.save(model, processor, output_dir) -> None`: Persist both `model.save_pretrained(output_dir)` and `processor.save_pretrained(output_dir)`.
-- `huggingface.reset(model, processor=None)` / `huggingface.unload(model, processor=None)`: Move `model` back to CPU (`model.cpu()`).
 
 ---
 
@@ -124,4 +122,19 @@ configured = models.configure(
     text_threshold=0.25,
 )
 print(configured.model_id, configured.details.backend, configured.post.threshold)
+```
+
+For registered Grounding DINO models, `weights` may select a compatible Hugging
+Face repository or pretrained directory. The architecture config and processor
+still come from `model_id`; Transformers performs the compatibility check:
+
+```python
+from klygo import config, models
+
+configured = config.set(
+    configured,
+    "model.weights",
+    "organization/custom-grounding-dino",
+)
+detector = models.load(configured)
 ```

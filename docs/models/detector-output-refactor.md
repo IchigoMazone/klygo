@@ -21,7 +21,6 @@ first = detector(image, prompt=["person"], threshold=0.5)
 second = detector(image)  # reuses prompt and threshold
 detector(image, threshold=0.7)  # keeps prompt
 detector(image, prompt=None)  # explicit clearing, where text is optional
-detector.reset()  # restores settings and clears remembered overrides
 ```
 
 Configuration validation is completed before updating remembered values. Eager
@@ -44,16 +43,14 @@ duplicates are removed, and blank/non-string labels are rejected.
 
 ## Wrapper contracts
 
-| Wrapper | Prompt meaning | Clearing / reset |
+| Wrapper | Prompt meaning | Clearing the prompt |
 | --- | --- | --- |
-| YOLO | Filters its fixed class vocabulary; unknown labels raise ValueError | `prompt=None` restores configured `classes`; reset restores defaults |
-| YOLO-World | Replaces vocabulary only when it changes | `prompt=None` and reset restore the checkpoint vocabulary |
-| Grounding DINO | Lowercase text labels with trailing periods removed | Missing/cleared text cannot infer: ValueError leaves saved configuration unchanged; reset clears it |
-| Locate Anything | Required category queries, processed sequentially | Same required-text policy as Grounding DINO; reset retains device placement |
+| YOLO | Filters its fixed class vocabulary; unknown labels raise ValueError | `prompt=None` restores configured `classes` |
+| YOLO-World | Replaces vocabulary only when it changes | `prompt=None` restores the checkpoint vocabulary |
+| Grounding DINO | Lowercase text labels with trailing periods removed | Missing/cleared text cannot infer: ValueError leaves saved configuration unchanged |
+| Locate Anything | Required category queries, processed sequentially | Same required-text policy as Grounding DINO |
 
-For text-required models, use `reset()` when clearing configuration without
-running inference. This avoids silently reusing old text or issuing malformed
-empty queries. Direct `forward()` remains a low-level hook; remembered options
+Direct `forward()` remains a low-level hook; remembered options
 belong to `predict()` and callable syntax.
 
 Every output frame stores an independent `config`: `prompt`, postprocessing
@@ -126,8 +123,7 @@ iteration caches frame results for replay, so memory grows with consumed results
 even when lazy image proxies avoid retaining decoded pixels. Streaming is not a
 promise of constant total memory.
 
-Closing a result stream also closes its pending generator. Consuming a stream
-after unloading its detector raises `InvalidStateError`.
+Closing a result stream also closes its pending generator.
 
 ## Benchmark scope
 

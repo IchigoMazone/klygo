@@ -44,7 +44,7 @@ class TestRealDetectionOptIn(unittest.TestCase):
             detector.benchmark(source, iterations=1, warmup=0, verbose=False)
             self.assertEqual(detector.predict_config, before)
         finally:
-            detector.unload()
+            del detector
 
     def test_yolo(self):
         self.run_checkpoint("YOLO", "yolo11?.pt", "klygo.models.detection.YOLODetect")

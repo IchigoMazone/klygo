@@ -1,7 +1,6 @@
 """Torchvision backend hooks without selecting a model architecture."""
 
 import importlib.util
-import tempfile
 import unittest
 
 
@@ -35,10 +34,6 @@ class TestTorchvisionBackend(unittest.TestCase):
         self.assertEqual(results[0]["class_ids"], [7])
         self.assertEqual(results[0]["boxes"], [[1.0, 2.0, 3.0, 4.0]])
 
-        with tempfile.TemporaryDirectory() as temporary:
-            torchvision.save(model, temporary)
-            from klygo import files
-            self.assertTrue(files.is_file(files.join(temporary, "model.pt")))
 
 
 if __name__ == "__main__":

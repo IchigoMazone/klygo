@@ -277,9 +277,6 @@ class Detector(BaseModel):
                     images, batch, workers, prefetch, backend=self.backend
                 ):
                     def infer() -> List[Detection]:
-                        if self.state == "UNLOADED":
-                            from klygo.models.errors import InvalidStateError
-                            raise InvalidStateError("Cannot consume a stream after model unload")
                         return self._infer_batch(
                             part, prompts, metadata, offset * vid_stride,
                             vid_stride, prepared_images=prepared,
@@ -597,17 +594,6 @@ class Detector(BaseModel):
             metadata, prompt = self._resolve_prediction(_UNSET, {}, validate=False)
             return self._config_snapshot(metadata, prompt)
 
-    def reset(self) -> "Detector":
-        """Restore default settings and prompt state, and reset backend resources."""
-        with self._prediction_lock:
-            self._reset_prediction_state()
-            common.reset(self.backend, self.model, getattr(self, "processor", None))
-            self._settings = deepcopy(self._default_settings)
-            self._predict_config = {"prompt": None}
-            if self.state != "UNLOADED":
-                self.state = "READY"
-        return self
-
     def warmup(self) -> None:
         """Warm up with current settings without remembering temporary changes."""
         dummy_img = PIL.Image.new("RGB", (640, 640), color=(100, 100, 100))
@@ -616,43 +602,6 @@ class Detector(BaseModel):
     def clear_cache(self) -> None:
         """Release unused backend memory blocks."""
         common.clear_cache(self.backend)
-
-    def save(self, output_dir: str) -> None:
-        """Serialise the model (weights + metadata) to a Klygo-standard directory."""
-        export_metadata = dict(self.metadata)
-        export_metadata["model_id"] = self.model_id
-        export_metadata["flags"] = dict(
-            utils.normalize_flags(export_metadata.get("flags", self.flags))
-        )
-        export_metadata.setdefault("priority", None)
-        export_metadata.setdefault("details", None)
-        if not export_metadata.get("class"):
-            export_metadata["class"] = self.class_name
-
-        common.save(
-            backend=self.backend,
-            model=self.model,
-            output_dir=output_dir,
-            metadata=export_metadata,
-            class_module=self.__class__.__module__,
-            processor=getattr(self, "processor", None),
-        )
-        if hasattr(self, "tokenizer") and self.tokenizer is not None and hasattr(self.tokenizer, "save_pretrained"):
-            self.tokenizer.save_pretrained(output_dir)
-
-    def unload(self) -> None:
-        """Release GPU/CPU memory and transition model state to ``UNLOADED``."""
-        common.unload(self.backend, self.model, getattr(self, "processor", None))
-        if hasattr(self, "tokenizer"):
-            del self.tokenizer
-            self.tokenizer = None
-        if hasattr(self, "processor"):
-            del self.processor
-            self.processor = None
-        if hasattr(self, "model"):
-            del self.model
-            self.model = None
-        self.state = "UNLOADED"
 
     def benchmark(
         self,
@@ -992,15 +941,6 @@ class Detector(BaseModel):
                 self._restore_prediction_state(state)
             except Exception as error:
                 raise RuntimeError("Failed to restore backend inference state") from error
-
-    def _reset_prediction_state(self) -> None:
-        """Restore wrapper-specific prompt state without requiring a valid query."""
-        if hasattr(self, "original_names") and hasattr(getattr(self, "model", None), "set_classes"):
-            self.model.set_classes(list(self.original_names.values()))
-            self.names = dict(self.original_names)
-        elif self.backend == "Hugging Face":
-            self.names = {}
-            self._active_prompt = None
 
     def _prepare_prediction(self, prompt: Optional[List[str]]) -> None:
         """Prepare backend-specific class state for one prediction call."""

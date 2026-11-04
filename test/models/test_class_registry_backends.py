@@ -121,7 +121,7 @@ class TestClassRegistryBackends(unittest.TestCase):
             },
             "flags": {"model": False, "post": True},
             "priority": {},
-            "model": {"imgsz": 320},
+            "model": {"imgsz": 320, "weights": "trained-world.pt"},
             "post": {
                 "threshold": 0.25,
                 "iou": 0.7,
@@ -140,6 +140,7 @@ class TestClassRegistryBackends(unittest.TestCase):
 
         model.forward([Image.new("RGB", (8, 8))], prompt=["cat", "dog"])
         self.assertEqual(model.original_names, {0: "person", 1: "car"})
+        self.assertEqual(model.model.model_id, "trained-world.pt")
         self.assertEqual(model.names, {0: "cat", 1: "dog"})
         self.assertEqual(
             model.model.last_options,
@@ -167,7 +168,7 @@ class TestClassRegistryBackends(unittest.TestCase):
             },
             "flags": {"model": False, "post": True},
             "priority": {},
-            "model": {"imgsz": 320},
+            "model": {"imgsz": 320, "weights": "trained-yolo.pt"},
             "post": {
                 "threshold": 0.25,
                 "iou": 0.7,
@@ -186,6 +187,7 @@ class TestClassRegistryBackends(unittest.TestCase):
 
         model.forward([Image.new("RGB", (8, 8))], prompt=["car"])
         self.assertEqual(model.names, {0: "person", 1: "car"})
+        self.assertEqual(model.model.model_id, "trained-yolo.pt")
         self.assertEqual(
             model.model.last_options,
             {

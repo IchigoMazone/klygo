@@ -196,24 +196,3 @@ def optimize_model(model: Any) -> Any:
     model.predict = optimized_predict
     model._klygo_predict_optimized = True
     return model
-
-
-def save(model: Any, output_dir: str) -> None:
-    """Save weights using the Ultralytics model ``save()`` method."""
-    from klygo import files
-    abs_out = files.resolve(output_dir)
-    target = files.join(abs_out, "model.pt") if files.is_dir(abs_out) else abs_out
-    if model is not None and hasattr(model, "save"):
-        model.save(target)
-
-
-def reset(model: Any) -> None:
-    """Move an Ultralytics model back to CPU."""
-    if model is not None and hasattr(model, "cpu"):
-        model.cpu()
-
-
-def unload(model: Any) -> None:
-    """Release Ultralytics model accelerator resources."""
-    if model is not None and hasattr(model, "cpu"):
-        model.cpu()

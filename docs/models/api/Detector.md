@@ -9,7 +9,7 @@ models.Detector(
 ) -> None
 ```
 
-Base Layer-2 object-detection engine providing unified batch/streaming inference, coordinate restoration, benchmarking, serialization, and multi-backend hardware dispatch.
+Base Layer-2 object-detection engine providing unified batch/streaming inference, coordinate restoration, benchmarking, configuration export, and multi-backend hardware dispatch.
 
 ## Contract
 
@@ -19,13 +19,13 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
    - `self.device`: Query the active accelerator device of `self.model` via `common.current_device()`.
    - `self.dtype`: Query the active numeric dtype of `self.model` via `common.current_dtype()`.
    - `self.predict_config`: Independent, defensive `deepcopy` snapshot of effective inference options (such as `prompt`, `threshold`, `iou`). External mutation of the returned dictionary does not mutate model state.
-   - Persistent settings: `predict()` automatically retains configured `prompt`, `threshold`, and `iou` across successive calls. Passing `prompt=None` clears the remembered prompt and restores default vocabulary; calling `reset()` clears all remembered overrides. Execution controls (`batch`, `workers`, `prefetch`, `vid_stride`, `max_frames`, `stream`, `native`, `packed`, `verbose`) are never persisted.
+   - Persistent settings: `predict()` automatically retains configured `prompt`, `threshold`, and `iou` across successive calls. Passing `prompt=None` clears the remembered prompt and restores default vocabulary. Execution controls (`batch`, `workers`, `prefetch`, `vid_stride`, `max_frames`, `stream`, `native`, `packed`, `verbose`) are never persisted.
 2. **Multi-Backend Dispatch Helpers (delegated to [`klygo.models.backend.common`](../backend/api/common.md))**:
    - `self.cast_inputs(inputs, dev=None, dtype=None)`: Cast floating-point tensors to the model's device and dtype while preserving integer tensors (`input_ids`) via `common.cast_inputs()`.
    - `self.run_inference(inputs, **model_kwargs)`: Execute forward pass via `common.run_inference()` on the active backend adapter (`Hugging Face`, `Ultralytics`, `Torchvision`, or `Keras`).
    - `self.get_output_device(outputs)` / `self.sync_device(tensor, target_device)`: Inspect output device and synchronize multi-GPU tensors via `common.get_output_device()` and `common.sync_device()`.
    - `self.format_results(raw_outputs)`: Normalize framework-native predictions into `list[dict[str, Any]]` with `"boxes"` (`xyxy`), `"scores"`, `"labels"`, and `"class_ids"` via `common.format_results()`, ready to pass straight into [`outputs.build_detections(images, formatted, names=self.names)`](../../outputs/api/build_detections.md).
-   - See the [`klygo.models.backend` & `common` Guide](../backend/README.md) for direct usage of all 15 `common` functions.
+   - See the [`klygo.models.backend` & `common` Guide](../backend/README.md) for direct usage of all 12 `common` functions.
 3. **Inference Engine (`predict`)**:
    - Resolves single images, lists of images, directories, or video streams through `klygo.media`.
    - Applies call-local parameter overrides (`**kwargs`) validated against `metadata.flags` and `metadata.priority`.
@@ -37,9 +37,6 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
 4. **Lifecycle & Isolated Benchmarking**:
    - `warmup()`: Run a single 640×640 dummy inference pass to initialize GPU kernels.
    - `benchmark(source=None, iterations=10, warmup=3, verbose=True, **kwargs)`: Measure mean latency (ms), throughput (FPS), device, and dtype inside accelerator synchronization. Temporary overrides apply only during the benchmark run and are safely restored on completion or failure.
-   - `save(output_dir)`: Export `klygo.json` metadata, custom `model.py` source (for custom classes), tokenizer (when present), and backend weights.
-   - `reset()`: Clear remembered predict configuration, restore default model settings, and reset backend class state.
-   - `unload()`: Move weights to CPU, release model and processor/tokenizer references, clear GPU caches, and transition `state` to `"UNLOADED"`.
 
 ## Parameters
 
@@ -57,10 +54,27 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
 - `forward(images, prompt=None) -> list[Detection]`: Pure inference hook implemented by subclasses on a batch of `PIL.Image.Image` instances.
 - `benchmark(source=None, iterations=10, warmup=3, verbose=True, **kwargs) -> dict[str, Any]`: Measure latency and FPS in isolation without mutating persistent model settings.
 - `warmup() -> None`: Warm up the accelerator pipeline on a 640×640 image.
-- `save(output_dir: str) -> None`: Persist metadata, custom wrapper code, tokenizer, and model weights.
-- `reset() -> None`: Restore default settings, clear remembered prediction configuration, and reset backend vocabulary.
-- `unload() -> None`: Release model and processor references, clear accelerator caches, and set `state = "UNLOADED"`.
+- `export(output_path="config.json", overwrite=False) -> pathlib.Path`: Export the resolved registry configuration directly to a JSON file.
 - `help() -> None`: Display a Rich guide covering parameters and usage.
+
+## Model lifetime
+
+Create a new detector to start with fresh prediction settings. Release references to the detector and any active prediction streams when finished. Use the underlying framework to manage device placement.
+
+## Native model persistence
+
+Use the framework API on `detector.model` to save a loaded model.
+
+| Backend | Native save call |
+| --- | --- |
+| Ultralytics | `detector.model.save("model.pt")` |
+| Torchvision / PyTorch | `torch.save(detector.model.state_dict(), "model.pt")` |
+| Hugging Face | `detector.model.save_pretrained("checkpoint")` |
+| Keras / KerasHub | `detector.model.save("model.keras")` or `detector.model.save_to_preset("preset")` where supported |
+
+For Hugging Face, save the processor and tokenizer with their own `save_pretrained()` methods when present and needed for reload.
+
+`detector.export("detector.json")` separately writes Klygo's resolved configuration. It includes the wrapper class, model identifier, parameter groups, and overrides loaded from `models.json`. It does not export native weights.
 
 ## Returns
 
@@ -70,7 +84,6 @@ Returns a `Detector` wrapper instance in `"READY"` state.
 
 - Calling `forward()` on the base `Detector` without overriding it or attaching a callable `self.model` returns empty detections.
 - Passing an undeclared or locked parameter to `predict(**kwargs)` raises `ValueError`.
-- Calling `predict()`, `forward()`, `warmup()`, `benchmark()`, or `save()` after `unload()` raises `models.errors.InvalidStateError`.
 
 ## Example
 

@@ -6,7 +6,6 @@ Torchvision, and Keras).
 """
 
 import importlib
-import sys
 from typing import Any, Optional, Dict, List
 
 KERAS_BACKENDS = {"Keras", "KerasHub", "TensorFlow"}
@@ -25,9 +24,6 @@ __all__ = [
     "get_output_device",
     "sync_device",
     "format_results",
-    "reset",
-    "unload",
-    "save",
 ]
 
 
@@ -194,79 +190,3 @@ def format_results(backend: str, raw_outputs: Any) -> List[Dict[str, Any]]:
     if family in KERAS_BACKENDS:
         return _import_adapter("keras").format_results(raw_outputs)
     return raw_outputs
-
-
-def reset(backend: str, model: Any, processor: Optional[Any] = None) -> None:
-    """Move the wrapped model back to CPU and clear accelerator caches."""
-    family = backend_family(backend)
-    if family == "Hugging Face":
-        _import_adapter("huggingface").reset(model, processor=processor)
-    elif family == "Ultralytics":
-        _import_adapter("ultralytics").reset(model)
-    elif family == "Torchvision":
-        _import_adapter("torchvision").reset(model)
-    elif family in KERAS_BACKENDS:
-        _import_adapter("keras").reset(model)
-    elif model is not None and hasattr(model, "cpu"):
-        model.cpu()
-    clear_cache(backend)
-
-
-def unload(backend: str, model: Any, processor: Optional[Any] = None) -> None:
-    """Release backend model resources and clear accelerator caches."""
-    family = backend_family(backend)
-    if family == "Hugging Face":
-        _import_adapter("huggingface").unload(model, processor=processor)
-    elif family == "Ultralytics":
-        _import_adapter("ultralytics").unload(model)
-    elif family == "Torchvision":
-        _import_adapter("torchvision").unload(model)
-    elif family in KERAS_BACKENDS:
-        _import_adapter("keras").unload(model)
-    elif model is not None and hasattr(model, "cpu"):
-        model.cpu()
-    clear_cache(backend)
-
-
-def save(
-    backend: str,
-    model: Any,
-    output_dir: str,
-    metadata: Dict[str, Any],
-    class_module: str,
-    processor: Optional[Any] = None,
-) -> None:
-    """Save a complete model bundle (``klygo.json`` metadata, custom ``model.py``, and weights)."""
-    from klygo import files
-
-    abs_out = files.resolve(output_dir)
-    files.mkdir(abs_out)
-
-    # 1. Write klygo.json metadata
-    meta = dict(metadata)
-    meta.pop("num_params", None)
-    files.save(files.join(abs_out, "klygo.json"), meta, verbose=False)
-
-    # 2. Copy custom class definition (model.py) when not a built-in Klygo wrapper
-    if not class_module.startswith("klygo.models."):
-        mod = sys.modules.get(class_module)
-        if mod and hasattr(mod, "__file__") and mod.__file__:
-            source_file = mod.__file__
-            if files.exists(source_file):
-                files.copy(source_file, files.join(abs_out, "model.py"), overwrite=True)
-
-    # 3. Delegate model weight serialization to the active backend adapter
-    family = backend_family(backend)
-    if family == "Hugging Face" or processor is not None:
-        _import_adapter("huggingface").save(model, processor, abs_out)
-    elif family == "Ultralytics":
-        _import_adapter("ultralytics").save(model, abs_out)
-    elif family == "Torchvision":
-        _import_adapter("torchvision").save(model, abs_out)
-    elif family in KERAS_BACKENDS:
-        _import_adapter("keras").save(model, abs_out)
-    elif model is not None:
-        if hasattr(model, "save_pretrained"):
-            model.save_pretrained(abs_out)
-        elif hasattr(model, "save"):
-            model.save(abs_out)

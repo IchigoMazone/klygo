@@ -8,18 +8,17 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from contextvars import ContextVar
 import os
-from typing import Dict, Any, Optional, List, Mapping
+from typing import Dict, Any, Optional, List, Mapping, Union
 
 from box import Box
 
-from .errors import InvalidStateError
 from . import utils
 
 __all__ = ["BaseModel"]
 
 
 class BaseModel(ABC):
-    """Abstract model wrapper with metadata, settings, and lifecycle guards.
+    """Abstract model wrapper with metadata, settings, and introspection.
 
     Subclasses implement ``predict``, ``benchmark``, and ``help``. Backend
     inference remains the responsibility of the concrete implementation.
@@ -51,7 +50,6 @@ class BaseModel(ABC):
             task or self.metadata.get("task") or self.details.get("task") or "Universal"
         )
         self.class_name: str = f"{self.__class__.__module__}.{self.__class__.__qualname__}"
-        self._default_settings: Dict[str, Any] = utils.parameter_groups(self.metadata)
         self._settings: Dict[str, Any] = utils.parameter_groups(self.metadata)
         self.state = "READY"
 
@@ -87,25 +85,6 @@ class BaseModel(ABC):
         return utils.suppress_warnings()
 
     # =========================================================================
-    # GUARD: Block public method calls after the model has been UNLOADED
-    # =========================================================================
-    def __getattribute__(self, name: str) -> Any:
-        attr = super().__getattribute__(name)
-        if name.startswith('_') or not callable(attr) or isinstance(attr, type):
-            return attr
-        try:
-            d = object.__getattribute__(self, '__dict__')
-            state = d.get('state', 'READY')
-            model_id = d.get('model_id', 'model')
-        except AttributeError:
-            return attr
-        if state == 'UNLOADED' and name not in ('reset', 'unload', 'info', 'help', 'supports', 'methods'):
-            raise InvalidStateError(
-                "Model '{}' is UNLOADED. Cannot call '{}'.".format(model_id, name)
-            )
-        return attr
-
-    # =========================================================================
     # INTROSPECTION
     # =========================================================================
     def supports(self, op_name: str) -> bool:
@@ -138,12 +117,55 @@ class BaseModel(ABC):
         table.add_row("Flags", ", ".join(self.flags) if self.flags else "(None)")
         table.add_row("Settings", str(self.settings))
         if hasattr(type(self), "predict_config"):
-            table.add_row("Device", str(self.device) if self.state != "UNLOADED" else "unloaded")
-            table.add_row("Dtype", str(self.dtype) if self.state != "UNLOADED" else "unloaded")
+            table.add_row("Device", str(self.device))
+            table.add_row("Dtype", str(self.dtype))
             table.add_row("Predict Configuration", str(self.predict_config))
         if self.params:
             table.add_row("Parameters", ", ".join(f"{k}={v}" for k, v in self.params.items()))
         Console().print(table)
+
+    def export(
+        self,
+        output_path: Union[str, os.PathLike[str]] = "config.json",
+        *,
+        overwrite: bool = False,
+    ) -> os.PathLike[str]:
+        """Export the resolved Klygo model configuration to ``config.json``.
+
+        Parameters
+        ----------
+        output_path : str or os.PathLike[str], default="config.json"
+            Destination JSON file.
+        overwrite : bool, default=False
+            Allow an existing ``config.json`` to be replaced.
+
+        Returns
+        -------
+        pathlib.Path
+            Path to the exported configuration file.
+
+        Raises
+        ------
+        FileExistsError
+            If the destination exists and overwrite is disabled.
+        ValueError
+            If the destination does not use the ``.json`` extension.
+        """
+        from klygo import files
+
+        config = self._metadata.to_dict()
+        config["model_id"] = self.model_id
+        config["class"] = config.get("class") or self.class_name
+        output_path = files.path(output_path)
+        if files.extension(output_path).lower() != ".json":
+            raise ValueError("Model configuration export requires a .json file.")
+        files.save(
+            output_path,
+            config,
+            overwrite=overwrite,
+            verbose=False,
+        )
+        return output_path
 
     # =========================================================================
     # PROPERTIES: config, settings, params
@@ -219,4 +241,3 @@ class BaseModel(ABC):
     @abstractmethod
     def help(self) -> None:
         raise NotImplementedError
-

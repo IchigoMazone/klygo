@@ -4,7 +4,6 @@
 import os
 import fnmatch
 import importlib
-import importlib.util
 from typing import Dict, Any, Optional, Union, Mapping, Sequence
 from functools import lru_cache
 from box import Box
@@ -14,7 +13,7 @@ from .base import BaseModel
 from . import utils
 from .detection.base import Detector
 
-__all__ = ["load", "configure", "set_backend", "get_backend"]
+__all__ = ["load", "export", "configure", "set_backend", "get_backend"]
 
 CLASS_MAPPING = {
     "Detector": Detector,
@@ -47,8 +46,8 @@ def _get_registry() -> Dict[str, Any]:
     return _REGISTRY_CACHE
 
 
-def _resolve_class(class_path: str, search_dir: Optional[str] = None) -> Any:
-    """Dynamically resolve a model wrapper class from a module import path or local ``model.py``."""
+def _resolve_class(class_path: str) -> Any:
+    """Dynamically resolve a model wrapper class from an import path."""
     if not isinstance(class_path, str) or not class_path.strip():
         raise ValueError(
             "Model metadata must define a non-empty 'class' import path."
@@ -60,27 +59,6 @@ def _resolve_class(class_path: str, search_dir: Optional[str] = None) -> Any:
         module_path, class_name = target.rsplit(".", 1)
         return getattr(importlib.import_module(module_path), class_name)
 
-    # 1. Resolve from a local model.py inside a saved custom model directory
-    if search_dir and files.is_dir(search_dir):
-        py_files = [files.join(search_dir, "model.py")]
-        if "." in class_path:
-            mod_part = class_path.rsplit(".", 1)[0]
-            py_files.append(files.join(search_dir, f"{mod_part}.py"))
-
-        for py_path in py_files:
-            if files.exists(py_path):
-                try:
-                    spec = importlib.util.spec_from_file_location("custom_model_module", py_path)
-                    if spec and spec.loader:
-                        mod = importlib.util.module_from_spec(spec)
-                        spec.loader.exec_module(mod)
-                        class_name = class_path.rsplit(".", 1)[-1]
-                        if hasattr(mod, class_name):
-                            return getattr(mod, class_name)
-                except Exception:
-                    pass
-
-    # 2. Resolve from an importable Python package or module
     if "." in class_path:
         try:
             module_path, class_name = class_path.rsplit(".", 1)
@@ -95,25 +73,18 @@ def _resolve_class(class_path: str, search_dir: Optional[str] = None) -> Any:
 
 
 def _normalize_model_name(name: Any) -> Any:
-    """Normalize model identifier between official Hugging Face/hub notation and Klygo aliases."""
+    """Map equivalent public model names to the registry lookup form."""
     if isinstance(name, os.PathLike):
         name = str(name)
     if not isinstance(name, str):
         return name
     clean = name.strip().replace("\\", "/")
-    if clean in (
-        "nvidia/LocateAnything-3B",
-        "nvidia/locate-anything-3b",
-        "locate-anything",
-        "locateanything",
-    ):
+    if clean in ("locate-anything", "nvidia/LocateAnything-3B"):
         return "locate-anything"
     if clean.startswith("IDEA-Research/"):
-        return clean.removeprefix("IDEA-Research/")
+        return clean[len("IDEA-Research/"):]
     if clean.startswith("ultralytics/"):
-        clean = clean.removeprefix("ultralytics/")
-    if not clean.endswith(".pt") and (clean.startswith("yolo") or "-world" in clean):
-        return f"{clean}.pt"
+        return clean[len("ultralytics/"):]
     return clean
 
 
@@ -160,7 +131,6 @@ def _instantiate(
     *,
     source_id: Any,
     overrides: Mapping[str, Any],
-    search_dir: Optional[str] = None,
 ) -> BaseModel:
     """Configure one metadata entry and instantiate its declared class."""
     model_id = entry.get("model_id") or source_id
@@ -169,7 +139,7 @@ def _instantiate(
         metadata=entry,
         **dict(overrides),
     )
-    cls = _resolve_class(configured.get("class"), search_dir=search_dir)
+    cls = _resolve_class(configured.get("class"))
     with utils.suppress_warnings():
         return cls(metadata=configured)
 
@@ -178,9 +148,9 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
     """Load a model from metadata or a model source.
 
     ``model`` may be an existing :class:`BaseModel`, a metadata mapping, a
-    loaded :class:`klygo.config.Config`, an offline model directory, a
-    registered model name, a YOLO ``.pt`` file, or an in-memory module exposing
-    ``parameters()``. Read configuration files with :mod:`klygo.config` first.
+    loaded :class:`klygo.config.Config`, an exported model JSON file, a
+    registered model name, or an in-memory module exposing ``parameters()``.
+    Read other configuration formats with :mod:`klygo.config` first.
 
     Keyword arguments override parameter groups declared by the resolved
     metadata. Priority parameters keep their original names; all other
@@ -202,7 +172,8 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
     Raises
     ------
     TypeError
-        If ``model`` is a configuration file path instead of loaded metadata.
+        If ``model`` is a non-JSON configuration file path instead of loaded
+        metadata.
     ValueError
         If the source cannot be resolved, its class is missing, or an override
         does not map to a declared parameter group.
@@ -266,94 +237,95 @@ def load(model: Union[str, Any], **kwargs) -> BaseModel:
         return inst
 
     entry = None
-    search_dir = None
 
-    if files.is_file(model) and files.extension(model).lower() in {
-        ".json", ".yaml", ".yml", ".toml"
+    if files.is_file(model) and files.extension(model).lower() == ".json":
+        exported = files.load(model, verbose=False)
+        required = {"class", "model_id", "details", "flags"}
+        if not isinstance(exported, Mapping) or not required.issubset(exported):
+            raise ValueError(
+                "models.load() only accepts JSON files created by "
+                "models.export() or model.export()."
+            )
+        entry = dict(exported)
+    elif files.is_file(model) and files.extension(model).lower() in {
+        ".yaml", ".yml", ".toml"
     }:
         raise TypeError(
-            "models.load() does not read configuration files; "
+            "models.load() only reads exported model JSON files; "
             "pass config.load(path) or Config(path).read()"
         )
 
-    # 1. Load from an offline or exported model directory
     if files.is_dir(model):
-        abs_model_path = str(files.resolve(model))
-        search_dir = abs_model_path
-        klygo_path = files.join(abs_model_path, "klygo.json")
-        config_path = files.join(abs_model_path, "config.json")
+        raise ValueError("models.load() does not accept directory paths.")
 
-        if files.exists(klygo_path):
-            entry = files.load(klygo_path, verbose=False)
-            if isinstance(entry, dict) and not files.is_absolute(str(entry.get("model_id", ""))):
-                entry["model_id"] = abs_model_path
-        elif files.exists(config_path):
-            cfg = files.load(config_path, verbose=False)
-            if isinstance(cfg, dict):
-                if "class" in cfg:
-                    entry = cfg
-                elif "grounding_dino" in cfg.get("model_type", "") or "GroundingDino" in str(
-                    cfg.get("architectures", [])
-                ):
-                    entry = {
-                        "class": "klygo.models.detection.GroundingDinoDetect",
-                        "model_id": abs_model_path,
-                        "details": {
-                            "name": "Grounding DINO",
-                            "task": "Object-Detection",
-                            "backend": "Hugging Face (Offline)",
-                            "library": "transformers",
-                            "num_params": "Offline",
-                        },
-                        "flags": {"model": False, "processor": True, "post": True},
-                        "model": {},
-                        "processor": {},
-                        "post": {"threshold": 0.25, "text_threshold": 0.3},
-                        "priority": {
-                            "post": ("threshold", "text_threshold"),
-                        },
-                    }
-
-    # 2. Load from a local YOLO .pt weights file
-    elif files.is_file(model) and files.extension(model).lower() == ".pt":
-        entry = _resolve(files.name(model))
-        if entry is not None:
-            entry = {**entry, "model_id": str(files.resolve(model))}
-        else:
-            entry = {
-                "class": "klygo.models.detection.YOLODetect",
-                "model_id": str(files.resolve(model)),
-                "details": {
-                    "name": "YOLO",
-                    "task": "Object-Detection",
-                    "backend": "Ultralytics (Offline)",
-                    "library": "ultralytics",
-                    "num_params": "Offline",
-                },
-                "flags": {"model": False, "post": True},
-                "model": {},
-                "post": {"threshold": 0.25, "iou": 0.7},
-                "priority": {
-                    "post": ("threshold", "iou"),
-                },
-            }
-
-    # 3. Look up in the built-in model registry
+    # 1. Look up in the built-in model registry
     if entry is None:
         entry = _resolve(model)
 
     if entry is None:
         raise ValueError(
-            f"Model '{model}' does not exist in registry and is not a valid offline model directory or file."
+            f"Model '{model}' does not exist in registry."
         )
 
-    # 4. Route all resolved sources through configure -> instantiate
+    # 2. Route all resolved sources through configure -> instantiate
     return _instantiate(
         entry,
         source_id=model,
         overrides=kwargs,
-        search_dir=search_dir,
     )
+
+
+def export(
+    model: Union[str, os.PathLike[str]],
+    output_path: Union[str, os.PathLike[str]] = "config.json",
+    *,
+    overwrite: bool = False,
+    **kwargs,
+) -> os.PathLike[str]:
+    """Export a registered model configuration without loading its weights.
+
+    Parameters
+    ----------
+    model : str or os.PathLike[str]
+        Any registered model name accepted by :func:`load`.
+    output_path : str or os.PathLike[str], default="config.json"
+        Destination JSON file.
+    overwrite : bool, default=False
+        Allow an existing destination to be replaced.
+    **kwargs : object
+        Parameter overrides resolved against the registry metadata.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the exported configuration file.
+
+    Raises
+    ------
+    FileExistsError
+        If the destination exists and overwrite is disabled.
+    ValueError
+        If the model is not registered or the destination is not JSON.
+    """
+    entry = _resolve(model)
+    if entry is None:
+        raise ValueError(f"Model '{model}' does not exist in registry.")
+
+    configured = configure(
+        str(entry.get("model_id") or model),
+        metadata=entry,
+        **kwargs,
+    )
+    output_path = files.path(output_path)
+    if files.extension(output_path).lower() != ".json":
+        raise ValueError("Model configuration export requires a .json file.")
+    files.save(
+        output_path,
+        configured.to_dict(),
+        overwrite=overwrite,
+        verbose=False,
+    )
+    return output_path
 
 def configure(
     model_id: str,

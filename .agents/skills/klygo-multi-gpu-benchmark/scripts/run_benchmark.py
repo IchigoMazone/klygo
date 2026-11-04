@@ -979,9 +979,8 @@ def run_benchmark(
 
             dev_entry["models"].append(model_data)
 
-            # Unload model and free GPU cache
-            detector.unload()
             synchronize_device(dev_str)
+            del runners, detector
 
         benchmark_runs.append(dev_entry)
 

@@ -10,13 +10,12 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from PIL import Image
 
-from klygo import files, outputs, validators
+from klygo import outputs, validators
 from klygo.models import utils
 from .base import Detector
 
 __all__ = ["LocateAnythingDetect"]
 
-_MODEL_ID = "nvidia/LocateAnything-3B"
 _REVISION = "c32291ca5e996f5a7a485845b4f57a233936bba0"
 
 _BOX_PATTERN = re.compile(r"<box>\s*<(\d+)>\s*<(\d+)>\s*<(\d+)>\s*<(\d+)>\s*</box>")
@@ -38,6 +37,7 @@ _ALLOWED_LOADING_OPTIONS = {
     "torch_dtype",
     "cache_dir",
     "local_files_only",
+    "weights",
 }
 
 
@@ -90,8 +90,9 @@ class LocateAnythingDetect(Detector):
     ----------
     metadata : mapping
         Klygo model metadata. The model group must include trust_remote_code=True.
-        Only the NVIDIA checkpoint or a local copy is supported. This adapter
-        requires CUDA and Transformers 4.57.1.
+        An optional ``weights`` source is passed to the native model loader while
+        ``model_id`` continues to select config, tokenizer, and processor assets.
+        This adapter requires CUDA and Transformers 4.57.1.
     **kwargs : object
         Detector construction options.
 
@@ -106,6 +107,7 @@ class LocateAnythingDetect(Detector):
         super().__init__(metadata=metadata, backend="Hugging Face", **kwargs)
 
         options = dict(self.metadata.get("model", {}))
+        weights = options.pop("weights", None)
         if options.get("trust_remote_code") is not True:
             raise ValueError(
                 "Locate Anything requires explicit model_trust_remote_code=True "
@@ -117,9 +119,6 @@ class LocateAnythingDetect(Detector):
             raise ValueError(
                 f"Unsupported Locate Anything loading options: {sorted(unsupported_options)}"
             )
-
-        if self.model_id != _MODEL_ID and not files.is_dir(self.model_id):
-            raise ValueError(f"Use {_MODEL_ID!r} or a local copy of that checkpoint")
 
         revision = options.get("revision", _REVISION)
         if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
@@ -175,7 +174,7 @@ class LocateAnythingDetect(Detector):
 
         self.model = (
             AutoModel.from_pretrained(
-                self.model_id,
+                weights or self.model_id,
                 config=config,
                 torch_dtype=dtype,
                 **loading_kwargs,
@@ -196,7 +195,7 @@ class LocateAnythingDetect(Detector):
         # 1. Validate prompt and reject incompatible postprocessing overrides
         if not prompt:
             raise ValueError(
-                "Locate Anything requires a non-empty prompt; use reset() to clear saved state"
+                "Locate Anything requires a non-empty prompt"
             )
 
         prompt_list = utils.normalize_prompt(prompt)
