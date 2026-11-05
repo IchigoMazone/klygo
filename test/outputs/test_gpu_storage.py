@@ -34,6 +34,7 @@ def detection(source_id="gpu", frame_index=0):
         source_id=source_id,
         frame_index=frame_index,
         image_size=(20, 20),
+        source=np.zeros((20, 20, 3), dtype=np.uint8),
     )
 
 

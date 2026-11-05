@@ -162,9 +162,12 @@ class TestDetectionsEdgeCases(unittest.TestCase):
     def test_empty_collection_exports_valid_annotations(self):
         with tempfile.TemporaryDirectory() as root:
             path = files.join(root, "empty")
-            outputs.Detections().export(path)
+            exported = outputs.Detections().export(path)
+            self.assertEqual(exported, files.path(path))
             self.assertEqual(files.load(files.join(path, "data.yaml"), verbose=False), {"names": {}})
-            self.assertEqual(files.load(files.join(path, "manifest.json"), verbose=False), [])
+            self.assertEqual(files.find(files.join(path, "images"), pattern="*.jpg"), [])
+            self.assertEqual(files.find(files.join(path, "labels"), pattern="*.txt"), [])
+            self.assertFalse(files.exists(files.join(path, "manifest.json")))
 
     def test_deterministic_random_mutations_keep_invariants(self):
         generator = random.Random(17)

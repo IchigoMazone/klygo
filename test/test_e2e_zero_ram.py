@@ -19,6 +19,8 @@ class TestEndToEnd(unittest.TestCase):
         self.assertEqual(results.count, 100); self.assertEqual(results.total_objects, 100)
         with tempfile.TemporaryDirectory() as root:
             target = files.join(root, "annotations"); results.export(target)
-            self.assertTrue(files.exists(files.join(target, "manifest.json")))
+            self.assertTrue(files.exists(files.join(target, "data.yaml")))
+            self.assertEqual(len(files.find(files.join(target, "images"), pattern="*.jpg")), 100)
+            self.assertEqual(len(files.find(files.join(target, "labels"), pattern="*.txt")), 100)
 
 if __name__ == "__main__": unittest.main()

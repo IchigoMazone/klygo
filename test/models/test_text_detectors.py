@@ -148,7 +148,7 @@ class TestLocateAnything(unittest.TestCase):
         entry["model"]["trust_remote_code"] = consent
         return entry
 
-    def make_model(self, weights=None):
+    def make_model(self, weights=None, device_map=None):
         self.processor, self.native = FakeProcessor(), FakeModel()
         self.loader = Mock(return_value=self.native)
         self.transformers = SimpleNamespace(
@@ -159,6 +159,7 @@ class TestLocateAnything(unittest.TestCase):
             AutoModel=SimpleNamespace(from_pretrained=self.loader))
         metadata = self.metadata()
         metadata["model"]["weights"] = weights
+        metadata["model"]["device_map"] = device_map
         with patch.dict("sys.modules", {"transformers": self.transformers}), patch.object(torch.cuda, "is_available", return_value=True), patch.object(torch.cuda, "is_bf16_supported", return_value=True):
             return LocateAnythingDetect(metadata)
 
@@ -212,6 +213,35 @@ class TestLocateAnything(unittest.TestCase):
     def test_weight_override_uses_the_native_model_loader(self):
         self.make_model("compatible-weights")
         self.assertEqual(self.loader.call_args.args[0], "compatible-weights")
+
+    def test_models_load_forwards_device_map_without_moving_the_model(self):
+        self.processor, self.native = FakeProcessor(), FakeModel()
+        self.loader = Mock(return_value=self.native)
+        transformers = SimpleNamespace(
+            __version__="4.57.1",
+            AutoConfig=SimpleNamespace(from_pretrained=Mock(return_value=SimpleNamespace(model_type="locateanything"))),
+            AutoTokenizer=SimpleNamespace(from_pretrained=Mock(return_value=object())),
+            AutoProcessor=SimpleNamespace(from_pretrained=Mock(return_value=self.processor)),
+            AutoModel=SimpleNamespace(from_pretrained=self.loader),
+        )
+        with patch.dict("sys.modules", {"transformers": transformers}), patch.object(
+            torch.cuda,
+            "is_available",
+            return_value=True,
+        ), patch.object(
+            torch.cuda,
+            "is_bf16_supported",
+            return_value=True,
+        ):
+            loaded = models.load(
+                "locate-anything",
+                device_map="auto",
+                model_trust_remote_code=True,
+            )
+
+        self.assertIsInstance(loaded, LocateAnythingDetect)
+        self.assertEqual(self.loader.call_args.kwargs["device_map"], "auto")
+        self.assertFalse(hasattr(self.native, "requested_device"))
 
     def test_empty_malformed_coordinates_and_options(self):
         model = self.make_model()

@@ -358,6 +358,7 @@ class TestModelMetadata(unittest.TestCase):
 
     def test_registry_uses_flat_metadata_and_model_specific_groups(self):
         grounding_dino = _resolve("grounding-dino-base")
+        locate_anything = _resolve("locate-anything")
         yolo = _resolve("yolo11n.pt")
         yolo_world = _resolve("yolov8m-worldv2.pt")
 
@@ -368,6 +369,19 @@ class TestModelMetadata(unittest.TestCase):
         self.assertIn("threshold", yolo["priority"]["post"])
         self.assertIsNone(yolo["model"]["weights"])
         self.assertIsNone(grounding_dino["model"]["weights"])
+        self.assertIn("device_map", locate_anything["priority"]["model"])
+        priority_device_map = models.configure(
+            locate_anything["model_id"],
+            metadata=locate_anything,
+            device_map="auto",
+        )
+        prefixed_device_map = models.configure(
+            locate_anything["model_id"],
+            metadata=locate_anything,
+            model_device_map="balanced",
+        )
+        self.assertEqual(priority_device_map.model.device_map, "auto")
+        self.assertEqual(prefixed_device_map.model.device_map, "balanced")
         self.assertEqual(grounding_dino["details"]["num_params"], "232M")
         self.assertEqual(
             tuple(grounding_dino["flags"]),

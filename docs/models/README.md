@@ -45,7 +45,7 @@ See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](back
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Ultralytics** | [Ultralytics Guide](backend/api/ultralytics.md) | `"Ultralytics"` | `ultralytics`, `torch` | YOLOv8, YOLOv9, YOLOv10, YOLO11, YOLO-World v2 | Built-in `YOLODetect` & `YOLOWorldDetect`, registry loading, open-vocabulary `set_classes` |
 | **Hugging Face / PyTorch** | [Hugging Face Guide](backend/api/huggingface.md) | `"Hugging Face"` / `"PyTorch"` | `transformers`, `torch` | Grounding DINO, Locate Anything, DETR, RT-DETR, custom `nn.Module` | Built-in `GroundingDinoDetect` and optional CUDA-only `LocateAnythingDetect`, AMP `autocast`, `BatchFeature` float casting, multi-GPU `sync_device` |
-| **Torchvision** | [Torchvision Guide](backend/api/torchvision.md) | `"Torchvision"` | `torchvision`, `torch` | Faster R-CNN (`fasterrcnn_mobilenet_v3_large_fpn`), RetinaNet, FCOS, SSD | List-of-tensor `cast_inputs`, `run_inference`, and `format_results` (`boxes`, `scores`, `labels`) |
+| **Torchvision** | [Torchvision Guide](backend/api/torchvision.md) | `"Torchvision"` | `torchvision`, `torch` | Faster R-CNN (`fasterrcnn_mobilenet_v3_large_fpn`), RetinaNet, FCOS, SSD | Built-in `FasterRCNNDetect`, registry loading, and list-of-tensor backend formatting |
 | **Keras 3 / KerasHub** | [Keras & KerasHub Guide](backend/api/keras.md) | `"Keras"` / `"KerasHub"` | `keras`, `keras-hub` | D-FINE / RT-DETR (`dfine_small_coco`), RetinaNet, custom `keras.Model` | Native `KERAS_BACKEND=torch`/`jax`/`tensorflow` support, `ObjectDetector` aspect-preserving resize & `decode_predictions`, automatic `yxyx` $\rightarrow$ `xyxy` conversion |
 
 </details>
@@ -60,6 +60,7 @@ See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](back
 | I want to... | Recommended API | Key Parameters / Example |
 | :--- | :--- | :--- |
 | **Load a built-in registered model by name** | [`load()`](api/load.md) | `detector = models.load("ultralytics/yolov8n.pt")` |
+| **Load registered Torchvision Faster R-CNN** | [`load()`](api/load.md) | `detector = models.load("torchvision/fasterrcnn_mobilenet_v3_large_fpn", device="cpu")` |
 | **Load an exported model JSON file** | [`load()`](api/load.md) | `detector = models.load("artifacts/models/yolo.json")` |
 | **Load compatible weights separately from the model definition** | [`load()`](api/load.md) | `cfg = config.set(config.load("model.json"), "model.weights", "trained.pt"); detector = models.load(cfg)` |
 | **Load a model from a persisted `klygo.config` file** | [`load()`](api/load.md) | `detector = models.load(config.load("model.yaml"))` |

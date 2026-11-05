@@ -257,6 +257,8 @@ class TestManyClassesScaleAndStress(unittest.TestCase):
         """Export a collection with 80 classes to YOLO format and verify data.yaml & txt annotations."""
         rng = random.Random(777)
         frames = [make_multi_class_frame("yolo_test", i, COCO_80, boxes_per_frame=15, rng=rng) for i in range(5)]
+        for item in frames:
+            item._source = Image.new("RGB", item.image_size)
         dets = outputs.Detections(frames)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -264,7 +266,8 @@ class TestManyClassesScaleAndStress(unittest.TestCase):
             dets.export(out_dir, format="yolo")
 
             self.assertTrue(files.exists(files.join(out_dir, "data.yaml")))
-            self.assertTrue(files.exists(files.join(out_dir, "manifest.json")))
+            self.assertFalse(files.exists(files.join(out_dir, "manifest.json")))
+            self.assertEqual(len(files.find(files.join(out_dir, "images"), pattern="*.jpg")), 5)
             self.assertTrue(files.is_dir(files.join(out_dir, "labels")))
 
             data_yaml = files.load(files.join(out_dir, "data.yaml"), verbose=False)

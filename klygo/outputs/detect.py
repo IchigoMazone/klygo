@@ -2930,34 +2930,50 @@ class Detections:
             overwrite=overwrite, verbose=verbose,
         )
 
-    def export(self, path: str, *, format: str = "yolo", overwrite: bool = False) -> None:
-        """Export annotations without copying source images."""
+    def export(self, path: str, *, format: str = "yolo", overwrite: bool = False) -> Any:
+        """Export annotations and source images, returning the output path."""
         self._require_materialized("export()")
         format = str(format).lower()
-        if format == "json": files.save(path, self.to_dict(), overwrite=overwrite, verbose=False); return
+        if format == "json":
+            return files.save(path, self.to_dict(), overwrite=overwrite, verbose=False)
         if format != "yolo": raise ValueError("format must be 'yolo' or 'json'")
         if files.exists(path) and not overwrite: raise FileExistsError(f"output path already exists: {path}")
         if files.exists(path): files.remove(path, missing_ok=True)
-        labels_dir = files.join(path, "labels"); files.mkdir(labels_dir)
+        from klygo import media
+
+        output_dir = files.path(path)
+        images_dir = files.join(output_dir, "images")
+        labels_dir = files.join(output_dir, "labels")
+        files.mkdir(images_dir)
+        files.mkdir(labels_dir)
         active = sorted(self.names.items())
         names = {index: label for index, (_class_id, label) in enumerate(active)}
-        manifest = []
         label_ids = {label: key for key, label in names.items()}
         for position, frame in enumerate(self):
             width, height = frame.image_size
             digest = sha1(f"{frame.source_id}:{frame.frame_index}".encode()).hexdigest()[:10]
-            filename = f"frame_{position:06d}_{frame.frame_index}_{digest}.txt"
+            stem = f"frame_{position:06d}_{frame.frame_index}_{digest}"
+            label_filename = f"{stem}.txt"
+            image_filename = f"{stem}.jpg"
             xyxy = frame._xyxy
             lines = [
                 f"{label_ids[lbl]} {(row[0]+row[2])/2/width:.6f} {(row[1]+row[3])/2/height:.6f} {(row[2]-row[0])/width:.6f} {(row[3]-row[1])/height:.6f}"
                 for lbl, row in zip(frame._labels, xyxy.tolist())
             ]
-            files.save(files.join(labels_dir, filename), lines, overwrite=True, verbose=False)
-            manifest.append({"source_id": frame.source_id, "frame_index": frame.frame_index,
-                             "source_path": frame.source_path, "image_size": list(frame.image_size),
-                             "label_file": files.as_posix(files.join("labels", filename))})
-        files.save(files.join(path, "data.yaml"), {"names": names}, overwrite=True, verbose=False)
-        files.save(files.join(path, "manifest.json"), manifest, overwrite=True, verbose=False)
+            media.save(
+                files.join(images_dir, image_filename),
+                media.to_pil(frame._resolve_source()).convert("RGB"),
+                overwrite=True,
+                verbose=False,
+            )
+            files.save(
+                files.join(labels_dir, label_filename),
+                lines,
+                overwrite=True,
+                verbose=False,
+            )
+        files.save(files.join(output_dir, "data.yaml"), {"names": names}, overwrite=True, verbose=False)
+        return output_dir
 
     def transform(self, *operations: Any) -> "Detections":
         """Apply one or more postprocessing operations or a callable pipeline in-place.

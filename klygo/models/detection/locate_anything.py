@@ -37,6 +37,7 @@ _ALLOWED_LOADING_OPTIONS = {
     "torch_dtype",
     "cache_dir",
     "local_files_only",
+    "device_map",
     "weights",
 }
 
@@ -160,6 +161,10 @@ class LocateAnythingDetect(Detector):
             "cache_dir": options.get("cache_dir", "artifacts/weights/locate-anything"),
             "local_files_only": options.get("local_files_only", False),
         }
+        model_loading_kwargs = dict(loading_kwargs)
+        device_map = options.get("device_map")
+        if device_map is not None:
+            model_loading_kwargs["device_map"] = device_map
 
         config = AutoConfig.from_pretrained(self.model_id, **loading_kwargs)
         if getattr(config, "model_type", None) != "locateanything":
@@ -172,16 +177,15 @@ class LocateAnythingDetect(Detector):
             if not callable(getattr(self.processor, callback_name, None)):
                 raise ValueError(f"Unsupported Locate Anything processor: missing {callback_name}")
 
-        self.model = (
-            AutoModel.from_pretrained(
-                weights or self.model_id,
-                config=config,
-                torch_dtype=dtype,
-                **loading_kwargs,
-            )
-            .to(device)
-            .eval()
+        self.model = AutoModel.from_pretrained(
+            weights or self.model_id,
+            config=config,
+            torch_dtype=dtype,
+            **model_loading_kwargs,
         )
+        if device_map is None:
+            self.model = self.model.to(device)
+        self.model = self.model.eval()
         self._revision = revision
 
     def forward(

@@ -4,7 +4,7 @@
 Detections(frames=(), *, metadata=None, names=None, stream=False, packed=False)
 ```
 
-Owns either an ordered materialized frame collection or a bounded-memory one-pass frame stream. Materialized results provide collision-safe CRUD, stable frame lookup, coordinate restoration, net change properties, mutation history, class-wide `drop` and `relabel`, explicit class-ID `compact`, backend-neutral `repredict`, JSON serialization, and annotation-only YOLO export.
+Owns either an ordered materialized frame collection or a bounded-memory one-pass frame stream. Materialized results provide collision-safe CRUD, stable frame lookup, coordinate restoration, net change properties, mutation history, class-wide `drop` and `relabel`, explicit class-ID `compact`, backend-neutral `repredict`, JSON serialization, and complete YOLO dataset export.
 
 Set `packed=True` for compact materialized storage. Coordinates, scores, class IDs, UIDs, and frame offsets are stored in shared NumPy/CuPy arrays. `results[i]` still returns a `Detection`, and `results[i][j]` still returns a `Box`. Unmodified frame facades use a weak cache; edited frames are pinned as authoritative overlays so changes survive garbage collection. Structural frame CRUD safely materializes the collection before editing. Streams and packed storage are mutually exclusive.
 
@@ -21,7 +21,8 @@ for frame in stream:
 
 results = model.predict("images/", stream=False)
 results.drop("unknown")
-results.export("artifacts/predictions", format="yolo")
+dataset_dir = results.export("artifacts/predictions", format="yolo")
+print(dataset_dir)  # contains images/, labels/, and data.yaml
 
 packed_results = model.predict("images/", packed=True)
 print(packed_results.is_packed, packed_results.total_objects)
@@ -58,7 +59,7 @@ The collection owns the shared class registry. Frame CRUD and direct mutations o
 
 The collection maintains an internal label-to-frame index. Collection-wide `drop()` and `relabel()` therefore visit only frames containing a requested label and automatically batch registry synchronization. Callers use the normal methods directly; batching remains an implementation detail.
 
-Class IDs remain stable and deleted IDs are not reused during normal editing. Call `compact()` explicitly to rewrite active IDs to `0..n-1`. Compaction updates the shared registries lazily instead of visiting every box, so its cost depends on the number of classes and frames rather than the total annotation count. Box UIDs and frame identities remain unchanged. YOLO export performs its own temporary compact mapping and never mutates the collection.
+Class IDs remain stable and deleted IDs are not reused during normal editing. Call `compact()` explicitly to rewrite active IDs to `0..n-1`. Compaction updates the shared registries lazily instead of visiting every box, so its cost depends on the number of classes and frames rather than the total annotation count. Box UIDs and frame identities remain unchanged. YOLO export performs its own temporary compact mapping, writes source pixels to `images/` with matching annotation stems in `labels/`, returns the dataset directory, and never mutates the collection.
 
 Use `copy()` to create an independent working result before in-place filtering. Frames, boxes, registries, and metadata are copied deeply, while lazy source-image handles are shared so image pixels are not duplicated in memory.
 
@@ -79,7 +80,7 @@ results = model.predict("images/", stream=False)
 results.drop(["unknown"])
 results.repredict(model, index=[0, 2], threshold=0.5)
 results.compact()
-results.export("artifacts/predictions", format="yolo")
+dataset_dir = results.export("artifacts/predictions", format="yolo")
 ```
 
 `merge()` raises on any duplicate `(source_id, frame_index)` identity. Batch operations validate before committing. `filter()`, `drop()`, `relabel()`, `compact()`, and `clear()` return the same collection for in-place chaining:

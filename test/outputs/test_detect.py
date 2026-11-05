@@ -460,12 +460,17 @@ class TestOutputs(unittest.TestCase):
         self.assertEqual(next(iter(results)).labels, ["vehicle"])
         self.assertEqual(consumed, [True])
 
-    def test_export_is_annotation_only(self):
+    def test_export_writes_images_and_returns_the_dataset_directory(self):
         with tempfile.TemporaryDirectory() as root:
-            target = files.join(root, "export"); outputs.Detections([frame()]).export(target)
+            target = files.join(root, "export")
+            item = frame()
+            item._source = Image.new("RGBA", item.image_size)
+            exported = outputs.Detections([item]).export(target)
+            self.assertEqual(exported, files.path(target))
             self.assertTrue(files.exists(files.join(target,"data.yaml")))
-            self.assertTrue(files.exists(files.join(target,"manifest.json")))
-            self.assertFalse(files.exists(files.join(target,"images")))
+            self.assertEqual(len(files.find(files.join(target, "images"), pattern="*.jpg")), 1)
+            self.assertEqual(len(files.find(files.join(target, "labels"), pattern="*.txt")), 1)
+            self.assertFalse(files.exists(files.join(target,"manifest.json")))
 
     def test_yolo_export_compacts_ids_without_mutating_results(self):
         with tempfile.TemporaryDirectory() as root:
@@ -480,9 +485,7 @@ class TestOutputs(unittest.TestCase):
                 {"names": {0: "a", 1: "c"}},
             )
             label_file = files.load(
-                files.join(target, "labels", files.name(files.load(
-                    files.join(target, "manifest.json"), verbose=False
-                )[0]["label_file"])),
+                files.find(files.join(target, "labels"), pattern="*.txt")[0],
                 verbose=False,
             )
             lines = label_file.splitlines() if isinstance(label_file, str) else label_file

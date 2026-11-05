@@ -34,7 +34,37 @@ Torchvision detection models expect a `list[torch.Tensor]` (where each tensor ha
 
 ---
 
-## 3. Writing a Custom Torchvision `Detector` Subclass (Faster R-CNN)
+## 3. Built-in Faster R-CNN
+
+Klygo includes `FasterRCNNDetect` for the official MobileNetV3-Large FPN
+architecture. Load the default COCO weights through either equivalent registry
+name:
+
+```python
+from klygo import models
+
+detector = models.load(
+    "torchvision/fasterrcnn_mobilenet_v3_large_fpn",
+    device="cpu",
+    threshold=0.5,
+)
+```
+
+`device` and `threshold` are priority parameters. A separate checkpoint follows
+the standard model prefix:
+
+```python
+detector = models.load(
+    "fasterrcnn_mobilenet_v3_large_fpn",
+    device="cpu",
+    model_weights="artifacts/weights/fasterrcnn.pt",
+)
+```
+
+The checkpoint must be a compatible state dictionary. Torchvision performs the
+strict key and tensor-shape validation.
+
+## 4. Writing a Custom Torchvision `Detector` Subclass
 
 ```python
 import torch
@@ -103,7 +133,7 @@ class FasterRCNNDetector(models.Detector):
 
 ---
 
-## 4. Configuring and Loading
+## 5. Configuring and Loading
 
 ```python
 from klygo import models

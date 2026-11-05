@@ -37,6 +37,7 @@ from klygo import models
 detector = models.load(
     "nvidia/LocateAnything-3B",
     model_trust_remote_code=True,
+    device_map="auto",
     model_device="cuda",
     model_torch_dtype="bfloat16",
 )
@@ -52,6 +53,9 @@ the native Hugging Face error. A successfully resolved checkpoint must declare
 `model_type="locateanything"`. Save the tokenizer with
 `detector.tokenizer.save_pretrained(output_dir)` when exporting a native checkpoint.
 Use `model_local_files_only=True` to prohibit checkpoint downloads.
+`device_map` is a model priority option and is passed only to
+`AutoModel.from_pretrained()`. When it is set, the adapter leaves placement to
+Transformers/Accelerate and does not call `.to(device)` afterward.
 
 Set `weights` to load compatible native weights separately while keeping the
 config, tokenizer, and processor selected by `model_id`. Because the same pinned

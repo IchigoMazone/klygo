@@ -5,6 +5,8 @@ import random
 import tempfile
 import unittest
 
+from PIL import Image
+
 from klygo import files, outputs, postprocessing
 
 
@@ -22,6 +24,7 @@ def frame(index, boxes=2):
         source_id="packed-source",
         frame_index=index,
         image_size=(100, 100),
+        source=Image.new("RGB", (100, 100)),
         metadata={"index": index},
     )
 

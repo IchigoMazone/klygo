@@ -12,7 +12,7 @@ results.astype(32)
 results.transform(post.clip(), post.threshold(0.4), post.nms(0.5))
 results[0].save("artifacts/predictions/selected.jpg", mode="uid", overwrite=True)
 results.save_video("artifacts/predictions/result.mp4", fps=30.0, mode="index", overwrite=True)
-results.export("artifacts/predictions", format="yolo")
+dataset_dir = results.export("artifacts/predictions", format="yolo")
 ```
 
 ## Public APIs

@@ -282,7 +282,8 @@
     },
     "priority": {
       "model": [
-        "weights"
+        "weights",
+        "device_map"
       ],
       "generation": [
         "generation_mode",
@@ -295,6 +296,7 @@
     },
     "model": {
       "weights": null,
+      "device_map": null,
       "trust_remote_code": false,
       "revision": "c32291ca5e996f5a7a485845b4f57a233936bba0"
     },
@@ -305,6 +307,36 @@
       "top_p": 0.9,
       "repetition_penalty": 1.1,
       "do_sample": false
+    }
+  },
+  "fasterrcnn_mobilenet_v3_large_fpn": {
+    "class": "klygo.models.detection.FasterRCNNDetect",
+    "model_id": "fasterrcnn_mobilenet_v3_large_fpn",
+    "details": {
+      "name": "Faster R-CNN MobileNetV3-Large FPN",
+      "task": "Object-Detection",
+      "backend": "Torchvision",
+      "library": "torchvision",
+      "num_params": "19.4M"
+    },
+    "flags": {
+      "model": false,
+      "post": true
+    },
+    "priority": {
+      "model": [
+        "device"
+      ],
+      "post": [
+        "threshold"
+      ]
+    },
+    "model": {
+      "device": null,
+      "weights": "DEFAULT"
+    },
+    "post": {
+      "threshold": 0.5
     }
   },
   "grounding-dino-*": {

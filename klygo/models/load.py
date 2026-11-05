@@ -21,16 +21,19 @@ CLASS_MAPPING = {
     "YOLODetect": "klygo.models.detection.yolo.YOLODetect",
     "YOLOWorldDetect": "klygo.models.detection.yolo_world.YOLOWorldDetect",
     "LocateAnythingDetect": "klygo.models.detection.locate_anything.LocateAnythingDetect",
+    "FasterRCNNDetect": "klygo.models.detection.faster_rcnn.FasterRCNNDetect",
     "klygo.models.detection.Detector": Detector,
     "klygo.models.detection.base.Detector": Detector,
     "klygo.models.detection.GroundingDinoDetect": "klygo.models.detection.grounding_dino.GroundingDinoDetect",
     "klygo.models.detection.YOLODetect": "klygo.models.detection.yolo.YOLODetect",
     "klygo.models.detection.YOLOWorldDetect": "klygo.models.detection.yolo_world.YOLOWorldDetect",
     "klygo.models.detection.LocateAnythingDetect": "klygo.models.detection.locate_anything.LocateAnythingDetect",
+    "klygo.models.detection.FasterRCNNDetect": "klygo.models.detection.faster_rcnn.FasterRCNNDetect",
     "klygo.models.detection.grounding_dino.GroundingDinoDetect": "klygo.models.detection.grounding_dino.GroundingDinoDetect",
     "klygo.models.detection.yolo.YOLODetect": "klygo.models.detection.yolo.YOLODetect",
     "klygo.models.detection.yolo_world.YOLOWorldDetect": "klygo.models.detection.yolo_world.YOLOWorldDetect",
     "klygo.models.detection.locate_anything.LocateAnythingDetect": "klygo.models.detection.locate_anything.LocateAnythingDetect",
+    "klygo.models.detection.faster_rcnn.FasterRCNNDetect": "klygo.models.detection.faster_rcnn.FasterRCNNDetect",
 }
 
 _REGISTRY_CACHE: Optional[Dict[str, Any]] = None
@@ -85,6 +88,8 @@ def _normalize_model_name(name: Any) -> Any:
         return clean[len("IDEA-Research/"):]
     if clean.startswith("ultralytics/"):
         return clean[len("ultralytics/"):]
+    if clean.startswith("torchvision/"):
+        return clean[len("torchvision/"):]
     return clean
 
 
