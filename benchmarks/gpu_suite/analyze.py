@@ -31,8 +31,12 @@ def render(bundle):
              "- Most detectors use FP32. LocateAnything uses FP16, one query, fast generation and a 512-token limit; it is not directly comparable to FP32 detector precision.",
              "- First-frame figures in throughput runs are host-visible delivery observations. The separate ready-latency pass synchronizes each result and is not included in FPS.",
              "- Batched/non-stream output arrives in bursts. Delivery intervals are not isolated per-frame inference time; ready pack latency includes the entire call.",
+             "- Image diagnostics contain only 8 or 32 deliveries. Their interpolated P95/P99 are descriptive samples, not tail-latency SLA evidence.",
+             "- Throughput passes retain yielded results for untimed parity; peak memory includes retention. The separate stability probe consumes without retaining frames.",
              "- RSS is sampled at 50 ms; short peaks can be missed. CPU percentages are approximate, expressed relative to one core and include probe setup. NVML uses device-window statistics.",
-             "- This controlled public bus workload does not qualify production accuracy, live-camera behavior or 10–30 minute stability.", ""]
+             "- Reserved VRAM includes allocator caches from preceding modes. Allocated peaks describe live tensor allocation; neither is an isolated minimum-memory requirement.",
+             "- Factory load time excludes process/hardware initialization and includes checkpoint lookup/download when needed; cache states differ between jobs.",
+             "- This controlled public bus workload does not qualify production accuracy or live-camera behavior. A separate stability result, when present, covers one managed pipeline, not all models or 30-minute production use.", ""]
     if reports:
         env = reports[0].get("environment",{})
         lines += ["## Environment", "", f"GPU: **{env.get('gpu')}**, VRAM {number(env.get('vram_mib'))} MiB. CUDA {env.get('cuda')}.",
@@ -41,6 +45,16 @@ def render(bundle):
                   "| Package | Version |", "| --- | --- |"]
         lines += [f"| {name} | {version} |" for name,version in env.get("versions",{}).items()]
         lines += ["", "Tested commit(s): "+", ".join(f"`{value}`" for value in sorted({r.get('environment',{}).get('tested_commit','unknown') for r in reports})), ""]
+    if bundle.get("hardware_details"):
+        lines += ["Additional hardware/runtime details: `"+str(bundle["hardware_details"])+"`.", ""]
+    if bundle.get("failed_attempts") or bundle.get("rejected_control_probe_attempts"):
+        lines += ["## Attempt audit", "",
+                  "The original model groups are frozen: native overrides are transient and are not remembered by managed prediction. Real Detector API tests confirm that the original measurements used independent mode settings.",
+                  f"Rejected control probes: {len(bundle.get('rejected_control_probe_attempts',[]))}. These attempted an explicit managed-time override of the frozen model group, were rejected before final measurements, and are excluded from tables.",
+                  "Setup/execution failures are retained separately from the selected final attempts:", ""]
+        for report in bundle.get("failed_attempts",[]):
+            lines.append(f"- {report.get('model')}: {report.get('error_type')} — {report.get('error')}")
+        lines.append("")
     profiles = sorted({(r["settings"]["profile"],r["settings"]["batch"]) for r in reports})
     for profile,batch in profiles:
         selected = [r for r in reports if r["settings"]["profile"]==profile and r["settings"]["batch"]==batch]
@@ -111,6 +125,30 @@ def render(bundle):
             if backend:
                 means = {stage:statistics.mean(frame[stage] for frame in backend) for stage in backend[0]}
                 lines += ["", "Upstream-reported first-repeat stage averages (ms/frame): "+str(means)+". These are upstream timers, not an additive decomposition of total wall time.", ""]
+            captures = case.get("first_repeat_output",[])
+            if captures and all("uids" in frame for frame in captures):
+                unique = all(len(set(frame["uids"]))==len(frame["uids"]) for frame in captures)
+                sources = len({frame["source_id"] for frame in captures})
+                lines += ["", f"First-repeat metadata: per-frame UID uniqueness={unique}; distinct source identities={sources}."]
+                if settings["profile"]=="video":
+                    ordered = [frame["frame_index"] for frame in captures]==list(range(len(captures)))
+                    lines += [f"Sequential video frame indices={ordered}."]
+                else:
+                    lines += ["Image-pack frame indices restart per public API call; cross-path source representations are not asserted to have identical identity strings."]
+                lines.append("")
+    stable = bundle.get("stability")
+    if stable:
+        lines += ["## Ten-minute managed-stream stability", "",
+                  f"GPU: {stable.get('gpu')}; model {stable.get('model')}; elapsed {number(stable.get('elapsed_seconds'))} s; frames {stable.get('total_frames')}.",
+                  f"Pass: **{stable.get('pass')}**. Exceptions: `{stable.get('exceptions')}`. Failed gates: `{stable.get('failed_gates')}`.",
+                  "Each loop verifies frame count and order, consumes without retaining frames, closes the stream and collects unreachable Python objects. The model remains loaded; allocator caches are not emptied between loops.", "",
+                  "| Metric | First 60-second median | Last 60-second median | Change % |",
+                  "| --- | ---: | ---: | ---: |"]
+        for key in ("rss_mib","vram_allocated_mib","fps","open_fds"):
+            lines.append(f"| {key} | {number(stable.get(key+'_first_window'))} | {number(stable.get(key+'_last_window'))} | {number(stable.get(key+'_growth_percent'))} |")
+        elapsed = stable.get("elapsed_seconds",0)
+        if elapsed:
+            lines += ["",f"Whole-check throughput including between-loop cleanup: {number(stable.get('total_frames',0)/elapsed)} FPS. Per-loop FPS above excludes between-loop cleanup.",""]
     lines += ["## Reproduction and limits", "",
               "Use the versioned runner and notebook with the recorded package versions. Every raw timing sample, diagnostic interval, telemetry sample and first-repeat normalized output is retained in the companion JSON.",
               "No CPU result has been substituted for a failed GPU job. N/A is a capability limitation; ERROR is an attempted run that failed. Model-load and download costs are separate from prediction FPS.",

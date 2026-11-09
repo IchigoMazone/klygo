@@ -62,7 +62,7 @@ def build(key, args):
         name = {"yolo": "yolov8n.pt", "yolo11": "yolo11n.pt", "yolo26": "yolo26n.pt",
                 "yolo-world": "yolov8s-worldv2.pt"}[key]
         detector = models.load(name, device=args.device, imgsz=args.imgsz,
-                               half=False, threshold=0.25, iou=0.7)
+                               half=False, threshold=0.25, iou=0.7, model_stream=False)
         prompt = ["person", "bus", "car"] if key == "yolo-world" else None
         if prompt:
             detector.model.set_classes(prompt)
@@ -260,13 +260,12 @@ def execute(detector,key,prompt,mode,images,args,video=None):
                 rect=True,verbose=False)
         return raw(detector,key,images,prompt)
     if mode.startswith("native"):
-        # Inference options persist between public predict calls. Always reset
-        # upstream streaming explicitly instead of inheriting a previous mode.
+        # Native calls may override a frozen model group transiently. Frozen
+        # options are not remembered by Detector's runtime configuration.
         kwargs = {"model_stream": mode=="native-stream"} if key in ("yolo","yolo11","yolo26","yolo-world") else {}
         return detector.predict(video or images,prompt=prompt,native=True,verbose=False,**kwargs)
-    kwargs = {"model_stream": False} if key in ("yolo","yolo11","yolo26","yolo-world") else {}
     return detector.predict(video or images,prompt=prompt,batch=args.batch,workers=1,prefetch=1,
-                            stream=mode=="managed-stream",verbose=False,**kwargs)
+                            stream=mode=="managed-stream",verbose=False)
 
 
 def measure(detector,key,prompt,mode,packs,args,video=None,ready_latency=False):

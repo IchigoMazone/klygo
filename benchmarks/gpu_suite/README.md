@@ -26,6 +26,9 @@ therefore have N/A for native rows.
 - A separate latency diagnostic synchronizes at each result and reports P50,
   P95/P99 delivery intervals and pack-call latency. Non-stream/batched delivery
   has bursts; zero-length intervals do not imply zero inference latency.
+- Throughput passes retain yielded results for untimed comparison. Their memory
+  peaks include result retention; bounded streaming memory is checked separately
+  by the non-retaining ten-minute stability probe.
 - Sampled RSS/CPU and optional NVML utilization, power, clocks and temperature;
   Torch allocated/reserved VRAM peaks. Sampling cannot capture arbitrarily short
   peaks. NVML utilization is a device-window statistic, not exact per-call work.
