@@ -260,10 +260,13 @@ def execute(detector,key,prompt,mode,images,args,video=None):
                 rect=True,verbose=False)
         return raw(detector,key,images,prompt)
     if mode.startswith("native"):
-        kwargs = {"model_stream": True} if mode=="native-stream" else {}
+        # Inference options persist between public predict calls. Always reset
+        # upstream streaming explicitly instead of inheriting a previous mode.
+        kwargs = {"model_stream": mode=="native-stream"} if key in ("yolo","yolo11","yolo26","yolo-world") else {}
         return detector.predict(video or images,prompt=prompt,native=True,verbose=False,**kwargs)
+    kwargs = {"model_stream": False} if key in ("yolo","yolo11","yolo26","yolo-world") else {}
     return detector.predict(video or images,prompt=prompt,batch=args.batch,workers=1,prefetch=1,
-                            stream=mode=="managed-stream",verbose=False)
+                            stream=mode=="managed-stream",verbose=False,**kwargs)
 
 
 def measure(detector,key,prompt,mode,packs,args,video=None,ready_latency=False):
