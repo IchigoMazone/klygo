@@ -98,8 +98,50 @@ def _prepared_batches(
     if workers == 0 or prefetch == 0 or (
         count is not None and count <= batch and (workers == 1 or count <= 1)
     ):
-        for part in batches:
-            yield part, [materialize(image) for image in part]
+        try:
+            for part in batches:
+                yield part, [materialize(image) for image in part]
+        finally:
+            close = getattr(iterator, "close", None)
+            if callable(close):
+                close()
+        return
+
+    source_prepares_pixels = (
+        bool(getattr(images, "_predicates", ()))
+        or bool(getattr(images, "_preprocessing_ops", ()))
+        or getattr(images, "_motion_threshold", None) is not None
+        or getattr(images, "_deduplicate_threshold", None) is not None
+    )
+    if batch == 1 and workers == 1 and not source_prepares_pixels:
+        # One ordered worker already serializes video reads. Avoid a second
+        # executor and a completed intermediate Future on every default frame.
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="klygo-decode")
+        pending_single: deque[tuple[Any, Future[Any]]] = deque()
+        exhausted = object()
+
+        def submit_one() -> bool:
+            image = next(iterator, exhausted)
+            if image is exhausted:
+                return False
+            pending_single.append((image, executor.submit(materialize, image)))
+            return True
+
+        try:
+            for _ in range(prefetch + 1):
+                if not submit_one():
+                    break
+            while pending_single:
+                image, future = pending_single.popleft()
+                yield [image], [future.result()]
+                submit_one()
+        finally:
+            for _image, future in pending_single:
+                future.cancel()
+            executor.shutdown(wait=True, cancel_futures=True)
+            close = getattr(iterator, "close", None)
+            if callable(close):
+                close()
         return
 
     stopped = Event()

@@ -24,4 +24,4 @@ pipeline = p.compose(p.resize((32, 24)), p.grayscale())
 print(pipeline(image).size)
 ```
 
-Run [the standalone example](../../../examples/preprocessing/compose.py) and see the [module index](../README.md).
+Run [the standalone example](../../../examples/preprocessing/Compose.py) and see the [module index](../README.md).

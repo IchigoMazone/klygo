@@ -30,6 +30,48 @@ class TestManagedPipeline(unittest.TestCase):
             finally:
                 batches.close()
 
+    def test_default_worker_keeps_source_iteration_on_the_caller_and_closes(self):
+        for workers, prefetch in ((0, 0), (1, 0), (1, 1)):
+            with self.subTest(workers=workers, prefetch=prefetch):
+                caller = current_thread().name
+                seen = []
+                closed = Event()
+
+                def source():
+                    try:
+                        for index in range(20):
+                            seen.append((index, current_thread().name))
+                            yield index
+                    finally:
+                        closed.set()
+
+                with patch.object(base, "_materialize_model_image", side_effect=lambda image: image):
+                    batches = base._prepared_batches(source(), 1, workers, prefetch)
+                    self.assertEqual(next(batches), ([0], [0]))
+                    batches.close()
+                self.assertTrue(closed.is_set())
+                self.assertTrue(all(thread == caller for _, thread in seen))
+                self.assertLessEqual(len(seen), 2 if prefetch else 1)
+
+    def test_default_worker_propagates_decode_failure_and_closes_source(self):
+        closed = Event()
+
+        def source():
+            try:
+                yield from range(20)
+            finally:
+                closed.set()
+
+        def decode(image):
+            if image == 1:
+                raise ValueError("decode failed")
+            return image
+
+        with patch.object(base, "_materialize_model_image", side_effect=decode):
+            with self.assertRaisesRegex(ValueError, "decode failed"):
+                list(base._prepared_batches(source(), 1, 1, 1))
+        self.assertTrue(closed.is_set())
+
     def test_single_batch_still_uses_parallel_workers(self):
         rendezvous = Event()
 

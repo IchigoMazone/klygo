@@ -20,7 +20,7 @@ Local Tutorial Notebooks (`tutorials/preprocessing/`, 1-to-1 with `klygo/preproc
 <summary><b>How lazy execution, quality predicates, and coordinate restoration work together</b> <i>(Click to expand or collapse)</i></summary>
 
 1. **Lazy Pipelines on `media.LazyImage` (`Operation` & `Compose`)**:
-   - Every transform in `transforms.py` returns a serializable [`Operation`](api/Operation.md) and pipelines are built with [`compose()`](api/compose.md) / [`Compose`](api/Compose.md).
+   - Every transform in `transforms.py` returns a serializable [`Operation`](api/Operation.md) and pipelines are built with [`compose()`](api/Compose.md) / [`Compose`](api/Compose.md).
    - Applying an `Operation` or `Compose` pipeline to a `media.LazyImage` appends operations to the image's lazy queue without decoding pixels until [`materialize()`](api/materialize.md) (or `.to_pil()` / `.to_numpy()`) is called. Use [`inspect()`](api/inspect.md) to preview queued steps and [`optimize()`](api/optimize.md) to normalize a pipeline without changing pixel semantics.
 2. **Quality Scoring & Conditional Predicates (`Metric` & `Predicate`)**:
    - Functions in `metrics.py` (such as [`blur_score()`](api/blur_score.md), [`brightness_score()`](api/brightness_score.md), [`contrast_score()`](api/contrast_score.md), and [`perceptual_hash()`](api/perceptual_hash.md)) return reusable [`Metric`](api/Metric.md) evaluators that compute fast preview statistics.
@@ -40,7 +40,7 @@ Local Tutorial Notebooks (`tutorials/preprocessing/`, 1-to-1 with `klygo/preproc
 
 | I want to... | Recommended API | Key Parameters / Example |
 | :--- | :--- | :--- |
-| **Chain multiple transforms into a reusable pipeline** | [`compose()`](api/compose.md) | `pipe = p.compose(p.auto_orient(), p.letterbox((640, 640)))` |
+| **Chain multiple transforms into a reusable pipeline** | [`compose()`](api/Compose.md) | `pipe = p.compose(p.auto_orient(), p.letterbox((640, 640)))` |
 | **Execute a lazy pipeline to PIL / NumPy / tensor** | [`materialize()`](api/materialize.md) | `pil_img = p.materialize(lazy_img, output="pil")` |
 | **Inspect or normalize queued operations before decoding** | [`inspect()`](api/inspect.md) / [`optimize()`](api/optimize.md) | `plan = p.inspect(lazy_img); safe_pipe = p.optimize(pipe)` |
 | **Run a transform conditionally based on image quality** | [`Predicate`](api/Predicate.md) / [`between()`](api/between.md) | `op = p.clahe().when(p.brightness_score() < 90)` |
@@ -79,7 +79,7 @@ Implemented in `core.py`.
 | [`Compose`](api/Compose.md) | [Run](../../examples/preprocessing/Compose.py) |
 | [`Metric`](api/Metric.md) | [Run](../../examples/preprocessing/Metric.py) |
 | [`Predicate`](api/Predicate.md) | [Run](../../examples/preprocessing/Predicate.py) |
-| [`compose`](api/compose.md) | [Run](../../examples/preprocessing/compose.py) |
+| [`compose`](api/Compose.md) | [Run](../../examples/preprocessing/Compose.py) |
 | [`apply`](api/apply.md) | [Run](../../examples/preprocessing/apply.py) |
 | [`materialize`](api/materialize.md) | [Run](../../examples/preprocessing/materialize.py) |
 | [`inspect`](api/inspect.md) | [Run](../../examples/preprocessing/inspect.py) |
