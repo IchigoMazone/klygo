@@ -1,6 +1,8 @@
 """Ultralytics YOLO-World detection wrapper."""
 
 from typing import Any, Dict
+from contextlib import contextmanager
+from klygo.models.detection import _ultralytics as execution
 
 try:
     from ultralytics import YOLOWorld
@@ -24,6 +26,21 @@ class YOLOWorldDetect(Detector):
         self.model = YOLOWorld(weights or self.model_id)
         self.original_names = dict(self.model.names)
         self.names = dict(self.original_names)
+
+    @contextmanager
+    def _prediction_session(self, options):
+        # Predictor reuse belongs to this wrapper, not the generic task engine.
+        with self._prediction_lock:
+            execution.optimize_model(self.model)
+        yield self.forward
+
+    def format_results(self, raw_outputs):
+        """Pack Ultralytics results without framework dispatch."""
+        return execution.format_results(raw_outputs)
+
+    def run_inference(self, inputs, **model_kwargs):
+        """Use the model's native prediction API."""
+        return self.model(inputs, **model_kwargs)
 
     def forward(self, images, prompt=None, **kwargs):
         """Run YOLO-World and return standard detection frames."""

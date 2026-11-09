@@ -1,4 +1,4 @@
-"""Lazy framework adapters for Hugging Face, Ultralytics, Keras, and Torchvision."""
+"""Compatibility imports for relocated runtime and detection helpers."""
 
 import importlib
 

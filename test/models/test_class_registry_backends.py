@@ -131,13 +131,6 @@ class TestClassRegistryBackends(unittest.TestCase):
         with patch("klygo.models.detection.yolo_world.YOLOWorld", _YOLOWorld):
             model = YOLOWorldDetect(metadata)
 
-        own_methods = {
-            name
-            for name, value in YOLOWorldDetect.__dict__.items()
-            if callable(value)
-        }
-        self.assertEqual(own_methods, {"__init__", "forward"})
-
         model.forward([Image.new("RGB", (8, 8))], prompt=["cat", "dog"])
         self.assertEqual(model.original_names, {0: "person", 1: "car"})
         self.assertEqual(model.model.model_id, "trained-world.pt")
@@ -177,13 +170,6 @@ class TestClassRegistryBackends(unittest.TestCase):
         }
         with patch("klygo.models.detection.yolo.YOLO", _YOLO):
             model = YOLODetect(metadata)
-
-        own_methods = {
-            name
-            for name, value in YOLODetect.__dict__.items()
-            if callable(value)
-        }
-        self.assertEqual(own_methods, {"__init__", "forward"})
 
         model.forward([Image.new("RGB", (8, 8))], prompt=["car"])
         self.assertEqual(model.names, {0: "person", 1: "car"})

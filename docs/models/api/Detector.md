@@ -16,16 +16,15 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
 `Detector` subclasses [`models.BaseModel`](BaseModel.md) and sets `task="Object-Detection"`. Every detector implements `forward(images, prompt=None)`. Before that method runs, `predict()` resolves priority arguments and `<group>_` prefixes into the active `self.metadata` groups. A wrapper reads those groups explicitly, performs preprocessing, calls its native model, formats the result, and passes it to `outputs.build_detections()`. `run_inference()` remains an optional adapter for framework-specific execution, not a required wrapper pattern.
 
 1. **Persistent Prediction Configuration & Public Properties**:
-   - `self.device`: Query the active accelerator device of `self.model` via `common.current_device()`.
-   - `self.dtype`: Query the active numeric dtype of `self.model` via `common.current_dtype()`.
+   - `self.device`: Query the active accelerator device of `self.model` through `models.runtime`.
+   - `self.dtype`: Query the active numeric dtype of `self.model` through `models.runtime`.
    - `self.predict_config`: Independent, defensive `deepcopy` snapshot of effective inference options (such as `prompt`, `threshold`, `iou`). External mutation of the returned dictionary does not mutate model state.
    - Persistent settings: `predict()` automatically retains configured `prompt`, `threshold`, and `iou` across successive calls. Passing `prompt=None` clears the remembered prompt and restores default vocabulary. Execution controls (`batch`, `workers`, `prefetch`, `vid_stride`, `max_frames`, `stream`, `native`, `packed`, `verbose`) are never persisted.
-2. **Multi-Backend Dispatch Helpers (delegated to [`klygo.models.backend.common`](../backend/api/common.md))**:
-   - `self.cast_inputs(inputs, dev=None, dtype=None)`: Cast floating-point tensors to the model's device and dtype while preserving integer tensors (`input_ids`) via `common.cast_inputs()`.
-   - `self.run_inference(inputs, **model_kwargs)`: Execute forward pass via `common.run_inference()` on the active backend adapter (`Hugging Face`, `Ultralytics`, `Torchvision`, or `Keras`).
-   - `self.get_output_device(outputs)` / `self.sync_device(tensor, target_device)`: Inspect output device and synchronize multi-GPU tensors via `common.get_output_device()` and `common.sync_device()`.
-   - `self.format_results(raw_outputs)`: Normalize framework-native predictions into `list[dict[str, Any]]` with `"boxes"` (`xyxy`), `"scores"`, `"labels"`, and `"class_ids"` via `common.format_results()`, ready to pass straight into [`outputs.build_detections(images, formatted, names=self.names)`](../../outputs/api/build_detections.md).
-   - See the [`klygo.models.backend` & `common` Guide](../backend/README.md) for direct usage of all 12 `common` functions.
+2. **Optional Execution Helpers and Native Wrappers**:
+   - `self.cast_inputs(inputs)`, `self.run_inference(inputs, **model_kwargs)`, `self.get_output_device(outputs)`, `self.sync_device(tensor, target_device)` and `self.format_results(raw_outputs)` remain compatible for existing custom models.
+   - Built-in wrappers implement their framework-specific helpers directly. A new custom model can perform native preprocessing and inference inside `forward` and return frames from [`outputs.build_detections`](../../outputs/api/build_detections.md), without calling any execution dispatcher.
+   - `_prediction_session(options)` is an optional private context-manager hook yielding an inference callable. It runs once for a managed prediction and closes when its stream ends, fails or is explicitly closed. The default yields `forward`; YOLO prepares predictor reuse in its own session.
+   - Device, dtype, cache management and benchmark synchronization use lazy shared runtime helpers. The [backend guide](../backend/README.md) explains the compatibility boundary.
 3. **Inference Engine (`predict`)**:
    - Resolves single images, lists of images, directories, or video streams through `klygo.media`.
    - Applies call-local parameter overrides (`**kwargs`) validated against `metadata.flags` and `metadata.priority`.

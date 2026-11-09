@@ -29,7 +29,7 @@ models.set_backend("Keras", engine="torch")
 
 ## 2. Adapter Functions (`klygo/models/backend/keras.py`)
 
-When `Detector` dispatches through [`klygo.models.backend.common`](common.md) with `backend="Keras"` (or `"KerasHub"` / `"TensorFlow"`), `klygo.models.backend.keras` provides specialized handling for both standard `keras.Model` instances and `keras_hub.models.ObjectDetector` presets:
+When an existing custom wrapper uses the compatible Detector helpers through [`klygo.models.backend.common`](common.md) with `backend="Keras"` (or `"KerasHub"` / `"TensorFlow"`), `klygo.models.backend.keras` provides specialized handling for both standard `keras.Model` instances and `keras_hub.models.ObjectDetector` presets:
 
 - `keras.current_device(model=None) -> str`: Query the active Keras device (`"cuda:0"`, `"gpu:0"`, or `"cpu"`), checking Torch CUDA availability when `KERAS_BACKEND == "torch"`.
 - `keras.current_dtype(model=None) -> str`: Return `model.compute_dtype` / `model.dtype` or `keras.config.floatx()`.

@@ -19,6 +19,7 @@ except (ImportError, RuntimeError) as exc:
 from klygo import files, outputs
 from klygo.models import utils
 from klygo.models.detection.base import Detector
+from klygo.models.detection import _torchvision as execution
 
 __all__ = ["FasterRCNNDetect"]
 
@@ -54,6 +55,18 @@ class FasterRCNNDetect(Detector):
             for class_id, name in enumerate(categories)
             if name != "__background__"
         }
+
+    def cast_inputs(self, inputs):
+        """Move Torchvision image tensors to the model's device and dtype."""
+        return execution.cast_inputs(inputs, self.current_device(), self.current_dtype())
+
+    def run_inference(self, inputs, **model_kwargs):
+        """Run the native Torchvision model."""
+        return self.model(inputs, **model_kwargs)
+
+    def format_results(self, raw_outputs):
+        """Pack Torchvision outputs without framework dispatch."""
+        return execution.format_results(raw_outputs)
 
     def forward(self, images, prompt=None):
         """Run Faster R-CNN and return standardized detection frames."""

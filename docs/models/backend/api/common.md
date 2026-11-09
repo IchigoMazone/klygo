@@ -1,10 +1,14 @@
-# `klygo.models.backend.common` API Reference
+# `klygo.models.backend.common` Compatibility Reference
+
+These historical helpers remain available for existing custom wrappers. Built-in
+models own native execution; accelerator lifecycle helpers live in `models.runtime`.
+See the [execution guide](../README.md).
 
 ```python
 from klygo.models.backend import common
 ```
 
-Unified multi-backend dispatcher providing 15 functions for hardware introspection, accelerator synchronization, tensor casting, forward inference, prediction normalization, and model persistence across **Hugging Face**, **Ultralytics**, **Torchvision**, and **Keras / KerasHub**.
+Compatibility helpers for hardware introspection, accelerator synchronization, tensor casting, forward inference and prediction normalization across **Hugging Face**, **Ultralytics**, **Torchvision**, and **Keras / KerasHub**.
 
 ---
 
@@ -79,7 +83,7 @@ common.inference_context(backend: str) -> ContextManager
 Return the framework's no-gradient inference context manager.
 
 - **Parameters**: `backend` (`str`) — backend identifier.
-- **Returns**: `torch.inference_mode()` for `"Hugging Face"`, `"Ultralytics"`, and `"Torchvision"`; `contextlib.nullcontext()` for `"Keras"` (which uses `training=False` inside `run_inference`) and custom backends.
+- **Returns**: `torch.inference_mode()` for `"Hugging Face"`, `"Ultralytics"`, and `"Torchvision"`; the active Keras engine context, or `contextlib.nullcontext()` for custom backends.
 
 ---
 

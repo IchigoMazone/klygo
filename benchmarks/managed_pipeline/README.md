@@ -135,3 +135,18 @@ The CLI helper at the top of this guide includes signature verification inside
 its timing interval. Its historical CPU results and the CUDA notebook results
 therefore have different measurement scopes; do not compare those FPS values as
 if they were the same protocol. Use the notebook for this recorded GPU comparison.
+
+## Native-execution refactor validation
+
+The later runtime/session refactor keeps the T4 report above as historical, pinned
+evidence; it has not been remeasured on GPU. A local CPU smoke comparison is saved
+in [metrics/runtime_refactor_cpu.json](metrics/runtime_refactor_cpu.json). It uses
+the existing 48-frame bus clip, YOLOv8n FP32 at imgsz 320, one full-clip warmup and
+two timed repetitions. The CLI includes output hashing in the timed scope.
+
+Before/after output hashes and frame counts matched for raw YOLO, native Klygo,
+and both managed worker configurations. Raw control throughput varied between
+the sequential runs, so these values do not establish an isolated performance
+gain or regression. The refactor moves lifecycle helpers to `models/runtime`,
+native conversion beside each wrapper, and predictor preparation into an optional
+prediction session while preserving the old import paths for compatibility.

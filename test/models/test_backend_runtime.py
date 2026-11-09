@@ -9,6 +9,7 @@ import numpy as np
 
 from klygo.models.backend import common, huggingface, keras, ultralytics
 from klygo.models.detection.base import Detector
+from klygo.models import runtime
 
 
 class FakeJaxDevice:
@@ -180,7 +181,7 @@ class TestBackendRuntimeDispatch(unittest.TestCase):
 
     def test_benchmark_accepts_non_torch_devices_and_uses_dispatcher_barriers(self):
         harness = BenchmarkHarness()
-        with patch.object(common, "synchronize") as synchronize:
+        with patch.object(runtime, "synchronize") as synchronize:
             report = Detector.benchmark(
                 harness,
                 iterations=2,

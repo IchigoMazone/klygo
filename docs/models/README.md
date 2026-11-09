@@ -32,12 +32,12 @@ Focused guides:
 
 1. **Layer 1 — Abstract Contract ([`BaseModel`](api/BaseModel.md) in `base.py`)**:
    Manages lifecycle state (`LOADING`, `READY`), `metadata`, `details`, `flags`, call-local runtime parameter overrides (`_use_metadata`), Rich terminal inspection (`info()`).
-2. **Layer 2 — Task Engine ([`Detector`](api/Detector.md) in `detection/base.py` & [`backend.common`](backend/README.md))**:
-   Implements the complete object-detection pipeline (`predict()`, backend-owned Ultralytics inference via `native=True`, compact materialized results via `packed=True`, streaming via `stream=True`, coordinate restoration, benchmarking, persistence, and lifecycle controls) and delegates low-level tensor/device operations to [`klygo.models.backend.common`](backend/api/common.md).
+2. **Layer 2 — Task Engine ([`Detector`](api/Detector.md) in `detection/base.py`)**:
+   Implements the complete object-detection pipeline (`predict()`, backend-owned Ultralytics inference via `native=True`, compact materialized results via `packed=True`, streaming via `stream=True`, coordinate restoration, benchmarking, persistence, and lifecycle controls) and uses lazy accelerator lifecycle helpers in `models/runtime`. Built-in wrappers own native inference and conversion; custom wrappers can implement `forward` directly.
 3. **Layer 3 — Concrete & Application Wrappers (`detection/*.py` & custom subclasses)**:
    Before `forward()` runs, `predict()` resolves priority names and `<group>_` prefixes into `self.metadata`. Wrappers then read visible `model_config`, `processor_config`, and `post_config` dictionaries, call the native model explicitly, format its output, and call `outputs.build_detections()`. This keeps routing and model behavior editable in every backend.
 
-See the dedicated [**`klygo.models.backend` & `common` Dispatchers Guide**](backend/README.md) and [`common` API Reference](backend/api/common.md) for all 12 unified backend functions (`backend_family`, `current_device`, `current_dtype`, `is_accelerator_available`, `inference_context`, `synchronize`, `clear_cache`, `cast_inputs`, `run_inference`, `get_output_device`, `sync_device`, `format_results`).
+See [native execution and compatibility](backend/README.md) for the optional prediction-session hook, module responsibilities and preserved legacy helpers.
 
 ### Supported Backend Families
 

@@ -5,7 +5,7 @@ via media.load, batching loop, progress bar tracking, external timing, hardware 
 export, and benchmark workflows.
 """
 
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from concurrent.futures import Future, ThreadPoolExecutor
 from copy import copy, deepcopy
 from collections import deque
@@ -21,7 +21,7 @@ import PIL.Image
 from klygo.models.base import BaseModel
 from klygo.models import utils
 from klygo import utils as klygo_utils
-from klygo.models.backend import common
+from klygo.models import runtime, _compat
 from klygo.outputs.detect import Box, Detection, Detections
 from klygo.utils.progress import ProgressBar
 from klygo import validators
@@ -331,18 +331,19 @@ class Detector(BaseModel):
                 if not stream:
                     frames = []
                     prediction_snapshot = self._config_snapshot(metadata, prompts)
-                    with ProgressBar(total=len(images), desc="Predict", unit="frame", verbose=verbose, colour="cyan") as progress:
-                        offset = 0
-                        for part, prepared in _prepared_batches(
-                            images, batch, workers, prefetch, backend=self.backend
-                        ):
-                            frames.extend(self._infer_batch(
-                                part, prompts, metadata, offset * vid_stride,
-                                vid_stride, prepared_images=prepared,
-                                prediction_snapshot=prediction_snapshot,
-                            ))
-                            progress.update(len(part))
-                            offset += len(part)
+                    with self._prediction_session(metadata) as infer:
+                        with ProgressBar(total=len(images), desc="Predict", unit="frame", verbose=verbose, colour="cyan") as progress:
+                            offset = 0
+                            for part, prepared in _prepared_batches(
+                                images, batch, workers, prefetch, backend=self.backend
+                            ):
+                                frames.extend(self._infer_batch(
+                                    part, prompts, metadata, offset * vid_stride,
+                                    vid_stride, prepared_images=prepared,
+                                    prediction_snapshot=prediction_snapshot, inference=infer,
+                                ))
+                                progress.update(len(part))
+                                offset += len(part)
                     result = Detections(
                         frames,
                         metadata={"source_type": source_type, "fps": getattr(images, "fps", 30.0)},
@@ -368,27 +369,28 @@ class Detector(BaseModel):
         def generate():
             offset = 0
             try:
-                for part, prepared in _prepared_batches(
-                    images, batch, workers, prefetch, backend=self.backend
-                ):
-                    def infer() -> List[Detection]:
-                        return self._infer_batch(
-                            part, prompts, metadata, offset * vid_stride,
-                            vid_stride, prepared_images=prepared,
-                            prediction_snapshot=prediction_snapshot,
-                        )
+                with self._prediction_session(metadata) as session_infer:
+                    for part, prepared in _prepared_batches(
+                        images, batch, workers, prefetch, backend=self.backend
+                    ):
+                        def infer_batch() -> List[Detection]:
+                            return self._infer_batch(
+                                part, prompts, metadata, offset * vid_stride,
+                                vid_stride, prepared_images=prepared,
+                                prediction_snapshot=prediction_snapshot, inference=session_infer,
+                            )
 
-                    if isolate_state:
-                        with self._prediction_lock:
-                            current = self._snapshot_prediction_state()
-                            try:
-                                frames = infer()
-                            finally:
-                                self._restore_prediction_state(current)
-                    else:
-                        frames = infer()
-                    yield from frames
-                    offset += len(part)
+                        if isolate_state:
+                            with self._prediction_lock:
+                                current = self._snapshot_prediction_state()
+                                try:
+                                    frames = infer_batch()
+                                finally:
+                                    self._restore_prediction_state(current)
+                        else:
+                            frames = infer_batch()
+                        yield from frames
+                        offset += len(part)
             finally:
                 close = getattr(images, "close", None)
                 if callable(close):
@@ -535,7 +537,7 @@ class Detector(BaseModel):
             with self._prediction_lock:
                 metadata, prompts = self._resolve_prediction(prompt, kwargs, runtime=False)
                 _ = self._native_runtime_options(metadata, prompts)
-                images, is_single = common._native_inputs(source)
+                images, is_single = utils._native_inputs(source)
                 source_type = "image" if is_single else "frames"
                 previous = self._snapshot_prediction_state()
                 try:
@@ -697,7 +699,7 @@ class Detector(BaseModel):
 
     def clear_cache(self) -> None:
         """Release unused backend memory blocks."""
-        common.clear_cache(self.backend)
+        runtime.clear_cache(self.backend)
 
     def benchmark(
         self,
@@ -731,10 +733,10 @@ class Detector(BaseModel):
                 for _ in range(warmup):
                     self._infer_batch(images, prompts, metadata)
                 for _ in range(iterations):
-                    common.synchronize(self.backend, device=cur_dev)
+                    runtime.synchronize(self.backend, device=cur_dev)
                     start = time.perf_counter()
                     result = self._infer_batch(images, prompts, metadata)
-                    common.synchronize(self.backend, device=cur_dev, value=result)
+                    runtime.synchronize(self.backend, device=cur_dev, value=result)
                     latencies.append(time.perf_counter() - start)
 
             average = statistics.mean(latencies)
@@ -792,63 +794,56 @@ class Detector(BaseModel):
 
     def current_device(self) -> Any:
         """Return the actual device hosting the wrapped model."""
-        return common.current_device(self.model, backend=self.backend)
+        return runtime.current_device(self.model, backend=self.backend)
 
     def current_dtype(self) -> Any:
         """Return the actual dtype of the wrapped model's parameters."""
-        return common.current_dtype(self.model, backend=self.backend)
+        return runtime.current_dtype(self.model, backend=self.backend)
 
     def cast_inputs(self, inputs: Any) -> Any:
         """Cast floating inputs to the model's device and dtype via the active backend."""
-        return common.cast_inputs(self.backend, inputs, dev=self.current_device(), dtype=self.current_dtype())
+        return _compat.cast_inputs(self.backend, inputs, dev=self.current_device(), dtype=self.current_dtype())
 
     def run_inference(self, inputs: Any, **model_kwargs) -> Any:
         """Execute a forward pass using the native runtime of the selected backend."""
-        if common.backend_family(self.backend) == "Ultralytics":
-            options = dict(model_kwargs)
-            model_kwargs["_reuse_predictor"] = (
-                getattr(self, "_prepared_predict_options", None) == options
-            )
-            outputs = common.run_inference(
-                self.backend,
-                self.model,
-                inputs,
-                cur_dtype=self.current_dtype(),
-                **model_kwargs,
-            )
-            self._prepared_predict_options = options
-            return outputs
-        return common.run_inference(
-            self.backend,
-            self.model,
-            inputs,
-            cur_dtype=self.current_dtype(),
-            **model_kwargs,
-        )
+        return _compat.run_detector_inference(self, inputs, **model_kwargs)
 
     def get_output_device(self, outputs: Any) -> Any:
         """Detect the device of the model's output tensors."""
-        return common.get_output_device(self.backend, outputs, default_device=self.current_device())
+        return _compat.get_output_device(self.backend, outputs, default_device=self.current_device())
 
     def sync_device(self, tensor: Any, target_device: Any) -> Any:
         """Move a tensor to target_device when it differs from the current device."""
-        return common.sync_device(self.backend, tensor, target_device=target_device)
+        return _compat.sync_device(self.backend, tensor, target_device=target_device)
 
     def format_results(self, raw_outputs: Any) -> List[Dict[str, Any]]:
         """Normalise raw backend output into a list of {boxes, scores, labels} dicts."""
-        return common.format_results(self.backend, raw_outputs)
+        return _compat.format_results(self.backend, raw_outputs)
 
     # =========================================================================
     # 4. INTERNAL STATE & BATCH INFERENCE HELPERS
     # =========================================================================
 
+    @contextmanager
+    def _prediction_session(self, options):
+        """Prepare a prediction once and release resources when iteration ends.
+
+        Subclasses may override this private hook and yield an inference callable.
+        The default requires only ``forward`` and allocates no session state.
+        """
+        with self._prediction_lock:
+            _compat._optimize_model(self.backend, self.model)
+        yield self.forward
+
     def _infer_batch(self, images: List[Any], prompt: Any, metadata: Dict[str, Any],
                      offset: int = 0, frame_step: int = 1,
                      prepared_images: Optional[List[Any]] = None,
-                     prediction_snapshot: Optional[Dict[str, Any]] = None) -> List[Detection]:
-        with self._prediction_lock, self._use_metadata(metadata), common.inference_context(self.backend):
+                     prediction_snapshot: Optional[Dict[str, Any]] = None,
+                     inference: Any = None) -> List[Detection]:
+        with self._prediction_lock, self._use_metadata(metadata), runtime.inference_context(self.backend), (
+            nullcontext(inference) if inference is not None else self._prediction_session(metadata)
+        ) as infer:
             self._prepare_prediction(prompt)
-            common._optimize_model(self.backend, self.model)
             start = time.perf_counter()
             prepared = (
                 prepared_images
@@ -857,7 +852,7 @@ class Detector(BaseModel):
             )
             if len(prepared) != len(images):
                 raise ValueError("prepared image count must match source image count")
-            raw = list(self.forward(images=prepared, prompt=deepcopy(prompt)))
+            raw = list(infer(images=prepared, prompt=deepcopy(prompt)))
             elapsed = (time.perf_counter() - start) * 1000 / max(1, len(images))
             if len(raw) != len(images):
                 raise ValueError("forward() must return exactly one result per input image")
@@ -947,10 +942,10 @@ class Detector(BaseModel):
 
     def _stream_state_isolation_required(self) -> bool:
         """Return whether each lazy batch must restore mutable backend state."""
-        family = common.backend_family(self.backend)
+        family = utils.backend_family(self.backend)
         if family == "Ultralytics":
             return hasattr(self, "original_names")
-        if family == "Torchvision" or family in common.KERAS_BACKENDS:
+        if family == "Torchvision" or family in runtime.KERAS_BACKENDS:
             return False
         return True
 

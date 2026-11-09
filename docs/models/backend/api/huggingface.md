@@ -23,7 +23,7 @@ Select this backend via `backend="Hugging Face"` on [`models.Detector`](../../ap
 
 ## 2. Adapter Functions (`klygo/models/backend/huggingface.py`)
 
-All functions are automatically invoked when `Detector` dispatches through [`klygo.models.backend.common`](common.md) with `backend="Hugging Face"`:
+These compatibility helpers remain available when existing custom wrappers dispatch through [`klygo.models.backend.common`](common.md) with `backend="Hugging Face"`:
 
 - `huggingface.current_device(model) -> torch.device`: Return the PyTorch device owning the model's parameters.
 - `huggingface.current_dtype(model) -> torch.dtype`: Return the parameter dtype (`torch.float32`, `torch.float16`, `torch.bfloat16`).
@@ -138,3 +138,5 @@ configured = config.set(
 )
 detector = models.load(configured)
 ```
+
+Built-in detectors now own native inference and use private conversion helpers beside their wrappers. See the [execution architecture](../README.md).

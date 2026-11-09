@@ -23,7 +23,7 @@ pip install "klygo[ultralytics]"
 
 ## 2. Adapter Functions (`klygo/models/backend/ultralytics.py`)
 
-All functions are automatically invoked when `Detector` dispatches through [`klygo.models.backend.common`](common.md) with `backend="Ultralytics"`:
+These compatibility helpers remain available when existing custom wrappers dispatch through [`klygo.models.backend.common`](common.md) with `backend="Ultralytics"`:
 
 - `ultralytics.current_device(model) -> torch.device`: Return the PyTorch device hosting the Ultralytics model parameters.
 - `ultralytics.current_dtype(model) -> torch.dtype`: Return the parameter dtype (`torch.float32`, `torch.float16`).
@@ -160,3 +160,5 @@ detector = models.load(configured)
 ```
 
 See [`examples/integration/multi_backend_workflow.py`](../../../../examples/integration/multi_backend_workflow.py) for a full evaluation of both `YOLODetect` and `YOLOWorldDetect` on COCO15.
+
+Built-in detectors now own native inference and use private conversion helpers beside their wrappers. See the [execution architecture](../README.md).
