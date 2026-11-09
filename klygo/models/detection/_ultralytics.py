@@ -74,13 +74,16 @@ def predict_prepared(
     the required stable operations, allowing callers to use the public prediction
     API as a compatibility fallback.
     """
+    # Native predict also accepts a single PIL image, array, path or generator.
+    # Only an explicit decoded batch belongs to this prepared-input fast path.
+    if not isinstance(images, (list, tuple)) or not images:
+        return None
     predictor = getattr(model, "predictor", None)
     required = (
         "_lock", "model", "preprocess", "inference", "postprocess", "run_callbacks"
     )
     if (
         predictor is None
-        or not images
         or not all(isinstance(image, np.ndarray) for image in images)
         or any(not hasattr(predictor, name) for name in required)
     ):

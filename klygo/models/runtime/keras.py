@@ -1,4 +1,4 @@
-"""Keras 3 and KerasHub backend adapter (`klygo.models.backend.keras`).
+"""Keras 3 accelerator lifecycle helpers across Torch, JAX and TensorFlow.
 
 Supports PyTorch (`torch`), JAX (`jax`), and TensorFlow (`tensorflow`) computation engines
 with lazy imports so environments without `keras` / `keras_hub` remain unaffected.
@@ -10,8 +10,7 @@ from contextlib import nullcontext
 from typing import Any, List, Dict, Optional
 
 __all__ = [
-    "ensure_backend", "get_active_backend", "cast_inputs", "run_inference",
-    "format_results", "current_device", "current_dtype", "inference_context",
+    "ensure_backend", "get_active_backend", "current_device", "current_dtype", "inference_context",
     "is_accelerator_available", "synchronize", "clear_cache",
 ]
 
@@ -221,9 +220,3 @@ def clear_cache() -> None:
                 clear()
         except Exception:
             pass
-
-
-def __getattr__(name):
-    if name in {"cast_inputs", "run_inference", "format_results", "_to_numpy_array"}:
-        return getattr(importlib.import_module("klygo.models.detection._keras"), name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

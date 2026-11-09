@@ -1,6 +1,6 @@
 """Legacy custom-wrapper delegates; built-in detectors use native execution.
 
-This module preserves historical Detector helper behavior and backend imports.
+This module preserves historical Detector convenience methods.
 New wrappers can implement forward directly and optionally own a session hook.
 """
 
@@ -29,7 +29,7 @@ __all__ = [
 
 def _import_adapter(name: str):
     """Import one framework adapter without loading unrelated dependencies."""
-    return importlib.import_module("klygo.models.runtime.keras" if name == "keras" else f"klygo.models.detection._{name}")
+    return importlib.import_module(f"klygo.models.detection._{name}")
 
 
 def _runtime_adapter(backend: Optional[str]):
@@ -42,7 +42,7 @@ def _runtime_adapter(backend: Optional[str]):
     if family == "Torchvision":
         return _import_adapter("torchvision")
     if family in KERAS_BACKENDS:
-        return _import_adapter("keras")
+        return importlib.import_module("klygo.models.runtime.keras")
     return None
 
 

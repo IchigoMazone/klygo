@@ -97,14 +97,9 @@ class TestPredictionSession(unittest.TestCase):
                     with detector._prediction_session({}):
                         self.assertEqual(detector.format_results([]), [])
 
-    def test_legacy_paths_resolve_to_relocated_implementations(self):
-        for old, new in (
-            ("common", "klygo.models._compat"),
-            ("torch_runtime", "klygo.models.runtime.torch"),
-            ("keras", "klygo.models.runtime.keras"),
-            ("ultralytics", "klygo.models.detection._ultralytics"),
-        ):
-            self.assertIs(importlib.import_module("klygo.models.backend." + old), importlib.import_module(new))
+    def test_removed_backend_package_is_not_importable(self):
+        with self.assertRaises(ModuleNotFoundError):
+            importlib.import_module("klygo.models.backend")
 
     def test_runtime_import_does_not_load_frameworks_or_backend_package(self):
         code = '''

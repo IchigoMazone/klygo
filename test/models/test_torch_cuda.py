@@ -7,7 +7,8 @@ from unittest.mock import patch
 import torch
 
 import klygo
-from klygo.models.backend import common, torch_runtime
+from klygo.models import _compat as common
+from klygo.models.runtime import torch as torch_runtime
 
 
 class TestTorchCudaDelegation(unittest.TestCase):

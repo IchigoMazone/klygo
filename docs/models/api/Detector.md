@@ -24,7 +24,7 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
    - `self.cast_inputs(inputs)`, `self.run_inference(inputs, **model_kwargs)`, `self.get_output_device(outputs)`, `self.sync_device(tensor, target_device)` and `self.format_results(raw_outputs)` remain compatible for existing custom models.
    - Built-in wrappers implement their framework-specific helpers directly. A new custom model can perform native preprocessing and inference inside `forward` and return frames from [`outputs.build_detections`](../../outputs/api/build_detections.md), without calling any execution dispatcher.
    - `_prediction_session(options)` is an optional private context-manager hook yielding an inference callable. It runs once for a managed prediction and closes when its stream ends, fails or is explicitly closed. The default yields `forward`; YOLO prepares predictor reuse in its own session.
-   - Device, dtype, cache management and benchmark synchronization use lazy shared runtime helpers. The [backend guide](../backend/README.md) explains the compatibility boundary.
+   - Device, dtype, cache management and benchmark synchronization use lazy shared runtime helpers. The [execution guide](../execution/README.md) explains the compatibility boundary.
 3. **Inference Engine (`predict`)**:
    - Resolves single images, lists of images, directories, or video streams through `klygo.media`.
    - Applies call-local parameter overrides (`**kwargs`) validated against `metadata.flags` and `metadata.priority`.

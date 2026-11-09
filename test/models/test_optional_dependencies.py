@@ -89,7 +89,7 @@ assert not frameworks.intersection(sys.modules), frameworks.intersection(sys.mod
     def test_missing_model_extras_raise_actionable_errors(self):
         script = r'''
 import builtins
-from klygo.models.backend import common
+from klygo.models import _compat as common
 
 blocked_roots = {"jax", "keras", "tensorflow", "torch"}
 real_import = builtins.__import__

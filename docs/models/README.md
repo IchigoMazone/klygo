@@ -37,16 +37,16 @@ Focused guides:
 3. **Layer 3 — Concrete & Application Wrappers (`detection/*.py` & custom subclasses)**:
    Before `forward()` runs, `predict()` resolves priority names and `<group>_` prefixes into `self.metadata`. Wrappers then read visible `model_config`, `processor_config`, and `post_config` dictionaries, call the native model explicitly, format its output, and call `outputs.build_detections()`. This keeps routing and model behavior editable in every backend.
 
-See [native execution and compatibility](backend/README.md) for the optional prediction-session hook, module responsibilities and preserved legacy helpers.
+See [native execution and compatibility](execution/README.md) for the optional prediction-session hook, module responsibilities and preserved legacy helpers.
 
 ### Supported Backend Families
 
 | Backend Family | Dedicated Guide | `backend` Identifier | Upstream Libraries | Representative Models | Built-in / Adapter Capabilities |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Ultralytics** | [Ultralytics Guide](backend/api/ultralytics.md) | `"Ultralytics"` | `ultralytics`, `torch` | YOLOv8, YOLOv9, YOLOv10, YOLO11, YOLO-World v2 | Built-in `YOLODetect` & `YOLOWorldDetect`, registry loading, open-vocabulary `set_classes` |
-| **Hugging Face / PyTorch** | [Hugging Face Guide](backend/api/huggingface.md) | `"Hugging Face"` / `"PyTorch"` | `transformers`, `torch` | Grounding DINO, Locate Anything, DETR, RT-DETR, custom `nn.Module` | Built-in `GroundingDinoDetect` and optional CUDA-only `LocateAnythingDetect`, AMP `autocast`, `BatchFeature` float casting, multi-GPU `sync_device` |
-| **Torchvision** | [Torchvision Guide](backend/api/torchvision.md) | `"Torchvision"` | `torchvision`, `torch` | Faster R-CNN (`fasterrcnn_mobilenet_v3_large_fpn`), RetinaNet, FCOS, SSD | Built-in `FasterRCNNDetect`, registry loading, and list-of-tensor backend formatting |
-| **Keras 3 / KerasHub** | [Keras & KerasHub Guide](backend/api/keras.md) | `"Keras"` / `"KerasHub"` | `keras`, `keras-hub` | D-FINE / RT-DETR (`dfine_small_coco`), RetinaNet, custom `keras.Model` | Native `KERAS_BACKEND=torch`/`jax`/`tensorflow` support, `ObjectDetector` aspect-preserving resize & `decode_predictions`, automatic `yxyx` $\rightarrow$ `xyxy` conversion |
+| **Ultralytics** | [Ultralytics Guide](execution/api/ultralytics.md) | `"Ultralytics"` | `ultralytics`, `torch` | YOLOv8, YOLOv9, YOLOv10, YOLO11, YOLO-World v2 | Built-in `YOLODetect` & `YOLOWorldDetect`, registry loading, open-vocabulary `set_classes` |
+| **Hugging Face / PyTorch** | [Hugging Face Guide](execution/api/huggingface.md) | `"Hugging Face"` / `"PyTorch"` | `transformers`, `torch` | Grounding DINO, Locate Anything, DETR, RT-DETR, custom `nn.Module` | Built-in `GroundingDinoDetect` and optional CUDA-only `LocateAnythingDetect`, AMP `autocast`, `BatchFeature` float casting, multi-GPU `sync_device` |
+| **Torchvision** | [Torchvision Guide](execution/api/torchvision.md) | `"Torchvision"` | `torchvision`, `torch` | Faster R-CNN (`fasterrcnn_mobilenet_v3_large_fpn`), RetinaNet, FCOS, SSD | Built-in `FasterRCNNDetect`, registry loading, and list-of-tensor backend formatting |
+| **Keras 3 / KerasHub** | [Keras & KerasHub Guide](execution/api/keras.md) | `"Keras"` / `"KerasHub"` | `keras`, `keras-hub` | D-FINE / RT-DETR (`dfine_small_coco`), RetinaNet, custom `keras.Model` | Native `KERAS_BACKEND=torch`/`jax`/`tensorflow` support, `ObjectDetector` aspect-preserving resize & `decode_predictions`, automatic `yxyx` $\rightarrow$ `xyxy` conversion |
 
 </details>
 

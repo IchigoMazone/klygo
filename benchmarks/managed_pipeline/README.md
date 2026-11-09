@@ -149,4 +149,4 @@ and both managed worker configurations. Raw control throughput varied between
 the sequential runs, so these values do not establish an isolated performance
 gain or regression. The refactor moves lifecycle helpers to `models/runtime`,
 native conversion beside each wrapper, and predictor preparation into an optional
-prediction session while preserving the old import paths for compatibility.
+prediction session while preserving Detector convenience methods. The later cleanup removes the old `models/backend` import paths; see the native execution guide.

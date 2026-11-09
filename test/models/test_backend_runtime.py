@@ -6,8 +6,11 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
 import numpy as np
+from PIL import Image
 
-from klygo.models.backend import common, huggingface, keras, ultralytics
+from klygo.models import _compat as common
+from klygo.models.runtime import keras
+from klygo.models.detection import _huggingface as huggingface, _ultralytics as ultralytics
 from klygo.models.detection.base import Detector
 from klygo.models import runtime
 
@@ -36,6 +39,15 @@ class BenchmarkHarness(Detector):
 
 
 class TestBackendRuntimeDispatch(unittest.TestCase):
+    def test_prepared_predictor_falls_back_for_single_native_inputs(self):
+        for source in (Image.new("RGB", (8, 8)), np.zeros((8, 8, 3), dtype=np.uint8)):
+            with self.subTest(source=type(source).__name__):
+                original = Mock(return_value=["native"])
+                model = SimpleNamespace(predict=original, predictor=SimpleNamespace())
+                ultralytics.optimize_model(model)
+                self.assertEqual(model.predict(source), ["native"])
+                original.assert_called_once_with(source=source, stream=False)
+
     def test_ultralytics_optimizer_preserves_public_model_calls(self):
         original_predict = Mock(return_value=["fallback"])
         model = SimpleNamespace(predict=original_predict)

@@ -2,9 +2,9 @@
 
 `Detector` owns batching, streaming, preprocessing traces, metadata and standardized
 outputs. Concrete wrappers own their native inference and result conversion.
-The `backend` package is now a compatibility import surface, not the execution
-layer required by built-in detectors. Existing imports and custom Detector
-convenience methods remain supported.
+The former `models/backend` package has been removed. Old imports from
+`klygo.models.backend` must migrate; custom Detector convenience methods remain
+supported.
 
 ## Responsibilities
 
@@ -17,7 +17,7 @@ convenience methods remain supported.
 | Private helpers beside detection wrappers | Framework-specific conversion shared by related models |
 | `models/runtime/` | Lazy Torch/Keras device, precision, inference context, barriers and cache management |
 | `models/_compat.py` | Historical custom-wrapper convenience dispatch |
-| `models/backend/` | Thin aliases for existing imports |
+| `models/execution/` | Thin aliases for existing imports |
 
 New custom models only need to implement `forward(images, prompt=None)` and return
 one standardized detection per image. Calling `self.cast_inputs`,
@@ -41,10 +41,10 @@ frameworks may use the same hook for their own preparation; no model is required
 to implement an optimization hook. Native source decoding retains the backend's
 own lifecycle.
 
-## Existing imports
+## Migration
 
-The [common helper reference](api/common.md) and framework references remain
-valid for compatibility:
+Use [Detector convenience methods and runtime helpers](api/common.md) or own
+native inference in a wrapper. Framework guides:
 
 - [Ultralytics](api/ultralytics.md)
 - [Hugging Face](api/huggingface.md)
