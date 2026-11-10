@@ -1,0 +1,72 @@
+import ast,sys,subprocess,time,json,statistics,gc,hashlib
+from pathlib import Path
+sys.path.insert(0,str(Path('work/klygo-benchmark').resolve()))
+from klygo import models
+from klygo.models import utils
+from klygo.models.detection import base
+from PIL import Image
+import numpy as np
+import torch
+repo=Path('work/klygo-benchmark')
+def original(module,path,name):
+ source=subprocess.check_output(['git','-c','safe.directory='+str(repo.resolve()),'-C',str(repo),'show','HEAD:'+path],text=True)
+ tree=ast.parse(source); tree.body=[n for n in tree.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name==name]
+ ns=dict(module.__dict__);exec(compile(tree,path,'exec'),ns);return ns[name]
+old_prepare=original(base,'klygo/models/detection/base.py','_prepared_batches');old_resolve=original(utils,'klygo/models/utils.py','resolve_images')
+new_prepare,new_resolve=base._prepared_batches,utils.resolve_images
+versions={'before':(old_prepare,old_resolve),'after':(new_prepare,new_resolve)}
+def select(version):base._prepared_batches,utils.resolve_images=versions[version]
+image=Image.open('C:/Users/Mine/Downloads/klygo/artifacts/bus.jpg/bus.jpg').convert('RGB').resize((640,480))
+images=[image.copy() for _ in range(8)]
+video='C:/Users/Mine/Downloads/klygo/artifacts/benchmarks/sample_8frames.mp4'
+print('GPU',torch.cuda.get_device_name(0),flush=True)
+torch.set_num_threads(1)
+report={'gpu':torch.cuda.get_device_name(0),'torch':torch.__version__,'baseline_commit':subprocess.check_output(['git','-c','safe.directory='+str(repo.resolve()),'-C',str(repo),'rev-parse','HEAD'],text=True).strip(),'image_size':[640,480],'imgsz':640,'video_sha256':hashlib.sha256(Path(video).read_bytes()).hexdigest(),'microbench':{},'cases':[]}
+# Isolate source preparation from model execution.
+for kind in ['rgb_resolution','batch4_preparation','single_stream_pack']:
+ times={v:[] for v in versions}
+ for rep in range(7):
+  for v in (['before','after'] if rep%2==0 else ['after','before']):
+   select(v);start=time.perf_counter()
+   for _ in range(10):
+    if kind=='rgb_resolution':list(utils.resolve_images(images)[0])
+    elif kind=='batch4_preparation':list(base._prepared_batches(iter(images),4,1,1,backend='Ultralytics'))
+    else:list(base._prepared_batches(iter(images[:4]),4,1,1,backend='Ultralytics'))
+   times[v].append((time.perf_counter()-start)/10)
+ report['microbench'][kind]=times
+ print('MICRO',kind,{v:statistics.median(t)*1000 for v,t in times.items()},flush=True)
+for name,weights in [('yolov8n.pt','C:/Users/Mine/Downloads/klygo/yolov8n.pt'),('yolo26n.pt','C:/Users/Mine/Downloads/klygo/weights/yolo26n.pt')]:
+ select('after');d=models.load(name,weights=weights,device='cuda:0',imgsz=640,half=False,model_stream=False)
+ for profile,source in [('images',images),('video',video)]:
+  for batch in [1,4]:
+   for stream in [True]:
+    if profile=='images' and batch==1:continue
+    def predict(v):
+     select(v)
+     return list(d.predict(source,batch=batch,stream=stream,verbose=False))
+    for v in versions:
+     predict(v);predict(v)
+    torch.cuda.synchronize()
+    engine=d.model.predictor.model
+    native=getattr(engine,'model',engine)
+    assert str(next(native.parameters()).device)=='cuda:0'
+    case={'model':name,'profile':profile,'batch':batch,'stream':stream,'seconds':{v:[] for v in versions},'parity':True}
+    reference=None
+    for rep in range(7):
+     for v in (['before','after'] if rep%2==0 else ['after','before']):
+      torch.cuda.synchronize();start=time.perf_counter();frames=predict(v);torch.cuda.synchronize();elapsed=time.perf_counter()-start
+      case['seconds'][v].append(elapsed)
+      payload=[(np.asarray(f.boxes),np.asarray(f.scores),list(f.labels),f.frame_index) for f in frames]
+      if reference is None:reference=payload
+      assert len(reference)==len(payload)
+      for a,b in zip(reference,payload):
+       assert a[2:]==b[2:]
+       np.testing.assert_allclose(a[0],b[0],atol=1e-3,rtol=1e-4);np.testing.assert_allclose(a[1],b[1],atol=1e-5)
+      del frames
+    case['frames']=len(reference);case['boxes']=sum(len(x[1]) for x in reference)
+    report['cases'].append(case)
+    Path('work/optimization_release.json').write_text(json.dumps(report,indent=2))
+    print('CASE',name,profile,batch,stream,{v:round(len(reference)/statistics.median(t),3) for v,t in case['seconds'].items()},'parity PASS',flush=True)
+ del d;gc.collect();torch.cuda.empty_cache()
+select('after')
+print('COMPLETE',len(report['cases']),flush=True)

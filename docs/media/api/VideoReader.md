@@ -28,6 +28,10 @@ The active capture handle (`.cap`) is opened lazily on the first [`read_frame(in
 
 Raises `FileNotFoundError` on initialization if `path` does not exist or cannot be opened by OpenCV `VideoCapture`. Out-of-range frame indices (`index < 0` or `index >= total_frames`) in `read_frame(index)` return `None`.
 
+Nearby forward requests advance the decoder through skipped frames instead of
+seeking to a keyframe for each sample. Backward and distant random-access requests
+still seek, and concurrent access remains serialized by the reader lock.
+
 ## Example
 
 See [`VideoReader.py`](../../../examples/media/VideoReader.py) for a standalone runnable script.

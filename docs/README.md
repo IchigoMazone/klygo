@@ -53,7 +53,7 @@ Every public Klygo module provides verified reference documentation (`docs/<modu
 | **[`klygo.datasets`](datasets/README.md)** | 9 | 9 | [Docs](datasets/README.md) | [`examples/datasets/`](../examples/datasets) | [`Document_Datasets_Overview.ipynb`](../tutorials/datasets/Document_Datasets_Overview.ipynb) | [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/datasets/Document_Datasets_Overview.ipynb) |
 | **[`klygo.media`](media/README.md)** | 15 | 1 | [Docs](media/README.md) | [`examples/media/`](../examples/media) | [`Document_Media_Overview.ipynb`](../tutorials/media/Document_Media_Overview.ipynb) | [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/media/Document_Media_Overview.ipynb) |
 | **[`klygo.preprocessing`](preprocessing/README.md)** | 137 | 4 | [Docs](preprocessing/README.md) | [`examples/preprocessing/`](../examples/preprocessing) | [`Document_Preprocessing_Overview.ipynb`](../tutorials/preprocessing/Document_Preprocessing_Overview.ipynb) | [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/preprocessing/Document_Preprocessing_Overview.ipynb) |
-| **[`klygo.models`](models/README.md)** | 15 | 4 | [Docs](models/README.md) ([`backend`](models/backend/README.md)) | [`examples/models/`](../examples/models) | [`Document_Models_Overview.ipynb`](../tutorials/models/Document_Models_Overview.ipynb) | [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/models/Document_Models_Overview.ipynb) |
+| **[`klygo.models`](models/README.md)** | 15 | 4 | [Docs](models/README.md) ([native execution](models/execution/README.md)) | [`examples/models/`](../examples/models) | [`Document_Models_Overview.ipynb`](../tutorials/models/Document_Models_Overview.ipynb) | [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/models/Document_Models_Overview.ipynb) |
 | **[`klygo.outputs`](outputs/README.md)** | 2 | 1 | [Docs](outputs/README.md) | [`examples/outputs/`](../examples/outputs) | [`Document_Outputs_Overview.ipynb`](../tutorials/outputs/Document_Outputs_Overview.ipynb) | [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/outputs/Document_Outputs_Overview.ipynb) |
 | **[`klygo.postprocessing`](postprocessing/README.md)** | 20 | 2 | [Docs](postprocessing/README.md) | [`examples/postprocessing/`](../examples/postprocessing) | [`Document_Postprocessing_Overview.ipynb`](../tutorials/postprocessing/Document_Postprocessing_Overview.ipynb) | [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/postprocessing/Document_Postprocessing_Overview.ipynb) |
 | **[`klygo.mining`](mining/README.md)** | 13 | 1 | [Docs](mining/README.md) | [`examples/mining/`](../examples/mining) | [`Document_Mining_Overview.ipynb`](../tutorials/mining/Document_Mining_Overview.ipynb) | [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/mining/Document_Mining_Overview.ipynb) |
@@ -65,11 +65,11 @@ Every public Klygo module provides verified reference documentation (`docs/<modu
 
 ## 3. Backend Extension Layer Guides
 
-- **[`klygo.models.backend`](models/backend/README.md)**: Unified [`common`](models/backend/api/common.md) dispatchers (`cast_inputs`, `run_inference`, `format_results`, `current_device`, `current_dtype`, `inference_context`, `synchronize`, `clear_cache`, `save`, `reset`, `unload`) and dedicated adapter guides for:
-  - [Ultralytics (`YOLO` & `YOLO-World`)](models/backend/api/ultralytics.md)
-  - [Hugging Face (`Grounding DINO` & `DETR`)](models/backend/api/huggingface.md)
-  - [Torchvision (`Faster R-CNN`, `RetinaNet`, `SSD`)](models/backend/api/torchvision.md)
-  - [Keras 3 & KerasHub (`RT-DETR / D-FINE`, `ObjectDetector`)](models/backend/api/keras.md)
+- **[Native model execution](models/execution/README.md)**: Detector sessions, native framework calls and lazy `models.runtime` accelerator lifecycle helpers.
+  - [Ultralytics](models/execution/api/ultralytics.md)
+  - [Hugging Face](models/execution/api/huggingface.md)
+  - [Torchvision](models/execution/api/torchvision.md)
+  - [Keras](models/execution/api/keras.md)
 - **[`klygo.archive.backend`](archive/backend/README.md)**: Capability matrix and codec adapters for `ZipBackend`, `TarBackend`, `GZipBackend`, `SevenZipBackend`, and `RarBackend`.
 
 ---

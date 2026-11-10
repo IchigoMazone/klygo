@@ -1,0 +1,152 @@
+{
+    "before_commit": "c723d269a5609df99b242d42c52bb4ec30909c08",
+    "after_source_sha256": {
+        "klygo/models/_compat.py": "35528af487a4ec19d7dccc833249cd035c861c81c9ecc83604a088c774c603fd",
+        "klygo/models/backend/__init__.py": "a2d53a8b12f44687d6c93dffcb037ae781dd24c1ddd5073520f27b2843021a96",
+        "klygo/models/backend/common.py": "e32831137cd8138203bfbcb94fb733ad4c95be6b69be9e4ed9136df8709fb58a",
+        "klygo/models/backend/huggingface.py": "26c5ce7c20b7acda06d3dcfdbf03c7d03b512f2baf06feca26ea04d27b980663",
+        "klygo/models/backend/keras.py": "eb7ff61a596aedf9d11c83de7bce0ede331b5616c49cac68bbe85f7b6bdaf4d3",
+        "klygo/models/backend/torch_runtime.py": "ee0465152d5537a8d3a7bef7ce7831279d7a4ad4f90339a27b5d3174d9e3996d",
+        "klygo/models/backend/torchvision.py": "f22a038d8f03ba626d2ae090a25d2789ce5b4ab49b5ba675d8e1417d9e586967",
+        "klygo/models/backend/ultralytics.py": "cfa58dcf60307324a513677fe2982d2a06f8f7b5a6b7f17da971387df1b09148",
+        "klygo/models/detection/_huggingface.py": "66c2654a7c11875449c50d94b199f2fafcc7c62861ad5d4e97bf0d449f54357d",
+        "klygo/models/detection/_keras.py": "066055534752d7e32163fa12dd1ba19607b871fa71af54acf1d2e52523ae976a",
+        "klygo/models/detection/_torchvision.py": "e2ba5c32d802ee6dc156827c7661c6a979197aa7684d0da50fd4136398f5fc49",
+        "klygo/models/detection/_ultralytics.py": "db87aa117fc052f5dde89c756c13dc714cf1fc244b6d19c9221e278e7c05bbd8",
+        "klygo/models/detection/base.py": "bed9355aeb302b8692565c2553a637ff492e10290bd50b65e2ff46a463efd9ed",
+        "klygo/models/detection/faster_rcnn.py": "ee121413b6d9c4381304e5dc5749b5c28f477b3a7c1c6afb0656e29ea53bedf0",
+        "klygo/models/detection/grounding_dino.py": "779111f2521d81572fc18f782002daeef34256b77dbae3ca3845a3bc8374a8b1",
+        "klygo/models/detection/locate_anything.py": "b6bd4ca9d828b3f470775f702973796b7bb916d936a54b6d0076d9e6340133ad",
+        "klygo/models/detection/yolo.py": "e1e732a48d7748441cfa7c6d803ac014f0e80ceb71b7b62aabe8cc8db24d5f99",
+        "klygo/models/detection/yolo_world.py": "ca782a7d0f2f35107b2a4414d60e327e67693fe4bfd1c281713a9748315d920c",
+        "klygo/models/runtime/__init__.py": "645a4fc7b35178ad268f9c693ec7b3f38fcc634255e27cea86f90ae07d7e47ae",
+        "klygo/models/runtime/keras.py": "b96cb53531d4acdd5f8300f6a91b13bef0317e728d1534c0375188ad7a621db7",
+        "klygo/models/runtime/torch.py": "4801b01187e1087abb3cf8d8560a9c5559269a843d532c394561b3d131a62630",
+        "klygo/models/utils.py": "522601bf52174e8fab4ea3be8b97aef6470f51f3104a2752597234b79bd7ae0f"
+    },
+    "before": {
+        "yolo_raw": {
+            "frames": 48,
+            "median_seconds": 0.6751243780004188,
+            "fps": 71.09801032835793,
+            "signature": "587818063b24f000a83cecbe92cc3c5d4cbcf8606f1541b2dc4a153bd0291789",
+            "seconds": [
+                0.48360710800079687,
+                0.8666416480000407
+            ]
+        },
+        "yolo_native_batch1": {
+            "frames": 48,
+            "median_seconds": 1.0643172744994445,
+            "fps": 45.099333770162396,
+            "signature": "c64f4683ef21f025061a5d2bedc93db780c36d1ad02ad13f6fb45502296415bc",
+            "seconds": [
+                1.2304799209996418,
+                0.8981546279992472
+            ]
+        },
+        "yolo_managed_workers1_prefetch1": {
+            "frames": 48,
+            "median_seconds": 0.9605899854996096,
+            "fps": 49.96929046166858,
+            "signature": "587818063b24f000a83cecbe92cc3c5d4cbcf8606f1541b2dc4a153bd0291789",
+            "seconds": [
+                1.4041622879994975,
+                0.5170176829997217
+            ]
+        },
+        "yolo_managed_workers4_prefetch2": {
+            "frames": 48,
+            "median_seconds": 0.5639073849997658,
+            "fps": 85.12036067770231,
+            "signature": "587818063b24f000a83cecbe92cc3c5d4cbcf8606f1541b2dc4a153bd0291789",
+            "seconds": [
+                0.5870263639999393,
+                0.5407884059995922
+            ]
+        },
+        "environment": {
+            "torch": "2.15.0+cpu",
+            "ultralytics": "8.4.208",
+            "device": "cpu",
+            "torch_threads": 8
+        },
+        "settings": {
+            "source": "artifacts/managed-pipeline/bus.mp4",
+            "output": "artifacts/managed-pipeline/runtime-before.json",
+            "weights": "artifacts/managed-pipeline/yolov8n.pt",
+            "scope": "yolo",
+            "native": true,
+            "device": "cpu",
+            "iterations": 2,
+            "batch": 4,
+            "imgsz": 320
+        }
+    },
+    "after": {
+        "yolo_raw": {
+            "frames": 48,
+            "median_seconds": 0.7978979659997094,
+            "fps": 60.158067880094684,
+            "signature": "587818063b24f000a83cecbe92cc3c5d4cbcf8606f1541b2dc4a153bd0291789",
+            "seconds": [
+                0.9197537269992608,
+                0.676042205000158
+            ]
+        },
+        "yolo_native_batch1": {
+            "frames": 48,
+            "median_seconds": 1.3507085559999723,
+            "fps": 35.53690378785235,
+            "signature": "c64f4683ef21f025061a5d2bedc93db780c36d1ad02ad13f6fb45502296415bc",
+            "seconds": [
+                0.9460055499994269,
+                1.7554115620005177
+            ]
+        },
+        "yolo_managed_workers1_prefetch1": {
+            "frames": 48,
+            "median_seconds": 1.1591935994997584,
+            "fps": 41.40809612882098,
+            "signature": "587818063b24f000a83cecbe92cc3c5d4cbcf8606f1541b2dc4a153bd0291789",
+            "seconds": [
+                0.9229587469999387,
+                1.395428451999578
+            ]
+        },
+        "yolo_managed_workers4_prefetch2": {
+            "frames": 48,
+            "median_seconds": 0.541418509000323,
+            "fps": 88.65600123022645,
+            "signature": "587818063b24f000a83cecbe92cc3c5d4cbcf8606f1541b2dc4a153bd0291789",
+            "seconds": [
+                0.587772880000557,
+                0.49506413800008886
+            ]
+        },
+        "environment": {
+            "torch": "2.15.0+cpu",
+            "ultralytics": "8.4.208",
+            "device": "cpu",
+            "torch_threads": 8
+        },
+        "settings": {
+            "source": "artifacts/managed-pipeline/bus.mp4",
+            "output": "artifacts/managed-pipeline/runtime-after.json",
+            "weights": "artifacts/managed-pipeline/yolov8n.pt",
+            "scope": "yolo",
+            "native": true,
+            "device": "cpu",
+            "iterations": 2,
+            "batch": 4,
+            "imgsz": 320
+        }
+    },
+    "output_hashes_match": true,
+    "limitations": [
+        "Local CPU smoke benchmark, not the T4 protocol or a new GPU measurement.",
+        "48-frame existing bus clip, YOLOv8n FP32, imgsz 320, full-clip warmup and two timed repetitions.",
+        "CLI timing includes hashing; outputs matched for raw/native/managed in both revisions.",
+        "Sequential runs varied, including the raw control. Do not interpret these measurements as an isolated speedup or regression."
+    ]
+}

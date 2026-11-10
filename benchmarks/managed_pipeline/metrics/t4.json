@@ -1,0 +1,950 @@
+{
+  "gpu": "Tesla T4",
+  "torch": "2.14.1+cu130",
+  "ultralytics": "8.4.208",
+  "opencv": "4.14.0",
+  "baseline": "fb0f42f4075cb2bfab250446c1df059a67b5b2bb",
+  "optimized": "9ff1abd3f1b39f594144d9a81373e7109998bf86",
+  "video_frames": 240,
+  "video_sha256": "a1f8b78d4bd9d9a1cf71ab63db4e2b4bbdba42523dbdce1548d919f9f6beba78",
+  "weights_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+  "primary": [
+    {
+      "name": "raw_b1",
+      "revision": "raw",
+      "kind": "raw",
+      "batch": 1,
+      "workers": 1,
+      "prefetch": 1,
+      "stride": 1,
+      "fps": 85.85796291317266,
+      "seconds": [
+        2.795314399000006,
+        2.641932875000009,
+        3.5610583150000252
+      ],
+      "frames": [
+        240,
+        240,
+        240
+      ],
+      "objects": [
+        1321,
+        1321,
+        1321
+      ],
+      "signatures": [
+        "7d491939ffaacc427ac99ec163758c6b584d62770f4a79a6f10b027797259b45",
+        "7d491939ffaacc427ac99ec163758c6b584d62770f4a79a6f10b027797259b45",
+        "7d491939ffaacc427ac99ec163758c6b584d62770f4a79a6f10b027797259b45"
+      ],
+      "stable": true,
+      "peak_vram_mib": 34.3662109375,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "baseline_native_b1",
+      "revision": "baseline",
+      "kind": "native",
+      "batch": 1,
+      "workers": 1,
+      "prefetch": 1,
+      "stride": 1,
+      "fps": 84.69446355640733,
+      "seconds": [
+        3.3141446559999963,
+        2.820435997000004,
+        2.8337153329999865
+      ],
+      "frames": [
+        240,
+        240,
+        240
+      ],
+      "objects": [
+        1321,
+        1321,
+        1321
+      ],
+      "signatures": [
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd"
+      ],
+      "stable": true,
+      "peak_vram_mib": 34.3662109375,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "optimized_native_b1",
+      "revision": "optimized",
+      "kind": "native",
+      "batch": 1,
+      "workers": 1,
+      "prefetch": 1,
+      "stride": 1,
+      "fps": 78.08672675171482,
+      "seconds": [
+        3.0735057030000235,
+        3.835449725999979,
+        2.8414201459999617
+      ],
+      "frames": [
+        240,
+        240,
+        240
+      ],
+      "objects": [
+        1321,
+        1321,
+        1321
+      ],
+      "signatures": [
+        "7643cc8eb0bab0c2b26756dfda5f5f9e966bcf5c724d40d95057acefb321d256",
+        "7643cc8eb0bab0c2b26756dfda5f5f9e966bcf5c724d40d95057acefb321d256",
+        "7643cc8eb0bab0c2b26756dfda5f5f9e966bcf5c724d40d95057acefb321d256"
+      ],
+      "stable": true,
+      "peak_vram_mib": 34.3662109375,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "baseline_managed_b1_w1",
+      "revision": "baseline",
+      "kind": "managed",
+      "batch": 1,
+      "workers": 1,
+      "prefetch": 1,
+      "stride": 1,
+      "fps": 75.13263965510546,
+      "seconds": [
+        3.3529564629999413,
+        3.18856818200004,
+        3.1943506989999833
+      ],
+      "frames": [
+        240,
+        240,
+        240
+      ],
+      "objects": [
+        1321,
+        1321,
+        1321
+      ],
+      "signatures": [
+        "7d491939ffaacc427ac99ec163758c6b584d62770f4a79a6f10b027797259b45",
+        "7d491939ffaacc427ac99ec163758c6b584d62770f4a79a6f10b027797259b45",
+        "7d491939ffaacc427ac99ec163758c6b584d62770f4a79a6f10b027797259b45"
+      ],
+      "stable": true,
+      "peak_vram_mib": 24.65673828125,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "optimized_managed_b1_w1",
+      "revision": "optimized",
+      "kind": "managed",
+      "batch": 1,
+      "workers": 1,
+      "prefetch": 1,
+      "stride": 1,
+      "fps": 64.04701850465001,
+      "seconds": [
+        3.125720387000001,
+        4.369207797999934,
+        3.7472470320000184
+      ],
+      "frames": [
+        240,
+        240,
+        240
+      ],
+      "objects": [
+        1321,
+        1321,
+        1321
+      ],
+      "signatures": [
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd"
+      ],
+      "stable": true,
+      "peak_vram_mib": 24.65673828125,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "baseline_managed_b1_w4",
+      "revision": "baseline",
+      "kind": "managed",
+      "batch": 1,
+      "workers": 4,
+      "prefetch": 2,
+      "stride": 1,
+      "fps": 76.13569723308,
+      "seconds": [
+        3.1522663969999485,
+        3.136967004999974,
+        3.7775358269999515
+      ],
+      "frames": [
+        240,
+        240,
+        240
+      ],
+      "objects": [
+        1321,
+        1321,
+        1321
+      ],
+      "signatures": [
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd"
+      ],
+      "stable": true,
+      "peak_vram_mib": 24.65673828125,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "optimized_managed_b1_w4",
+      "revision": "optimized",
+      "kind": "managed",
+      "batch": 1,
+      "workers": 4,
+      "prefetch": 2,
+      "stride": 1,
+      "fps": 64.57388412252035,
+      "seconds": [
+        3.720324335999976,
+        3.7166728199999852,
+        3.112236566999968
+      ],
+      "frames": [
+        240,
+        240,
+        240
+      ],
+      "objects": [
+        1321,
+        1321,
+        1321
+      ],
+      "signatures": [
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd"
+      ],
+      "stable": true,
+      "peak_vram_mib": 24.65673828125,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "raw_b4",
+      "revision": "raw",
+      "kind": "raw",
+      "batch": 4,
+      "workers": 1,
+      "prefetch": 1,
+      "stride": 1,
+      "fps": 159.6819938415394,
+      "seconds": [
+        1.4993319940000447,
+        1.5029872449999857,
+        1.510491170000023
+      ],
+      "frames": [
+        240,
+        240,
+        240
+      ],
+      "objects": [
+        1321,
+        1321,
+        1321
+      ],
+      "signatures": [
+        "64cdd496486049ab90eee0fb63537d5f80bc51c03173d6ec7f76725f922ebe5e",
+        "64cdd496486049ab90eee0fb63537d5f80bc51c03173d6ec7f76725f922ebe5e",
+        "64cdd496486049ab90eee0fb63537d5f80bc51c03173d6ec7f76725f922ebe5e"
+      ],
+      "stable": true,
+      "peak_vram_mib": 91.39453125,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "baseline_managed_b4_w4",
+      "revision": "baseline",
+      "kind": "managed",
+      "batch": 4,
+      "workers": 4,
+      "prefetch": 2,
+      "stride": 1,
+      "fps": 27.480054094514077,
+      "seconds": [
+        8.733607261999964,
+        8.76182608399995,
+        8.467399348000072
+      ],
+      "frames": [
+        240,
+        240,
+        240
+      ],
+      "objects": [
+        1321,
+        1321,
+        1321
+      ],
+      "signatures": [
+        "c0c1efa306048b90550af10c92aa4b485323249ce654c111ca29ae6d06c232b0",
+        "c0c1efa306048b90550af10c92aa4b485323249ce654c111ca29ae6d06c232b0",
+        "c0c1efa306048b90550af10c92aa4b485323249ce654c111ca29ae6d06c232b0"
+      ],
+      "stable": true,
+      "peak_vram_mib": 63.0908203125,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "optimized_managed_b4_w4",
+      "revision": "optimized",
+      "kind": "managed",
+      "batch": 4,
+      "workers": 4,
+      "prefetch": 2,
+      "stride": 1,
+      "fps": 122.30204641246472,
+      "seconds": [
+        1.9623547360000657,
+        1.9870372780000025,
+        1.9551404349999757
+      ],
+      "frames": [
+        240,
+        240,
+        240
+      ],
+      "objects": [
+        1321,
+        1321,
+        1321
+      ],
+      "signatures": [
+        "c0c1efa306048b90550af10c92aa4b485323249ce654c111ca29ae6d06c232b0",
+        "c0c1efa306048b90550af10c92aa4b485323249ce654c111ca29ae6d06c232b0",
+        "c0c1efa306048b90550af10c92aa4b485323249ce654c111ca29ae6d06c232b0"
+      ],
+      "stable": true,
+      "peak_vram_mib": 63.0908203125,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "raw_b4_stride3",
+      "revision": "raw",
+      "kind": "raw",
+      "batch": 4,
+      "workers": 1,
+      "prefetch": 1,
+      "stride": 3,
+      "fps": 97.3376094183243,
+      "seconds": [
+        0.8218817009999384,
+        0.812717627999973,
+        0.8323820980000392
+      ],
+      "frames": [
+        80,
+        80,
+        80
+      ],
+      "objects": [
+        445,
+        445,
+        445
+      ],
+      "signatures": [
+        "b27bb264598cbd2ec44281b3596fdb469400d1b1ce02d07ea3b13c33b784cd36",
+        "b27bb264598cbd2ec44281b3596fdb469400d1b1ce02d07ea3b13c33b784cd36",
+        "b27bb264598cbd2ec44281b3596fdb469400d1b1ce02d07ea3b13c33b784cd36"
+      ],
+      "stable": true,
+      "peak_vram_mib": 90.501953125,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "baseline_managed_b4_w4_stride3",
+      "revision": "baseline",
+      "kind": "managed",
+      "batch": 4,
+      "workers": 4,
+      "prefetch": 2,
+      "stride": 3,
+      "fps": 7.906808617301289,
+      "seconds": [
+        10.36984703099995,
+        10.117862196000033,
+        9.266657615999975
+      ],
+      "frames": [
+        80,
+        80,
+        80
+      ],
+      "objects": [
+        445,
+        445,
+        445
+      ],
+      "signatures": [
+        "c70864df5533b59c7ecc992f4104cf34c762e5d299f3bae0eb6e0997cc30c51d",
+        "c70864df5533b59c7ecc992f4104cf34c762e5d299f3bae0eb6e0997cc30c51d",
+        "c70864df5533b59c7ecc992f4104cf34c762e5d299f3bae0eb6e0997cc30c51d"
+      ],
+      "stable": true,
+      "peak_vram_mib": 63.0908203125,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "optimized_managed_b4_w4_stride3",
+      "revision": "optimized",
+      "kind": "managed",
+      "batch": 4,
+      "workers": 4,
+      "prefetch": 2,
+      "stride": 3,
+      "fps": 84.64306753755528,
+      "seconds": [
+        0.9273114300000316,
+        0.9501633229999698,
+        0.9451453300000594
+      ],
+      "frames": [
+        80,
+        80,
+        80
+      ],
+      "objects": [
+        445,
+        445,
+        445
+      ],
+      "signatures": [
+        "42753b956525978de7aaa70e45a17f062e421e70b23a799e505576d95d7fbf80",
+        "42753b956525978de7aaa70e45a17f062e421e70b23a799e505576d95d7fbf80",
+        "42753b956525978de7aaa70e45a17f062e421e70b23a799e505576d95d7fbf80"
+      ],
+      "stable": true,
+      "peak_vram_mib": 63.0908203125,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    }
+  ],
+  "confirmation": [
+    {
+      "name": "optimized_native_b1_confirm",
+      "revision": "optimized",
+      "kind": "native",
+      "batch": 1,
+      "workers": 1,
+      "prefetch": 1,
+      "stride": 1,
+      "fps": 81.27473557421528,
+      "seconds": [
+        4.31601878999993,
+        2.842610362000073,
+        2.952947164999955
+      ],
+      "frames": [
+        240,
+        240,
+        240
+      ],
+      "objects": [
+        1321,
+        1321,
+        1321
+      ],
+      "signatures": [
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd"
+      ],
+      "stable": true,
+      "peak_vram_mib": 34.3662109375,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "baseline_native_b1_confirm",
+      "revision": "baseline",
+      "kind": "native",
+      "batch": 1,
+      "workers": 1,
+      "prefetch": 1,
+      "stride": 1,
+      "fps": 73.84534904545967,
+      "seconds": [
+        3.0818498610000233,
+        3.2500354199999038,
+        4.533772404000047
+      ],
+      "frames": [
+        240,
+        240,
+        240
+      ],
+      "objects": [
+        1321,
+        1321,
+        1321
+      ],
+      "signatures": [
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd"
+      ],
+      "stable": true,
+      "peak_vram_mib": 34.45458984375,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "optimized_managed_b1_w1_confirm",
+      "revision": "optimized",
+      "kind": "managed",
+      "batch": 1,
+      "workers": 1,
+      "prefetch": 1,
+      "stride": 1,
+      "fps": 70.76473634568599,
+      "seconds": [
+        3.2756973759999255,
+        3.57576445899997,
+        3.391519737000067
+      ],
+      "frames": [
+        240,
+        240,
+        240
+      ],
+      "objects": [
+        1321,
+        1321,
+        1321
+      ],
+      "signatures": [
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd"
+      ],
+      "stable": true,
+      "peak_vram_mib": 24.65673828125,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "baseline_managed_b1_w1_confirm",
+      "revision": "baseline",
+      "kind": "managed",
+      "batch": 1,
+      "workers": 1,
+      "prefetch": 1,
+      "stride": 1,
+      "fps": 66.9776396054384,
+      "seconds": [
+        3.5832854279999538,
+        3.985435941999981,
+        3.253042234000077
+      ],
+      "frames": [
+        240,
+        240,
+        240
+      ],
+      "objects": [
+        1321,
+        1321,
+        1321
+      ],
+      "signatures": [
+        "94786f2e246a1f707ab58009e361e24c845047398ef6cb2c1c924dde611f3212",
+        "94786f2e246a1f707ab58009e361e24c845047398ef6cb2c1c924dde611f3212",
+        "94786f2e246a1f707ab58009e361e24c845047398ef6cb2c1c924dde611f3212"
+      ],
+      "stable": true,
+      "peak_vram_mib": 24.65673828125,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "raw_b1_confirm",
+      "revision": "raw",
+      "kind": "raw",
+      "batch": 1,
+      "workers": 1,
+      "prefetch": 1,
+      "stride": 1,
+      "fps": 77.86343421706766,
+      "seconds": [
+        3.0823197359999313,
+        2.8490396470000405,
+        3.1631845499999827
+      ],
+      "frames": [
+        240,
+        240,
+        240
+      ],
+      "objects": [
+        1321,
+        1321,
+        1321
+      ],
+      "signatures": [
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+        "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd"
+      ],
+      "stable": true,
+      "peak_vram_mib": 34.3662109375,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "baseline_managed_b4_w4_stride3_confirm",
+      "revision": "baseline",
+      "kind": "managed",
+      "batch": 4,
+      "workers": 4,
+      "prefetch": 2,
+      "stride": 3,
+      "fps": 9.208774225476304,
+      "seconds": [
+        8.687366857000143
+      ],
+      "frames": [
+        80
+      ],
+      "objects": [
+        445
+      ],
+      "signatures": [
+        "b27bb264598cbd2ec44281b3596fdb469400d1b1ce02d07ea3b13c33b784cd36"
+      ],
+      "stable": true,
+      "peak_vram_mib": 63.0908203125,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    },
+    {
+      "name": "optimized_managed_b4_w4_stride3_confirm",
+      "revision": "optimized",
+      "kind": "managed",
+      "batch": 4,
+      "workers": 4,
+      "prefetch": 2,
+      "stride": 3,
+      "fps": 86.79337481737997,
+      "seconds": [
+        0.9217293389999668
+      ],
+      "frames": [
+        80
+      ],
+      "objects": [
+        445
+      ],
+      "signatures": [
+        "b27bb264598cbd2ec44281b3596fdb469400d1b1ce02d07ea3b13c33b784cd36"
+      ],
+      "stable": true,
+      "peak_vram_mib": 63.0908203125,
+      "gpu": "Tesla T4",
+      "torch": "2.14.1+cu130",
+      "torch_threads": 2
+    }
+  ],
+  "numeric_parity": [
+    {
+      "configuration": "native_b1",
+      "same_frame_counts": true,
+      "same_class_ids": true,
+      "max_box_error_px": 0,
+      "max_score_error": 0,
+      "within_tolerance": true
+    },
+    {
+      "configuration": "managed_b1_w1",
+      "same_frame_counts": true,
+      "same_class_ids": true,
+      "max_box_error_px": 0.00048828125,
+      "max_score_error": 1.3709068298339844e-06,
+      "within_tolerance": true
+    },
+    {
+      "configuration": "managed_b4_w4_stride3",
+      "same_frame_counts": true,
+      "same_class_ids": true,
+      "max_box_error_px": 0,
+      "max_score_error": 0,
+      "within_tolerance": true
+    }
+  ],
+  "protocol": {
+    "model": "YOLOv8n",
+    "imgsz": 640,
+    "half": false,
+    "rect": true,
+    "conf": 0.25,
+    "iou": 0.7,
+    "device": "cuda:0",
+    "warmup_full_clips": 1,
+    "measured_repetitions": 3,
+    "opencv_threads": 1,
+    "torch_threads": 2,
+    "cudnn_benchmark": true,
+    "timing": "CUDA-synchronized prediction only; parity checks outside timing",
+    "workload": "240-frame 1280x720 H.264 moving public bus sample, GOP 60, B-frames 2",
+    "native_batch": 1,
+    "raw_stride3_start_may_differ": true
+  },
+  "followup": {
+    "base_commit": "9ff1abd3f1b39f594144d9a81373e7109998bf86",
+    "source_sha256": "5ac4d0bc083821a384d9517a6e2438d8f9ed4a7bee97c634905e29954589241e",
+    "patch_sha256": "b0499d1c787459cecb3692670c8a8b0afef0a2ba7b76bf89ba827b50a1d15392",
+    "measurements": [
+      {
+        "name": "followup_b1_a",
+        "revision": "followup",
+        "kind": "managed",
+        "batch": 1,
+        "workers": 1,
+        "prefetch": 1,
+        "stride": 1,
+        "fps": 77.02685891330825,
+        "seconds": [
+          3.1157962739998766,
+          3.0903150890001143,
+          4.04613600499988
+        ],
+        "frames": [
+          240,
+          240,
+          240
+        ],
+        "objects": [
+          1321,
+          1321,
+          1321
+        ],
+        "signatures": [
+          "ba751a0a67054e3edfe674d35ca0ed6151c1008eb9706f6112f49e74d6a1669f",
+          "ba751a0a67054e3edfe674d35ca0ed6151c1008eb9706f6112f49e74d6a1669f",
+          "ba751a0a67054e3edfe674d35ca0ed6151c1008eb9706f6112f49e74d6a1669f"
+        ],
+        "stable": true,
+        "peak_vram_mib": 24.65673828125,
+        "gpu": "Tesla T4",
+        "torch": "2.14.1+cu130",
+        "torch_threads": 2,
+        "source_sha256": "5ac4d0bc083821a384d9517a6e2438d8f9ed4a7bee97c634905e29954589241e",
+        "source_ref": "9ff1abd3f1b39f594144d9a81373e7109998bf86 plus followup_pipeline.diff"
+      },
+      {
+        "name": "previous_b1_a",
+        "revision": "previous",
+        "kind": "managed",
+        "batch": 1,
+        "workers": 1,
+        "prefetch": 1,
+        "stride": 1,
+        "fps": 79.03199981205225,
+        "seconds": [
+          4.028027620999865,
+          3.0367446170000676,
+          3.0168312580001384
+        ],
+        "frames": [
+          240,
+          240,
+          240
+        ],
+        "objects": [
+          1321,
+          1321,
+          1321
+        ],
+        "signatures": [
+          "eef3d100e2fbb8901f68e03e77a3f97555454d7ef0a0f7ae21dd36cb46db42eb",
+          "eef3d100e2fbb8901f68e03e77a3f97555454d7ef0a0f7ae21dd36cb46db42eb",
+          "eef3d100e2fbb8901f68e03e77a3f97555454d7ef0a0f7ae21dd36cb46db42eb"
+        ],
+        "stable": true,
+        "peak_vram_mib": 24.65673828125,
+        "gpu": "Tesla T4",
+        "torch": "2.14.1+cu130",
+        "torch_threads": 2,
+        "source_sha256": "d89d16df72a17a977afd8b4263308ba80e6d75ab461eaaf9eaed9cb99ef7d1a5",
+        "source_ref": "9ff1abd3f1b39f594144d9a81373e7109998bf86"
+      },
+      {
+        "name": "previous_b1_b",
+        "revision": "previous",
+        "kind": "managed",
+        "batch": 1,
+        "workers": 1,
+        "prefetch": 1,
+        "stride": 1,
+        "fps": 72.35395597954198,
+        "seconds": [
+          3.0211883339998167,
+          3.3170266469999206,
+          3.6817001179999806
+        ],
+        "frames": [
+          240,
+          240,
+          240
+        ],
+        "objects": [
+          1321,
+          1321,
+          1321
+        ],
+        "signatures": [
+          "358dd98a069ecef78bfd1ea2f1ab2e94b587a169c2373aa5a85b9160d0073f19",
+          "358dd98a069ecef78bfd1ea2f1ab2e94b587a169c2373aa5a85b9160d0073f19",
+          "358dd98a069ecef78bfd1ea2f1ab2e94b587a169c2373aa5a85b9160d0073f19"
+        ],
+        "stable": true,
+        "peak_vram_mib": 24.65673828125,
+        "gpu": "Tesla T4",
+        "torch": "2.14.1+cu130",
+        "torch_threads": 2,
+        "source_sha256": "d89d16df72a17a977afd8b4263308ba80e6d75ab461eaaf9eaed9cb99ef7d1a5",
+        "source_ref": "9ff1abd3f1b39f594144d9a81373e7109998bf86"
+      },
+      {
+        "name": "followup_b1_b",
+        "revision": "followup",
+        "kind": "managed",
+        "batch": 1,
+        "workers": 1,
+        "prefetch": 1,
+        "stride": 1,
+        "fps": 77.97118508579733,
+        "seconds": [
+          3.746874729999945,
+          3.078060179999966,
+          3.017824227000119
+        ],
+        "frames": [
+          240,
+          240,
+          240
+        ],
+        "objects": [
+          1321,
+          1321,
+          1321
+        ],
+        "signatures": [
+          "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+          "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd",
+          "6533134ef5afbf55e3fe3cf94662d6545bf6bc67d8a338d0505e93a8be9c27cd"
+        ],
+        "stable": true,
+        "peak_vram_mib": 24.65673828125,
+        "gpu": "Tesla T4",
+        "torch": "2.14.1+cu130",
+        "torch_threads": 2,
+        "source_sha256": "5ac4d0bc083821a384d9517a6e2438d8f9ed4a7bee97c634905e29954589241e",
+        "source_ref": "9ff1abd3f1b39f594144d9a81373e7109998bf86 plus followup_pipeline.diff"
+      },
+      {
+        "name": "followup_b4_w4",
+        "revision": "followup",
+        "kind": "managed",
+        "batch": 4,
+        "workers": 4,
+        "prefetch": 2,
+        "stride": 1,
+        "fps": 128.66798054151445,
+        "seconds": [
+          1.848545275000106,
+          1.8652659270001095,
+          1.9422879500000363
+        ],
+        "frames": [
+          240,
+          240,
+          240
+        ],
+        "objects": [
+          1321,
+          1321,
+          1321
+        ],
+        "signatures": [
+          "c0c1efa306048b90550af10c92aa4b485323249ce654c111ca29ae6d06c232b0",
+          "c0c1efa306048b90550af10c92aa4b485323249ce654c111ca29ae6d06c232b0",
+          "c0c1efa306048b90550af10c92aa4b485323249ce654c111ca29ae6d06c232b0"
+        ],
+        "stable": true,
+        "peak_vram_mib": 63.0908203125,
+        "gpu": "Tesla T4",
+        "torch": "2.14.1+cu130",
+        "torch_threads": 2,
+        "source_sha256": "5ac4d0bc083821a384d9517a6e2438d8f9ed4a7bee97c634905e29954589241e",
+        "source_ref": "9ff1abd3f1b39f594144d9a81373e7109998bf86 plus followup_pipeline.diff"
+      }
+    ],
+    "pooled_previous_batch1_fps": 75.54568461090905,
+    "pooled_followup_batch1_fps": 77.34311744093024,
+    "parity": {
+      "same_frame_counts": true,
+      "same_class_ids": true,
+      "max_box_error_px": 0.00048828125,
+      "max_score_error": 1.1920928955078125e-06
+    }
+  },
+  "limitations": [
+    "Controlled generated clip, not the original user video.",
+    "Batch-1 measurements vary between processes; do not claim a universal speedup.",
+    "Raw stride-3 may begin at a different frame; only compare the Klygo revisions for parity.",
+    "Initial strict hash differences were investigated with numerical comparisons.",
+    "Follow-up is identified by base commit plus exact source and patch hashes."
+  ]
+}

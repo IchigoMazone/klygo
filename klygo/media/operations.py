@@ -148,6 +148,13 @@ class VideoReader:
                 return None
 
             c = self.cap
+            # Nearby forward samples are cheaper to reach by advancing the
+            # decoder than by seeking back to a keyframe for every sample.
+            if 0 < index - self._current_pos <= 32:
+                while self._current_pos < index:
+                    if not c.grab():
+                        break
+                    self._current_pos += 1
             if self._current_pos != index:
                 c.set(cv.CAP_PROP_POS_FRAMES, index)
                 self._current_pos = index

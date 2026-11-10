@@ -5,7 +5,7 @@ via media.load, batching loop, progress bar tracking, external timing, hardware 
 export, and benchmark workflows.
 """
 
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from concurrent.futures import Future, ThreadPoolExecutor
 from copy import copy, deepcopy
 from collections import deque
@@ -13,7 +13,7 @@ import itertools
 import math
 import os
 import statistics
-from threading import RLock
+from threading import Event, RLock
 import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 import PIL.Image
@@ -21,7 +21,7 @@ import PIL.Image
 from klygo.models.base import BaseModel
 from klygo.models import utils
 from klygo import utils as klygo_utils
-from klygo.models.backend import common
+from klygo.models import runtime, _compat
 from klygo.outputs.detect import Box, Detection, Detections
 from klygo.utils.progress import ProgressBar
 from klygo import validators
@@ -50,6 +50,14 @@ def _materialize_model_image(image: Any, backend: Optional[str] = None) -> Any:
         image = image.to_pil(cache=False)
         if image.mode != "RGB":
             image = image.convert("RGB")
+    if backend == "Ultralytics" and isinstance(image, PIL.Image.Image):
+        import numpy as np
+
+        # Match Ultralytics' PIL-to-BGR conversion while keeping its prepared
+        # predictor path available for lazily transformed and in-memory images.
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        return np.ascontiguousarray(np.asarray(image)[:, :, ::-1])
     return image
 
 
@@ -66,6 +74,8 @@ def _prepared_batches(
     backend: Optional[str] = None,
 ):
     """Yield ordered source batches and decoded pixels with bounded read-ahead."""
+    from klygo import media
+
     iterator = iter(images)
 
     def materialize(image: Any) -> Any:
@@ -81,42 +91,142 @@ def _prepared_batches(
             yield part
 
     batches = iter(parts())
-    if workers == 0 or prefetch == 0:
-        for part in batches:
-            yield part, [materialize(image) for image in part]
+    try:
+        count = len(images)
+    except (TypeError, AttributeError):
+        count = None
+    if workers == 0 or prefetch == 0 or (
+        count is not None and count <= batch and (workers == 1 or count <= 1)
+    ):
+        try:
+            for part in batches:
+                yield part, [materialize(image) for image in part]
+        finally:
+            close = getattr(iterator, "close", None)
+            if callable(close):
+                close()
         return
 
-    first = next(batches, None)
-    if first is None:
-        return
-    second = next(batches, None)
-    if second is None:
-        yield first, [materialize(image) for image in first]
-        return
-    batches = itertools.chain((first, second), batches)
+    source_prepares_pixels = (
+        bool(getattr(images, "_predicates", ()))
+        or bool(getattr(images, "_preprocessing_ops", ()))
+        or getattr(images, "_motion_threshold", None) is not None
+        or getattr(images, "_deduplicate_threshold", None) is not None
+    )
+    if batch == 1 and workers == 1 and not source_prepares_pixels:
+        # One ordered worker already serializes video reads. Avoid a second
+        # executor and a completed intermediate Future on every default frame.
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="klygo-decode")
+        pending_single: deque[tuple[Any, Future[Any]]] = deque()
+        exhausted = object()
 
-    pending: deque[tuple[List[Any], List[Future[Any]]]] = deque()
-    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="klygo-decode") as executor:
-        def submit(part: List[Any]) -> tuple[List[Any], List[Future[Any]]]:
-            return part, [executor.submit(materialize, image) for image in part]
+        def submit_one() -> bool:
+            image = next(iterator, exhausted)
+            if image is exhausted:
+                return False
+            pending_single.append((image, executor.submit(materialize, image)))
+            return True
 
         try:
-            for _ in range(prefetch):
-                part = next(batches, None)
-                if part is None:
+            for _ in range(prefetch + 1):
+                if not submit_one():
                     break
-                pending.append(submit(part))
-            while pending:
-                part, futures = pending.popleft()
-                prepared = [future.result() for future in futures]
-                following = next(batches, None)
-                if following is not None:
-                    pending.append(submit(following))
-                yield part, prepared
+            while pending_single:
+                image, future = pending_single.popleft()
+                yield [image], [future.result()]
+                submit_one()
         finally:
-            for _part, futures in pending:
-                for future in futures:
-                    future.cancel()
+            for _image, future in pending_single:
+                future.cancel()
+            executor.shutdown(wait=True, cancel_futures=True)
+            close = getattr(iterator, "close", None)
+            if callable(close):
+                close()
+        return
+
+    stopped = Event()
+    serial_batches = (
+        workers == 1
+        and backend == "Ultralytics"
+        and getattr(images, "source_type", None) == "video"
+        and getattr(images, "backend", None) == "opencv"
+        and not source_prepares_pixels
+    )
+    executor = None if serial_batches else ThreadPoolExecutor(max_workers=workers, thread_name_prefix="klygo-decode")
+    producer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="klygo-source")
+    pending: deque[Future[Any]] = deque()
+
+    def prepare_video(image: Any, decoded: Any) -> Any:
+        # Keep temporary pixels off the source proxy retained by Detections.
+        proxy = media.LazyImage(image)
+        proxy._image = decoded
+        prepared = materialize(proxy)
+        image._preprocessing_trace = proxy._preprocessing_trace
+        image._cached_size = proxy._cached_size
+        image._cached_mode = proxy._cached_mode
+        return prepared
+
+    def submit_batch():
+        if stopped.is_set():
+            return None
+        part = next(batches, None)
+        if part is None:
+            return None
+        if serial_batches:
+            # Keep source iteration and pixel preparation together off the
+            # inference thread, without per-image Futures or a second pool.
+            prepared = []
+            for image in part:
+                if stopped.is_set():
+                    return None
+                prepared.append(materialize(image))
+            return part, prepared
+        futures = []
+        for image in part:
+            if stopped.is_set():
+                return None
+            if isinstance(image, media.LazyImage) and image.frame_index is not None:
+                # Only this producer touches video readers. Worker scheduling
+                # cannot reorder reads or cause backward seeks on shared readers.
+                decoded = image.load(cache=False)
+                if (
+                    backend == "Ultralytics"
+                    and image.backend == "opencv"
+                    and not image._instructions
+                    and not image._preprocessing_ops
+                ):
+                    # Already in the backend's format: avoid another task,
+                    # source proxy, and thread hand-off for this common case.
+                    ready = Future()
+                    ready.set_result(decoded)
+                    futures.append(ready)
+                else:
+                    futures.append(executor.submit(prepare_video, image, decoded))
+            else:
+                futures.append(executor.submit(materialize, image))
+        return part, futures
+
+    try:
+        # One batch is consumed now; prefetch bounds the batches ahead of it.
+        pending.extend(producer.submit(submit_batch) for _ in range(prefetch + 1))
+        while pending:
+            submitted = pending.popleft().result()
+            if submitted is None:
+                break
+            part, futures = submitted
+            prepared = futures if serial_batches else [future.result() for future in futures]
+            yield part, prepared
+            pending.append(producer.submit(submit_batch))
+    finally:
+        stopped.set()
+        for future in pending:
+            future.cancel()
+        producer.shutdown(wait=True, cancel_futures=True)
+        if executor is not None:
+            executor.shutdown(wait=True, cancel_futures=True)
+        close = getattr(iterator, "close", None)
+        if callable(close):
+            close()
 
 
 def _values_match(left: Any, right: Any) -> bool:
@@ -237,17 +347,20 @@ class Detector(BaseModel):
                     self._prepare_prediction(prompts)
                 if not stream:
                     frames = []
-                    with ProgressBar(total=len(images), desc="Predict", unit="frame", verbose=verbose, colour="cyan") as progress:
-                        offset = 0
-                        for part, prepared in _prepared_batches(
-                            images, batch, workers, prefetch, backend=self.backend
-                        ):
-                            frames.extend(self._infer_batch(
-                                part, prompts, metadata, offset * vid_stride,
-                                vid_stride, prepared_images=prepared,
-                            ))
-                            progress.update(len(part))
-                            offset += len(part)
+                    prediction_snapshot = self._config_snapshot(metadata, prompts)
+                    with self._prediction_session(metadata) as infer:
+                        with ProgressBar(total=len(images), desc="Predict", unit="frame", verbose=verbose, colour="cyan") as progress:
+                            offset = 0
+                            for part, prepared in _prepared_batches(
+                                images, batch, workers, prefetch, backend=self.backend
+                            ):
+                                frames.extend(self._infer_batch(
+                                    part, prompts, metadata, offset * vid_stride,
+                                    vid_stride, prepared_images=prepared,
+                                    prediction_snapshot=prediction_snapshot, inference=infer,
+                                ))
+                                progress.update(len(part))
+                                offset += len(part)
                     result = Detections(
                         frames,
                         metadata={"source_type": source_type, "fps": getattr(images, "fps", 30.0)},
@@ -273,27 +386,28 @@ class Detector(BaseModel):
         def generate():
             offset = 0
             try:
-                for part, prepared in _prepared_batches(
-                    images, batch, workers, prefetch, backend=self.backend
-                ):
-                    def infer() -> List[Detection]:
-                        return self._infer_batch(
-                            part, prompts, metadata, offset * vid_stride,
-                            vid_stride, prepared_images=prepared,
-                            prediction_snapshot=prediction_snapshot,
-                        )
+                with self._prediction_session(metadata) as session_infer:
+                    for part, prepared in _prepared_batches(
+                        images, batch, workers, prefetch, backend=self.backend
+                    ):
+                        def infer_batch() -> List[Detection]:
+                            return self._infer_batch(
+                                part, prompts, metadata, offset * vid_stride,
+                                vid_stride, prepared_images=prepared,
+                                prediction_snapshot=prediction_snapshot, inference=session_infer,
+                            )
 
-                    if isolate_state:
-                        with self._prediction_lock:
-                            current = self._snapshot_prediction_state()
-                            try:
-                                frames = infer()
-                            finally:
-                                self._restore_prediction_state(current)
-                    else:
-                        frames = infer()
-                    yield from frames
-                    offset += len(part)
+                        if isolate_state:
+                            with self._prediction_lock:
+                                current = self._snapshot_prediction_state()
+                                try:
+                                    frames = infer_batch()
+                                finally:
+                                    self._restore_prediction_state(current)
+                        else:
+                            frames = infer_batch()
+                        yield from frames
+                        offset += len(part)
             finally:
                 close = getattr(images, "close", None)
                 if callable(close):
@@ -318,6 +432,7 @@ class Detector(BaseModel):
         """Build backend-native runtime options for one prediction."""
         if self.backend == "Ultralytics":
             model_config = dict(metadata.get("model", {}))
+            model_config.pop("weights", None)
             post_config = dict(metadata.get("post", {}))
             classes = model_config.pop("classes", None)
             if prompt and not hasattr(self, "original_names"):
@@ -439,7 +554,7 @@ class Detector(BaseModel):
             with self._prediction_lock:
                 metadata, prompts = self._resolve_prediction(prompt, kwargs, runtime=False)
                 _ = self._native_runtime_options(metadata, prompts)
-                images, is_single = common._native_inputs(source)
+                images, is_single = utils._native_inputs(source)
                 source_type = "image" if is_single else "frames"
                 previous = self._snapshot_prediction_state()
                 try:
@@ -601,7 +716,7 @@ class Detector(BaseModel):
 
     def clear_cache(self) -> None:
         """Release unused backend memory blocks."""
-        common.clear_cache(self.backend)
+        runtime.clear_cache(self.backend)
 
     def benchmark(
         self,
@@ -635,10 +750,10 @@ class Detector(BaseModel):
                 for _ in range(warmup):
                     self._infer_batch(images, prompts, metadata)
                 for _ in range(iterations):
-                    common.synchronize(self.backend, device=cur_dev)
+                    runtime.synchronize(self.backend, device=cur_dev)
                     start = time.perf_counter()
                     result = self._infer_batch(images, prompts, metadata)
-                    common.synchronize(self.backend, device=cur_dev, value=result)
+                    runtime.synchronize(self.backend, device=cur_dev, value=result)
                     latencies.append(time.perf_counter() - start)
 
             average = statistics.mean(latencies)
@@ -696,63 +811,56 @@ class Detector(BaseModel):
 
     def current_device(self) -> Any:
         """Return the actual device hosting the wrapped model."""
-        return common.current_device(self.model, backend=self.backend)
+        return runtime.current_device(self.model, backend=self.backend)
 
     def current_dtype(self) -> Any:
         """Return the actual dtype of the wrapped model's parameters."""
-        return common.current_dtype(self.model, backend=self.backend)
+        return runtime.current_dtype(self.model, backend=self.backend)
 
     def cast_inputs(self, inputs: Any) -> Any:
         """Cast floating inputs to the model's device and dtype via the active backend."""
-        return common.cast_inputs(self.backend, inputs, dev=self.current_device(), dtype=self.current_dtype())
+        return _compat.cast_inputs(self.backend, inputs, dev=self.current_device(), dtype=self.current_dtype())
 
     def run_inference(self, inputs: Any, **model_kwargs) -> Any:
         """Execute a forward pass using the native runtime of the selected backend."""
-        if common.backend_family(self.backend) == "Ultralytics":
-            options = dict(model_kwargs)
-            model_kwargs["_reuse_predictor"] = (
-                getattr(self, "_prepared_predict_options", None) == options
-            )
-            outputs = common.run_inference(
-                self.backend,
-                self.model,
-                inputs,
-                cur_dtype=self.current_dtype(),
-                **model_kwargs,
-            )
-            self._prepared_predict_options = options
-            return outputs
-        return common.run_inference(
-            self.backend,
-            self.model,
-            inputs,
-            cur_dtype=self.current_dtype(),
-            **model_kwargs,
-        )
+        return _compat.run_detector_inference(self, inputs, **model_kwargs)
 
     def get_output_device(self, outputs: Any) -> Any:
         """Detect the device of the model's output tensors."""
-        return common.get_output_device(self.backend, outputs, default_device=self.current_device())
+        return _compat.get_output_device(self.backend, outputs, default_device=self.current_device())
 
     def sync_device(self, tensor: Any, target_device: Any) -> Any:
         """Move a tensor to target_device when it differs from the current device."""
-        return common.sync_device(self.backend, tensor, target_device=target_device)
+        return _compat.sync_device(self.backend, tensor, target_device=target_device)
 
     def format_results(self, raw_outputs: Any) -> List[Dict[str, Any]]:
         """Normalise raw backend output into a list of {boxes, scores, labels} dicts."""
-        return common.format_results(self.backend, raw_outputs)
+        return _compat.format_results(self.backend, raw_outputs)
 
     # =========================================================================
     # 4. INTERNAL STATE & BATCH INFERENCE HELPERS
     # =========================================================================
 
+    @contextmanager
+    def _prediction_session(self, options):
+        """Prepare a prediction once and release resources when iteration ends.
+
+        Subclasses may override this private hook and yield an inference callable.
+        The default requires only ``forward`` and allocates no session state.
+        """
+        with self._prediction_lock:
+            _compat._optimize_model(self.backend, self.model)
+        yield self.forward
+
     def _infer_batch(self, images: List[Any], prompt: Any, metadata: Dict[str, Any],
                      offset: int = 0, frame_step: int = 1,
                      prepared_images: Optional[List[Any]] = None,
-                     prediction_snapshot: Optional[Dict[str, Any]] = None) -> List[Detection]:
-        with self._prediction_lock, self._use_metadata(metadata), common.inference_context(self.backend):
+                     prediction_snapshot: Optional[Dict[str, Any]] = None,
+                     inference: Any = None) -> List[Detection]:
+        with self._prediction_lock, self._use_metadata(metadata), runtime.inference_context(self.backend), (
+            nullcontext(inference) if inference is not None else self._prediction_session(metadata)
+        ) as infer:
             self._prepare_prediction(prompt)
-            common._optimize_model(self.backend, self.model)
             start = time.perf_counter()
             prepared = (
                 prepared_images
@@ -761,7 +869,7 @@ class Detector(BaseModel):
             )
             if len(prepared) != len(images):
                 raise ValueError("prepared image count must match source image count")
-            raw = list(self.forward(images=prepared, prompt=deepcopy(prompt)))
+            raw = list(infer(images=prepared, prompt=deepcopy(prompt)))
             elapsed = (time.perf_counter() - start) * 1000 / max(1, len(images))
             if len(raw) != len(images):
                 raise ValueError("forward() must return exactly one result per input image")
@@ -815,7 +923,7 @@ class Detector(BaseModel):
                 b_list = preprocessing.restore_boxes(b_list, trace)
             det = outputs.build_detections(
                 [final_image],
-                [{"boxes": b_list, "scores": list(s_list), "labels": list(l_list), "class_ids": list(c_list)}],
+                [{"boxes": b_list, "scores": s_list, "labels": l_list, "class_ids": c_list}],
                 names=self.names,
             )[0]
             if trace:
@@ -851,10 +959,10 @@ class Detector(BaseModel):
 
     def _stream_state_isolation_required(self) -> bool:
         """Return whether each lazy batch must restore mutable backend state."""
-        family = common.backend_family(self.backend)
+        family = utils.backend_family(self.backend)
         if family == "Ultralytics":
             return hasattr(self, "original_names")
-        if family == "Torchvision" or family in common.KERAS_BACKENDS:
+        if family == "Torchvision" or family in runtime.KERAS_BACKENDS:
             return False
         return True
 

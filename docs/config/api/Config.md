@@ -35,7 +35,7 @@ See [`Config.py`](../../../examples/config/Config.py).
 
 ## Tests
 
-See [`test_Config.py`](../../../test/config/test_Config.py) and [`test_model_metadata.py`](../../../test/config/test_model_metadata.py).
+See [`test_config.py`](../../../test/config/test_config.py) and [`test_model_metadata.py`](../../../test/config/test_model_metadata.py).
 
 ## Complete executable example
 

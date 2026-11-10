@@ -11,7 +11,7 @@ Klygo is a modular, composable Python toolkit (`Python >= 3.10`) organized into 
 ```text
 1. Storage, Config & Datasets : klygo.files • klygo.archive • klygo.config • klygo.datasets • klygo.mining
 2. Media & Preprocessing      : klygo.media (LazyImage, MediaFrames) • klygo.preprocessing (trace)
-3. Multi-Backend AI Models    : klygo.models (BaseModel -> Detector -> backend.common)
+3. Multi-Backend AI Models    : klygo.models (BaseModel -> Detector -> native model wrappers)
                                 ├── Ultralytics (YOLOv8/v11, YOLO-World v2)
                                 ├── Hugging Face / PyTorch (Grounding DINO, DETR, custom nn.Module)
                                 ├── Torchvision (Faster R-CNN, RetinaNet, FCOS, SSD)
@@ -84,7 +84,7 @@ Inside Klygo modules, examples (`examples/`), tutorials (`tutorials/`), and inte
 
 ### 3.1. 3-Tier Model Hierarchy
 1. **Layer 1 (`models.BaseModel` in `klygo/models/base.py`)**: Manages `metadata`, `details`, `flags`, `state` (`LOADING`, `READY`), and `info()`.
-2. **Layer 2 (`models.Detector` in `klygo/models/detection/base.py` & `klygo.models.backend.common`)**: Implements `predict(source, prompt=None, stream=False, **kwargs)`, automatic coordinate restoration from `klygo.preprocessing` traces, `warmup()`, `benchmark()`, and delegates tensor/device operations to [`klygo.models.backend.common`](docs/models/backend/api/common.md).
+2. **Layer 2 (`models.Detector` in `klygo/models/detection/base.py`)**: Implements `predict(source, prompt=None, stream=False, **kwargs)`, automatic coordinate restoration from `klygo.preprocessing` traces, `warmup()`, `benchmark()`, with native wrapper inference and shared accelerator lifecycle helpers in `klygo.models.runtime`.
 3. **Layer 3 (Concrete Wrappers & Custom Subclasses)**: Implement `forward(self, images: list[PIL.Image.Image], prompt=None) -> list[Detection]`.
 
 ### 3.2. Standard 4-Step Pattern for Subclassing `models.Detector`
@@ -108,7 +108,7 @@ class CustomDetector(models.Detector):
         post_cfg = dict(self.metadata.get("post", {}))
         threshold = float(post_cfg.get("threshold", 0.25))
 
-        # 3. Delegate tensor casting -> forward execution -> result formatting to backend helpers
+        # 3. Optionally use Detector helpers, or own native tensor/model calls
         inputs = self.cast_inputs(preprocessed_tensors)
         raw_outputs = self.run_inference(inputs)
         formatted = self.format_results(raw_outputs)
@@ -144,10 +144,10 @@ detector = models.load(configured)
 ```
 
 ### 3.3. Backend-Specific Notes
-- **Ultralytics (`backend="Ultralytics"`)**: Built-in `YOLODetect` (`yolov8n.pt`) and `YOLOWorldDetect` (`yolov8s-worldv2.pt`). Passing a `.pt` path directly to `models.load("yolov8n.pt")` auto-instantiates `YOLODetect`. See [`docs/models/backend/api/ultralytics.md`](docs/models/backend/api/ultralytics.md).
-- **Hugging Face (`backend="Hugging Face"`)**: Built-in `GroundingDinoDetect`. `self.cast_inputs(batch_feature)` casts float tensors (`pixel_values`) while keeping `input_ids` as `int64`. Use `out_dev = self.get_output_device(raw_outputs)` and `self.sync_device(inputs["input_ids"], out_dev)` for multi-GPU safety. See [`docs/models/backend/api/huggingface.md`](docs/models/backend/api/huggingface.md).
-- **Torchvision (`backend="Torchvision"`)**: Generic adapter for caller-owned models (e.g., `fasterrcnn_mobilenet_v3_large_fpn(weights=FasterRCNN_MobileNet_V3_Large_FPN_Weights.COCO_V1)`). Expects `list[Tensor[C, H, W]]` in `[0.0, 1.0]`. See [`docs/models/backend/api/torchvision.md`](docs/models/backend/api/torchvision.md).
-- **Keras 3 / KerasHub (`backend="Keras"`)**: Supports `KERAS_BACKEND="torch"` without requiring TensorFlow (`models.set_backend("Keras", engine="torch")`). Natively handles `keras_hub.models.ObjectDetector.from_preset("dfine_small_coco")` (RT-DETR / D-FINE): `run_inference` resizes inputs to `image_converter.image_size` prior to `model.preprocessor` and calls `model.decode_predictions(raw_preds, inputs)`, while `format_results` filters `-1` padding slots and converts `yxyx` $\rightarrow$ `xyxy` boxes automatically. See [`docs/models/backend/api/keras.md`](docs/models/backend/api/keras.md).
+- **Ultralytics (`backend="Ultralytics"`)**: Built-in `YOLODetect` (`yolov8n.pt`) and `YOLOWorldDetect` (`yolov8s-worldv2.pt`). Passing a `.pt` path directly to `models.load("yolov8n.pt")` auto-instantiates `YOLODetect`. See [`docs/models/execution/api/ultralytics.md`](docs/models/execution/api/ultralytics.md).
+- **Hugging Face (`backend="Hugging Face"`)**: Built-in `GroundingDinoDetect`. `self.cast_inputs(batch_feature)` casts float tensors (`pixel_values`) while keeping `input_ids` as `int64`. Use `out_dev = self.get_output_device(raw_outputs)` and `self.sync_device(inputs["input_ids"], out_dev)` for multi-GPU safety. See [`docs/models/execution/api/huggingface.md`](docs/models/execution/api/huggingface.md).
+- **Torchvision (`backend="Torchvision"`)**: Generic adapter for caller-owned models (e.g., `fasterrcnn_mobilenet_v3_large_fpn(weights=FasterRCNN_MobileNet_V3_Large_FPN_Weights.COCO_V1)`). Expects `list[Tensor[C, H, W]]` in `[0.0, 1.0]`. See [`docs/models/execution/api/torchvision.md`](docs/models/execution/api/torchvision.md).
+- **Keras 3 / KerasHub (`backend="Keras"`)**: Supports `KERAS_BACKEND="torch"` without requiring TensorFlow (`models.set_backend("Keras", engine="torch")`). Natively handles `keras_hub.models.ObjectDetector.from_preset("dfine_small_coco")` (RT-DETR / D-FINE): `run_inference` resizes inputs to `image_converter.image_size` prior to `model.preprocessor` and calls `model.decode_predictions(raw_preds, inputs)`, while `format_results` filters `-1` padding slots and converts `yxyx` $\rightarrow$ `xyxy` boxes automatically. See [`docs/models/execution/api/keras.md`](docs/models/execution/api/keras.md).
 
 ---
 

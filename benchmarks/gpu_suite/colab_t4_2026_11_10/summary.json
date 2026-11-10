@@ -1,0 +1,1294 @@
+{
+  "schema": "klygo.colab.saved_output_summary.v1",
+  "source_url": "https://colab.research.google.com/drive/1l2ejVBidUcgaw907giH5V6WIdD46hxMo?usp=sharing",
+  "retrieved_date": "2026-11-10",
+  "gpu": "Tesla T4",
+  "driver": "580.82.07",
+  "device_memory_mib": 15360,
+  "power_limit_w": 70,
+  "torch": "2.14.1+cu130",
+  "transformers": "4.57.1",
+  "ultralytics": "8.4.208",
+  "tested_matrix_commit": "313897b4b40c8ebfd366ac1d99460727ed48919e",
+  "control_and_stability_commit": "5f9aef9a0b7ed1fa93b51425bb232ad7d7de64e4",
+  "configurations": 25,
+  "supported_cases": 124,
+  "repeats_per_case": 7,
+  "reported_measured_passes": 868,
+  "data_completeness": "Rounded median FPS and parity flags recovered from saved stdout. The full matrix bundle in cell 15 is replaced by an Output hidden placeholder in the downloaded notebook. Individual timing samples, detailed parity values, matrix telemetry and latency cannot be reconstructed from these medians.",
+  "reports": [
+    {
+      "model": "yolo",
+      "profile": "images",
+      "batch": 1,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 99.568,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 97.336,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 70.885,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "ok",
+          "fps_median": 71.132,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 63.101,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 58.624,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "yolo11",
+      "profile": "images",
+      "batch": 1,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 77.048,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 76.94,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 58.242,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "ok",
+          "fps_median": 59.657,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 55.705,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 50.436,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "yolo26",
+      "profile": "images",
+      "batch": 1,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 71.3,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 73.68,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 55.188,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "ok",
+          "fps_median": 51.06,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 49.424,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 42.364,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "yolo-world",
+      "profile": "images",
+      "batch": 1,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 61.561,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 68.617,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 58.975,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "ok",
+          "fps_median": 56.068,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 53.515,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 50.271,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "grounding-dino",
+      "profile": "images",
+      "batch": 1,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 3.075,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 3.078,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 3.085,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 2.962,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "grounding-dino-base",
+      "profile": "images",
+      "batch": 1,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 2.158,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 2.079,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 2.094,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 2.121,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "faster-rcnn",
+      "profile": "images",
+      "batch": 1,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 30.731,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 28.519,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 28.273,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 27.003,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "d-fine",
+      "profile": "images",
+      "batch": 1,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 2.311,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 2.183,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 2.125,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 2.187,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "locate-anything",
+      "profile": "images",
+      "batch": 1,
+      "source_cell": 12,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 1.561,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 1.546,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 1.55,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 1.573,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ],
+      "selection_note": "Successful retry after installing decord and lmdb; initial failed attempt remains in notebook."
+    },
+    {
+      "model": "yolo",
+      "profile": "images",
+      "batch": 4,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 156.265,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 151.244,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 107.758,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "ok",
+          "fps_median": 108.747,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 98.595,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 89.237,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "yolo11",
+      "profile": "images",
+      "batch": 4,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 157.958,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 154.403,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 108.491,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "ok",
+          "fps_median": 108.003,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 101.729,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 92.212,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "yolo26",
+      "profile": "images",
+      "batch": 4,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 162.393,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 159.109,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 108.978,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "ok",
+          "fps_median": 114.069,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 99.755,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 86.569,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "yolo-world",
+      "profile": "images",
+      "batch": 4,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 99.317,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 100.669,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 86.816,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "ok",
+          "fps_median": 84.431,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 70.897,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 58.098,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "grounding-dino",
+      "profile": "images",
+      "batch": 4,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 3.264,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 3.255,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 3.266,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 3.251,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "grounding-dino-base",
+      "profile": "images",
+      "batch": 4,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 2.316,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 2.29,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 2.284,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 2.286,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "faster-rcnn",
+      "profile": "images",
+      "batch": 4,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 39.732,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 37.106,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 36.085,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 34.516,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "d-fine",
+      "profile": "images",
+      "batch": 4,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 8.639,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 8.17,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "N/A",
+          "reason": "No upstream native source-stream engine",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 7.93,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 8.466,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "yolo",
+      "profile": "video",
+      "batch": 1,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 82.134,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 84.032,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 74.41,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "ok",
+          "fps_median": 71.231,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 70.508,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 70.033,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "yolo",
+      "profile": "video",
+      "batch": 4,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 138.746,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 148.175,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "N/A",
+          "reason": "Native video batch is locked to 1 by the tested public API",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "native-stream",
+          "status": "N/A",
+          "reason": "Native video batch is locked to 1 by the tested public API",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 128.142,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 122.721,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "yolo11",
+      "profile": "video",
+      "batch": 1,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 70.499,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 63.475,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 62.021,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "ok",
+          "fps_median": 62.787,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 59.043,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 59.375,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "yolo11",
+      "profile": "video",
+      "batch": 4,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 139.956,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 137.682,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "N/A",
+          "reason": "Native video batch is locked to 1 by the tested public API",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "native-stream",
+          "status": "N/A",
+          "reason": "Native video batch is locked to 1 by the tested public API",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 117.277,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 111.254,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "yolo26",
+      "profile": "video",
+      "batch": 1,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 62.954,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 63.75,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 60.86,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "ok",
+          "fps_median": 55.878,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 54.967,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 56.028,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "yolo26",
+      "profile": "video",
+      "batch": 4,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 122.154,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 120.98,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "N/A",
+          "reason": "Native video batch is locked to 1 by the tested public API",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "native-stream",
+          "status": "N/A",
+          "reason": "Native video batch is locked to 1 by the tested public API",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 111.036,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 107.239,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "yolo-world",
+      "profile": "video",
+      "batch": 1,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 64.26,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 64.675,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "ok",
+          "fps_median": 62.198,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-stream",
+          "status": "ok",
+          "fps_median": 58.484,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 58.049,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 56.799,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    },
+    {
+      "model": "yolo-world",
+      "profile": "video",
+      "batch": 4,
+      "source_cell": 11,
+      "cases": [
+        {
+          "mode": "raw-non-stream",
+          "status": "ok",
+          "fps_median": 108.092,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "raw-stream",
+          "status": "ok",
+          "fps_median": 108.777,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "native-non-stream",
+          "status": "N/A",
+          "reason": "Native video batch is locked to 1 by the tested public API",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "native-stream",
+          "status": "N/A",
+          "reason": "Native video batch is locked to 1 by the tested public API",
+          "status_source": "Capability rules in pinned runner; no FPS fabricated"
+        },
+        {
+          "mode": "managed-non-stream",
+          "status": "ok",
+          "fps_median": 101.799,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        },
+        {
+          "mode": "managed-stream",
+          "status": "ok",
+          "fps_median": 98.001,
+          "printed_decimal_places": 3,
+          "all_parity_pass": true
+        }
+      ]
+    }
+  ],
+  "control_verification": [
+    {
+      "model": "yolo",
+      "mode": "raw-non-stream",
+      "fps_median": 89.117,
+      "all_parity_pass": true
+    },
+    {
+      "model": "yolo",
+      "mode": "raw-stream",
+      "fps_median": 90.881,
+      "all_parity_pass": true
+    },
+    {
+      "model": "yolo",
+      "mode": "native-non-stream",
+      "fps_median": 68.847,
+      "all_parity_pass": true
+    },
+    {
+      "model": "yolo",
+      "mode": "native-stream",
+      "fps_median": 71.668,
+      "all_parity_pass": true
+    },
+    {
+      "model": "yolo",
+      "mode": "managed-non-stream",
+      "fps_median": 60.352,
+      "all_parity_pass": true
+    },
+    {
+      "model": "yolo",
+      "mode": "managed-stream",
+      "fps_median": 54.248,
+      "all_parity_pass": true
+    }
+  ],
+  "attempt_audit": {
+    "initial_locate_failure": "Missing decord and lmdb; successful retry selected",
+    "rejected_control_probes": "16 attempts rejected by frozen model group; excluded from selected tables",
+    "source_cells": [
+      11,
+      12,
+      13,
+      14
+    ]
+  }
+}

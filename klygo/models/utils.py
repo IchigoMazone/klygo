@@ -382,7 +382,9 @@ def resolve_images(
                             if isinstance(item, media.LazyImage):
                                 yield item
                                 continue
-                        pil_img = media.to_pil(item).convert("RGB")
+                        pil_img = media.to_pil(item)
+                        if pil_img.mode != "RGB":
+                            pil_img = pil_img.convert("RGB")
                         if hasattr(item, "path"):
                             pil_img.path = item.path
                         elif isinstance(item, (str, Path)):
@@ -453,7 +455,9 @@ def resolve_images(
             if isinstance(item, media.LazyImage):
                 cleaned_images.append(item)
                 continue
-        pil_img = media.to_pil(item).convert("RGB")
+        pil_img = media.to_pil(item)
+        if pil_img.mode != "RGB":
+            pil_img = pil_img.convert("RGB")
         if hasattr(item, "path"):
             pil_img.path = item.path
         elif isinstance(item, (str, Path)):
@@ -491,3 +495,23 @@ def normalize_prompt(text_prompt: Union[str, List[str]]) -> List[str]:
     if not normalized:
         raise ValueError("prompt must contain at least one label; use None to clear it")
     return normalized
+
+
+def backend_family(backend: Optional[str]) -> str:
+    """Normalize decorated backend names such as ``'Hugging Face (Offline)'`` to ``'Hugging Face'``."""
+    return (backend or "").split(" (", 1)[0]
+
+
+def _native_inputs(source: Any) -> tuple[list[Any], bool]:
+    """Normalize in-memory native inputs without invoking Klygo media decoding."""
+    from os import PathLike
+
+    if isinstance(source, (str, bytes, PathLike)) or getattr(source, "is_stream", False):
+        raise TypeError(
+            "This backend requires in-memory native inputs; use native=False for paths, videos, or MediaFrames"
+        )
+    if isinstance(source, (list, tuple)):
+        if not source:
+            raise ValueError("native input must contain at least one item")
+        return list(source), False
+    return [source], True
