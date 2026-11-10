@@ -74,7 +74,7 @@ def render(bundle):
     for report in reports:
         settings = report["settings"]
         lines += [f"## Detail — {report['model']}, {settings['profile']}, batch {settings['batch']}", "",
-                  f"Status: **{report.get('status')}**. Load {number(report.get('load_seconds'))} s. Device `{report.get('actual_model_device')}`, dtype `{report.get('actual_model_dtype')}`.",
+                  f"Status: **{report.get('status')}**. Load {number(report.get('load_seconds'))} s. Device `{report.get('actual_model_device')}`, dtype `{report.get('actual_model_dtype')}`; observed {report.get('device_observation_stage','at factory return before warmup (legacy report)')}.",
                   f"Input scope: {report.get('input_scope','not available')}. Input SHA256: `{report.get('input_sha256')}`.",
                   f"Runner SHA256: `{report.get('runner_sha256')}`. Prompt: `{report.get('prompt')}`.", ""]
         if report.get("status")=="error":

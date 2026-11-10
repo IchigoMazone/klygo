@@ -367,6 +367,7 @@ def run_model(args):
         report["prompt"] = prompt
         report["actual_model_dtype"] = str(detector.dtype)
         report["actual_model_device"] = str(detector.device)
+        report["device_at_factory_return"] = str(detector.device)
         report["detector_class"] = type(detector).__module__+"."+type(detector).__qualname__
         report["weights_revision"] = getattr(getattr(detector.model,"config",None),"_commit_hash",None)
         report["runner_sha256"] = files.hash(__file__)
@@ -408,6 +409,18 @@ def run_model(args):
         print(f"Loaded {args.model}: {report['load_seconds']:.2f}s, dtype={detector.dtype}",flush=True)
         for mode in active:
             measure(detector,args.model,prompt,mode,packs,args,video)
+        report["actual_model_device"] = str(detector.device)
+        report["actual_model_dtype"] = str(detector.dtype)
+        report["device_observation_stage"] = "after complete warmup, before measured repeats"
+        report["execution_policy_after_warmup"] = {
+            "float32_matmul_precision":torch.get_float32_matmul_precision(),
+            "matmul_allow_tf32":torch.backends.cuda.matmul.allow_tf32,
+            "cudnn_allow_tf32":torch.backends.cudnn.allow_tf32,
+            "cudnn_benchmark":torch.backends.cudnn.benchmark,
+            "deterministic_algorithms":torch.are_deterministic_algorithms_enabled(),
+        }
+        if args.device.startswith("cuda") and not report["actual_model_device"].startswith("cuda"):
+            raise RuntimeError("Model did not remain on CUDA after warmup")
         for repeat in range(args.repeats):
             order = active if repeat%2==0 else list(reversed(active))
             print(f"{args.model} repeat {repeat+1}/{args.repeats}: {','.join(order)}",flush=True)

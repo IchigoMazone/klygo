@@ -22,6 +22,11 @@ precision, matmul/cuDNN TF32 flags, cuDNN benchmark policy and deterministic
 algorithm setting. The current runner records these at startup; the pinned
 historical runner did not include those fields. A strict-precision experiment
 and a framework-default experiment must be identified separately.
+The current runner also verifies the CUDA model device after complete warmup.
+Some wrappers load checkpoints on CPU and move them during the first prediction;
+their factory-return device is not the timed execution-device observation. The
+older `cffb476` report's device field was collected before warmup; preserve that
+field and interpret it at that stage rather than relabeling it after the fact.
 
 From a checkout at your selected commit:
 
@@ -187,6 +192,10 @@ results for later checking, so their memory peaks differ from a non-retaining
 live stream. Report the ten-minute stability probe separately. Host delivery
 intervals and API-pack quantiles are not isolated kernel latency or a production
 P99 guarantee. Sampled RSS/NVML counters can miss short peaks.
+The raw baseline is the implemented framework path in `raw()`/`execute()`;
+non-Ultralytics adapters may reuse shared input/tensor conversion helpers.
+Its FPS is not a vendor CLI benchmark, and the ratio does not isolate every
+individual Klygo operation.
 
 A suitable results paragraph must name the actual measurements, for example:
 

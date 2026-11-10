@@ -37,6 +37,8 @@ class TestVideoSource(unittest.TestCase):
             self.assertEqual(report['input_sha256'], files.hash(video))
             self.assertIn('caller-provided video', report['input_scope'])
             self.assertEqual(report['status'], 'complete')
+            self.assertEqual(report['device_at_factory_return'], 'cpu')
+            self.assertEqual(report['device_observation_stage'], 'after complete warmup, before measured repeats')
 
 
 if __name__ == '__main__':
