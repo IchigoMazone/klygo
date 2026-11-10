@@ -1,5 +1,11 @@
 # Six-mode Colab GPU suite
 
+For a hardware comparison, follow [the other-GPU guide](OTHER_GPUS.md). It covers
+commit/environment/input pinning, single-device selection, the complete matrix,
+raw file export and an example methodology paragraph. Use
+`raw_statistics.py bundle.json --output artifacts/benchmarks/statistics` for
+repeat-level dispersion and paired overhead when the full bundle is available.
+
 ## Recorded Tesla T4 results
 
 The [2026-11-10 Colab import](colab_t4_2026_11_10/README.md) records 25 selected

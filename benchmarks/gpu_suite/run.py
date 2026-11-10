@@ -221,7 +221,10 @@ class Telemetry:
             import pynvml
             pynvml.nvmlInit()
             self.nvml = pynvml
-            self.handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            # CUDA_VISIBLE_DEVICES can remap logical cuda:0 to a different
+            # physical device. Never silently sample physical GPU zero.
+            device_uuid = str(torch.cuda.get_device_properties(torch.cuda.current_device()).uuid)
+            self.handle = pynvml.nvmlDeviceGetHandleByUUID(device_uuid)
         except Exception:
             self.nvml = None
 
@@ -325,8 +328,9 @@ def environment():
         commit = None
     return {"versions":versions,"python":sys.version,"os":platform.platform(),
             "cpu_count":os.cpu_count(),"cpu":platform.processor(),"cuda":torch.version.cuda,
-            "gpu":torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
-            "vram_mib":torch.cuda.get_device_properties(0).total_memory/2**20 if torch.cuda.is_available() else None,
+            "gpu":torch.cuda.get_device_name(torch.cuda.current_device()) if torch.cuda.is_available() else None,
+            "gpu_uuid":str(getattr(torch.cuda.get_device_properties(torch.cuda.current_device()),"uuid",None)) if torch.cuda.is_available() else None,
+            "vram_mib":torch.cuda.get_device_properties(torch.cuda.current_device()).total_memory/2**20 if torch.cuda.is_available() else None,
             "torch_threads":torch.get_num_threads(),"tested_commit":commit}
 
 
@@ -340,6 +344,8 @@ def prepare(args):
 
 
 def run_model(args):
+    if args.device.startswith("cuda"):
+        torch.cuda.set_device(args.device)
     cv2.setNumThreads(1)
     torch.set_num_threads(2)
     torch.backends.cudnn.benchmark = True
