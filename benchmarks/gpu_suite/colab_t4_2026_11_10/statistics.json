@@ -1,0 +1,1874 @@
+{
+    "schema": "klygo.descriptive_statistics.v1",
+    "comparisons": [
+        {
+            "model": "yolo",
+            "profile": "images",
+            "batch": 1,
+            "mode": "raw-non-stream",
+            "fps": 99.568,
+            "raw_fps": 99.568,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "batch": 1,
+            "mode": "raw-stream",
+            "fps": 97.336,
+            "raw_fps": 99.568,
+            "raw_throughput_percent": 97.75831592479513,
+            "elapsed_overhead_percent": 2.2930878606065574,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "batch": 1,
+            "mode": "native-non-stream",
+            "fps": 70.885,
+            "raw_fps": 99.568,
+            "raw_throughput_percent": 71.19255182387917,
+            "elapsed_overhead_percent": 40.46413204486139,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "batch": 1,
+            "mode": "native-stream",
+            "fps": 71.132,
+            "raw_fps": 99.568,
+            "raw_throughput_percent": 71.4406234934919,
+            "elapsed_overhead_percent": 39.97638193780575,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-non-stream",
+            "fps": 63.101,
+            "raw_fps": 99.568,
+            "raw_throughput_percent": 63.374779045476465,
+            "elapsed_overhead_percent": 57.79147715567105,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-stream",
+            "fps": 58.624,
+            "raw_fps": 99.568,
+            "raw_throughput_percent": 58.87835449140287,
+            "elapsed_overhead_percent": 69.84170305676855,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "batch": 1,
+            "mode": "raw-non-stream",
+            "fps": 77.048,
+            "raw_fps": 77.048,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "batch": 1,
+            "mode": "raw-stream",
+            "fps": 76.94,
+            "raw_fps": 77.048,
+            "raw_throughput_percent": 99.85982763991278,
+            "elapsed_overhead_percent": 0.14036911879387048,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "batch": 1,
+            "mode": "native-non-stream",
+            "fps": 58.242,
+            "raw_fps": 77.048,
+            "raw_throughput_percent": 75.59183885370159,
+            "elapsed_overhead_percent": 32.289413138285106,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "batch": 1,
+            "mode": "native-stream",
+            "fps": 59.657,
+            "raw_fps": 77.048,
+            "raw_throughput_percent": 77.42835634928875,
+            "elapsed_overhead_percent": 29.151650267361774,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-non-stream",
+            "fps": 55.705,
+            "raw_fps": 77.048,
+            "raw_throughput_percent": 72.29908628387498,
+            "elapsed_overhead_percent": 38.31433444035546,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-stream",
+            "fps": 50.436,
+            "raw_fps": 77.048,
+            "raw_throughput_percent": 65.46049216073098,
+            "elapsed_overhead_percent": 52.7638988024427,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "batch": 1,
+            "mode": "raw-non-stream",
+            "fps": 71.3,
+            "raw_fps": 71.3,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "batch": 1,
+            "mode": "raw-stream",
+            "fps": 73.68,
+            "raw_fps": 71.3,
+            "raw_throughput_percent": 103.33800841514729,
+            "elapsed_overhead_percent": -3.2301845819761255,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "batch": 1,
+            "mode": "native-non-stream",
+            "fps": 55.188,
+            "raw_fps": 71.3,
+            "raw_throughput_percent": 77.40252454417953,
+            "elapsed_overhead_percent": 29.194752482423713,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "batch": 1,
+            "mode": "native-stream",
+            "fps": 51.06,
+            "raw_fps": 71.3,
+            "raw_throughput_percent": 71.61290322580645,
+            "elapsed_overhead_percent": 39.63963963963963,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-non-stream",
+            "fps": 49.424,
+            "raw_fps": 71.3,
+            "raw_throughput_percent": 69.31837307152875,
+            "elapsed_overhead_percent": 44.26189705406281,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-stream",
+            "fps": 42.364,
+            "raw_fps": 71.3,
+            "raw_throughput_percent": 59.416549789621314,
+            "elapsed_overhead_percent": 68.30327636672646,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "batch": 1,
+            "mode": "raw-non-stream",
+            "fps": 61.561,
+            "raw_fps": 61.561,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "batch": 1,
+            "mode": "raw-stream",
+            "fps": 68.617,
+            "raw_fps": 61.561,
+            "raw_throughput_percent": 111.4618021149754,
+            "elapsed_overhead_percent": -10.283165979276276,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "batch": 1,
+            "mode": "native-non-stream",
+            "fps": 58.975,
+            "raw_fps": 61.561,
+            "raw_throughput_percent": 95.799288510583,
+            "elapsed_overhead_percent": 4.384908859686298,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "batch": 1,
+            "mode": "native-stream",
+            "fps": 56.068,
+            "raw_fps": 61.561,
+            "raw_throughput_percent": 91.07714299637757,
+            "elapsed_overhead_percent": 9.797032175215815,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-non-stream",
+            "fps": 53.515,
+            "raw_fps": 61.561,
+            "raw_throughput_percent": 86.9300368739949,
+            "elapsed_overhead_percent": 15.035036905540512,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-stream",
+            "fps": 50.271,
+            "raw_fps": 61.561,
+            "raw_throughput_percent": 81.66046685401473,
+            "elapsed_overhead_percent": 22.45827614330329,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino",
+            "profile": "images",
+            "batch": 1,
+            "mode": "raw-non-stream",
+            "fps": 3.075,
+            "raw_fps": 3.075,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino",
+            "profile": "images",
+            "batch": 1,
+            "mode": "native-non-stream",
+            "fps": 3.078,
+            "raw_fps": 3.075,
+            "raw_throughput_percent": 100.09756097560975,
+            "elapsed_overhead_percent": -0.09746588693956282,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-non-stream",
+            "fps": 3.085,
+            "raw_fps": 3.075,
+            "raw_throughput_percent": 100.32520325203251,
+            "elapsed_overhead_percent": -0.32414910858994395,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-stream",
+            "fps": 2.962,
+            "raw_fps": 3.075,
+            "raw_throughput_percent": 96.32520325203252,
+            "elapsed_overhead_percent": 3.8149898717082964,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino-base",
+            "profile": "images",
+            "batch": 1,
+            "mode": "raw-non-stream",
+            "fps": 2.158,
+            "raw_fps": 2.158,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino-base",
+            "profile": "images",
+            "batch": 1,
+            "mode": "native-non-stream",
+            "fps": 2.079,
+            "raw_fps": 2.158,
+            "raw_throughput_percent": 96.33920296570899,
+            "elapsed_overhead_percent": 3.799903799903781,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino-base",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-non-stream",
+            "fps": 2.094,
+            "raw_fps": 2.158,
+            "raw_throughput_percent": 97.03429101019462,
+            "elapsed_overhead_percent": 3.0563514804202496,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino-base",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-stream",
+            "fps": 2.121,
+            "raw_fps": 2.158,
+            "raw_throughput_percent": 98.28544949026877,
+            "elapsed_overhead_percent": 1.7444601603017418,
+            "parity": true
+        },
+        {
+            "model": "faster-rcnn",
+            "profile": "images",
+            "batch": 1,
+            "mode": "raw-non-stream",
+            "fps": 30.731,
+            "raw_fps": 30.731,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "faster-rcnn",
+            "profile": "images",
+            "batch": 1,
+            "mode": "native-non-stream",
+            "fps": 28.519,
+            "raw_fps": 30.731,
+            "raw_throughput_percent": 92.8020565552699,
+            "elapsed_overhead_percent": 7.756232686980624,
+            "parity": true
+        },
+        {
+            "model": "faster-rcnn",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-non-stream",
+            "fps": 28.273,
+            "raw_fps": 30.731,
+            "raw_throughput_percent": 92.00156194071134,
+            "elapsed_overhead_percent": 8.69380681215295,
+            "parity": true
+        },
+        {
+            "model": "faster-rcnn",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-stream",
+            "fps": 27.003,
+            "raw_fps": 30.731,
+            "raw_throughput_percent": 87.8689271419739,
+            "elapsed_overhead_percent": 13.805873421471704,
+            "parity": true
+        },
+        {
+            "model": "d-fine",
+            "profile": "images",
+            "batch": 1,
+            "mode": "raw-non-stream",
+            "fps": 2.311,
+            "raw_fps": 2.311,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "d-fine",
+            "profile": "images",
+            "batch": 1,
+            "mode": "native-non-stream",
+            "fps": 2.183,
+            "raw_fps": 2.311,
+            "raw_throughput_percent": 94.46127217654694,
+            "elapsed_overhead_percent": 5.86349060925333,
+            "parity": true
+        },
+        {
+            "model": "d-fine",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-non-stream",
+            "fps": 2.125,
+            "raw_fps": 2.311,
+            "raw_throughput_percent": 91.95153613154478,
+            "elapsed_overhead_percent": 8.752941176470586,
+            "parity": true
+        },
+        {
+            "model": "d-fine",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-stream",
+            "fps": 2.187,
+            "raw_fps": 2.311,
+            "raw_throughput_percent": 94.63435742102986,
+            "elapsed_overhead_percent": 5.669867398262474,
+            "parity": true
+        },
+        {
+            "model": "locate-anything",
+            "profile": "images",
+            "batch": 1,
+            "mode": "raw-non-stream",
+            "fps": 1.561,
+            "raw_fps": 1.561,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "locate-anything",
+            "profile": "images",
+            "batch": 1,
+            "mode": "native-non-stream",
+            "fps": 1.546,
+            "raw_fps": 1.561,
+            "raw_throughput_percent": 99.03907751441383,
+            "elapsed_overhead_percent": 0.9702457956015431,
+            "parity": true
+        },
+        {
+            "model": "locate-anything",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-non-stream",
+            "fps": 1.55,
+            "raw_fps": 1.561,
+            "raw_throughput_percent": 99.29532351057016,
+            "elapsed_overhead_percent": 0.7096774193548372,
+            "parity": true
+        },
+        {
+            "model": "locate-anything",
+            "profile": "images",
+            "batch": 1,
+            "mode": "managed-stream",
+            "fps": 1.573,
+            "raw_fps": 1.561,
+            "raw_throughput_percent": 100.76873798846893,
+            "elapsed_overhead_percent": -0.7628734901462209,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "batch": 4,
+            "mode": "raw-non-stream",
+            "fps": 156.265,
+            "raw_fps": 156.265,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "batch": 4,
+            "mode": "raw-stream",
+            "fps": 151.244,
+            "raw_fps": 156.265,
+            "raw_throughput_percent": 96.78686846062779,
+            "elapsed_overhead_percent": 3.3198011160773255,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "batch": 4,
+            "mode": "native-non-stream",
+            "fps": 107.758,
+            "raw_fps": 156.265,
+            "raw_throughput_percent": 68.95849998400153,
+            "elapsed_overhead_percent": 45.014755284990436,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "batch": 4,
+            "mode": "native-stream",
+            "fps": 108.747,
+            "raw_fps": 156.265,
+            "raw_throughput_percent": 69.59139922567435,
+            "elapsed_overhead_percent": 43.69591804831396,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-non-stream",
+            "fps": 98.595,
+            "raw_fps": 156.265,
+            "raw_throughput_percent": 63.094742904681155,
+            "elapsed_overhead_percent": 58.4918099295096,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-stream",
+            "fps": 89.237,
+            "raw_fps": 156.265,
+            "raw_throughput_percent": 57.106197805010716,
+            "elapsed_overhead_percent": 75.11234129340968,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "batch": 4,
+            "mode": "raw-non-stream",
+            "fps": 157.958,
+            "raw_fps": 157.958,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "batch": 4,
+            "mode": "raw-stream",
+            "fps": 154.403,
+            "raw_fps": 157.958,
+            "raw_throughput_percent": 97.74940173970296,
+            "elapsed_overhead_percent": 2.3024164038263573,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "batch": 4,
+            "mode": "native-non-stream",
+            "fps": 108.491,
+            "raw_fps": 157.958,
+            "raw_throughput_percent": 68.6834474987022,
+            "elapsed_overhead_percent": 45.595487183268666,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "batch": 4,
+            "mode": "native-stream",
+            "fps": 108.003,
+            "raw_fps": 157.958,
+            "raw_throughput_percent": 68.37450461515085,
+            "elapsed_overhead_percent": 46.253344814495904,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-non-stream",
+            "fps": 101.729,
+            "raw_fps": 157.958,
+            "raw_throughput_percent": 64.40256270654224,
+            "elapsed_overhead_percent": 55.2733242241642,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-stream",
+            "fps": 92.212,
+            "raw_fps": 157.958,
+            "raw_throughput_percent": 58.37754339761203,
+            "elapsed_overhead_percent": 71.2987463670672,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "batch": 4,
+            "mode": "raw-non-stream",
+            "fps": 162.393,
+            "raw_fps": 162.393,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "batch": 4,
+            "mode": "raw-stream",
+            "fps": 159.109,
+            "raw_fps": 162.393,
+            "raw_throughput_percent": 97.9777453461664,
+            "elapsed_overhead_percent": 2.0639938658403967,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "batch": 4,
+            "mode": "native-non-stream",
+            "fps": 108.978,
+            "raw_fps": 162.393,
+            "raw_throughput_percent": 67.10757237073027,
+            "elapsed_overhead_percent": 49.01447998678634,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "batch": 4,
+            "mode": "native-stream",
+            "fps": 114.069,
+            "raw_fps": 162.393,
+            "raw_throughput_percent": 70.24255971624392,
+            "elapsed_overhead_percent": 42.36383241722115,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-non-stream",
+            "fps": 99.755,
+            "raw_fps": 162.393,
+            "raw_throughput_percent": 61.4281403755088,
+            "elapsed_overhead_percent": 62.79184000801965,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-stream",
+            "fps": 86.569,
+            "raw_fps": 162.393,
+            "raw_throughput_percent": 53.30833225570068,
+            "elapsed_overhead_percent": 87.58793563515808,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "batch": 4,
+            "mode": "raw-non-stream",
+            "fps": 99.317,
+            "raw_fps": 99.317,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "batch": 4,
+            "mode": "raw-stream",
+            "fps": 100.669,
+            "raw_fps": 99.317,
+            "raw_throughput_percent": 101.36129766303856,
+            "elapsed_overhead_percent": -1.343015228123856,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "batch": 4,
+            "mode": "native-non-stream",
+            "fps": 86.816,
+            "raw_fps": 99.317,
+            "raw_throughput_percent": 87.41303100174191,
+            "elapsed_overhead_percent": 14.39941946185035,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "batch": 4,
+            "mode": "native-stream",
+            "fps": 84.431,
+            "raw_fps": 99.317,
+            "raw_throughput_percent": 85.01162942900008,
+            "elapsed_overhead_percent": 17.630964929942785,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-non-stream",
+            "fps": 70.897,
+            "raw_fps": 99.317,
+            "raw_throughput_percent": 71.3845565210387,
+            "elapsed_overhead_percent": 40.0863224113855,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-stream",
+            "fps": 58.098,
+            "raw_fps": 99.317,
+            "raw_throughput_percent": 58.497538185809084,
+            "elapsed_overhead_percent": 70.94736479741127,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino",
+            "profile": "images",
+            "batch": 4,
+            "mode": "raw-non-stream",
+            "fps": 3.264,
+            "raw_fps": 3.264,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino",
+            "profile": "images",
+            "batch": 4,
+            "mode": "native-non-stream",
+            "fps": 3.255,
+            "raw_fps": 3.264,
+            "raw_throughput_percent": 99.72426470588236,
+            "elapsed_overhead_percent": 0.27649769585254,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-non-stream",
+            "fps": 3.266,
+            "raw_fps": 3.264,
+            "raw_throughput_percent": 100.06127450980394,
+            "elapsed_overhead_percent": -0.06123698714023407,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-stream",
+            "fps": 3.251,
+            "raw_fps": 3.264,
+            "raw_throughput_percent": 99.6017156862745,
+            "elapsed_overhead_percent": 0.39987696093508607,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino-base",
+            "profile": "images",
+            "batch": 4,
+            "mode": "raw-non-stream",
+            "fps": 2.316,
+            "raw_fps": 2.316,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino-base",
+            "profile": "images",
+            "batch": 4,
+            "mode": "native-non-stream",
+            "fps": 2.29,
+            "raw_fps": 2.316,
+            "raw_throughput_percent": 98.87737478411054,
+            "elapsed_overhead_percent": 1.1353711790393017,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino-base",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-non-stream",
+            "fps": 2.284,
+            "raw_fps": 2.316,
+            "raw_throughput_percent": 98.61830742659758,
+            "elapsed_overhead_percent": 1.4010507880910739,
+            "parity": true
+        },
+        {
+            "model": "grounding-dino-base",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-stream",
+            "fps": 2.286,
+            "raw_fps": 2.316,
+            "raw_throughput_percent": 98.70466321243524,
+            "elapsed_overhead_percent": 1.3123359580052396,
+            "parity": true
+        },
+        {
+            "model": "faster-rcnn",
+            "profile": "images",
+            "batch": 4,
+            "mode": "raw-non-stream",
+            "fps": 39.732,
+            "raw_fps": 39.732,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "faster-rcnn",
+            "profile": "images",
+            "batch": 4,
+            "mode": "native-non-stream",
+            "fps": 37.106,
+            "raw_fps": 39.732,
+            "raw_throughput_percent": 93.39071780932247,
+            "elapsed_overhead_percent": 7.077022583948689,
+            "parity": true
+        },
+        {
+            "model": "faster-rcnn",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-non-stream",
+            "fps": 36.085,
+            "raw_fps": 39.732,
+            "raw_throughput_percent": 90.82100070472164,
+            "elapsed_overhead_percent": 10.106692531522787,
+            "parity": true
+        },
+        {
+            "model": "faster-rcnn",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-stream",
+            "fps": 34.516,
+            "raw_fps": 39.732,
+            "raw_throughput_percent": 86.87204268599618,
+            "elapsed_overhead_percent": 15.111832193765217,
+            "parity": true
+        },
+        {
+            "model": "d-fine",
+            "profile": "images",
+            "batch": 4,
+            "mode": "raw-non-stream",
+            "fps": 8.639,
+            "raw_fps": 8.639,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "d-fine",
+            "profile": "images",
+            "batch": 4,
+            "mode": "native-non-stream",
+            "fps": 8.17,
+            "raw_fps": 8.639,
+            "raw_throughput_percent": 94.57113091793032,
+            "elapsed_overhead_percent": 5.740514075887382,
+            "parity": true
+        },
+        {
+            "model": "d-fine",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-non-stream",
+            "fps": 7.93,
+            "raw_fps": 8.639,
+            "raw_throughput_percent": 91.79303160087974,
+            "elapsed_overhead_percent": 8.940731399747781,
+            "parity": true
+        },
+        {
+            "model": "d-fine",
+            "profile": "images",
+            "batch": 4,
+            "mode": "managed-stream",
+            "fps": 8.466,
+            "raw_fps": 8.639,
+            "raw_throughput_percent": 97.99745340895937,
+            "elapsed_overhead_percent": 2.0434679896054853,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "video",
+            "batch": 1,
+            "mode": "raw-non-stream",
+            "fps": 82.134,
+            "raw_fps": 82.134,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "video",
+            "batch": 1,
+            "mode": "raw-stream",
+            "fps": 84.032,
+            "raw_fps": 82.134,
+            "raw_throughput_percent": 102.31085786641341,
+            "elapsed_overhead_percent": -2.258663366336633,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "video",
+            "batch": 1,
+            "mode": "native-non-stream",
+            "fps": 74.41,
+            "raw_fps": 82.134,
+            "raw_throughput_percent": 90.59585555312051,
+            "elapsed_overhead_percent": 10.380325225104148,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "video",
+            "batch": 1,
+            "mode": "native-stream",
+            "fps": 71.231,
+            "raw_fps": 82.134,
+            "raw_throughput_percent": 86.72535125526578,
+            "elapsed_overhead_percent": 15.306537883786554,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "video",
+            "batch": 1,
+            "mode": "managed-non-stream",
+            "fps": 70.508,
+            "raw_fps": 82.134,
+            "raw_throughput_percent": 85.84508242627899,
+            "elapsed_overhead_percent": 16.48890905996483,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "video",
+            "batch": 1,
+            "mode": "managed-stream",
+            "fps": 70.033,
+            "raw_fps": 82.134,
+            "raw_throughput_percent": 85.26675919838313,
+            "elapsed_overhead_percent": 17.278997044250577,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "video",
+            "batch": 4,
+            "mode": "raw-non-stream",
+            "fps": 138.746,
+            "raw_fps": 138.746,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "video",
+            "batch": 4,
+            "mode": "raw-stream",
+            "fps": 148.175,
+            "raw_fps": 138.746,
+            "raw_throughput_percent": 106.79587159269457,
+            "elapsed_overhead_percent": -6.363421629829591,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "video",
+            "batch": 4,
+            "mode": "managed-non-stream",
+            "fps": 128.142,
+            "raw_fps": 138.746,
+            "raw_throughput_percent": 92.35725714615195,
+            "elapsed_overhead_percent": 8.27519470587319,
+            "parity": true
+        },
+        {
+            "model": "yolo",
+            "profile": "video",
+            "batch": 4,
+            "mode": "managed-stream",
+            "fps": 122.721,
+            "raw_fps": 138.746,
+            "raw_throughput_percent": 88.45011748086431,
+            "elapsed_overhead_percent": 13.058074820120446,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "video",
+            "batch": 1,
+            "mode": "raw-non-stream",
+            "fps": 70.499,
+            "raw_fps": 70.499,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "video",
+            "batch": 1,
+            "mode": "raw-stream",
+            "fps": 63.475,
+            "raw_fps": 70.499,
+            "raw_throughput_percent": 90.03673810976044,
+            "elapsed_overhead_percent": 11.065773926742795,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "video",
+            "batch": 1,
+            "mode": "native-non-stream",
+            "fps": 62.021,
+            "raw_fps": 70.499,
+            "raw_throughput_percent": 87.97429750776608,
+            "elapsed_overhead_percent": 13.669563534931717,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "video",
+            "batch": 1,
+            "mode": "native-stream",
+            "fps": 62.787,
+            "raw_fps": 70.499,
+            "raw_throughput_percent": 89.06083774237933,
+            "elapsed_overhead_percent": 12.282797394365064,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "video",
+            "batch": 1,
+            "mode": "managed-non-stream",
+            "fps": 59.043,
+            "raw_fps": 70.499,
+            "raw_throughput_percent": 83.75012411523568,
+            "elapsed_overhead_percent": 19.40280812289348,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "video",
+            "batch": 1,
+            "mode": "managed-stream",
+            "fps": 59.375,
+            "raw_fps": 70.499,
+            "raw_throughput_percent": 84.22105278089052,
+            "elapsed_overhead_percent": 18.73515789473683,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "video",
+            "batch": 4,
+            "mode": "raw-non-stream",
+            "fps": 139.956,
+            "raw_fps": 139.956,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "video",
+            "batch": 4,
+            "mode": "raw-stream",
+            "fps": 137.682,
+            "raw_fps": 139.956,
+            "raw_throughput_percent": 98.37520363542828,
+            "elapsed_overhead_percent": 1.6516320216150238,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "video",
+            "batch": 4,
+            "mode": "managed-non-stream",
+            "fps": 117.277,
+            "raw_fps": 139.956,
+            "raw_throughput_percent": 83.7956214810369,
+            "elapsed_overhead_percent": 19.337977608567748,
+            "parity": true
+        },
+        {
+            "model": "yolo11",
+            "profile": "video",
+            "batch": 4,
+            "mode": "managed-stream",
+            "fps": 111.254,
+            "raw_fps": 139.956,
+            "raw_throughput_percent": 79.49212609677328,
+            "elapsed_overhead_percent": 25.798622970859462,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "video",
+            "batch": 1,
+            "mode": "raw-non-stream",
+            "fps": 62.954,
+            "raw_fps": 62.954,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "video",
+            "batch": 1,
+            "mode": "raw-stream",
+            "fps": 63.75,
+            "raw_fps": 62.954,
+            "raw_throughput_percent": 101.26441528735266,
+            "elapsed_overhead_percent": -1.2486274509803885,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "video",
+            "batch": 1,
+            "mode": "native-non-stream",
+            "fps": 60.86,
+            "raw_fps": 62.954,
+            "raw_throughput_percent": 96.67376179432601,
+            "elapsed_overhead_percent": 3.4406835359842347,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "video",
+            "batch": 1,
+            "mode": "native-stream",
+            "fps": 55.878,
+            "raw_fps": 62.954,
+            "raw_throughput_percent": 88.76004701845793,
+            "elapsed_overhead_percent": 12.66330219406564,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "video",
+            "batch": 1,
+            "mode": "managed-non-stream",
+            "fps": 54.967,
+            "raw_fps": 62.954,
+            "raw_throughput_percent": 87.31295866823395,
+            "elapsed_overhead_percent": 14.530536503720427,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "video",
+            "batch": 1,
+            "mode": "managed-stream",
+            "fps": 56.028,
+            "raw_fps": 62.954,
+            "raw_throughput_percent": 88.99831623089875,
+            "elapsed_overhead_percent": 12.361676304704794,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "video",
+            "batch": 4,
+            "mode": "raw-non-stream",
+            "fps": 122.154,
+            "raw_fps": 122.154,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "video",
+            "batch": 4,
+            "mode": "raw-stream",
+            "fps": 120.98,
+            "raw_fps": 122.154,
+            "raw_throughput_percent": 99.03891808700493,
+            "elapsed_overhead_percent": 0.9704083319556966,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "video",
+            "batch": 4,
+            "mode": "managed-non-stream",
+            "fps": 111.036,
+            "raw_fps": 122.154,
+            "raw_throughput_percent": 90.89837418340784,
+            "elapsed_overhead_percent": 10.01296876688642,
+            "parity": true
+        },
+        {
+            "model": "yolo26",
+            "profile": "video",
+            "batch": 4,
+            "mode": "managed-stream",
+            "fps": 107.239,
+            "raw_fps": 122.154,
+            "raw_throughput_percent": 87.7900027833718,
+            "elapsed_overhead_percent": 13.908186387415022,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "video",
+            "batch": 1,
+            "mode": "raw-non-stream",
+            "fps": 64.26,
+            "raw_fps": 64.26,
+            "raw_throughput_percent": 100.0,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "video",
+            "batch": 1,
+            "mode": "raw-stream",
+            "fps": 64.675,
+            "raw_fps": 64.26,
+            "raw_throughput_percent": 100.645813881108,
+            "elapsed_overhead_percent": -0.6416698879010307,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "video",
+            "batch": 1,
+            "mode": "native-non-stream",
+            "fps": 62.198,
+            "raw_fps": 64.26,
+            "raw_throughput_percent": 96.79116090880797,
+            "elapsed_overhead_percent": 3.3152191388790664,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "video",
+            "batch": 1,
+            "mode": "native-stream",
+            "fps": 58.484,
+            "raw_fps": 64.26,
+            "raw_throughput_percent": 91.01151571739807,
+            "elapsed_overhead_percent": 9.87620545790302,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "video",
+            "batch": 1,
+            "mode": "managed-non-stream",
+            "fps": 58.049,
+            "raw_fps": 64.26,
+            "raw_throughput_percent": 90.33457827575474,
+            "elapsed_overhead_percent": 10.699581388137624,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "video",
+            "batch": 1,
+            "mode": "managed-stream",
+            "fps": 56.799,
+            "raw_fps": 64.26,
+            "raw_throughput_percent": 88.3893557422969,
+            "elapsed_overhead_percent": 13.135794644271925,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "video",
+            "batch": 4,
+            "mode": "raw-non-stream",
+            "fps": 108.092,
+            "raw_fps": 108.092,
+            "raw_throughput_percent": 100.00000000000001,
+            "elapsed_overhead_percent": 0.0,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "video",
+            "batch": 4,
+            "mode": "raw-stream",
+            "fps": 108.777,
+            "raw_fps": 108.092,
+            "raw_throughput_percent": 100.63371942419421,
+            "elapsed_overhead_percent": -0.6297287110326621,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "video",
+            "batch": 4,
+            "mode": "managed-non-stream",
+            "fps": 101.799,
+            "raw_fps": 108.092,
+            "raw_throughput_percent": 94.17810753802318,
+            "elapsed_overhead_percent": 6.181789605005927,
+            "parity": true
+        },
+        {
+            "model": "yolo-world",
+            "profile": "video",
+            "batch": 4,
+            "mode": "managed-stream",
+            "fps": 98.001,
+            "raw_fps": 108.092,
+            "raw_throughput_percent": 90.6644340006661,
+            "elapsed_overhead_percent": 10.296833705778496,
+            "parity": true
+        }
+    ],
+    "batch_scaling": [
+        {
+            "model": "yolo",
+            "profile": "images",
+            "mode": "raw-non-stream",
+            "batch1_fps": 99.568,
+            "batch4_fps": 156.265,
+            "throughput_ratio": 1.5694299373292624
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "mode": "raw-stream",
+            "batch1_fps": 97.336,
+            "batch4_fps": 151.244,
+            "throughput_ratio": 1.5538341415303691
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "mode": "native-non-stream",
+            "batch1_fps": 70.885,
+            "batch4_fps": 107.758,
+            "throughput_ratio": 1.5201805741694292
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "mode": "native-stream",
+            "batch1_fps": 71.132,
+            "batch4_fps": 108.747,
+            "throughput_ratio": 1.5288056008547488
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "mode": "managed-non-stream",
+            "batch1_fps": 63.101,
+            "batch4_fps": 98.595,
+            "throughput_ratio": 1.5624950476220663
+        },
+        {
+            "model": "yolo",
+            "profile": "images",
+            "mode": "managed-stream",
+            "batch1_fps": 58.624,
+            "batch4_fps": 89.237,
+            "throughput_ratio": 1.5221922762008733
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "mode": "raw-non-stream",
+            "batch1_fps": 77.048,
+            "batch4_fps": 157.958,
+            "throughput_ratio": 2.0501245976534106
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "mode": "raw-stream",
+            "batch1_fps": 76.94,
+            "batch4_fps": 154.403,
+            "throughput_ratio": 2.006797504548999
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "mode": "native-non-stream",
+            "batch1_fps": 58.242,
+            "batch4_fps": 108.491,
+            "throughput_ratio": 1.862762267779266
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "mode": "native-stream",
+            "batch1_fps": 59.657,
+            "batch4_fps": 108.003,
+            "throughput_ratio": 1.8103994501902545
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "mode": "managed-non-stream",
+            "batch1_fps": 55.705,
+            "batch4_fps": 101.729,
+            "throughput_ratio": 1.8262094964545372
+        },
+        {
+            "model": "yolo11",
+            "profile": "images",
+            "mode": "managed-stream",
+            "batch1_fps": 50.436,
+            "batch4_fps": 92.212,
+            "throughput_ratio": 1.8282972479974622
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "mode": "raw-non-stream",
+            "batch1_fps": 71.3,
+            "batch4_fps": 162.393,
+            "throughput_ratio": 2.277601683029453
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "mode": "raw-stream",
+            "batch1_fps": 73.68,
+            "batch4_fps": 159.109,
+            "throughput_ratio": 2.159459826275787
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "mode": "native-non-stream",
+            "batch1_fps": 55.188,
+            "batch4_fps": 108.978,
+            "throughput_ratio": 1.9746684061752553
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "mode": "native-stream",
+            "batch1_fps": 51.06,
+            "batch4_fps": 114.069,
+            "throughput_ratio": 2.2340188014101057
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "mode": "managed-non-stream",
+            "batch1_fps": 49.424,
+            "batch4_fps": 99.755,
+            "throughput_ratio": 2.018351408222726
+        },
+        {
+            "model": "yolo26",
+            "profile": "images",
+            "mode": "managed-stream",
+            "batch1_fps": 42.364,
+            "batch4_fps": 86.569,
+            "throughput_ratio": 2.043456708526107
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "mode": "raw-non-stream",
+            "batch1_fps": 61.561,
+            "batch4_fps": 99.317,
+            "throughput_ratio": 1.6133103750751285
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "mode": "raw-stream",
+            "batch1_fps": 68.617,
+            "batch4_fps": 100.669,
+            "throughput_ratio": 1.467114563446376
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "mode": "native-non-stream",
+            "batch1_fps": 58.975,
+            "batch4_fps": 86.816,
+            "throughput_ratio": 1.4720813904196695
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "mode": "native-stream",
+            "batch1_fps": 56.068,
+            "batch4_fps": 84.431,
+            "throughput_ratio": 1.5058678747235499
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "mode": "managed-non-stream",
+            "batch1_fps": 53.515,
+            "batch4_fps": 70.897,
+            "throughput_ratio": 1.324806129122676
+        },
+        {
+            "model": "yolo-world",
+            "profile": "images",
+            "mode": "managed-stream",
+            "batch1_fps": 50.271,
+            "batch4_fps": 58.098,
+            "throughput_ratio": 1.155696126991705
+        },
+        {
+            "model": "grounding-dino",
+            "profile": "images",
+            "mode": "raw-non-stream",
+            "batch1_fps": 3.075,
+            "batch4_fps": 3.264,
+            "throughput_ratio": 1.0614634146341462
+        },
+        {
+            "model": "grounding-dino",
+            "profile": "images",
+            "mode": "native-non-stream",
+            "batch1_fps": 3.078,
+            "batch4_fps": 3.255,
+            "throughput_ratio": 1.057504873294347
+        },
+        {
+            "model": "grounding-dino",
+            "profile": "images",
+            "mode": "managed-non-stream",
+            "batch1_fps": 3.085,
+            "batch4_fps": 3.266,
+            "throughput_ratio": 1.0586709886547812
+        },
+        {
+            "model": "grounding-dino",
+            "profile": "images",
+            "mode": "managed-stream",
+            "batch1_fps": 2.962,
+            "batch4_fps": 3.251,
+            "throughput_ratio": 1.0975692099932477
+        },
+        {
+            "model": "grounding-dino-base",
+            "profile": "images",
+            "mode": "raw-non-stream",
+            "batch1_fps": 2.158,
+            "batch4_fps": 2.316,
+            "throughput_ratio": 1.0732159406858202
+        },
+        {
+            "model": "grounding-dino-base",
+            "profile": "images",
+            "mode": "native-non-stream",
+            "batch1_fps": 2.079,
+            "batch4_fps": 2.29,
+            "throughput_ratio": 1.1014911014911015
+        },
+        {
+            "model": "grounding-dino-base",
+            "profile": "images",
+            "mode": "managed-non-stream",
+            "batch1_fps": 2.094,
+            "batch4_fps": 2.284,
+            "throughput_ratio": 1.090735434574976
+        },
+        {
+            "model": "grounding-dino-base",
+            "profile": "images",
+            "mode": "managed-stream",
+            "batch1_fps": 2.121,
+            "batch4_fps": 2.286,
+            "throughput_ratio": 1.0777934936350777
+        },
+        {
+            "model": "faster-rcnn",
+            "profile": "images",
+            "mode": "raw-non-stream",
+            "batch1_fps": 30.731,
+            "batch4_fps": 39.732,
+            "throughput_ratio": 1.2928964238065797
+        },
+        {
+            "model": "faster-rcnn",
+            "profile": "images",
+            "mode": "native-non-stream",
+            "batch1_fps": 28.519,
+            "batch4_fps": 37.106,
+            "throughput_ratio": 1.3010975139380765
+        },
+        {
+            "model": "faster-rcnn",
+            "profile": "images",
+            "mode": "managed-non-stream",
+            "batch1_fps": 28.273,
+            "batch4_fps": 36.085,
+            "throughput_ratio": 1.2763060163406785
+        },
+        {
+            "model": "faster-rcnn",
+            "profile": "images",
+            "mode": "managed-stream",
+            "batch1_fps": 27.003,
+            "batch4_fps": 34.516,
+            "throughput_ratio": 1.2782283449987037
+        },
+        {
+            "model": "d-fine",
+            "profile": "images",
+            "mode": "raw-non-stream",
+            "batch1_fps": 2.311,
+            "batch4_fps": 8.639,
+            "throughput_ratio": 3.7382085677196017
+        },
+        {
+            "model": "d-fine",
+            "profile": "images",
+            "mode": "native-non-stream",
+            "batch1_fps": 2.183,
+            "batch4_fps": 8.17,
+            "throughput_ratio": 3.7425561154374716
+        },
+        {
+            "model": "d-fine",
+            "profile": "images",
+            "mode": "managed-non-stream",
+            "batch1_fps": 2.125,
+            "batch4_fps": 7.93,
+            "throughput_ratio": 3.7317647058823527
+        },
+        {
+            "model": "d-fine",
+            "profile": "images",
+            "mode": "managed-stream",
+            "batch1_fps": 2.187,
+            "batch4_fps": 8.466,
+            "throughput_ratio": 3.871056241426612
+        },
+        {
+            "model": "yolo",
+            "profile": "video",
+            "mode": "raw-non-stream",
+            "batch1_fps": 82.134,
+            "batch4_fps": 138.746,
+            "throughput_ratio": 1.6892638858450826
+        },
+        {
+            "model": "yolo",
+            "profile": "video",
+            "mode": "raw-stream",
+            "batch1_fps": 84.032,
+            "batch4_fps": 148.175,
+            "throughput_ratio": 1.7633163556740292
+        },
+        {
+            "model": "yolo",
+            "profile": "video",
+            "mode": "managed-non-stream",
+            "batch1_fps": 70.508,
+            "batch4_fps": 128.142,
+            "throughput_ratio": 1.8174107902649346
+        },
+        {
+            "model": "yolo",
+            "profile": "video",
+            "mode": "managed-stream",
+            "batch1_fps": 70.033,
+            "batch4_fps": 122.721,
+            "throughput_ratio": 1.75233104393643
+        },
+        {
+            "model": "yolo11",
+            "profile": "video",
+            "mode": "raw-non-stream",
+            "batch1_fps": 70.499,
+            "batch4_fps": 139.956,
+            "throughput_ratio": 1.9852196485056526
+        },
+        {
+            "model": "yolo11",
+            "profile": "video",
+            "mode": "raw-stream",
+            "batch1_fps": 63.475,
+            "batch4_fps": 137.682,
+            "throughput_ratio": 2.1690744387554153
+        },
+        {
+            "model": "yolo11",
+            "profile": "video",
+            "mode": "managed-non-stream",
+            "batch1_fps": 59.043,
+            "batch4_fps": 117.277,
+            "throughput_ratio": 1.9862981217079079
+        },
+        {
+            "model": "yolo11",
+            "profile": "video",
+            "mode": "managed-stream",
+            "batch1_fps": 59.375,
+            "batch4_fps": 111.254,
+            "throughput_ratio": 1.8737515789473684
+        },
+        {
+            "model": "yolo26",
+            "profile": "video",
+            "mode": "raw-non-stream",
+            "batch1_fps": 62.954,
+            "batch4_fps": 122.154,
+            "throughput_ratio": 1.9403691584331415
+        },
+        {
+            "model": "yolo26",
+            "profile": "video",
+            "mode": "raw-stream",
+            "batch1_fps": 63.75,
+            "batch4_fps": 120.98,
+            "throughput_ratio": 1.8977254901960785
+        },
+        {
+            "model": "yolo26",
+            "profile": "video",
+            "mode": "managed-non-stream",
+            "batch1_fps": 54.967,
+            "batch4_fps": 111.036,
+            "throughput_ratio": 2.020048392671967
+        },
+        {
+            "model": "yolo26",
+            "profile": "video",
+            "mode": "managed-stream",
+            "batch1_fps": 56.028,
+            "batch4_fps": 107.239,
+            "throughput_ratio": 1.914025130291997
+        },
+        {
+            "model": "yolo-world",
+            "profile": "video",
+            "mode": "raw-non-stream",
+            "batch1_fps": 64.26,
+            "batch4_fps": 108.092,
+            "throughput_ratio": 1.682103952692188
+        },
+        {
+            "model": "yolo-world",
+            "profile": "video",
+            "mode": "raw-stream",
+            "batch1_fps": 64.675,
+            "batch4_fps": 108.777,
+            "throughput_ratio": 1.6819018167761888
+        },
+        {
+            "model": "yolo-world",
+            "profile": "video",
+            "mode": "managed-non-stream",
+            "batch1_fps": 58.049,
+            "batch4_fps": 101.799,
+            "throughput_ratio": 1.7536736205619392
+        },
+        {
+            "model": "yolo-world",
+            "profile": "video",
+            "mode": "managed-stream",
+            "batch1_fps": 56.799,
+            "batch4_fps": 98.001,
+            "throughput_ratio": 1.7254000950720965
+        }
+    ],
+    "stability_distribution": {
+        "fps": {
+            "samples": 312,
+            "minimum": 47.223608533557105,
+            "p05": 49.91437638780679,
+            "median": 73.23420891706526,
+            "p95": 77.2342188170987,
+            "maximum": 78.26579042470648,
+            "mean": 69.45177147326534,
+            "sample_sd": 8.796707279056095
+        },
+        "rss_mib": {
+            "samples": 312,
+            "minimum": 1608.265625,
+            "p05": 1608.4044921875,
+            "median": 1608.70703125,
+            "p95": 1619.15625,
+            "maximum": 1619.25,
+            "mean": 1612.3994891826924,
+            "sample_sd": 4.469259241227971
+        },
+        "vram_allocated_mib": {
+            "samples": 312,
+            "minimum": 12.09521484375,
+            "p05": 12.09521484375,
+            "median": 12.09521484375,
+            "p95": 12.09521484375,
+            "maximum": 12.09521484375,
+            "mean": 12.09521484375,
+            "sample_sd": 0.0
+        },
+        "vram_reserved_mib": {
+            "samples": 312,
+            "minimum": 60.0,
+            "p05": 60.0,
+            "median": 60.0,
+            "p95": 60.0,
+            "maximum": 60.0,
+            "mean": 60.0,
+            "sample_sd": 0.0
+        },
+        "open_fds": {
+            "samples": 312,
+            "minimum": 45,
+            "p05": 45.0,
+            "median": 45.0,
+            "p95": 45.0,
+            "maximum": 45,
+            "mean": 45,
+            "sample_sd": 0.0
+        }
+    },
+    "stability_whole_check_fps": 62.216589290708804,
+    "matrix_uncertainty": "Unavailable: individual matrix repeat timings were not saved in the notebook export.",
+    "inference_limit": "Ratios use rounded medians, not paired individual runs. Stability loops are serial, correlated observations; no independent-sample confidence interval is claimed."
+}

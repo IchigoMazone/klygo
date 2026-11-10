@@ -6,6 +6,17 @@ The saved notebook contains 25 selected configurations across nine model variant
 
 ## Evidence and completeness
 
+See [STATISTICS.md](STATISTICS.md) and [statistics.json](statistics.json) for
+derived overhead, throughput retention, batch scaling and stability quantiles.
+These preserve the distinction between observed medians and unavailable raw
+matrix timing samples; no confidence intervals are fabricated.
+
+The statistics/export follow-up passed eight focused checks, including mode
+routing, incomplete-report rejection and overhead formula direction. A synthetic
+full-report ZIP was exported, extracted and verified against its manifest.
+All 13 module audits passed. Full local discovery ran 505 tests with 21 skips
+and the same six missing-extra import errors; no new GPU run was performed.
+
 - [Colab_Executed.ipynb](Colab_Executed.ipynb): all 18 original cell sources and available saved outputs, including historical before/after experiments, failures, retries and control checks. Transient cell metadata and executable download outputs were removed. This is an execution archive; do not use Run all as a clean reproduction recipe.
 - [summary.json](summary.json): the 124 median FPS values and parity flags printed to three decimal places, selected LocateAnything retry, six separate control-verification values, source cells and commit pins. Unsupported statuses follow the pinned runner capability rules.
 - [stability.json](stability.json): complete recovered stability telemetry and gate results. The embedded compact JSON SHA256 was verified as `77b72b61d13918946b10199806bbadc9672db8305d940e4fceefd5beb3514e60`.

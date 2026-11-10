@@ -10,6 +10,50 @@ The large matrix bundle was hidden in the saved Colab output; individual matrix
 timings and latency/telemetry records are unavailable in this import. See the
 report's evidence section before interpreting the results.
 
+The companion [descriptive statistics](colab_t4_2026_11_10/STATISTICS.md)
+report same-configuration overhead, throughput retention, batch scaling and the
+observed stability distribution. Matrix confidence intervals remain unavailable
+until individual timing samples are recovered or measured again.
+
+## Preserve a complete run as files
+
+Export the selected raw JSON reports explicitly; keep failed attempts separate.
+This avoids the large HTML-output limit that affected the historical notebook.
+
+```bash
+PYTHONPATH=. python benchmarks/gpu_suite/export_bundle.py \
+  --report artifacts/benchmarks/six-mode/images-b1/yolo.json \
+  --stability artifacts/benchmarks/six-mode/stability.json \
+  --expected-repeats 7 \
+  --output artifacts/benchmarks/six-mode-results.zip
+```
+
+Repeat `--report` for every selected configuration. Use `--failed-report` for
+unselected failed attempts. Omit `--stability` if no stability run was performed.
+The exporter rejects incomplete repeats, inconsistent FPS/median/parity records,
+duplicate configurations and missing explicit mode statuses. An actual parity
+failure is preserved as FAIL rather than hidden or changed. It writes the full
+bundle, the detailed Markdown report and a SHA256 manifest inside a new ZIP.
+Validation checks structure and internal consistency; it cannot prove that a
+measurement was performed correctly. It cannot turn the historical rounded
+summary into raw evidence.
+
+Download the ZIP directly in Colab after export:
+
+```python
+from google.colab import files as colab_files
+colab_files.download("/content/klygo-six-mode/artifacts/benchmarks/six-mode-results.zip")
+```
+
+Recompute the historical descriptive report without a GPU:
+
+```bash
+PYTHONPATH=. python benchmarks/gpu_suite/statistics_report.py \
+  --summary benchmarks/gpu_suite/colab_t4_2026_11_10/summary.json \
+  --stability benchmarks/gpu_suite/colab_t4_2026_11_10/stability.json \
+  --output artifacts/benchmarks/colab_t4_statistics
+```
+
 The suite measures registered YOLOv8n, YOLO11n, YOLO26n, YOLO-World v2 small,
 Grounding DINO tiny/base, Faster R-CNN MobileNetV3 FPN and LocateAnything-3B,
 plus the existing KerasHub D-FINE Nano integration. Nano/small representatives
