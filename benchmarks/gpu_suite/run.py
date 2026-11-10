@@ -94,6 +94,26 @@ def sync(device):
         torch.cuda.synchronize(device)
 
 
+def execution_state(detector, key):
+    """Observe the executing engine, independently of a wrapper's template model."""
+    if key in ("yolo", "yolo11", "yolo26", "yolo-world"):
+        predictor = getattr(detector.model, "predictor", None)
+        engine = getattr(predictor, "model", None)
+        if engine is None:
+            raise RuntimeError("Ultralytics predictor was not initialized by warmup")
+        # Recent Ultralytics versions retain the original CPU model and execute
+        # a separate AutoBackend. Inspect its parameters, not YOLO.device.
+        parameter = next(engine.parameters())
+        device = str(parameter.device)
+        if str(predictor.device) != device or str(engine.device) != device:
+            raise RuntimeError("Predictor device and executing parameter device disagree")
+        return {"device": device, "dtype": str(parameter.dtype),
+                "source": "detector.model.predictor.model.parameters",
+                "wrapper_device": str(detector.device)}
+    return {"device": str(detector.device), "dtype": str(detector.dtype),
+            "source": "detector runtime", "wrapper_device": str(detector.device)}
+
+
 def numpy(value):
     if isinstance(value, torch.Tensor):
         return value.detach().cpu().numpy()
@@ -407,10 +427,16 @@ def run_model(args):
         cases = {mode:{"mode":mode,"status":"ok","runs":[],"parity":[]} for mode in active}
         references = {}
         print(f"Loaded {args.model}: {report['load_seconds']:.2f}s, dtype={detector.dtype}",flush=True)
+        report["warmup_execution_states"] = {}
         for mode in active:
             measure(detector,args.model,prompt,mode,packs,args,video)
-        report["actual_model_device"] = str(detector.device)
-        report["actual_model_dtype"] = str(detector.dtype)
+            state = execution_state(detector,args.model)
+            report["warmup_execution_states"][mode] = state
+            if args.device.startswith("cuda") and state["device"] != str(torch.device(args.device)):
+                raise RuntimeError(f"Warmup execution did not use the requested CUDA device: {mode}")
+        report["actual_model_device"] = state["device"]
+        report["actual_model_dtype"] = state["dtype"]
+        report["device_observation_source"] = state["source"]
         report["device_observation_stage"] = "after complete warmup, before measured repeats"
         report["execution_policy_after_warmup"] = {
             "float32_matmul_precision":torch.get_float32_matmul_precision(),
@@ -427,6 +453,9 @@ def run_model(args):
             captures = {}
             for mode in order:
                 sample,captured = measure(detector,args.model,prompt,mode,packs,args,video)
+                sample["execution_state"] = execution_state(detector,args.model)
+                if args.device.startswith("cuda") and sample["execution_state"]["device"] != str(torch.device(args.device)):
+                    raise RuntimeError(f"Measured execution did not use the requested CUDA device: {mode}")
                 sample["repeat"] = repeat
                 cases[mode]["runs"].append(sample)
                 captures[mode] = captured

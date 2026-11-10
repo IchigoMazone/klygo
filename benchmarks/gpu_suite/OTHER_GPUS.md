@@ -22,7 +22,13 @@ precision, matmul/cuDNN TF32 flags, cuDNN benchmark policy and deterministic
 algorithm setting. The current runner records these at startup; the pinned
 historical runner did not include those fields. A strict-precision experiment
 and a framework-default experiment must be identified separately.
-The current runner also verifies the CUDA model device after complete warmup.
+The current runner verifies the executing CUDA parameter device after every
+warmup mode and measured pass. For Ultralytics, it inspects
+`detector.model.predictor.model.parameters()` and cross-checks both predictor
+and AutoBackend device declarations. Recent versions can retain the original
+CPU checkpoint while a separate AutoBackend executes on CUDA. Wrapper `.device`
+alone cannot validate that execution. Per-pass execution observations are
+stored outside the timed region.
 Some wrappers load checkpoints on CPU and move them during the first prediction;
 their factory-return device is not the timed execution-device observation. The
 older `cffb476` report's device field was collected before warmup; preserve that

@@ -27,6 +27,12 @@ class TestBenchmarkExport(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Missing raw repeats'):
             validate([report], 7)
 
+    def test_raw_non_stream_cannot_be_labeled_unsupported(self):
+        report = self.report()
+        report['cases'][0] = dict(mode='raw-non-stream', status='N/A', reason='incorrect capability claim')
+        with self.assertRaisesRegex(ValueError, 'measured raw non-stream baseline'):
+            validate([report], 7)
+
     def test_rounded_summary_cannot_be_promoted_to_raw_evidence(self):
         with self.assertRaisesRegex(ValueError, 'full raw runner report'):
             validate([{'model': 'fixture', 'profile': 'images', 'batch': 1}], 7)

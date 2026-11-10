@@ -27,6 +27,9 @@ def validate(reports, expected_repeats):
         cases = report['cases']
         if len(cases) != len(MODES) or {c['mode'] for c in cases} != set(MODES):
             raise ValueError(f'All six explicit mode statuses are required: {identity}')
+        baseline = next(c for c in cases if c['mode'] == 'raw-non-stream')
+        if baseline['status'] != 'ok':
+            raise ValueError(f'A measured raw non-stream baseline is required: {identity}')
         for case in cases:
             if case['status'] == 'N/A':
                 if not case.get('reason'):

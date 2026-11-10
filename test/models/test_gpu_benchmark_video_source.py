@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from klygo import files
-from benchmarks.gpu_suite.run import run_model
+from benchmarks.gpu_suite.run import run_model, execution_state
 
 
 class TestVideoSource(unittest.TestCase):
@@ -30,6 +30,8 @@ class TestVideoSource(unittest.TestCase):
             with patch('benchmarks.gpu_suite.run.prepare', return_value=(source, [object()])), \
                  patch('benchmarks.gpu_suite.run.build', return_value=(detector, None)), \
                  patch('benchmarks.gpu_suite.run.measure', side_effect=measure), \
+                 patch('benchmarks.gpu_suite.run.execution_state', return_value={
+                     'device': 'cpu', 'dtype': 'float32', 'source': 'test fixture'}), \
                  patch('benchmarks.gpu_suite.run.media.save_video') as generated:
                 run_model(args)
             generated.assert_not_called()
@@ -39,6 +41,18 @@ class TestVideoSource(unittest.TestCase):
             self.assertEqual(report['status'], 'complete')
             self.assertEqual(report['device_at_factory_return'], 'cpu')
             self.assertEqual(report['device_observation_stage'], 'after complete warmup, before measured repeats')
+
+    def test_execution_device_comes_from_predictor_parameters(self):
+        parameter = SimpleNamespace(device='cuda:0', dtype='torch.float32')
+        engine = SimpleNamespace(device='cuda:0', parameters=lambda: iter([parameter]))
+        detector = SimpleNamespace(device='cpu', model=SimpleNamespace(
+            predictor=SimpleNamespace(device='cuda:0', model=engine)))
+        state = execution_state(detector, 'yolo')
+        self.assertEqual(state['device'], 'cuda:0')
+        self.assertEqual(state['wrapper_device'], 'cpu')
+        engine.device = 'cpu'
+        with self.assertRaisesRegex(RuntimeError, 'disagree'):
+            execution_state(detector, 'yolo')
 
 
 if __name__ == '__main__':
