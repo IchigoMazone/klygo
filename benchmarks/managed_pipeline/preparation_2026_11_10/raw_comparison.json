@@ -1,0 +1,288 @@
+{
+  "gpu": "Quadro M1200",
+  "torch": "2.14.1+cu126",
+  "baseline_commit": "d8ed895e9992d539541927fe03351d795bfddafb",
+  "image_size": [
+    640,
+    480
+  ],
+  "imgsz": 640,
+  "video_sha256": "da40c7de5d7443721affbd57a5e1af62fa29c45ba0d227b4c7b002b9e2fd8672",
+  "microbench": {
+    "rgb_resolution": {
+      "before": [
+        0.009833910001907498,
+        0.010304949997225777,
+        0.009664090001024306,
+        0.009602559998165816,
+        0.010048830002779141,
+        0.009588169999187813,
+        0.009723769995616749
+      ],
+      "after": [
+        0.004823359998408705,
+        0.005349439999554307,
+        0.004821949999313802,
+        0.004755540000041946,
+        0.00507458999636583,
+        0.004781070002354682,
+        0.0049035599979106335
+      ]
+    },
+    "batch4_preparation": {
+      "before": [
+        0.029222780000418426,
+        0.029715589998522772,
+        0.03326391999726184,
+        0.03345109000219963,
+        0.03427959000109695,
+        0.033302779996301976,
+        0.033645150001393634
+      ],
+      "after": [
+        0.02960020999889821,
+        0.0309124699968379,
+        0.03397176000289619,
+        0.0352171599981375,
+        0.03321202000370249,
+        0.033249909995356576,
+        0.033602290000999346
+      ]
+    },
+    "single_stream_pack": {
+      "before": [
+        0.01529566000099294,
+        0.015101959998719394,
+        0.013902130001224578,
+        0.014051090000430122,
+        0.014114329998847097,
+        0.014065739995567128,
+        0.013861500000348314
+      ],
+      "after": [
+        0.01379622999811545,
+        0.013950769999064505,
+        0.01386643000296317,
+        0.014113190001808107,
+        0.014103140000952408,
+        0.014509559998987242,
+        0.013961189996916801
+      ]
+    }
+  },
+  "cases": [
+    {
+      "model": "yolov8n.pt",
+      "profile": "images",
+      "batch": 4,
+      "stream": true,
+      "seconds": {
+        "before": [
+          0.7756066000438295,
+          0.7747099000262097,
+          0.7726465999730863,
+          0.772793999989517,
+          0.780311000009533,
+          0.7752264000009745,
+          0.7724676000070758
+        ],
+        "after": [
+          0.7710855000186712,
+          0.776543700019829,
+          0.7710211999947205,
+          0.7726431000046432,
+          0.774891699955333,
+          0.7750776999746449,
+          0.7728171999915503
+        ]
+      },
+      "parity": true,
+      "frames": 8,
+      "boxes": 40
+    },
+    {
+      "model": "yolov8n.pt",
+      "profile": "video",
+      "batch": 1,
+      "stream": true,
+      "seconds": {
+        "before": [
+          0.712179499969352,
+          0.7118610000470653,
+          0.7094529999885708,
+          0.7112043999950401,
+          0.7122209999943152,
+          0.7099584999959916,
+          0.7108450999949127
+        ],
+        "after": [
+          0.7143617999972776,
+          0.7097868000273593,
+          0.710502700007055,
+          0.7143659999710508,
+          0.7117423999588937,
+          0.7114029999938793,
+          0.7097251000232063
+        ]
+      },
+      "parity": true,
+      "frames": 8,
+      "boxes": 35
+    },
+    {
+      "model": "yolov8n.pt",
+      "profile": "video",
+      "batch": 4,
+      "stream": true,
+      "seconds": {
+        "before": [
+          0.7959581000031903,
+          0.7936059000203386,
+          0.7938797000097111,
+          0.7945439000031911,
+          0.7987284999690019,
+          0.7913991999812424,
+          0.789595200039912
+        ],
+        "after": [
+          0.7928277000319213,
+          0.7909530000179075,
+          0.7915790000115521,
+          0.7969663999974728,
+          0.7934727999963798,
+          0.7927003999939188,
+          0.7912798000033945
+        ]
+      },
+      "parity": true,
+      "frames": 8,
+      "boxes": 35
+    },
+    {
+      "model": "yolo26n.pt",
+      "profile": "images",
+      "batch": 4,
+      "stream": true,
+      "seconds": {
+        "before": [
+          0.6264922000118531,
+          0.6233780999900773,
+          0.6236730000237003,
+          0.6291777000296861,
+          0.6252883999841288,
+          0.6275577999767847,
+          0.6250491999671794
+        ],
+        "after": [
+          0.6213521000463516,
+          0.620586299977731,
+          0.6208444000221789,
+          0.6199168000021018,
+          0.6242152000195347,
+          0.6218177999835461,
+          0.6301656999858096
+        ]
+      },
+      "parity": true,
+      "frames": 8,
+      "boxes": 40
+    },
+    {
+      "model": "yolo26n.pt",
+      "profile": "video",
+      "batch": 1,
+      "stream": true,
+      "seconds": {
+        "before": [
+          0.58464900002582,
+          0.5868368999799713,
+          0.5830085999914445,
+          0.584266200021375,
+          0.5843042999622412,
+          0.5836013000225648,
+          0.5836031000362709
+        ],
+        "after": [
+          0.5829331999993883,
+          0.5835172000224702,
+          0.5846462000044994,
+          0.5848326000268571,
+          0.5849281999981031,
+          0.5867423000163399,
+          0.5841372000286356
+        ]
+      },
+      "parity": true,
+      "frames": 8,
+      "boxes": 41
+    },
+    {
+      "model": "yolo26n.pt",
+      "profile": "video",
+      "batch": 4,
+      "stream": true,
+      "seconds": {
+        "before": [
+          0.6415953999967314,
+          0.6430581999593414,
+          0.6438246000325307,
+          0.6414421999943443,
+          0.6428057000157423,
+          0.6426802999922074,
+          0.6412267999839969
+        ],
+        "after": [
+          0.6412745999987237,
+          0.641538199968636,
+          0.6434412999660708,
+          0.6426345999934711,
+          0.6416334999958053,
+          0.6400430999929085,
+          0.6386771000106819
+        ]
+      },
+      "parity": true,
+      "frames": 8,
+      "boxes": 41
+    }
+  ],
+  "baseline_published_commit": "5ed34c82fa6db1f700d0e0a591e69e9259538640",
+  "baseline_tree": "dc6fff4eb27fb50cd12ceb2e52377e4cd6840c85",
+  "protocol": {
+    "repeats_per_version": 7,
+    "warmup_calls_per_version_per_case": 2,
+    "alternating_order": true,
+    "cuda_synchronized_around_each_timed_pass": true,
+    "parity_checks": "boxes atol=1e-3 rtol=1e-4, scores atol=1e-5, labels and frame indices exact; checks outside timing",
+    "microbenchmark_calls_per_sample": 10,
+    "scope": "Local Quadro M1200 diagnostic; not a Tesla T4 rerun or production qualification"
+  },
+  "source_sha256": {
+    "klygo/models/utils.py": "4552341b957a08f982bec3cf055c175a453022e4e4d2fd02a56090eab8f98fa9",
+    "klygo/models/detection/base.py": "4f6ebe06bf3f0bc36ebc89c5f734c3ecf122bb88fa455008f1baa061ba5ca28a"
+  },
+  "weights_sha256": {
+    "yolov8n.pt": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+    "yolo26n.pt": "9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef"
+  },
+  "original_image_sha256": "c02019c4979c191eb739ddd944445ef408dad5679acab6fd520ef9d434bfbc63",
+  "image_pixels_sha256": "17fbef8d086a11a843ce3f56a83f4cfc73b3809a50e17161dc3858b656af273c",
+  "package_versions": {
+    "ultralytics": "8.4.183",
+    "numpy": "2.5.2",
+    "Pillow": "12.3.0",
+    "opencv-python": "5.0.0.93"
+  },
+  "gpu_driver": "572.76",
+  "published_source_sha256": {
+    "klygo/models/utils.py": "4552341b957a08f982bec3cf055c175a453022e4e4d2fd02a56090eab8f98fa9",
+    "klygo/models/detection/base.py": "9753cac2c27215e1e40604cc6a020902f51ba1f0fced87176b3e67f39c0c3081"
+  },
+  "publication_note": "The final publication additionally restricts the optimized video path to sources explicitly marked backend=opencv. Every timed video source already uses that backend; their execution path is unchanged. The final 68-test focused run validates the OpenCV eligibility and PIL fallback.",
+  "verification": {
+    "full_discovery_tests": 567,
+    "full_discovery_skips": 15,
+    "final_focused_tests": 68,
+    "public_module_audits_passed": 13
+  }
+}

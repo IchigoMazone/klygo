@@ -12,7 +12,165 @@ from klygo import files, media, models, preprocessing
 from klygo.models.detection import base
 
 
+class VideoSource:
+    source_type = "video"
+    backend = "opencv"
+
+    def __init__(self, frames):
+        self.frames = frames
+
+    def __iter__(self):
+        return iter(self.frames)
+
+
 class TestManagedPipeline(unittest.TestCase):
+    def test_pil_video_keeps_source_and_conversion_workers(self):
+        source = VideoSource(range(12))
+        source.backend = "pil"
+        with patch.object(base, "_materialize_model_image", side_effect=lambda image, **kwargs: image), patch.object(
+            base, "ThreadPoolExecutor", wraps=base.ThreadPoolExecutor
+        ) as pool:
+            batches = list(base._prepared_batches(source, 4, 1, 1, backend="Ultralytics"))
+        self.assertEqual([image for part, _ in batches for image in part], list(range(12)))
+        self.assertEqual(pool.call_count, 2)
+
+    def test_default_batched_prefetch_overlaps_and_uses_one_task_per_batch(self):
+        second_started = Event()
+        workers = []
+
+        def decode(image, **kwargs):
+            workers.append(current_thread().name)
+            if image == 4:
+                second_started.set()
+            return image
+
+        with patch.object(base, "_materialize_model_image", side_effect=decode), patch.object(
+            base, "ThreadPoolExecutor", wraps=base.ThreadPoolExecutor
+        ) as pool:
+            batches = base._prepared_batches(VideoSource(range(12)), 4, 1, 1, backend="Ultralytics")
+            try:
+                self.assertEqual(next(batches), (list(range(4)), list(range(4))))
+                self.assertTrue(second_started.wait(2))
+                self.assertEqual([part for part, _ in batches], [list(range(4, 8)), list(range(8, 12))])
+            finally:
+                batches.close()
+            self.assertEqual(pool.call_count, 1)
+        self.assertEqual(len(set(workers)), 1)
+
+    def test_rgb_resolution_copies_once_and_keeps_input_independent(self):
+        from klygo.models import utils
+
+        for stream in (False, True):
+            with self.subTest(stream=stream):
+                image = Image.new("RGB", (12, 8), "red")
+                with patch.object(Image.Image, "convert", side_effect=AssertionError("redundant RGB copy")):
+                    resolved, _ = utils.resolve_images([image], stream=stream)
+                    result = list(resolved)[0]
+                result.putpixel((0, 0), (0, 0, 0))
+                self.assertEqual(image.getpixel((0, 0)), (255, 0, 0))
+
+    def test_default_batched_worker_closes_source_after_decode_failure(self):
+        closed = Event()
+
+        def source():
+            try:
+                yield from range(20)
+            finally:
+                closed.set()
+
+        def decode(image, **kwargs):
+            if image == 5:
+                raise ValueError("decode failed")
+            return image
+
+        with patch.object(base, "_materialize_model_image", side_effect=decode):
+            with self.assertRaisesRegex(ValueError, "decode failed"):
+                list(base._prepared_batches(VideoSource(source()), 4, 1, 1, backend="Ultralytics"))
+        self.assertTrue(closed.is_set())
+
+    def test_default_video_batches_keep_reads_ordered_when_closed_early(self):
+        reads = []
+        closed = Event()
+
+        class Reader:
+            width, height = 20, 12
+
+            def read_frame(self, index):
+                reads.append(index)
+                return np.full((12, 20, 3), index, dtype=np.uint8)
+
+        reader = Reader()
+
+        def source():
+            try:
+                for index in range(100):
+                    yield media.LazyImage("unused.mp4", backend="opencv", frame_index=index, reader=reader)
+            finally:
+                closed.set()
+
+        batches = base._prepared_batches(VideoSource(source()), 4, 1, 1, backend="Ultralytics")
+        part, pixels = next(batches)
+        batches.close()
+        self.assertEqual([image.frame_index for image in part], list(range(4)))
+        self.assertEqual([int(image[0, 0, 0]) for image in pixels], list(range(4)))
+        self.assertEqual(reads, list(range(len(reads))))
+        self.assertLessEqual(len(reads), 8)
+        self.assertTrue(all(not image.is_loaded for image in part))
+        self.assertTrue(closed.is_set())
+
+    def test_closing_default_batch_prefetch_stops_remaining_decode_work(self):
+        stopped, second_started = Event(), Event()
+        decoded = []
+
+        def decode(image, **kwargs):
+            decoded.append(image)
+            if image == 4:
+                second_started.set()
+                if not stopped.wait(2):
+                    raise AssertionError("prefetch did not stop")
+            return image
+
+        with patch.object(base, "Event", return_value=stopped), patch.object(
+            base, "_materialize_model_image", side_effect=decode
+        ):
+            batches = base._prepared_batches(VideoSource(range(12)), 4, 1, 1, backend="Ultralytics")
+            try:
+                self.assertEqual(next(batches)[0], list(range(4)))
+                self.assertTrue(second_started.wait(2))
+            finally:
+                batches.close()
+        self.assertEqual(decoded, list(range(5)))
+
+    def test_default_video_batches_preserve_lazy_transform_trace(self):
+        class Reader:
+            width, height = 20, 12
+
+            def read_frame(self, index):
+                return np.full((12, 20, 3), index, dtype=np.uint8)
+
+        reader = Reader()
+        images = [preprocessing.resize((10, 6))(
+            media.LazyImage("unused.mp4", backend="opencv", frame_index=i, reader=reader)
+        ) for i in range(8)]
+        batches = list(base._prepared_batches(VideoSource(images), 4, 1, 1, backend="Ultralytics"))
+        pixels = [image for _, part in batches for image in part]
+        self.assertEqual([image.shape for image in pixels], [(6, 10, 3)] * 8)
+        self.assertEqual([int(image[0, 0, 0]) for image in pixels], list(range(8)))
+        self.assertTrue(all(image.trace and not image.is_loaded for image in images))
+
+    def test_non_rgb_resolution_still_converts_and_preserves_path(self):
+        from klygo.models import utils
+
+        for stream in (False, True):
+            with self.subTest(stream=stream):
+                image = Image.new("L", (12, 8), 42)
+                image.path = "input.png"
+                resolved, _ = utils.resolve_images([image], stream=stream)
+                result = list(resolved)[0]
+                self.assertEqual(result.mode, "RGB")
+                self.assertEqual(result.path, "input.png")
+                self.assertEqual(result.getpixel((0, 0)), (42, 42, 42))
+
     def test_default_prefetch_prepares_next_batch_during_inference(self):
         second_started = Event()
 

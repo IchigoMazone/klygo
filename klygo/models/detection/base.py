@@ -145,7 +145,14 @@ def _prepared_batches(
         return
 
     stopped = Event()
-    executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="klygo-decode")
+    serial_batches = (
+        workers == 1
+        and backend == "Ultralytics"
+        and getattr(images, "source_type", None) == "video"
+        and getattr(images, "backend", None) == "opencv"
+        and not source_prepares_pixels
+    )
+    executor = None if serial_batches else ThreadPoolExecutor(max_workers=workers, thread_name_prefix="klygo-decode")
     producer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="klygo-source")
     pending: deque[Future[Any]] = deque()
 
@@ -165,6 +172,15 @@ def _prepared_batches(
         part = next(batches, None)
         if part is None:
             return None
+        if serial_batches:
+            # Keep source iteration and pixel preparation together off the
+            # inference thread, without per-image Futures or a second pool.
+            prepared = []
+            for image in part:
+                if stopped.is_set():
+                    return None
+                prepared.append(materialize(image))
+            return part, prepared
         futures = []
         for image in part:
             if stopped.is_set():
@@ -198,7 +214,7 @@ def _prepared_batches(
             if submitted is None:
                 break
             part, futures = submitted
-            prepared = [future.result() for future in futures]
+            prepared = futures if serial_batches else [future.result() for future in futures]
             yield part, prepared
             pending.append(producer.submit(submit_batch))
     finally:
@@ -206,7 +222,8 @@ def _prepared_batches(
         for future in pending:
             future.cancel()
         producer.shutdown(wait=True, cancel_futures=True)
-        executor.shutdown(wait=True, cancel_futures=True)
+        if executor is not None:
+            executor.shutdown(wait=True, cancel_futures=True)
         close = getattr(iterator, "close", None)
         if callable(close):
             close()

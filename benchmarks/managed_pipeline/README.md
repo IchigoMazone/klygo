@@ -5,6 +5,10 @@ prediction. It uses a selected checkout through `PYTHONPATH`, a warmup run, and
 the median of three repetitions. Reports and input clips belong under
 `artifacts/managed-pipeline/`.
 
+The [2026-11-10 preparation follow-up](preparation_2026_11_10/README.md) records
+the RGB-copy reduction, the plain OpenCV YOLO video batch path, regression
+checks and independent local Quadro M1200 measurements with raw timings.
+
 ## Run
 
 From the repository root:

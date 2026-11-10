@@ -382,7 +382,9 @@ def resolve_images(
                             if isinstance(item, media.LazyImage):
                                 yield item
                                 continue
-                        pil_img = media.to_pil(item).convert("RGB")
+                        pil_img = media.to_pil(item)
+                        if pil_img.mode != "RGB":
+                            pil_img = pil_img.convert("RGB")
                         if hasattr(item, "path"):
                             pil_img.path = item.path
                         elif isinstance(item, (str, Path)):
@@ -453,7 +455,9 @@ def resolve_images(
             if isinstance(item, media.LazyImage):
                 cleaned_images.append(item)
                 continue
-        pil_img = media.to_pil(item).convert("RGB")
+        pil_img = media.to_pil(item)
+        if pil_img.mode != "RGB":
+            pil_img = pil_img.convert("RGB")
         if hasattr(item, "path"):
             pil_img.path = item.path
         elif isinstance(item, (str, Path)):
