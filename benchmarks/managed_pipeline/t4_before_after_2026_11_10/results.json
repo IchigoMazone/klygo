@@ -1,0 +1,36 @@
+{
+  "status": "complete",
+  "date": "2026-11-10",
+  "unit": "ms",
+  "lower_is_better": true,
+  "before_revision": "5ed34c82fa6db1f700d0e0a591e69e9259538640",
+  "after_revision": "237efc7537f65f6ff1016aac60acd9b67c6f2ad4",
+  "environment": {
+    "platform": "Google Colab",
+    "gpu": "NVIDIA Tesla T4",
+    "gpu_uuid": "GPU-33698f6d-0be2-670f-5e3f-355cc78707fa",
+    "gpu_memory_mib": 15360,
+    "driver": "580.82.07",
+    "power_limit_w": 70.0,
+    "pytorch": "2.14.1+cu130"
+  },
+  "protocol": {"configurations": 16, "supported_cases": 88, "repeats": 7, "measured_passes": 616, "cross_revision_parity": true},
+  "mode_order": {
+    "images_and_batch1_video": ["raw-non-stream", "raw-stream", "native-non-stream", "native-stream", "managed-non-stream", "managed-stream"],
+    "batch4_video": ["raw-non-stream", "raw-stream", "managed-non-stream", "managed-stream"]
+  },
+  "results": [
+    {"model":"yolo","source":"images","batch":1,"before":[110.356,107.542,79.196,60.920,71.498,66.947],"after":[104.154,110.518,78.670,78.338,70.220,66.927]},
+    {"model":"yolo","source":"images","batch":4,"before":[206.175,200.162,138.301,148.807,118.536,103.359],"after":[199.898,197.394,145.640,124.616,104.202,104.606]},
+    {"model":"yolo","source":"video","batch":1,"before":[89.372,90.747,82.476,81.145,77.713,79.248],"after":[88.695,93.568,85.007,81.881,81.260,81.051]},
+    {"model":"yolo","source":"video","batch":4,"before":[155.470,162.660,138.032,132.342],"after":[158.594,155.938,141.104,136.120]},
+    {"model":"yolo26","source":"images","batch":1,"before":[80.020,80.183,61.915,61.057,55.704,53.161],"after":[73.491,78.877,59.438,58.486,54.258,52.232]},
+    {"model":"yolo26","source":"images","batch":4,"before":[197.378,198.905,136.584,103.779,106.900,97.409],"after":[188.461,151.639,138.393,145.399,118.518,101.318]},
+    {"model":"yolo26","source":"video","batch":1,"before":[55.801,72.630,69.350,64.511,63.127,50.851],"after":[72.904,66.135,69.956,65.333,46.304,64.058]},
+    {"model":"yolo26","source":"video","batch":4,"before":[139.857,139.266,120.846,121.872],"after":[143.808,139.118,126.496,121.688]}
+  ],
+  "managed_summary": {"comparisons":16,"wins":9,"regressions":7,"mean_delta_percent":0.85,"median_delta_percent":1.72,"minimum_delta_percent":-26.65,"maximum_delta_percent":25.97},
+  "archive": {"retained":false,"reason":"Colab runtime recycled before download","generated_size_bytes":3088125,"generated_sha256":"9c9aa82fe05cec863f365c4e6486ba8df480cc81da7af8e0642fffec86994e30"},
+  "colab_url": "https://colab.research.google.com/drive/1nz4gMe2xglLKrfxynlK-YjUE1hMIbc59"
+}
+
