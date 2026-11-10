@@ -8,6 +8,12 @@ repeat-level dispersion and paired overhead when the full bundle is available.
 
 ## Recorded Tesla T4 results
 
+The [complete rerun and original raw evidence](colab_t4_complete_2026_11_10/README.md)
+contains 33 configurations, 172 supported cases and 1,204 individual measured
+passes, including two real-video datasets. All selected parity flags pass;
+archive SHA-256 values and every manifest entry were verified on recovery.
+
+
 The [2026-11-10 Colab import](colab_t4_2026_11_10/README.md) records 25 selected
 configurations, 124 supported cases and seven repeats per case, with all printed
 parity flags passing. It includes the executed notebook, rounded FPS summaries,
