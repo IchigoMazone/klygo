@@ -41,6 +41,7 @@ benchmarks/
 | **Round 2** | Architecture Ready | Rigorous multi-process benchmark with subprocess isolation, symmetric warmup, memory delta tracking, 30–60 real frames, 5 repeats, detection parity verification, and full 5-model coverage. | [`benchmarks/round_2/README.md`](round_2/README.md) |
 | **Outputs CPU/GPU** | Completed | Focused NumPy/CuPy benchmark for NMS, device transfers, precision conversion, and threshold operations on `Detections`. | [`benchmarks/outputs_cpu_gpu/README.md`](outputs_cpu_gpu/README.md) |
 | **Mining CPU/GPU** | Reproducible | NumPy/CuPy parity and latency for statistics, scoring, selection, balancing, quality, duplicate search, and clustering. | [`benchmarks/mining/README.md`](mining/README.md) |
+| **Colab T4 six-mode suite** | Recorded | Nine model variants, 25 configurations, 124 supported cases; saved FPS/parity summaries and complete ten-minute stability telemetry. Matrix raw timing bundle unavailable in saved output. | [Recorded report](gpu_suite/colab_t4_2026_11_10/README.md) |
 
 ---
 

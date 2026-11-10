@@ -139,7 +139,9 @@ if they were the same protocol. Use the notebook for this recorded GPU compariso
 ## Native-execution refactor validation
 
 The later runtime/session refactor keeps the T4 report above as historical, pinned
-evidence; it has not been remeasured on GPU. A local CPU smoke comparison is saved
+evidence. Post-refactor GPU measurements are now recorded separately in the
+[six-mode Colab report](../gpu_suite/colab_t4_2026_11_10/README.md); its workload
+and protocol differ from this historical comparison. A local CPU smoke comparison is saved
 in [metrics/runtime_refactor_cpu.json](metrics/runtime_refactor_cpu.json). It uses
 the existing 48-frame bus clip, YOLOv8n FP32 at imgsz 320, one full-clip warmup and
 two timed repetitions. The CLI includes output hashing in the timed scope.

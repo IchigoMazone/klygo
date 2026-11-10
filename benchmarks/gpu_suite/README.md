@@ -1,5 +1,15 @@
 # Six-mode Colab GPU suite
 
+## Recorded Tesla T4 results
+
+The [2026-11-10 Colab import](colab_t4_2026_11_10/README.md) records 25 selected
+configurations, 124 supported cases and seven repeats per case, with all printed
+parity flags passing. It includes the executed notebook, rounded FPS summaries,
+a separate routing control check and complete 601.77-second stability telemetry.
+The large matrix bundle was hidden in the saved Colab output; individual matrix
+timings and latency/telemetry records are unavailable in this import. See the
+report's evidence section before interpreting the results.
+
 The suite measures registered YOLOv8n, YOLO11n, YOLO26n, YOLO-World v2 small,
 Grounding DINO tiny/base, Faster R-CNN MobileNetV3 FPN and LocateAnything-3B,
 plus the existing KerasHub D-FINE Nano integration. Nano/small representatives
