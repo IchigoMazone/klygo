@@ -103,12 +103,13 @@ def execution_state(detector, key):
             raise RuntimeError("Ultralytics predictor was not initialized by warmup")
         # Recent Ultralytics versions retain the original CPU model and execute
         # a separate AutoBackend. Inspect its parameters, not YOLO.device.
-        parameter = next(engine.parameters())
+        native = getattr(engine, "model", engine)
+        parameter = next(native.parameters())
         device = str(parameter.device)
         if str(predictor.device) != device or str(engine.device) != device:
             raise RuntimeError("Predictor device and executing parameter device disagree")
         return {"device": device, "dtype": str(parameter.dtype),
-                "source": "detector.model.predictor.model.parameters",
+                "source": "detector.model.predictor.model.model.parameters",
                 "wrapper_device": str(detector.device)}
     return {"device": str(detector.device), "dtype": str(detector.dtype),
             "source": "detector runtime", "wrapper_device": str(detector.device)}

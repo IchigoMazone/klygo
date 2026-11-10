@@ -44,7 +44,8 @@ class TestVideoSource(unittest.TestCase):
 
     def test_execution_device_comes_from_predictor_parameters(self):
         parameter = SimpleNamespace(device='cuda:0', dtype='torch.float32')
-        engine = SimpleNamespace(device='cuda:0', parameters=lambda: iter([parameter]))
+        engine = SimpleNamespace(device='cuda:0', parameters=lambda: iter([]),
+                                 model=SimpleNamespace(parameters=lambda: iter([parameter])))
         detector = SimpleNamespace(device='cpu', model=SimpleNamespace(
             predictor=SimpleNamespace(device='cuda:0', model=engine)))
         state = execution_state(detector, 'yolo')

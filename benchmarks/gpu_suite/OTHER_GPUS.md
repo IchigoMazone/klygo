@@ -24,7 +24,7 @@ historical runner did not include those fields. A strict-precision experiment
 and a framework-default experiment must be identified separately.
 The current runner verifies the executing CUDA parameter device after every
 warmup mode and measured pass. For Ultralytics, it inspects
-`detector.model.predictor.model.parameters()` and cross-checks both predictor
+`detector.model.predictor.model.model.parameters()` and cross-checks both predictor
 and AutoBackend device declarations. Recent versions can retain the original
 CPU checkpoint while a separate AutoBackend executes on CUDA. Wrapper `.device`
 alone cannot validate that execution. Per-pass execution observations are
