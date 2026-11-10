@@ -31,12 +31,12 @@ def render(bundle):
              "- Most detectors use FP32. LocateAnything uses FP16, one query, fast generation and a 512-token limit; it is not directly comparable to FP32 detector precision.",
              "- First-frame figures in throughput runs are host-visible delivery observations. The separate ready-latency pass synchronizes each result and is not included in FPS.",
              "- Batched/non-stream output arrives in bursts. Delivery intervals are not isolated per-frame inference time; ready pack latency includes the entire call.",
-             "- Image diagnostics contain only 8 or 32 deliveries. Their interpolated P95/P99 are descriptive samples, not tail-latency SLA evidence.",
+             "- Image diagnostic sample counts depend on the recorded iteration and batch settings. Their interpolated P95/P99 are descriptive samples, not tail-latency SLA evidence.",
              "- Throughput passes retain yielded results for untimed parity; peak memory includes retention. The separate stability probe consumes without retaining frames.",
              "- RSS is sampled at 50 ms; short peaks can be missed. CPU percentages are approximate, expressed relative to one core and include probe setup. NVML uses device-window statistics.",
              "- Reserved VRAM includes allocator caches from preceding modes. Allocated peaks describe live tensor allocation; neither is an isolated minimum-memory requirement.",
              "- Factory load time excludes process/hardware initialization and includes checkpoint lookup/download when needed; cache states differ between jobs.",
-             "- This controlled public bus workload does not qualify production accuracy or live-camera behavior. A separate stability result, when present, covers one managed pipeline, not all models or 30-minute production use.", ""]
+             "- These recorded workloads do not qualify production accuracy or live-camera behavior. A separate stability result, when present, covers one managed pipeline, not all models or 30-minute production use.", ""]
     if reports:
         env = reports[0].get("environment",{})
         lines += ["## Environment", "", f"GPU: **{env.get('gpu')}**, VRAM {number(env.get('vram_mib'))} MiB. CUDA {env.get('cuda')}.",

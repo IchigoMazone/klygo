@@ -17,6 +17,11 @@ Install the model extras from the repository and record the resolved package
 versions. The recorded T4 baseline uses Ultralytics 8.4.208 and Transformers
 4.57.1; other package versions must also be included in the environment manifest.
 Do not silently update the model framework during a hardware comparison.
+FP32 tensor dtype alone does not specify the TF32 policy. Record the matmul
+precision, matmul/cuDNN TF32 flags, cuDNN benchmark policy and deterministic
+algorithm setting. The current runner records these at startup; the pinned
+historical runner did not include those fields. A strict-precision experiment
+and a framework-default experiment must be identified separately.
 
 From a checkout at your selected commit:
 
@@ -66,6 +71,22 @@ label a failed or unimplemented FD gate as passing.
 
 ## 3. Run the same matrix
 
+Run all 25 configurations and the separate ten-minute stability probe with one
+command after selecting the physical GPU through `CUDA_VISIBLE_DEVICES`:
+
+```bash
+PYTHONPATH=. python benchmarks/gpu_suite/matrix.py --device cuda:0 \
+  --repeats 7 --allow-remote-code --stability-seconds 600 \
+  --output artifacts/benchmarks/gpu-name/session-01
+```
+
+Use a new output directory for each session. The script runs jobs sequentially,
+records failures, and exports the selected raw files. For a smaller explicit
+subset, use `--models yolo faster-rcnn --stability-seconds 0`. The LocateAnything
+remote-code flag is required only when that model is selected. A nonzero exit
+status requires inspecting job/probe results; it must not be reported as a
+completed qualification.
+
 The image profile uses predecoded PIL packs. The video profile includes source
 loading and H.264 decode. Measure both batch 1 and batch 4 when supported.
 
@@ -94,6 +115,14 @@ PYTHONPATH=. python benchmarks/gpu_suite/run.py --model yolo --device cuda:0 \
   --profile video --video-frames 120 --batch 4 --imgsz 640 --repeats 7 \
   --output artifacts/benchmarks/gpu-name/session-01/video_b4
 ```
+
+To measure a fixed real clip, use `--profile video --source-video path/to/clip.mp4`
+instead of generating the bus clip. The entire supplied file is consumed;
+`--video-frames` only controls generated input. Prepare a short, fixed excerpt
+before timing and record original/excerpt hashes, source/credit/license, frame
+count, codec, frame rate and dimensions. Use a separate output directory and
+bundle per clip: a model/profile/batch identity must not be duplicated inside a
+selected bundle. Keep real-footage and controlled-workload tables separate.
 
 For LocateAnything, add `--allow-remote-code` only for the declared pinned NVIDIA
 checkpoint after reviewing that model integration. Install `decord` and `lmdb`

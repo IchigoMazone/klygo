@@ -331,6 +331,11 @@ def environment():
             "gpu":torch.cuda.get_device_name(torch.cuda.current_device()) if torch.cuda.is_available() else None,
             "gpu_uuid":str(getattr(torch.cuda.get_device_properties(torch.cuda.current_device()),"uuid",None)) if torch.cuda.is_available() else None,
             "vram_mib":torch.cuda.get_device_properties(torch.cuda.current_device()).total_memory/2**20 if torch.cuda.is_available() else None,
+            "float32_matmul_precision":torch.get_float32_matmul_precision(),
+            "matmul_allow_tf32":torch.backends.cuda.matmul.allow_tf32,
+            "cudnn_allow_tf32":torch.backends.cudnn.allow_tf32,
+            "cudnn_benchmark":torch.backends.cudnn.benchmark,
+            "deterministic_algorithms":torch.are_deterministic_algorithms_enabled(),
             "torch_threads":torch.get_num_threads(),"tested_commit":commit}
 
 
@@ -384,7 +389,10 @@ def run_model(args):
             if not upstream_stream:
                 raise ValueError("The video profile requires an upstream video decoder for fair raw/native comparison")
             temporary = files.join(args.output,"bus_motion_mpeg4.mp4")
-            video = str(files.join(args.output,"bus_motion_h264.mp4"))
+            external_video = getattr(args,"source_video",None)
+            video = str(files.path(external_video).resolve()) if external_video else str(files.join(args.output,"bus_motion_h264.mp4"))
+            if external_video and not files.is_file(video):
+                raise FileNotFoundError(f"Video input does not exist: {video}")
             if not files.is_file(video):
                 base = np.asarray(media.to_pil(media.load(source,verbose=False)[0]).resize((1280,720)))
                 frames = (Image.fromarray(np.roll(base,int(20*np.sin(index/15)),axis=1).copy())
@@ -392,7 +400,8 @@ def run_model(args):
                 media.save_video(temporary,frames,fps=30,overwrite=True,verbose=False)
                 media.convert(temporary,video,codec="h264",gpu=False,preset="fast",overwrite=True,verbose=False)
             report["input_sha256"] = files.hash(video)
-            report["input_scope"] = "end-to-end 1280x720 H.264 controlled moving bus clip; includes source decoding"
+            report["input_scope"] = ("end-to-end caller-provided video; includes source decoding" if external_video else
+                                     "end-to-end 1280x720 H.264 controlled moving bus clip; includes source decoding")
         packs = [images] if video else [images]*args.iterations
         cases = {mode:{"mode":mode,"status":"ok","runs":[],"parity":[]} for mode in active}
         references = {}
@@ -448,9 +457,12 @@ def main():
     parser.add_argument("--repeats",type=int,default=7)
     parser.add_argument("--profile",choices=("images","video"),default="images")
     parser.add_argument("--video-frames",type=int,default=120)
+    parser.add_argument("--source-video",help="Existing fixed video for the video profile; use a separately hashed run per source")
     parser.add_argument("--allow-remote-code",action="store_true")
     parser.add_argument("--output",default="artifacts/benchmarks/six-mode")
     args = parser.parse_args()
+    if args.source_video and args.profile != "video":
+        parser.error("source-video requires --profile video")
     if args.device.startswith("cuda") and not torch.cuda.is_available():
         raise RuntimeError("A CUDA runtime is required; no silent CPU fallback")
     if min(args.batch,args.iterations,args.repeats) < 1:
