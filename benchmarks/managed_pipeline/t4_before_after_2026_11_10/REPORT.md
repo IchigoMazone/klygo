@@ -27,7 +27,7 @@ After: `237efc7537f65f6ff1016aac60acd9b67c6f2ad4`
 | yolo26 | video | 1 | 63.127 | 46.304 | -26.65% | 50.851 | 64.058 | +25.97% |
 | yolo26 | video | 4 | 120.846 | 126.496 | +4.68% | 121.872 | 121.688 | -0.15% |
 
-Across the 16 managed comparisons there are 9 improvements and 7 regressions. The simple mean delta is +0.85% and the median delta is +1.72%; positive means slower. This is therefore **not a universal performance win**. It is workload-dependent.
+Across the 16 managed comparisons there are 7 improvements and 9 regressions. The simple mean delta is +0.85% and the median delta is +1.72%; positive means slower. This is therefore **not a universal performance win**. It is workload-dependent.
 
 The largest regression is yolo26 video batch-1 managed stream (+25.97%); the next is yolo26 images batch-4 managed non-stream (+10.87%). The same yolo26 video batch-1 configuration improves 26.65% in non-stream mode, which is a strong sign that the effect is path-specific. Re-run these outliers with locked clocks/power where possible and preserve per-repeat samples externally before changing code again.
 

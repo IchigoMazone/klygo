@@ -29,7 +29,7 @@
     {"model":"yolo26","source":"video","batch":1,"before":[55.801,72.630,69.350,64.511,63.127,50.851],"after":[72.904,66.135,69.956,65.333,46.304,64.058]},
     {"model":"yolo26","source":"video","batch":4,"before":[139.857,139.266,120.846,121.872],"after":[143.808,139.118,126.496,121.688]}
   ],
-  "managed_summary": {"comparisons":16,"wins":9,"regressions":7,"mean_delta_percent":0.85,"median_delta_percent":1.72,"minimum_delta_percent":-26.65,"maximum_delta_percent":25.97},
+  "managed_summary": {"comparisons":16,"improvements":7,"regressions":9,"mean_delta_percent":0.85,"median_delta_percent":1.72,"minimum_delta_percent":-26.65,"maximum_delta_percent":25.97},
   "archive": {"retained":false,"reason":"Colab runtime recycled before download","generated_size_bytes":3088125,"generated_sha256":"9c9aa82fe05cec863f365c4e6486ba8df480cc81da7af8e0642fffec86994e30"},
   "colab_url": "https://colab.research.google.com/drive/1nz4gMe2xglLKrfxynlK-YjUE1hMIbc59"
 }
