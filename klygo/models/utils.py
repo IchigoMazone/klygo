@@ -16,6 +16,52 @@ from klygo import files
 __all__ = ["suppress_warnings", "suppress_ai_warnings"]
 
 
+def clone_value(value: Any) -> Any:
+    """Return an independent structural copy without full ``deepcopy`` overhead."""
+    if value is None or isinstance(value, (bool, int, float, str, bytes)):
+        return value
+    if isinstance(value, dict):
+        return {key: clone_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [clone_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(clone_value(item) for item in value)
+    if isinstance(value, set):
+        return {clone_value(item) for item in value}
+    copy_method = getattr(value, "copy", None)
+    if callable(copy_method) and type(value).__module__.startswith("numpy"):
+        return copy_method()
+    return deepcopy(value)
+
+
+class _SizedStream:
+    """Lazy stream iterable preserving known strided/capped item count."""
+
+    def __init__(self, factory: Any, count: int) -> None:
+        self._factory = factory
+        self._count = max(0, int(count))
+        self._gen: Any = None
+
+    def __len__(self) -> int:
+        return self._count
+
+    def __iter__(self) -> "_SizedStream":
+        if self._gen is None:
+            self._gen = self._factory()
+        return self
+
+    def __next__(self) -> Any:
+        if self._gen is None:
+            self._gen = self._factory()
+        return next(self._gen)
+
+    def close(self) -> None:
+        if self._gen is not None:
+            close = getattr(self._gen, "close", None)
+            if callable(close):
+                close()
+
+
 import functools
 
 def suppress_warnings(func=None):
@@ -133,18 +179,18 @@ def normalize_metadata(value: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     The former ``config={...}`` wrapper is accepted for compatibility and
     flattened without overwriting explicitly supplied top-level groups.
     """
-    result = deepcopy(dict(value or {}))
+    result = clone_value(dict(value or {}))
     legacy_profile = result.pop("profile", None)
     if legacy_profile is not None:
         if not isinstance(legacy_profile, Mapping):
             raise TypeError("metadata['profile'] must be a mapping")
-        result.setdefault("details", deepcopy(dict(legacy_profile)))
+        result.setdefault("details", clone_value(dict(legacy_profile)))
     legacy_config = result.pop("config", None)
     if legacy_config is not None:
         if not isinstance(legacy_config, Mapping):
             raise TypeError("metadata['config'] must be a mapping")
         for group, parameters in legacy_config.items():
-            result.setdefault(group, deepcopy(parameters))
+            result.setdefault(group, clone_value(parameters))
     legacy_groups = result.pop("parameter_groups", None)
     if legacy_groups is not None:
         result.setdefault("flags", legacy_groups)
@@ -162,7 +208,7 @@ def parameter_groups(metadata: Mapping[str, Any]) -> Dict[str, Dict[str, Any]]:
         if name in RESERVED_METADATA_KEYS:
             continue
         if isinstance(parameters, Mapping):
-            discovered[str(name)] = deepcopy(dict(parameters))
+            discovered[str(name)] = clone_value(dict(parameters))
 
     declaration = metadata.get("flags")
     if declaration is None:
@@ -329,6 +375,7 @@ def resolve_images(
     max_frames: Optional[int] = None,
     stream: bool = False,
     pixel_backend: str = "pil",
+    copy_pil: bool = True,
 ) -> Tuple[Union[List[PIL.Image.Image], Any], bool]:
     """Resolve input media sources via :mod:`klygo.media`.
 
@@ -360,7 +407,7 @@ def resolve_images(
             total_frames = 1
         elif getattr(source, "is_stream", False) or (hasattr(source, "__iter__") and not isinstance(source, (list, tuple))):
             raw_stream = source
-            total_frames = getattr(source, "total_frames", None)
+            total_frames = None
             fps_val = getattr(source, "fps", 30.0)
         else:
             raw_stream = source if isinstance(source, (list, tuple)) else [source]
@@ -382,6 +429,9 @@ def resolve_images(
                             if isinstance(item, media.LazyImage):
                                 yield item
                                 continue
+                        if isinstance(item, PIL.Image.Image) and not copy_pil and item.mode == "RGB":
+                            yield item
+                            continue
                         pil_img = media.to_pil(item)
                         if pil_img.mode != "RGB":
                             pil_img = pil_img.convert("RGB")
@@ -399,6 +449,11 @@ def resolve_images(
         elif hasattr(source, "shape") and getattr(source, "ndim", 0) in (2, 3):
             is_single = True
 
+        if total_frames is not None:
+            expected = (int(total_frames) + step - 1) // step
+            if max_frames is not None:
+                expected = min(expected, int(max_frames))
+            return _SizedStream(_build_generator, expected), is_single
         return _build_generator(), is_single
 
     # In-memory list path (standard RAM mode)
@@ -411,7 +466,7 @@ def resolve_images(
     elif isinstance(source, media.LazyImage):
         return [source], True
     elif isinstance(source, PIL.Image.Image):
-        return [source.convert("RGB")], True
+        return [source if (not copy_pil and source.mode == "RGB") else source.convert("RGB")], True
     elif hasattr(source, "shape"):
         if getattr(source, "ndim", 0) in (2, 3):
             return [media.to_pil(source).convert("RGB")], True
@@ -455,6 +510,9 @@ def resolve_images(
             if isinstance(item, media.LazyImage):
                 cleaned_images.append(item)
                 continue
+        if isinstance(item, PIL.Image.Image) and not copy_pil and item.mode == "RGB":
+            cleaned_images.append(item)
+            continue
         pil_img = media.to_pil(item)
         if pil_img.mode != "RGB":
             pil_img = pil_img.convert("RGB")

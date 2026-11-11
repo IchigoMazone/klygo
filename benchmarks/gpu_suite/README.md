@@ -82,10 +82,9 @@ cover the registry families; this is not every possible YOLO checkpoint size.
 Six rows are always reported: raw non-stream/stream, native non-stream/stream,
 managed non-stream/stream. A framework without an upstream source-stream engine
 gets N/A for raw/native stream; Python loops are not relabeled as native streams.
-At the tested revision, Klygo native-stream consumes the upstream generator into
-a materialized result. Its time to first caller-visible result includes that
-buffering. The public API locks native video batch to one; larger video batches
-therefore have N/A for native rows.
+Klygo native-stream yields upstream generator results lazily frame-by-frame.
+The public API locks native video batch to one; larger video batches therefore
+have N/A for native rows.
 
 ## Protocol
 

@@ -478,7 +478,7 @@ def run_model(args):
             case["first_frame_host_ms_median"] = statistics.median(run["first_frame_host_ms"] for run in case["runs"])
             case["all_parity_pass"] = all(item["pass"] for item in case["parity"])
             case["first_repeat_output"] = references[mode]
-            case["delivery_semantics"] = "upstream stream buffered into materialized Klygo output" if mode=="native-stream" else "caller-visible delivery"
+            case["delivery_semantics"] = "caller-visible delivery"
             print(f"RESULT {args.model} {mode}: {case['fps_median']:.3f} FPS; parity={case['all_parity_pass']}",flush=True)
         report["status"] = "complete"
         report["cases"] = [case for case in report["cases"] if case.get("status")=="N/A"]+list(cases.values())

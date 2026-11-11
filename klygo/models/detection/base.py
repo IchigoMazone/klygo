@@ -51,13 +51,14 @@ def _materialize_model_image(image: Any, backend: Optional[str] = None) -> Any:
         if image.mode != "RGB":
             image = image.convert("RGB")
     if backend == "Ultralytics" and isinstance(image, PIL.Image.Image):
+        import cv2
         import numpy as np
 
         # Match Ultralytics' PIL-to-BGR conversion while keeping its prepared
         # predictor path available for lazily transformed and in-memory images.
         if image.mode != "RGB":
             image = image.convert("RGB")
-        return np.ascontiguousarray(np.asarray(image)[:, :, ::-1])
+        return cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
     return image
 
 
@@ -339,6 +340,7 @@ class Detector(BaseModel):
                 max_frames=max_frames,
                 stream=stream,
                 pixel_backend=pixel_backend,
+                copy_pil=(self.backend != "Ultralytics"),
             )
             source_type = getattr(images, "source_type", "image" if is_single else "frames")
             previous = self._snapshot_prediction_state()
@@ -375,7 +377,7 @@ class Detector(BaseModel):
             if not stream:
                 return result
 
-            names = deepcopy(self.names)
+            names = dict(self.names)
             total = getattr(images, "total_frames", None)
             if total is None and hasattr(images, "__len__"):
                 total = len(images)
@@ -455,7 +457,7 @@ class Detector(BaseModel):
             return runtime
         return {}
 
-    def _native_image(self, raw: Any, frame_index: int) -> Any:
+    def _native_image(self, raw: Any, frame_index: int, fallback: Any = None) -> Any:
         """Return source media used to attach identity to one native result."""
         from klygo import files, media
 
@@ -468,6 +470,11 @@ class Detector(BaseModel):
             if shape is not None and len(shape) >= 2:
                 source._cached_size = (int(shape[1]), int(shape[0]))
             return source
+        if fallback is not None:
+            if isinstance(fallback, media.LazyImage):
+                return fallback
+            if isinstance(fallback, PIL.Image.Image):
+                return fallback if fallback.mode == "RGB" else fallback.convert("RGB")
         image = getattr(raw, "orig_img", None)
         if image is None:
             raise ValueError("native backend result does not provide source image data")
@@ -480,6 +487,7 @@ class Detector(BaseModel):
         metadata: Dict[str, Any],
         prompt: Any,
         prediction_snapshot: Optional[Dict[str, Any]] = None,
+        fallback_source: Any = None,
     ) -> Detection:
         """Convert one backend-native result into a Klygo Detection."""
         formatted = self.format_results([raw])
@@ -489,7 +497,7 @@ class Detector(BaseModel):
         latency = float(sum(float(value) for value in speed.values())) if isinstance(speed, Mapping) else 0.0
         frame = self._pack_detection(
             formatted[0],
-            self._native_image(raw, frame_index),
+            self._native_image(raw, frame_index, fallback=fallback_source),
             frame_index,
             latency,
             1000.0 / max(latency, 0.001),
@@ -498,7 +506,7 @@ class Detector(BaseModel):
             "native": True,
             "prompt": list(prompt) if prompt is not None else None,
             "predict_config": (
-                deepcopy(prediction_snapshot)
+                utils.clone_value(prediction_snapshot)
                 if prediction_snapshot is not None
                 else self._config_snapshot(metadata, prompt)
             ),
@@ -616,6 +624,14 @@ class Detector(BaseModel):
             is_generator = hasattr(raw, "__next__") or (hasattr(raw, "__iter__") and not isinstance(raw, (list, tuple)))
             prediction_snapshot = self._config_snapshot(metadata, prompts)
 
+            source_items = (
+                [source]
+                if isinstance(source, (PIL.Image.Image, media.LazyImage))
+                else source
+                if isinstance(source, (list, tuple))
+                else None
+            )
+
         def frames():
             iterator = iter(raw)
             index = 0
@@ -637,12 +653,18 @@ class Detector(BaseModel):
                             native_result = next(iterator)
                         except StopIteration:
                             break
+                    fallback = (
+                        source_items[index]
+                        if source_items is not None and index < len(source_items)
+                        else None
+                    )
                     yield self._pack_native_frame(
                         native_result,
                         index,
                         metadata,
                         prompts,
                         prediction_snapshot,
+                        fallback_source=fallback,
                     )
                     index += 1
             finally:
@@ -665,6 +687,13 @@ class Detector(BaseModel):
             "native": True,
             "requested_total_frames": None,
         }
+        if is_generator and not packed:
+            return Detections(
+                frames(),
+                metadata=result_metadata,
+                names=names,
+                stream=True,
+            )
         materialized = list(frames())
         return Detections(
             materialized,
@@ -869,7 +898,7 @@ class Detector(BaseModel):
             )
             if len(prepared) != len(images):
                 raise ValueError("prepared image count must match source image count")
-            raw = list(infer(images=prepared, prompt=deepcopy(prompt)))
+            raw = list(infer(images=prepared, prompt=utils.clone_value(prompt)))
             elapsed = (time.perf_counter() - start) * 1000 / max(1, len(images))
             if len(raw) != len(images):
                 raise ValueError("forward() must return exactly one result per input image")
@@ -897,7 +926,7 @@ class Detector(BaseModel):
                     "frame_index": frame.frame_index,
                     "image_frame_index": frame.frame_index,
                 })
-                frame.metadata = deepcopy(config)
+                frame.metadata = utils.clone_value(config)
                 frames.append(frame)
             return frames
 
@@ -933,13 +962,15 @@ class Detector(BaseModel):
             if target_size is not None:
                 det._image_size = target_size
         else:
-            fresh_output = bool(det.__dict__.pop("_klygo_fresh_output", False))
+            fresh_output = bool(det._fresh_output)
+            det._fresh_output = False
             if det._owner is not None or not fresh_output:
                 det = det._clone()
             det._source_path = str(img_path) if img_path is not None else det._source_path
             det._image_size = target_size if target_size is not None else final_image.size
-            det._source = final_image
-            det._source_id, _ = outputs.detect._source(final_image, None)
+            if det._source is not final_image:
+                det._source = final_image
+                det._source_id, _ = outputs.detect._source(final_image, None)
             det._frame_index = actual_idx
             det._identity = (det._source_id, actual_idx)
             if trace:
@@ -967,24 +998,24 @@ class Detector(BaseModel):
         return True
 
     def _resolve_prediction(self, prompt: Any, kwargs: Dict[str, Any], *, validate: bool = True, runtime: bool = True) -> Any:
-        base = deepcopy(dict(self._metadata))
-        base.update(deepcopy(self.settings))
+        base = utils.clone_value(dict(self._metadata))
+        base.update(utils.clone_value(self.settings))
         saved = {k: v for k, v in self._predict_config.items() if k != "prompt"}
         base = utils.resolve_metadata(base, saved, runtime=True)
         resolved = utils.resolve_metadata(base, kwargs, runtime=runtime)
-        effective_prompt = deepcopy(self._predict_config["prompt"]) if prompt is _UNSET else self._normalize_prediction_prompt(prompt)
+        effective_prompt = utils.clone_value(self._predict_config["prompt"]) if prompt is _UNSET else self._normalize_prediction_prompt(prompt)
         if validate:
             self._validate_prediction(resolved, effective_prompt)
         return resolved, effective_prompt
 
     def _remember_prediction(self, metadata: Dict[str, Any], prompt: Any) -> None:
-        base = deepcopy(dict(self._metadata))
-        base.update(deepcopy(self.settings))
+        base = utils.clone_value(dict(self._metadata))
+        base.update(utils.clone_value(self.settings))
         defaults = utils.parameter_groups(base)
-        remembered = {"prompt": deepcopy(prompt)}
+        remembered = {"prompt": utils.clone_value(prompt)}
         for group in utils.runtime_groups(metadata):
             changed = {
-                k: deepcopy(v) for k, v in metadata[group].items()
+                k: utils.clone_value(v) for k, v in metadata[group].items()
                 if not (k in defaults[group] and _values_match(v, defaults[group][k]))
             }
             if changed:
@@ -994,13 +1025,13 @@ class Detector(BaseModel):
     def _config_snapshot(self, metadata: Dict[str, Any], prompt: Any) -> Dict[str, Any]:
         groups = utils.parameter_groups(metadata)
         priority = utils.normalize_priority(groups, metadata.get("priority"))
-        result = {"prompt": deepcopy(prompt)}
+        result = {"prompt": utils.clone_value(prompt)}
         for group, values in groups.items():
             for key, value in values.items():
                 if group == "model" and key in _LOADING_OPTIONS:
                     continue
                 name = key if key in priority.get(group, ()) else f"{group}_{key}"
-                result[name] = deepcopy(value)
+                result[name] = utils.clone_value(value)
         return result
 
     def _normalize_prediction_prompt(self, prompt: Any) -> Optional[List[str]]:

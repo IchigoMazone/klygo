@@ -21,6 +21,24 @@ Identity = tuple[str, int]
 _RESTORED = object()
 
 
+def _clone_meta_value(value: Any) -> Any:
+    """Fast structural copy for metadata dictionaries."""
+    if value is None or isinstance(value, (bool, int, float, str, bytes)):
+        return value
+    if isinstance(value, dict):
+        return {key: _clone_meta_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_clone_meta_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_clone_meta_value(item) for item in value)
+    if isinstance(value, set):
+        return {_clone_meta_value(item) for item in value}
+    copy_method = getattr(value, "copy", None)
+    if callable(copy_method) and type(value).__module__.startswith("numpy"):
+        return copy_method()
+    return deepcopy(value)
+
+
 def _label(value: Any) -> str:
     result = "" if value is None else str(value).strip()
     if not result:
@@ -574,6 +592,7 @@ class Detection:
         "_uid_to_idx",
         "_next_uid",
         "_owner",
+        "_fresh_output",
         "__weakref__",
         "__dict__",
     )
@@ -598,7 +617,7 @@ class Detection:
         self._restore_trace = getattr(source, "_preprocessing_trace", None) or None
         if metadata is not None and not isinstance(metadata, Mapping):
             raise TypeError("metadata must be a mapping or None")
-        self.metadata = deepcopy(dict(metadata)) if metadata else {}
+        self.metadata = _clone_meta_value(dict(metadata)) if metadata else {}
         self._registry = _names(names)
         self._label_ids = {label: class_id for class_id, label in self._registry.items()}
         self._xyxy: np.ndarray = _EMPTY_XYXY
@@ -612,6 +631,7 @@ class Detection:
         self._uid_to_idx: Optional[dict[int, int]] = None
         self._next_uid = 0
         self._owner: Optional[Detections] = None
+        self._fresh_output = False
         if boxes is not None:
             box_list = list(boxes)
             if box_list:
@@ -663,7 +683,7 @@ class Detection:
         )
         if metadata is not None and not isinstance(metadata, Mapping):
             raise TypeError("metadata must be a mapping or None")
-        instance.metadata = deepcopy(dict(metadata)) if metadata else {}
+        instance.metadata = _clone_meta_value(dict(metadata)) if metadata else {}
         instance._registry = dict(registry) if registry is not None else {}
         instance._label_ids = (
             dict(label_ids)
@@ -693,6 +713,7 @@ class Detection:
         else:
             instance._next_uid = 0
         instance._owner = None
+        instance._fresh_output = False
         return instance
 
     identity = property(lambda self: self._identity, doc="Stable frame identity.")
@@ -1995,7 +2016,7 @@ class Detections:
         validators.validate_type(packed, bool, "packed")
         if stream and packed:
             raise ValueError("stream and packed storage are mutually exclusive")
-        self.metadata = deepcopy(dict(metadata or {})); initial_names = _names(names)
+        self.metadata = _clone_meta_value(dict(metadata or {})); initial_names = _names(names)
         self._registry = {} if stream else initial_names
         self._label_ids = {label: class_id for class_id, label in self._registry.items()}
         self._next_class_id = max(self._registry, default=-1) + 1
@@ -3030,7 +3051,7 @@ def _fast_detection_arrays(
     count = boxes.shape[0]
     if len(scores) != count or len(labels) != count or len(class_ids) != count:
         return None
-    if not all(registry.get(int(class_id)) == label for class_id, label in zip(class_ids, labels)):
+    if count and not all(registry.get(class_id) == label for class_id, label in zip(class_ids.tolist(), labels)):
         return None
     if not np.isfinite(boxes).all():
         raise ValueError("box coordinates must be finite")
@@ -3053,6 +3074,7 @@ def build_detections(images: Sequence[Any], predictions: Sequence[Mapping[str, A
     """Build one frame per image from normalized backend predictions."""
     images, predictions, registry = list(images), list(predictions), _names(names)
     if len(images) != len(predictions): raise ValueError("images and predictions must have the same length")
+    registry_rev = {value: key for key, value in registry.items()}
     frames = []
     for position, (image, prediction) in enumerate(zip(images, predictions)):
         if not isinstance(prediction, Mapping): raise TypeError("each prediction must be a mapping")
@@ -3070,45 +3092,48 @@ def build_detections(images: Sequence[Any], predictions: Sequence[Mapping[str, A
             raw_class_ids,
             registry,
         )
-        coords = _list(raw_coords, "boxes") if fast is None else raw_coords
-        scores = _list(raw_scores, "scores") if fast is None else raw_scores
-        labels = _list(raw_labels, "labels") if fast is None else raw_labels
-        class_ids = _list(raw_class_ids, "class_ids") if fast is None else raw_class_ids
-        if len({len(coords), len(scores), len(labels), len(class_ids)}) != 1:
-            raise ValueError("boxes, scores, labels, and class_ids must have the same length")
-
-        local = dict(registry)
-        local_rev = {value: key for key, value in local.items()}
-        n = len(coords)
-        if n == 0:
-            xyxy_arr = _EMPTY_XYXY
-            score_arr = _EMPTY_SCORES
-            cid_arr = _EMPTY_CLASS_IDS
-            uid_arr = _EMPTY_UIDS
-            label_list: list[str] = []
-        elif fast is not None:
+        if fast is not None:
             xyxy_arr, score_arr, cid_arr, uid_arr, label_list = fast
+            local = registry
+            local_rev = registry_rev
         else:
-            xyxy_rows = []
-            score_vals = []
-            cid_vals = []
-            label_list = []
-            for coordinates, score, label, preferred in zip(coords, scores, labels, class_ids):
-                lbl = local[label] if not isinstance(label, bool) and isinstance(label, int) and label in local else _label(label)
-                found = local_rev.get(lbl)
-                if found is None:
-                    preferred_id = None if preferred is None else Box._integer(preferred, "class_id")
-                    found = preferred_id if preferred_id is not None and preferred_id not in local else max(local, default=-1) + 1
-                    local[found] = lbl
-                    local_rev[lbl] = found
-                xyxy_rows.append(_coords(coordinates))
-                score_vals.append(_score(score))
-                cid_vals.append(found)
-                label_list.append(lbl)
-            xyxy_arr = np.array(xyxy_rows, dtype=np.float64)
-            score_arr = np.array(score_vals, dtype=np.float64)
-            cid_arr = np.array(cid_vals, dtype=np.int32)
-            uid_arr = np.arange(n, dtype=np.int64)
+            coords = _list(raw_coords, "boxes")
+            scores = _list(raw_scores, "scores")
+            labels = _list(raw_labels, "labels")
+            class_ids = _list(raw_class_ids, "class_ids")
+            if len({len(coords), len(scores), len(labels), len(class_ids)}) != 1:
+                raise ValueError("boxes, scores, labels, and class_ids must have the same length")
+
+            local = dict(registry)
+            local_rev = dict(registry_rev)
+            n = len(coords)
+            if n == 0:
+                xyxy_arr = _EMPTY_XYXY
+                score_arr = _EMPTY_SCORES
+                cid_arr = _EMPTY_CLASS_IDS
+                uid_arr = _EMPTY_UIDS
+                label_list: list[str] = []
+            else:
+                xyxy_rows = []
+                score_vals = []
+                cid_vals = []
+                label_list = []
+                for coordinates, score, label, preferred in zip(coords, scores, labels, class_ids):
+                    lbl = local[label] if not isinstance(label, bool) and isinstance(label, int) and label in local else _label(label)
+                    found = local_rev.get(lbl)
+                    if found is None:
+                        preferred_id = None if preferred is None else Box._integer(preferred, "class_id")
+                        found = preferred_id if preferred_id is not None and preferred_id not in local else max(local, default=-1) + 1
+                        local[found] = lbl
+                        local_rev[lbl] = found
+                    xyxy_rows.append(_coords(coordinates))
+                    score_vals.append(_score(score))
+                    cid_vals.append(found)
+                    label_list.append(lbl)
+                xyxy_arr = np.array(xyxy_rows, dtype=np.float64)
+                score_arr = np.array(score_vals, dtype=np.float64)
+                cid_arr = np.array(cid_vals, dtype=np.int32)
+                uid_arr = np.arange(n, dtype=np.int64)
 
         frame_index = getattr(image, "frame_index", None)
         frame_index = position if frame_index is None else frame_index
@@ -3128,9 +3153,11 @@ def build_detections(images: Sequence[Any], predictions: Sequence[Mapping[str, A
             registry=local,
             label_ids=local_rev,
         )
-        frame.__dict__["_klygo_fresh_output"] = True
+        frame._fresh_output = True
         frames.append(frame)
-        registry.update(local)
+        if fast is None and len(local) != len(registry):
+            registry.update(local)
+            registry_rev.update(local_rev)
     return frames
 
 

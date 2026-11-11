@@ -429,6 +429,83 @@ class TestManagedPipeline(unittest.TestCase):
         self.assertNotIn("weights", options)
         self.assertEqual(options["imgsz"], 320)
 
+    def test_sized_stream_preserves_length_and_avoids_single_batch_pool(self):
+        from klygo.models import utils
+
+        images = [Image.new("RGB", (12, 8), "red") for _ in range(4)]
+        resolved, _ = utils.resolve_images(images, step=2, max_frames=2, stream=True, copy_pil=False)
+        self.assertEqual(len(resolved), 2)
+        with patch.object(base, "ThreadPoolExecutor", side_effect=AssertionError("pool spawned")):
+            batches = list(base._prepared_batches(resolved, 2, 1, 1, backend="Ultralytics"))
+        self.assertEqual(len(batches), 1)
+        self.assertIs(batches[0][0][0], images[0])
+        self.assertIs(batches[0][0][1], images[2])
+
+    def test_native_stream_returns_lazy_detections(self):
+        from types import SimpleNamespace
+
+        closed = Event()
+        yielded = []
+
+        class StreamBackend:
+            names = {0: "object"}
+
+            def predict(self, source=None, stream=False, **options):
+                def gen():
+                    try:
+                        for idx in range(3):
+                            yielded.append(idx)
+                            yield SimpleNamespace(
+                                orig_img=np.zeros((8, 8, 3), dtype=np.uint8),
+                                path=None,
+                                names=self.names,
+                                boxes=None,
+                                speed={"inference": 1.0},
+                            )
+                    finally:
+                        closed.set()
+
+                return gen() if stream else list(gen())
+
+        detector = models.Detector(backend="Ultralytics", metadata={"flags": {"model": False, "post": True}, "model": {}, "post": {"threshold": 0.25, "iou": 0.7}})
+        detector.model = StreamBackend()
+        detector.names = {0: "object"}
+        result = detector.predict([Image.new("RGB", (8, 8))] * 3, native=True, model_stream=True, verbose=False)
+        self.assertTrue(result.is_stream)
+        self.assertEqual(yielded, [])
+        first = next(iter(result))
+        self.assertEqual(first.frame_index, 0)
+        self.assertEqual(yielded, [0])
+        result.close()
+        self.assertTrue(closed.is_set())
+
+    def test_native_in_memory_pil_reuses_caller_image_without_to_pil(self):
+        from types import SimpleNamespace
+
+        class Backend:
+            names = {0: "object"}
+
+            def predict(self, source=None, stream=False, **options):
+                return [SimpleNamespace(orig_img=np.zeros((8, 8, 3), dtype=np.uint8), path="image0.jpg", names=self.names, boxes=None, speed={}) for _ in source]
+
+        detector = models.Detector(backend="Ultralytics", metadata={"flags": {"model": False, "post": True}, "model": {}, "post": {"threshold": 0.25, "iou": 0.7}})
+        detector.model = Backend()
+        detector.names = {0: "object"}
+        img = Image.new("RGB", (8, 8))
+        with patch.object(media, "to_pil", side_effect=AssertionError("redundant to_pil")):
+            res = detector.predict([img], native=True, verbose=False)
+        self.assertIs(res[0]._source, img)
+
+    def test_clone_value_isolates_nested_metadata_and_arrays(self):
+        from klygo.models import utils
+
+        original = {"nested": {"items": [1, 2]}, "arr": np.array([3, 4])}
+        cloned = utils.clone_value(original)
+        cloned["nested"]["items"].append(99)
+        cloned["arr"][0] = 999
+        self.assertEqual(original["nested"]["items"], [1, 2])
+        self.assertEqual(original["arr"].tolist(), [3, 4])
+
 
 if __name__ == "__main__":
     unittest.main()

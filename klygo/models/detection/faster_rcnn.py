@@ -75,7 +75,7 @@ class FasterRCNNDetect(Detector):
         allowed = set(utils.normalize_prompt(prompt)) if prompt else None
 
         tensors = [
-            pil_to_tensor(image.convert("RGB")).float() / 255.0
+            pil_to_tensor(image if image.mode == "RGB" else image.convert("RGB")).float() / 255.0
             for image in images
         ]
         raw_outputs = self.run_inference(self.cast_inputs(tensors))

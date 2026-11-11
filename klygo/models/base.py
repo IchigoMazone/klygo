@@ -183,7 +183,8 @@ class BaseModel(ABC):
     @contextmanager
     def _use_metadata(self, value: Mapping[str, Any]):
         """Expose runtime metadata through ``self.metadata`` for one call."""
-        token = self._runtime_metadata.set(Box(value))
+        boxed = value if isinstance(value, Box) else Box(value)
+        token = self._runtime_metadata.set(boxed)
         try:
             yield
         finally:
