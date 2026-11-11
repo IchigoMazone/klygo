@@ -45,6 +45,7 @@ benchmarks/
 | **Colab T4 complete suite** | Recorded | 33 configurations, 172 supported cases, 1,204 measured passes (`controlled` + `people` + `cars`), verified raw ZIP archives at `cffb476`/`f83352d`. | [Recorded report](gpu_suite/colab_t4_complete_2026_11_10/README.md) |
 | **Colab L4 complete suite** | Recorded | Baseline at `8b87298` on Colab Pro NVIDIA L4: 33 configurations, 172 supported cases, 1,204 measured passes, 600s stability PASS, 100% parity PASS. | [Recorded report](gpu_suite/colab_l4_complete_2026_11_11/README.md) |
 | **Colab L4 optimized suite** | Recorded | Post-optimization rerun at `7729cb7` on same NVIDIA L4: 33 configs, 172 cases, 1,204 passes, `+30.6%–68.7%` YOLO managed image FPS, `23.6–53.0 ms` native-stream TTFF, 100% parity PASS. | [Recorded report](gpu_suite/colab_l4_optimized_2026_11_11/README.md) |
+| **Mining Curation Accuracy (COCO `val2017`)** | Recorded | Real-data `YOLOv8n` detection benchmark on Colab L4 at `1fb5020`: 11 curation strategies × 2 seeds on an 848-image noisy long-tail COCO pool evaluated against 247 clean held-out frames (`balance_median` `0.3874` vs `full_raw` `0.3139` `mAP@50-95`). | [Recorded report](mining/curation_l4_2026_11_11/README.md) |
 
 ---
 
