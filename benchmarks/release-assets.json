@@ -1,0 +1,42 @@
+{
+  "source_commit": "676979e70198d8f306736d2771d39226c1738a47",
+  "tag": "benchmark-evidence-2026-11-11",
+  "assets": [
+    {
+      "path": "benchmarks/gpu_suite/colab_l4_complete_2026_11_11/controlled_raw_evidence.zip",
+      "name": "colab_l4_complete_2026_11_11__controlled_raw_evidence.zip",
+      "size": 3645929,
+      "sha256": "8230f7780fd47e80552d67ac589e1bacd4a4a149a2b5e5775506e792f47fa350"
+    },
+    {
+      "path": "benchmarks/gpu_suite/colab_l4_complete_2026_11_11/extension_evidence.zip",
+      "name": "colab_l4_complete_2026_11_11__extension_evidence.zip",
+      "size": 787554,
+      "sha256": "89b7d60951e4b92074a9ef9e2593c0cf213ac345ce98849e05557dc9f93a35c8"
+    },
+    {
+      "path": "benchmarks/gpu_suite/colab_l4_optimized_2026_11_11/controlled_raw_evidence.zip",
+      "name": "colab_l4_optimized_2026_11_11__controlled_raw_evidence.zip",
+      "size": 3675339,
+      "sha256": "b2cdb9548422c57b5189e92c7192d18d650f944180b8d5feb26b4512a75ceaed"
+    },
+    {
+      "path": "benchmarks/gpu_suite/colab_l4_optimized_2026_11_11/extension_evidence.zip",
+      "name": "colab_l4_optimized_2026_11_11__extension_evidence.zip",
+      "size": 832816,
+      "sha256": "5447010a0210d3e8a309d3c03b6aefc44036a2c9a48dcf84c1d3619946d2edd6"
+    },
+    {
+      "path": "benchmarks/gpu_suite/colab_t4_complete_2026_11_10/controlled_raw_evidence.zip",
+      "name": "colab_t4_complete_2026_11_10__controlled_raw_evidence.zip",
+      "size": 3801675,
+      "sha256": "5856be73d2fad64e2b7e36d753b583ea1ad21434dc4d0bc3190ad26ec2bb5ed5"
+    },
+    {
+      "path": "benchmarks/gpu_suite/colab_t4_complete_2026_11_10/extension_evidence.zip",
+      "name": "colab_t4_complete_2026_11_10__extension_evidence.zip",
+      "size": 863392,
+      "sha256": "cbee84ce67cf7cd1adc123da3aaaeb73d117bb54c387cb62e065acfaa1bfa730"
+    }
+  ]
+}

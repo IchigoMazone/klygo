@@ -14,8 +14,8 @@ Repeat-level statistics (mean, sample SD, CV, exploratory bootstrap intervals an
 
 ## Original evidence
 
-- [controlled_raw_evidence.zip](controlled_raw_evidence.zip): original full bundle.json, individual timing/latency/telemetry samples, logs, environment, job records, driver, stability and SHA-256 manifest.
-- [extension_evidence.zip](extension_evidence.zip): people/cars bundles, source attribution and input hashes, logs, drivers, failed-attempt records and manifest. Its manifest also references the controlled ZIP above.
+- [controlled_raw_evidence.zip](https://github.com/IchigoMazone/klygo/releases/download/benchmark-evidence-2026-11-11/colab_t4_complete_2026_11_10__controlled_raw_evidence.zip): original full bundle.json, individual timing/latency/telemetry samples, logs, environment, job records, driver, stability and SHA-256 manifest.
+- [extension_evidence.zip](https://github.com/IchigoMazone/klygo/releases/download/benchmark-evidence-2026-11-11/colab_t4_complete_2026_11_10__extension_evidence.zip): people/cars bundles, source attribution and input hashes, logs, drivers, failed-attempt records and manifest. Its manifest also references the controlled ZIP above.
 - [validation.json](validation.json): verified archive hashes and counts. Every original manifest entry was checked. ZIP bytes are unchanged from the saved Colab export.
 
 Extract both archives into separate directories. Use the bundle.json in the controlled archive and real_people/bundle.json / real_cars/bundle.json in the extension archive with [raw_statistics.py](../raw_statistics.py). Read the full reports for latency, memory, throughput and measurement limits.

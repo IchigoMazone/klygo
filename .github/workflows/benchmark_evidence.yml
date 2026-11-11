@@ -1,0 +1,81 @@
+name: Publish benchmark evidence
+
+on:
+  push:
+    branches: [benchmark_models_klygo]
+    paths:
+      - .github/workflows/benchmark_evidence.yml
+      - benchmarks/release-assets.json
+      - benchmarks/SHA256SUMS
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-benchmark-evidence
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'IchigoMazone/klygo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Recover and verify original archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_commit=$(python -c 'import json; print(json.load(open("benchmarks/release-assets.json"))["source_commit"])')
+          git fetch --depth=1 origin "$source_commit"
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import subprocess
+
+          manifest = json.loads(Path('benchmarks/release-assets.json').read_text())
+          output = Path('artifacts/release-assets')
+          output.mkdir(parents=True, exist_ok=True)
+          expected_checksums = ''
+          for asset in manifest['assets']:
+              payload = subprocess.check_output(['git', 'show', manifest['source_commit'] + ':' + asset['path']])
+              assert len(payload) == asset['size'], asset['name']
+              assert hashlib.sha256(payload).hexdigest() == asset['sha256'], asset['name']
+              (output / asset['name']).write_bytes(payload)
+              expected_checksums += asset['sha256'] + '  ' + asset['name'] + '\n'
+          assert Path('benchmarks/SHA256SUMS').read_text() == expected_checksums
+          (output / 'SHA256SUMS').write_text(expected_checksums)
+          print('Verified', len(manifest['assets']), 'original archives')
+          PY
+
+      - name: Upload, download-verify and publish evidence release
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=$(python -c 'import json; print(json.load(open("benchmarks/release-assets.json"))["tag"])')
+          if ! gh release view "$tag" --json tagName > /dev/null 2>&1; then
+            gh release create "$tag" --target "$GITHUB_SHA" --draft \
+              --title "Benchmark evidence — T4 and L4, November 2026" \
+              --notes-file benchmarks/DOWNLOADS.md --latest=false
+          fi
+          gh release view "$tag" --json assets --jq '.assets[].name' > artifacts/existing-release-assets.txt
+          for asset in artifacts/release-assets/*; do
+            name=$(basename "$asset")
+            if ! grep -Fxq "$name" artifacts/existing-release-assets.txt; then
+              gh release upload "$tag" "$asset"
+            fi
+          done
+          mkdir -p artifacts/release-verification
+          gh release download "$tag" --dir artifacts/release-verification
+          cmp artifacts/release-assets/SHA256SUMS artifacts/release-verification/SHA256SUMS
+          (cd artifacts/release-verification && sha256sum --check SHA256SUMS)
+          gh release edit "$tag" --draft=false --latest=false
+          gh release view "$tag" --json url,assets --jq '{url, assets: [.assets[] | {name, size}]}'
