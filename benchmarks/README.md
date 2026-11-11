@@ -43,7 +43,8 @@ benchmarks/
 | **Mining CPU/GPU** | Reproducible | NumPy/CuPy parity and latency for statistics, scoring, selection, balancing, quality, duplicate search, and clustering. | [`benchmarks/mining/README.md`](mining/README.md) |
 | **Colab T4 six-mode suite** | Recorded | Nine model variants, 25 configurations, 124 supported cases; saved FPS/parity summaries and complete ten-minute stability telemetry. Matrix raw timing bundle unavailable in saved output. | [Recorded report](gpu_suite/colab_t4_2026_11_10/README.md) |
 | **Colab T4 complete suite** | Recorded | 33 configurations, 172 supported cases, 1,204 measured passes (`controlled` + `people` + `cars`), verified raw ZIP archives at `cffb476`/`f83352d`. | [Recorded report](gpu_suite/colab_t4_complete_2026_11_10/README.md) |
-| **Colab L4 complete suite** | Recorded | Re-measured at `8b87298` on Colab Pro NVIDIA L4: 33 configurations, 172 supported cases, 1,204 measured passes, 600s stability PASS, 100% parity PASS, and improvement roadmap. | [Recorded report](gpu_suite/colab_l4_complete_2026_11_11/README.md) |
+| **Colab L4 complete suite** | Recorded | Baseline at `8b87298` on Colab Pro NVIDIA L4: 33 configurations, 172 supported cases, 1,204 measured passes, 600s stability PASS, 100% parity PASS. | [Recorded report](gpu_suite/colab_l4_complete_2026_11_11/README.md) |
+| **Colab L4 optimized suite** | Recorded | Post-optimization rerun at `7729cb7` on same NVIDIA L4: 33 configs, 172 cases, 1,204 passes, `+30.6%–68.7%` YOLO managed image FPS, `23.6–53.0 ms` native-stream TTFF, 100% parity PASS. | [Recorded report](gpu_suite/colab_l4_optimized_2026_11_11/README.md) |
 
 ---
 

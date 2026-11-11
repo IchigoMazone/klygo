@@ -1,0 +1,45 @@
+{
+    "dataset": "people",
+    "url": "https://raw.githubusercontent.com/intel-iot-devkit/sample-videos/57978890822836f2b4743852f04f62fc511757e4/people-detection.mp4",
+    "source_repository_commit": "57978890822836f2b4743852f04f62fc511757e4",
+    "credit": "Intel IoT DevKit sample-videos contributors",
+    "license": "CC-BY-4.0",
+    "license_url": "https://github.com/intel-iot-devkit/sample-videos/blob/57978890822836f2b4743852f04f62fc511757e4/LICENSE",
+    "original_sha256": "18ffe8672d741e3e29c9d891d22c59d453720b086c25b35c88b393d55f92f693",
+    "excerpt_sha256": "56c176337add102635b2d994ba56503ffb8885e402543144e2de2dfb0cc0e940",
+    "transformation": "First 120 frames; audio removed; H.264/yuv420p transcode at original dimensions and frame rate",
+    "ffmpeg_command": [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        "/content/klygo_benchmark_run/extension/real_inputs/people-detection.mp4",
+        "-frames:v",
+        "120",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-threads",
+        "2",
+        "-pix_fmt",
+        "yuv420p",
+        "/content/klygo_benchmark_run/extension/real_inputs/people_120_h264.mp4"
+    ],
+    "probe": {
+        "programs": [],
+        "streams": [
+            {
+                "codec_name": "h264",
+                "width": 768,
+                "height": 432,
+                "r_frame_rate": "12/1",
+                "nb_read_frames": "120"
+            }
+        ]
+    },
+    "runner_commit": "7729cb719cc493fc45fc2c885c848b909d770ecd"
+}

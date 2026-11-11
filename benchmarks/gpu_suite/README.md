@@ -8,11 +8,14 @@ repeat-level dispersion and paired overhead when the full bundle is available.
 
 ## Recorded NVIDIA L4 results (2026-11-11)
 
-The [complete L4 rerun and original raw evidence](colab_l4_complete_2026_11_11/README.md)
-at commit `8b87298` contains 33 configurations, 172 supported cases and 1,204
-individual measured passes (controlled 25-config matrix, 600s stability probe,
-and `people`/`cars` real-video extensions). All parity checks pass and all
-archive manifests are verified.
+- **Post-optimization (`7729cb7`)**: The [optimized L4 rerun](colab_l4_optimized_2026_11_11/README.md)
+  matches the 33-configuration, 172-case, 1,204-pass protocol on the same physical L4 GPU,
+  cutting `managed` image overhead to `-4.5%–9.3%` (`+30.6%–68.7%` YOLO managed FPS) and
+  reducing `native-stream` video TTFF from `1.1–1.7 s` to `23.6–53.0 ms` (`100%` parity PASS, `600s` stability PASS).
+- **Baseline (`8b87298`)**: The [baseline L4 rerun](colab_l4_complete_2026_11_11/README.md)
+  contains 33 configurations, 172 supported cases and 1,204 individual measured passes
+  (controlled 25-config matrix, 600s stability probe, and `people`/`cars` real-video
+  extensions). All parity checks pass and all archive manifests are verified.
 
 ## Recorded Tesla T4 results
 
