@@ -7,6 +7,7 @@ on:
       - .github/workflows/benchmark_evidence.yml
       - benchmarks/release-assets.json
       - benchmarks/SHA256SUMS
+      - benchmarks/DOWNLOADS.md
   workflow_dispatch:
 
 permissions:
@@ -77,5 +78,5 @@ jobs:
           gh release download "$tag" --dir artifacts/release-verification
           cmp artifacts/release-assets/SHA256SUMS artifacts/release-verification/SHA256SUMS
           (cd artifacts/release-verification && sha256sum --check SHA256SUMS)
-          gh release edit "$tag" --draft=false --latest=false
+          gh release edit "$tag" --draft=false --latest=false --notes-file benchmarks/DOWNLOADS.md
           gh release view "$tag" --json url,assets --jq '{url, assets: [.assets[] | {name, size}]}'

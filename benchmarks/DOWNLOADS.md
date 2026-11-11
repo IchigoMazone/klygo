@@ -14,7 +14,7 @@ A full Git clone still includes the historical ZIP blobs; no history was rewritt
 
 ## Verify downloads
 
-Download the desired ZIP files and [SHA256SUMS](SHA256SUMS) into one directory:
+Download the desired ZIP files and [SHA256SUMS](https://github.com/IchigoMazone/klygo/releases/download/benchmark-evidence-2026-11-11/SHA256SUMS) into one directory:
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS
