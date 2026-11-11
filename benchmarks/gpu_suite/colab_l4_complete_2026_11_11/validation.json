@@ -1,0 +1,30 @@
+{
+    "datasets": [
+        {
+            "dataset": "controlled",
+            "configurations": 25,
+            "supported_cases": 124,
+            "measured_passes": 868,
+            "all_parity_pass": true
+        },
+        {
+            "dataset": "people",
+            "configurations": 4,
+            "supported_cases": 24,
+            "measured_passes": 168,
+            "all_parity_pass": true
+        },
+        {
+            "dataset": "cars",
+            "configurations": 4,
+            "supported_cases": 24,
+            "measured_passes": 168,
+            "all_parity_pass": true
+        }
+    ],
+    "archive_sha256": {
+        "controlled_raw_evidence.zip": "8230f7780fd47e80552d67ac589e1bacd4a4a149a2b5e5775506e792f47fa350",
+        "extension_evidence.zip": "89b7d60951e4b92074a9ef9e2593c0cf213ac345ce98849e05557dc9f93a35c8"
+    },
+    "all_archive_manifests_verified": true
+}
