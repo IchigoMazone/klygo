@@ -29,7 +29,7 @@ __all__ = [
 
 def _import_adapter(name: str):
     """Import one framework adapter without loading unrelated dependencies."""
-    return importlib.import_module(f"klygo.models.detection._{name}")
+    return importlib.import_module(f"klygo.models._frameworks.{name}")
 
 
 def _runtime_adapter(backend: Optional[str]):

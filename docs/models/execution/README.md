@@ -14,7 +14,7 @@ supported.
 | `models/detection/yolo.py`, `yolo_world.py` | Native Ultralytics calls and predictor reuse |
 | `models/detection/grounding_dino.py`, `locate_anything.py` | Transformers inputs and output-device alignment |
 | `models/detection/faster_rcnn.py` | Native Torchvision inputs, inference and results |
-| Private helpers beside detection wrappers | Framework-specific conversion shared by related models |
+| `models/_frameworks/` | Private framework-specific conversion helpers shared by related models |
 | `models/runtime/` | Lazy Torch/Keras device, precision, inference context, barriers and cache management |
 | `models/_compat.py` | Historical custom-wrapper convenience dispatch |
 | `models/execution/` | Thin aliases for existing imports |

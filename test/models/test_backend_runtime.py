@@ -10,7 +10,7 @@ from PIL import Image
 
 from klygo.models import _compat as common
 from klygo.models.runtime import keras
-from klygo.models.detection import _huggingface as huggingface, _ultralytics as ultralytics
+from klygo.models._frameworks import huggingface, ultralytics
 from klygo.models.detection.base import Detector
 from klygo.models import runtime
 

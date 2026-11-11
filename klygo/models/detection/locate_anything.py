@@ -190,25 +190,25 @@ class LocateAnythingDetect(Detector):
 
     def cast_inputs(self, inputs):
         """Move floating inputs while preserving integer token tensors."""
-        from klygo.models.detection import _huggingface as execution
+        from klygo.models._frameworks import huggingface as execution
 
         return execution.cast_inputs(inputs, dev=self.current_device(), dtype=self.current_dtype())
 
     def run_inference(self, inputs, **model_kwargs):
         """Execute this model using its native Transformers input structure."""
-        from klygo.models.detection import _huggingface as execution
+        from klygo.models._frameworks import huggingface as execution
 
         return execution.run_inference(self.model, inputs, cur_dtype=self.current_dtype(), **model_kwargs)
 
     def get_output_device(self, outputs):
         """Find the actual output shard for multi-device inference."""
-        from klygo.models.detection import _huggingface as execution
+        from klygo.models._frameworks import huggingface as execution
 
         return execution.get_output_device(outputs, default_device=self.current_device())
 
     def sync_device(self, tensor, target_device):
         """Move postprocessing tokens to the output shard when needed."""
-        from klygo.models.detection import _huggingface as execution
+        from klygo.models._frameworks import huggingface as execution
 
         return execution.sync_device(tensor, target_device)
 

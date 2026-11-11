@@ -19,7 +19,7 @@ except (ImportError, RuntimeError) as exc:
 from klygo import files, outputs
 from klygo.models import utils
 from klygo.models.detection.base import Detector
-from klygo.models.detection import _torchvision as execution
+from klygo.models._frameworks import torchvision as execution
 
 __all__ = ["FasterRCNNDetect"]
 

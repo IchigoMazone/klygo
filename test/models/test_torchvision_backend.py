@@ -8,7 +8,7 @@ import unittest
 class TestTorchvisionBackend(unittest.TestCase):
     def test_runtime_hooks_accept_a_caller_owned_module(self):
         import torch
-        from klygo.models.detection import _torchvision as torchvision
+        from klygo.models._frameworks import torchvision
 
         class CallerModel(torch.nn.Module):
             def __init__(self):

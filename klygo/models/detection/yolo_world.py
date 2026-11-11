@@ -2,7 +2,7 @@
 
 from typing import Any, Dict
 from contextlib import contextmanager
-from klygo.models.detection import _ultralytics as execution
+from klygo.models._frameworks import ultralytics as execution
 
 try:
     from ultralytics import YOLOWorld

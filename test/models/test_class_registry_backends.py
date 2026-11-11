@@ -7,8 +7,7 @@ from unittest.mock import patch
 import numpy as np
 from PIL import Image
 
-from klygo.models.detection import _keras as keras
-from klygo.models.detection import _ultralytics as ultralytics
+from klygo.models._frameworks import keras, ultralytics
 from klygo.models import detection
 from klygo.models.detection.yolo_world import YOLOWorldDetect
 from klygo.models.detection.yolo import YOLODetect
