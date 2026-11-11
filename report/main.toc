@@ -1,0 +1,126 @@
+\babel@toc {vietnamese}{}\relax 
+\contentsline {chapter}{Lời cảm ơn}{}{chapter*.1}%
+\contentsline {chapter}{Lời cam đoan}{}{chapter*.2}%
+\contentsline {chapter}{Phân công công việc}{}{chapter*.3}%
+\contentsline {chapter}{Tóm tắt}{}{chapter*.5}%
+\contentsline {chapter}{Abstract}{}{chapter*.6}%
+\contentsline {chapter}{DANH MỤC HÌNH ẢNH}{}{section*.8}%
+\contentsline {chapter}{DANH MỤC BẢNG}{}{section*.10}%
+\contentsline {chapter}{Danh mục từ viết tắt}{}{chapter*.12}%
+\contentsline {chapter}{\numberline {1}Giới Thiệu}{1}{chapter.1}%
+\contentsline {section}{\numberline {1.1}Bối cảnh và động cơ thực hiện}{1}{section.1.1}%
+\contentsline {section}{\numberline {1.2}Phát biểu bài toán}{1}{section.1.2}%
+\contentsline {section}{\numberline {1.3}Mục tiêu và câu hỏi nghiên cứu}{3}{section.1.3}%
+\contentsline {subsection}{\numberline {1.3.1}Mục tiêu}{3}{subsection.1.3.1}%
+\contentsline {subsection}{\numberline {1.3.2}Câu hỏi nghiên cứu}{3}{subsection.1.3.2}%
+\contentsline {section}{\numberline {1.4}Phạm vi và giả định}{3}{section.1.4}%
+\contentsline {section}{\numberline {1.5}Đóng góp và cấu trúc báo cáo}{4}{section.1.5}%
+\contentsline {section}{\numberline {1.6}Phạm vi mở rộng và câu hỏi nghiên cứu bổ sung}{4}{section.1.6}%
+\contentsline {chapter}{\numberline {2}Cơ Sở Lý Thuyết}{6}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Bài toán phát hiện đối tượng}{6}{section.2.1}%
+\contentsline {subsection}{\numberline {2.1.1}Đối tượng, nhãn và độ tin cậy}{6}{subsection.2.1.1}%
+\contentsline {subsection}{\numberline {2.1.2}Các hệ biểu diễn bounding box}{6}{subsection.2.1.2}%
+\contentsline {section}{\numberline {2.2}Đặc trưng ảnh và mô hình học sâu}{7}{section.2.2}%
+\contentsline {section}{\numberline {2.3}Các họ mô hình được khảo sát}{8}{section.2.3}%
+\contentsline {subsection}{\numberline {2.3.1}Phát hiện một giai đoạn và YOLOv8}{8}{subsection.2.3.1}%
+\contentsline {subsection}{\numberline {2.3.2}Phát hiện hai giai đoạn và Faster R-CNN}{8}{subsection.2.3.2}%
+\contentsline {subsection}{\numberline {2.3.3}YOLO-World và từ vựng mở}{9}{subsection.2.3.3}%
+\contentsline {section}{\numberline {2.4}Tiền xử lý và biến đổi tọa độ}{9}{section.2.4}%
+\contentsline {subsection}{\numberline {2.4.1}Resize, padding và letterbox}{9}{subsection.2.4.1}%
+\contentsline {subsection}{\numberline {2.4.2}Chuỗi phép biến đổi và giới hạn khôi phục}{10}{subsection.2.4.2}%
+\contentsline {section}{\numberline {2.5}IoU và hậu xử lý dự đoán}{10}{section.2.5}%
+\contentsline {subsection}{\numberline {2.5.1}Intersection over Union}{10}{subsection.2.5.1}%
+\contentsline {subsection}{\numberline {2.5.2}Ngưỡng tin cậy và NMS}{11}{subsection.2.5.2}%
+\contentsline {section}{\numberline {2.6}Chỉ số đánh giá chất lượng}{11}{section.2.6}%
+\contentsline {subsection}{\numberline {2.6.1}TP, FP, FN và điểm làm việc}{11}{subsection.2.6.1}%
+\contentsline {subsection}{\numberline {2.6.2}Đường cong PR và Average Precision}{12}{subsection.2.6.2}%
+\contentsline {section}{\numberline {2.7}Lazy loading, batch, stream và thời gian xử lý}{12}{section.2.7}%
+\contentsline {section}{\numberline {2.8}Khai phá và tuyển chọn dữ liệu huấn luyện}{13}{section.2.8}%
+\contentsline {subsection}{\numberline {2.8.1}Phân bố nhãn, độ hiếm và cân bằng dữ liệu}{13}{subsection.2.8.1}%
+\contentsline {subsection}{\numberline {2.8.2}Cluster và lựa chọn theo tính đa dạng}{14}{subsection.2.8.2}%
+\contentsline {subsection}{\numberline {2.8.3}Đánh giá phương pháp chọn dữ liệu}{14}{subsection.2.8.3}%
+\contentsline {chapter}{\numberline {3}Phân Tích Và Thiết Kế Thư Viện}{15}{chapter.3}%
+\contentsline {section}{\numberline {3.1}Yêu cầu hệ thống}{15}{section.3.1}%
+\contentsline {subsection}{\numberline {3.1.1}Yêu cầu chức năng}{15}{subsection.3.1.1}%
+\contentsline {subsection}{\numberline {3.1.2}Yêu cầu phi chức năng}{15}{subsection.3.1.2}%
+\contentsline {section}{\numberline {3.2}Kiến trúc tổng thể}{16}{section.3.2}%
+\contentsline {section}{\numberline {3.3}Hợp đồng dữ liệu đầu ra}{18}{section.3.3}%
+\contentsline {subsection}{\numberline {3.3.1}Box và định danh}{18}{subsection.3.3.1}%
+\contentsline {subsection}{\numberline {3.3.2}Detection và Detections}{19}{subsection.3.3.2}%
+\contentsline {subsection}{\numberline {3.3.3}Builder và ranh giới chuẩn hóa}{20}{subsection.3.3.3}%
+\contentsline {section}{\numberline {3.4}Thiết kế lớp mô hình và backend}{20}{section.3.4}%
+\contentsline {subsection}{\numberline {3.4.1}Ba mức trách nhiệm}{20}{subsection.3.4.1}%
+\contentsline {subsection}{\numberline {3.4.2}Khác biệt backend cần được giữ lại}{21}{subsection.3.4.2}%
+\contentsline {section}{\numberline {3.5}Luồng suy luận và trạng thái cấu hình}{21}{section.3.5}%
+\contentsline {section}{\numberline {3.6}Theo dõi hình học và khôi phục kết quả}{22}{section.3.6}%
+\contentsline {section}{\numberline {3.7}Vòng đời, lỗi và khả năng tái lập}{22}{section.3.7}%
+\contentsline {section}{\numberline {3.8}Phạm vi phiên bản và mô-đun mining mở rộng}{23}{section.3.8}%
+\contentsline {section}{\numberline {3.9}Prefix, priority và quyền thay đổi cấu hình}{24}{section.3.9}%
+\contentsline {section}{\numberline {3.10}Raw backend, native và managed}{25}{section.3.10}%
+\contentsline {section}{\numberline {3.11}Worker, prefetch và điều phối chuẩn bị batch}{27}{section.3.11}%
+\contentsline {chapter}{\numberline {4}Cài Đặt Và Kiểm Chứng}{29}{chapter.4}%
+\contentsline {section}{\numberline {4.1}Công nghệ và tổ chức mã nguồn}{29}{section.4.1}%
+\contentsline {section}{\numberline {4.2}Cài đặt đầu vào lazy và pipeline tiền xử lý}{30}{section.4.2}%
+\contentsline {subsection}{\numberline {4.2.1}LazyImage và thời điểm materialize}{30}{subsection.4.2.1}%
+\contentsline {subsection}{\numberline {4.2.2}Kiểm chứng lịch sử hình học}{30}{subsection.4.2.2}%
+\contentsline {section}{\numberline {4.3}Cài đặt chu trình suy luận}{31}{section.4.3}%
+\contentsline {subsection}{\numberline {4.3.1}Phân giải nguồn, cấu hình và batch}{31}{subsection.4.3.1}%
+\contentsline {subsection}{\numberline {4.3.2}Snapshot và tính độc lập của kết quả}{32}{subsection.4.3.2}%
+\contentsline {section}{\numberline {4.4}Adapter cho các mô hình thực nghiệm}{32}{section.4.4}%
+\contentsline {subsection}{\numberline {4.4.1}YOLODetect và YOLOWorldDetect}{32}{subsection.4.4.1}%
+\contentsline {subsection}{\numberline {4.4.2}Adapter Torchvision trong thực nghiệm}{33}{subsection.4.4.2}%
+\contentsline {section}{\numberline {4.5}Chuẩn hóa, hậu xử lý và hiển thị}{34}{section.4.5}%
+\contentsline {subsection}{\numberline {4.5.1}Kiểm tra đầu ra trước khi tạo object}{34}{subsection.4.5.1}%
+\contentsline {subsection}{\numberline {4.5.2}Hậu xử lý dưới dạng phép toán có thể kết hợp}{35}{subsection.4.5.2}%
+\contentsline {section}{\numberline {4.6}Kiểm chứng thư viện và công cụ thực nghiệm}{35}{section.4.6}%
+\contentsline {subsection}{\numberline {4.6.1}Kiểm thử phần mềm hiện có}{35}{subsection.4.6.1}%
+\contentsline {subsection}{\numberline {4.6.2}Kiểm tra metric và tính nhất quán phép đo}{35}{subsection.4.6.2}%
+\contentsline {chapter}{\numberline {5}Thực Nghiệm Và Đánh Giá}{37}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Mục tiêu và nguyên tắc thực nghiệm}{37}{section.5.1}%
+\contentsline {section}{\numberline {5.2}Dữ liệu và cách chọn mẫu}{37}{section.5.2}%
+\contentsline {subsection}{\numberline {5.2.1}Nguồn dữ liệu và manifest}{37}{subsection.5.2.1}%
+\contentsline {subsection}{\numberline {5.2.2}Phân bố và hệ quả khi diễn giải}{39}{subsection.5.2.2}%
+\contentsline {section}{\numberline {5.3}Môi trường và cấu hình mô hình}{40}{section.5.3}%
+\contentsline {subsection}{\numberline {5.3.1}Phần cứng và phần mềm}{40}{subsection.5.3.1}%
+\contentsline {subsection}{\numberline {5.3.2}Checkpoint và tham số}{40}{subsection.5.3.2}%
+\contentsline {section}{\numberline {5.4}Kết quả kiểm thử thư viện}{41}{section.5.4}%
+\contentsline {section}{\numberline {5.5}Chất lượng phát hiện trên 500 ảnh}{42}{section.5.5}%
+\contentsline {subsection}{\numberline {5.5.1}AP tổng hợp và precision--recall}{42}{subsection.5.5.1}%
+\contentsline {subsection}{\numberline {5.5.2}Điểm làm việc tại confidence 0,25}{43}{subsection.5.5.2}%
+\contentsline {subsection}{\numberline {5.5.3}Kết quả theo kích thước vật thể}{44}{subsection.5.5.3}%
+\contentsline {subsection}{\numberline {5.5.4}Khác biệt theo lớp}{45}{subsection.5.5.4}%
+\contentsline {section}{\numberline {5.6}Độ trễ và sự đánh đổi chất lượng--thời gian}{46}{section.5.6}%
+\contentsline {subsection}{\numberline {5.6.1}Thiết kế phép đo}{46}{subsection.5.6.1}%
+\contentsline {subsection}{\numberline {5.6.2}Chi phí của lớp điều phối predict}{47}{subsection.5.6.2}%
+\contentsline {section}{\numberline {5.7}Phân tích trường hợp thành công và lỗi}{49}{section.5.7}%
+\contentsline {section}{\numberline {5.8}Giới hạn và các mối đe dọa tới tính hợp lệ}{53}{section.5.8}%
+\contentsline {section}{\numberline {5.9}Thực nghiệm mining và kiểm chứng dữ liệu xuất}{53}{section.5.9}%
+\contentsline {subsection}{\numberline {5.9.1}Từ export annotation đến bộ dữ liệu huấn luyện}{56}{subsection.5.9.1}%
+\contentsline {section}{\numberline {5.10}Fine-tune trên dữ liệu được tuyển chọn}{56}{section.5.10}%
+\contentsline {section}{\numberline {5.11}Benchmark framework gốc và các chế độ Klygo}{58}{section.5.11}%
+\contentsline {section}{\numberline {5.12}Ảnh hưởng của worker và prefetch}{60}{section.5.12}%
+\contentsline {chapter}{\numberline {6}Minh Chứng Sản Phẩm Và Hướng Dẫn Sử Dụng}{63}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Cài đặt và chuẩn bị}{63}{section.6.1}%
+\contentsline {section}{\numberline {6.2}Pipeline phát hiện một ảnh}{63}{section.6.2}%
+\contentsline {section}{\numberline {6.3}Minh họa trace và khôi phục tọa độ}{65}{section.6.3}%
+\contentsline {section}{\numberline {6.4}Suy luận theo stream hữu hạn}{65}{section.6.4}%
+\contentsline {section}{\numberline {6.5}Các tình huống lỗi cần xử lý}{66}{section.6.5}%
+\contentsline {section}{\numberline {6.6}Tạo bộ dữ liệu bằng mining}{67}{section.6.6}%
+\contentsline {chapter}{\numberline {7}Kết Luận Và Hướng Phát Triển}{68}{chapter.7}%
+\contentsline {section}{\numberline {7.1}Kết quả đạt được}{68}{section.7.1}%
+\contentsline {section}{\numberline {7.2}Trả lời các câu hỏi nghiên cứu}{68}{section.7.2}%
+\contentsline {section}{\numberline {7.3}Bài học từ thiết kế và thực nghiệm}{69}{section.7.3}%
+\contentsline {section}{\numberline {7.4}Hạn chế còn tồn tại}{69}{section.7.4}%
+\contentsline {section}{\numberline {7.5}Hướng phát triển theo mức ưu tiên}{70}{section.7.5}%
+\contentsline {section}{\numberline {7.6}Kết luận từ phần mở rộng}{71}{section.7.6}%
+\contentsline {chapter}{\numberline {A}Phụ Lục Tái Lập Và Đối Chiếu}{72}{chapter.A}%
+\contentsline {section}{\numberline {A.1}Cài đặt môi trường}{72}{section.A.1}%
+\contentsline {section}{\numberline {A.2}Chuẩn bị dữ liệu và checkpoint}{72}{section.A.2}%
+\contentsline {section}{\numberline {A.3}Lệnh kiểm thử và thực nghiệm}{73}{section.A.3}%
+\contentsline {section}{\numberline {A.4}Tổ chức bằng chứng}{74}{section.A.4}%
+\contentsline {section}{\numberline {A.5}Schema dự đoán và tính lại metric}{75}{section.A.5}%
+\contentsline {section}{\numberline {A.6}Các ca kiểm thử bỏ qua}{75}{section.A.6}%
+\contentsline {section}{\numberline {A.7}AP theo toàn bộ lớp COCO}{76}{section.A.7}%
+\contentsline {section}{\numberline {A.8}Biên dịch và chỉnh thông tin nhóm}{78}{section.A.8}%
+\contentsline {section}{\numberline {A.9}Tái lập phần mở rộng}{79}{section.A.9}%
+\contentsline {chapter}{TÀI LIỆU THAM KHẢO}{80}{section*.63}%

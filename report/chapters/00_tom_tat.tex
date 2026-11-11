@@ -1,0 +1,31 @@
+\chapter*{Tóm Tắt}
+\addcontentsline{toc}{chapter}{Tóm Tắt}
+
+Đồ án xây dựng một ứng dụng thuật toán trên mạng đường Hà Nội gồm hai chế độ có
+chung nền tảng đồ thị. Chế độ thứ nhất giải bài toán lập lộ trình qua nhiều địa
+điểm: Dijkstra được dùng để tính đường đi ngắn nhất giữa các điểm quan tâm,
+Held--Karp tìm thứ tự ghé tối ưu chính xác cho tối đa 10 điểm, còn láng giềng gần
+nhất và 2-opt đóng vai trò phương pháp so sánh. Hệ thống hỗ trợ ba kiểu kết thúc
+tuyến và hai hàm mục tiêu: tổng quãng đường hoặc tổng thời gian ước tính.
+
+Chế độ thứ hai mô phỏng trò chơi truy tìm theo lượt trên đồ thị. Người trốn biết
+vị trí thật của mình, trong khi máy chỉ được quan sát tập vị trí khả dĩ, dấu vết
+tiết lộ theo chu kỳ, vị trí các đội truy tìm và các lối thoát. Ba chiến thuật
+\textit{đuổi dấu vết}, \textit{tìm kiếm độc lập} và \textit{phối hợp chặn lối
+thoát} được xây dựng trên khoảng cách Dijkstra. Ranh giới thông tin được tách rõ
+trong kiểu dữ liệu quan sát nhằm ngăn thuật toán máy đọc trực tiếp trạng thái ẩn.
+
+Phiên bản được kiểm tra ngày 24/10/2026 vượt qua 112/112 ca kiểm thử. Graph định
+tuyến đóng gói chứa 350.930 nút và 864.982 cạnh. Smoke test năm địa điểm cho kết
+quả 26,276 km khi tối ưu quãng đường và 29,93 phút khi tối ưu thời gian. Benchmark
+riêng cho tầng thứ tự ghé trên 24 cấu hình cho thấy Held--Karp chỉ tốn dưới 7,2 ms
+ở giới hạn 10 điểm, trong khi láng giềng gần nhất lệch tới 19,53\% và 2-opt lệch
+tới 3,97\% so với nghiệm tối ưu. Benchmark
+trò chơi gồm 360 ván cho thấy hiệu quả chiến thuật phụ thuộc mạnh vào kiểu di
+chuyển của người trốn và cấu trúc sân; do đó báo cáo không tuyên bố một heuristic
+luôn vượt trội. Kết quả minh họa giá trị của việc kết hợp thuật toán chính xác,
+heuristic và kiểm thử bất biến trong một ứng dụng đồ thị thực tế.
+
+\textbf{Từ khóa:} đồ thị đường phố, Dijkstra, Held--Karp, bài toán người du lịch,
+pursuit--evasion, tập niềm tin, OpenStreetMap, Streamlit.
+\clearpage

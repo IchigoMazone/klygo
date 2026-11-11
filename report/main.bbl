@@ -1,0 +1,67 @@
+\begin{thebibliography}{10}
+
+\bibitem{redmon2016yolo}
+J.~Redmon, S.~Divvala, R.~Girshick, and A.~Farhadi, ``You only look once:
+  Unified, real-time object detection,'' in {\em Proceedings of the IEEE
+  Conference on Computer Vision and Pattern Recognition}, 2016.
+\newblock \url{https://arxiv.org/abs/1506.02640}.
+
+\bibitem{ultralyticsv8}
+{Ultralytics}, ``Explore {Ultralytics YOLOv8}.'' Official documentation.
+\newblock \url{https://docs.ultralytics.com/models/yolov8/}.
+
+\bibitem{ren2015faster}
+S.~Ren, K.~He, R.~Girshick, and J.~Sun, ``Faster {R-CNN}: Towards real-time
+  object detection with region proposal networks,'' in {\em Advances in Neural
+  Information Processing Systems}, 2015.
+\newblock \url{https://arxiv.org/abs/1506.01497}.
+
+\bibitem{torchvisionfaster}
+{Torchvision Contributors}, ``fasterrcnn\_mobilenet\_v3\_large\_fpn.''
+  Torchvision 0.23 documentation.
+\newblock
+  \url{https://docs.pytorch.org/vision/0.23/models/generated/torchvision.models.detection.fasterrcnn_mobilenet_v3_large_fpn.html}.
+
+\bibitem{cheng2024world}
+T.~Cheng, L.~Song, Y.~Ge, W.~Liu, X.~Wang, and Y.~Shan, ``{YOLO-World}:
+  Real-time open-vocabulary object detection,'' in {\em Proceedings of the
+  IEEE/CVF Conference on Computer Vision and Pattern Recognition}, 2024.
+\newblock \url{https://arxiv.org/abs/2401.17270}.
+
+\bibitem{cocoeval}
+{COCO Consortium}, ``{COCO API}: Python evaluation code, cocoeval.py.''
+  Official source code.
+\newblock
+  \url{https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocotools/cocoeval.py}.
+
+\bibitem{opencvKmeans}
+{OpenCV}, ``Clustering: kmeans and kmeansflags.''
+  \url{https://docs.opencv.org/4.12.0/d5/d38/group__core__cluster.html}, 2025.
+
+\bibitem{klygosource}
+{Klygo Project}, ``{Klygo}: Source code and local documentation, version
+  2.1.0,'' 2026.
+\newblock \url{https://github.com/IchigoMazone/klygo}.
+
+\bibitem{lin2014coco}
+T.-Y. Lin, M.~Maire, S.~Belongie, L.~Bourdev, R.~Girshick, J.~Hays, P.~Perona,
+  D.~Ramanan, C.~L. Zitnick, and P.~Doll{\'a}r, ``{Microsoft COCO}: Common
+  objects in context.'' arXiv:1405.0312, 2014.
+\newblock \url{https://arxiv.org/abs/1405.0312}.
+
+\bibitem{cocomirror}
+{LibreYOLO}, ``{COCO2017}: instances\_val2017.json.'' Public dataset mirror,
+  Hugging Face.
+\newblock
+  \url{https://huggingface.co/datasets/LibreYOLO/coco2017/blob/main/instances_val2017.json}.
+
+\bibitem{ultralyticsTrain}
+{Ultralytics}, ``Model training with ultralytics yolo.''
+  \url{https://docs.ultralytics.com/modes/train/}, 2026.
+
+\bibitem{pytorchversions}
+{PyTorch Contributors}, ``Previous {PyTorch} versions.'' Official installation
+  documentation.
+\newblock \url{https://pytorch.org/get-started/previous-versions/}.
+
+\end{thebibliography}

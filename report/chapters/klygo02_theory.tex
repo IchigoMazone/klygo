@@ -1,0 +1,154 @@
+\chapter{Cơ Sở Lý Thuyết}
+\label{chap:theory}
+\section{Bài toán phát hiện đối tượng}
+\subsection{Đối tượng, nhãn và độ tin cậy}
+Một bộ phát hiện đối tượng giải đồng thời hai nhiệm vụ: phân loại đối tượng và định vị vùng ảnh tương ứng. Một ảnh có thể có số đối tượng thay đổi, nên đầu ra là một tập box thay vì một vector nhãn có kích thước cố định. Điểm tin cậy do mô hình tạo ra được dùng để sắp xếp và lọc dự đoán. Điểm này không mặc nhiên là xác suất đã được hiệu chuẩn, và cùng một giá trị số có thể mang ý nghĩa khác nhau giữa hai mô hình.
+
+Nhãn tham chiếu được gọi là ground truth. Một dự đoán chỉ được coi là phát hiện đúng khi đáp ứng quy tắc so khớp về lớp và vị trí. Vì vậy, nhận đúng loại vật thể nhưng vẽ box lệch đáng kể vẫn có thể bị tính là sai. Ngược lại, nhiều box cùng bao một vật thể không tạo ra nhiều lần phát hiện đúng; cần cơ chế ghép một đối một để tránh tính trùng.
+
+Phân loại ảnh trả lời ảnh chứa loại nội dung nào. Phát hiện đối tượng bổ sung vị trí và số lượng thực thể. Phân đoạn đi xa hơn bằng cách gán nhãn cho pixel hoặc tạo mask theo từng thực thể. Klygo trong phạm vi thực nghiệm này sử dụng kết quả bounding box, vì vậy metric và hình minh họa đều được xây dựng cho bài toán detection, không suy ra chất lượng segmentation.
+
+\subsection{Các hệ biểu diễn bounding box}
+Một box dạng $xyxy$ được biểu diễn bởi tọa độ góc trái trên và góc phải dưới. Với quy ước tọa độ liên tục dùng trong đánh giá, chiều rộng và chiều cao là
+\begin{equation}
+w=x_2-x_1,\qquad h=y_2-y_1.
+\end{equation}
+Dạng $xywh$ lưu vị trí góc trái trên cùng chiều rộng và chiều cao. Dạng tâm chuẩn hóa thường gặp trong nhãn YOLO được tính bằng
+\begin{equation}
+\hat{x}_c=\frac{x_1+x_2}{2W},\quad
+\hat{y}_c=\frac{y_1+y_2}{2H},\quad
+\hat{w}=\frac{x_2-x_1}{W},\quad
+\hat{h}=\frac{y_2-y_1}{H}.
+\end{equation}
+Khi đổi ngược sang pixel, tọa độ chuẩn hóa phải nhân với đúng kích thước ảnh mà nhãn mô tả. Nếu lấy kích thước ảnh sau resize để giải mã nhãn của ảnh gốc, box có thể sai dù các giá trị đều nằm trong một khoảng hợp lệ.
+
+\begin{table}[H]\centering\small
+\caption{Hợp đồng tọa độ tại các ranh giới của thực nghiệm}
+\begin{tabularx}{\textwidth}{p{3cm}YY}
+\toprule Ranh giới & Biểu diễn & Kiểm tra quan trọng \\\midrule
+Kết quả Klygo & $[x_1,y_1,x_2,y_2]$ theo pixel ảnh gốc & Tọa độ hữu hạn, thứ tự góc hợp lệ \\
+Tệp dự đoán COCO & $[x,y,w,h]$ theo pixel ảnh gốc & $w=x_2-x_1$, $h=y_2-y_1$ \\
+Nhãn YOLO & Tâm và kích thước chuẩn hóa & Dùng đúng $W,H$ và ánh xạ lớp \\
+Ảnh tiền xử lý & Pixel sau biến đổi & Có thông tin resize, padding hoặc crop \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Đặc trưng ảnh và mô hình học sâu}
+Mạng nơ-ron tích chập học các bộ lọc để trích xuất đặc trưng cục bộ từ ảnh. Một phép tích chập tạo đáp ứng tại vị trí $(u,v)$ từ một vùng lân cận và các kênh đầu vào. Khi xếp nhiều tầng, biểu diễn có thể chuyển từ cạnh, màu và kết cấu sang các mẫu có ý nghĩa cao hơn. Trong một bộ phát hiện hiện đại, backbone tạo đặc trưng, neck kết hợp thông tin ở các mức và head sinh các dự đoán phục vụ phân loại, định vị.
+
+Độ phân giải đặc trưng ảnh hưởng đến vật thể nhỏ. Giảm kích thước ảnh làm suy luận nhẹ hơn nhưng cũng giảm số pixel mô tả vật thể. Ngược lại, tăng độ phân giải có thể giúp giữ chi tiết nhưng làm tăng thời gian và bộ nhớ. Do đó, kích thước đầu vào là một biến thực nghiệm, không chỉ là một tùy chọn triển khai. Cùng ghi ``640'' vẫn chưa bảo đảm hai framework sinh ra tensor giống hệt nhau nếu chính sách giữ tỷ lệ và padding khác nhau.
+
+Trong suy luận, mô hình được đặt ở chế độ đánh giá và tắt tính gradient. Các lựa chọn này giúp tránh lưu đồ thị gradient không cần thiết, đồng thời sử dụng hành vi phù hợp của những tầng phụ thuộc trạng thái huấn luyện. FP32 được dùng xuyên suốt thực nghiệm để hạn chế thêm một yếu tố thay đổi về độ chính xác số. Tối ưu FP16, lượng tử hóa hay biên dịch mô hình là hướng phát triển riêng, cần được đánh giá lại thay vì gộp vào kết quả hiện tại.
+
+\section{Các họ mô hình được khảo sát}
+\subsection{Phát hiện một giai đoạn và YOLOv8}
+Các mô hình một giai đoạn sinh dự đoán lớp và vị trí trực tiếp từ biểu diễn ảnh, không tổ chức một bước phân loại riêng trên từng vùng đề xuất theo cách của họ R-CNN. YOLO là một hướng tiếp cận tiêu biểu; bài báo ban đầu đặt phát hiện như bài toán hồi quy box và lớp từ toàn ảnh~\cite{redmon2016yolo}. YOLOv8 là một phiên bản phát triển sau đó của Ultralytics, có thiết kế head anchor-free và giao diện suy luận thống nhất trong thư viện này~\cite{ultralyticsv8}.
+
+Đề tài chọn biến thể nano với checkpoint \code{yolov8n.pt}. Đây là một cấu hình nhỏ, phù hợp để khảo sát trên GPU có bộ nhớ hạn chế. Tên cấu hình, checkpoint, ngưỡng và kích thước suy luận phải được ghi cùng kết quả; nhận xét về biến thể nano không đại diện cho mọi mô hình mang tên YOLOv8. Báo cáo không áp dụng trực tiếp công thức loss hoặc cấu trúc của YOLO phiên bản đầu cho YOLOv8.
+
+\subsection{Phát hiện hai giai đoạn và Faster R-CNN}
+Faster R-CNN kết hợp mạng đề xuất vùng RPN với bộ phát hiện dùng đặc trưng chia sẻ~\cite{ren2015faster}. Về mặt luồng xử lý, ảnh được trích xuất đặc trưng; các vùng có khả năng chứa vật thể được đề xuất; thông tin vùng tiếp tục phục vụ phân loại và hiệu chỉnh box. Cấu trúc này cung cấp một cách tổ chức khác với baseline một giai đoạn, tạo cơ sở khảo sát chất lượng và độ trễ trong cùng pipeline.
+
+Thực nghiệm dùng phiên bản MobileNetV3-Large FPN có sẵn trong Torchvision, với trọng số \code{COCO\_V1}~\cite{torchvisionfaster}. Backbone và FPN là các thành phần thuộc cấu hình này; không đồng nhất nó với một Faster R-CNN dùng ResNet hoặc những mô hình có backbone khác. Nhóm đặt lại giới hạn resize và ngưỡng hậu xử lý theo thiết kế thực nghiệm, nên kết quả cũng không phải là bản tái lập nguyên trạng các con số model zoo.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[node distance=0.65cm,>=Stealth,every node/.style={font=\small},box/.style={draw,rounded corners,align=center,minimum height=1.5cm,text width=2.65cm,inner sep=5pt}]
+\node[box] (i) {Ảnh đầu vào};
+\node[above=0.25cm of i.north,anchor=south west,xshift=-1.5cm,font=\small\bfseries] {Một giai đoạn};
+\node[box,right=of i] (b) {Backbone\\và neck};
+\node[box,right=of b] (h) {Head dự đoán\\box và lớp};
+\node[box,right=of h] (n) {Hậu xử lý\\và kết quả};
+\draw[->] (i)--(b);\draw[->] (b)--(h);\draw[->] (h)--(n);
+\node[box,below=1.1cm of i] (i2) {Ảnh đầu vào};
+\node[above=0.25cm of i2.north,anchor=south west,xshift=-1.5cm,font=\small\bfseries] {Hai giai đoạn};
+\node[box,right=of i2] (b2) {Đặc trưng\\và RPN};
+\node[box,right=of b2] (h2) {Đặc trưng vùng\\và phân loại};
+\node[box,right=of h2] (n2) {Hiệu chỉnh box\\và hậu xử lý};
+\draw[->] (i2)--(b2);\draw[->] (b2)--(h2);\draw[->] (h2)--(n2);
+\end{tikzpicture}
+\caption{Sơ đồ khái niệm một giai đoạn và hai giai đoạn. Hình do nhóm dựng để giải thích luồng xử lý; không mô tả đầy đủ các tầng của từng mạng.}
+\end{figure}
+
+\subsection{YOLO-World và từ vựng mở}
+YOLO-World kết hợp thông tin thị giác và ngôn ngữ để mở rộng phát hiện theo từ vựng~\cite{cheng2024world}. Thay vì chỉ diễn giải lớp bằng chỉ số cố định, hệ thống có thể gắn dự đoán với các mô tả văn bản. Điều này làm phát sinh thêm hợp đồng về prompt, thứ tự vocabulary và ánh xạ kết quả. Một thay đổi prompt có thể thay đổi ý nghĩa của cùng một chỉ số lớp trong lần suy luận tiếp theo.
+
+Trong Klygo, adapter YOLO-World giữ vocabulary gốc của checkpoint, đồng thời cập nhật vocabulary khi nhận prompt. Thực nghiệm chính dùng \code{yolov8s-worldv2.pt} với vocabulary COCO của checkpoint, không tạo prompt từ các vật thể đã biết trong từng ảnh. Cách làm này tránh việc vô tình đưa thông tin ground truth của ảnh vào đầu vào mô hình. Muốn đánh giá năng lực từ vựng mở trên lớp mới, cần thiết kế riêng tập lớp và kiểm tra dữ liệu tiền huấn luyện; đó là phạm vi chưa được thực hiện ở đây.
+
+\section{Tiền xử lý và biến đổi tọa độ}
+\subsection{Resize, padding và letterbox}
+Với ảnh gốc $W\times H$ và khung đích $W_t\times H_t$, letterbox giữ tỷ lệ bằng hệ số
+\begin{equation}
+r=\min\left(\frac{W_t}{W},\frac{H_t}{H}\right).
+\end{equation}
+Gọi $(p_x,p_y)$ là padding ở trái và trên. Một điểm chuyển sang ảnh đã xử lý theo $x'=rx+p_x$, $y'=ry+p_y$. Khôi phục điểm sử dụng phép biến đổi ngược
+\begin{formulabox}[title={Khôi phục tọa độ sau letterbox}]
+\begin{equation}
+x=\frac{x'-p_x}{r},\qquad y=\frac{y'-p_y}{r}.
+\end{equation}
+\end{formulabox}
+Công thức phải dùng padding thực tế đã áp dụng, kể cả ảnh có kích thước lẻ hoặc phép làm tròn. Dùng padding lý thuyết tính lại sau suy luận có thể tạo sai số. Với resize không giữ tỷ lệ, hai hệ số $r_x,r_y$ khác nhau và phải được xử lý riêng.
+
+\subsection{Chuỗi phép biến đổi và giới hạn khôi phục}
+Nếu chuỗi biến đổi là $T_k\circ\cdots\circ T_1$, thứ tự hoàn tác hình học là $T_1^{-1}\circ\cdots\circ T_k^{-1}$ trên kết quả. Trong cài đặt, có thể duyệt trace theo chiều ngược để khôi phục từng bước. Những phép như thay đổi sáng hoặc tương phản không đổi tọa độ; phép resize, crop, padding, flip hoặc rotate cần thông tin hình học.
+
+Không phải mọi mất mát đều có thể hoàn tác. Crop loại bỏ nội dung ngoài khung; khôi phục tọa độ chỉ đưa một box quan sát được về vị trí trong ảnh gốc, không tái tạo các vật thể đã bị cắt khỏi đầu vào. Với phép quay hoặc phối cảnh, biểu diễn bằng box trục song song có thể bao một vùng lớn hơn hình chiếu chính xác. Vì vậy, ``khôi phục box'' cần được hiểu theo hợp đồng của phép biến đổi và loại hình học đầu ra, không phải cam kết khôi phục mọi thông tin của ảnh.
+
+\section{IoU và hậu xử lý dự đoán}
+\subsection{Intersection over Union}
+IoU giữa hai box $A$ và $B$ được tính bằng
+\begin{equation}
+\operatorname{IoU}(A,B)=\frac{|A\cap B|}{|A|+|B|-|A\cap B|}.
+\end{equation}
+Nếu hai box không giao nhau, diện tích giao bằng không. Khi box trùng nhau hoàn toàn và có diện tích dương, IoU bằng một. IoU không phụ thuộc trực tiếp nhãn lớp; phần đánh giá phải áp dụng thêm quy tắc cùng lớp. Việc tăng ngưỡng IoU khiến yêu cầu định vị chặt hơn, vì vậy AP50 và AP75 giúp quan sát những mức độ chính xác vị trí khác nhau.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[scale=0.9]
+\filldraw[fill=blue!15,draw=blue!70!black,thick] (0,0) rectangle (5,3);
+\filldraw[fill=orange!20,fill opacity=0.65,draw=orange!80!black,thick] (2,1) rectangle (6,4);
+\fill[teal!35,opacity=0.7] (2,1) rectangle (5,3);
+\node at (1,0.7) {$A$};\node at (5.4,3.5) {$B$};\node at (3.5,2) {$A\cap B$};
+\node[align=left,right] at (7,2) {Diện tích $A$: $15$\\Diện tích $B$: $12$\\Giao: $6$; hợp: $21$\\$\operatorname{IoU}=6/21\approx0{,}286$};
+\end{tikzpicture}
+\caption{Minh họa cách tính IoU trên hai hình chữ nhật. Đây là ví dụ hình học, không phải số liệu dự đoán của mô hình.}
+\end{figure}
+
+\subsection{Ngưỡng tin cậy và NMS}
+Lọc confidence giữ các dự đoán có $s_i\geq\tau$. Tăng $\tau$ thường giảm số dự đoán được giữ, nhưng tác động lên Precision, Recall và F1 phụ thuộc phân bố điểm của mô hình. Không nên dùng một ngưỡng cao để loại dự đoán trước khi tính đường cong PR, vì các dự đoán điểm thấp vẫn có thể góp phần vào độ bao phủ khi xét những mức ngưỡng khác nhau.
+
+NMS sắp dự đoán theo điểm giảm dần, chọn box có điểm cao và loại các box còn lại chồng lấn vượt ngưỡng. Với NMS theo lớp, chỉ các box cùng lớp mới được so sánh để loại trùng. Với NMS không phân biệt lớp, các box khác lớp cũng có thể triệt tiêu nhau. Hai lựa chọn này có hệ quả khác nhau khi hai vật thể chồng lấn hoặc mô hình gán nhiều nhãn cho cùng một vùng.
+
+Một cài đặt NMS đơn giản có thể cần $O(n^2)$ phép so sánh IoU trong trường hợp xấu. Framework có thể sử dụng kernel tối ưu, nhưng kết quả vẫn phụ thuộc các tham số như score threshold, IoU threshold và giới hạn số box. Trong thực nghiệm chính, NMS của backend được giữ trong pipeline, và không thêm một lần NMS Klygo nữa sau đó. Điều này tránh thay đổi dự đoán do hậu xử lý lặp.
+
+\section{Chỉ số đánh giá chất lượng}
+\subsection{TP, FP, FN và điểm làm việc}
+Ở một ngưỡng IoU và confidence đã xác định, TP là dự đoán khớp một ground truth hợp lệ; FP là dự đoán không khớp và không thuộc diện bỏ qua; FN là ground truth hợp lệ chưa được khớp. Với ghép một đối một, một ground truth thông thường chỉ đóng góp tối đa một TP. Từ các số đếm,
+\begin{equation}
+P=\frac{TP}{TP+FP},\qquad R=\frac{TP}{TP+FN},\qquad
+F_1=\frac{2PR}{P+R}.
+\end{equation}
+Báo cáo quy ước trả không khi mẫu số bằng không cho các chỉ số điểm làm việc. Precision phản ánh tỷ lệ đúng trong những dự đoán được giữ; Recall phản ánh tỷ lệ ground truth được tìm thấy. F1 là trung bình điều hòa, có ích khi cần một số tóm tắt tại đúng một cấu hình ngưỡng.
+
+Micro aggregation cộng TP, FP, FN qua các lớp rồi tính chỉ số. Macro aggregation tính chỉ số từng lớp rồi lấy trung bình trên những lớp đủ điều kiện. Micro có thể chịu ảnh hưởng mạnh từ lớp phổ biến; macro thể hiện vai trò của mỗi lớp rõ hơn nhưng cũng nhạy với lớp có ít mẫu. Không được so trực tiếp F1 micro với AP macro như thể chúng đo cùng một đại lượng.
+
+\subsection{Đường cong PR và Average Precision}
+Khi xét dự đoán theo điểm giảm dần, mỗi mức confidence tạo một cặp precision--recall. AP tóm tắt đường cong đó. Trong quy trình COCO, precision được nội suy tại 101 mức recall và đánh giá trên các ngưỡng IoU từ 0,50 đến 0,95, bước 0,05~\cite{cocoeval}. Có thể biểu diễn phần lấy trung bình bằng
+\begin{equation}
+\mathrm{AP}=\frac{1}{|\mathcal{T}|\,|\mathcal{C}_{+}|}
+\sum_{t\in\mathcal{T}}\sum_{c\in\mathcal{C}_{+}}
+\frac{1}{101}\sum_{r\in\{0,0.01,\ldots,1\}}\bar{p}_{t,c}(r),
+\end{equation}
+trong đó $\mathcal{T}$ là tập ngưỡng IoU, $\mathcal{C}_{+}$ gồm các lớp có ground truth hợp lệ trong phạm vi đánh giá, và $\bar{p}$ là precision nội suy. Khi chỉ xét $t=0{,}50$ ta thu được AP50. Chỉ số AP trong báo cáo chính là AP@[0.50:0.95] cho box, với diện tích all và maxDets bằng 100.
+
+COCO có quy tắc riêng cho annotation crowd và đối tượng nằm ngoài khoảng diện tích đang đánh giá. Mã thực nghiệm dùng trực tiếp COCOeval thay vì tự thay thế các quy tắc đó bằng một vòng ghép đơn giản. Đối với P/R/F1 tại confidence 0,25, nhóm lấy trạng thái match và ignore từ cùng công cụ để duy trì cách xử lý nhất quán. Số lớp có hỗ trợ và số annotation hợp lệ phải được công bố khi đánh giá một tập con.
+
+\section{Lazy loading, batch, stream và thời gian xử lý}
+Lazy loading trì hoãn giải mã hoặc chuyển đổi dữ liệu; streaming cho phép tiêu thụ nguồn từng phần. Một nguồn lazy vẫn có thể bị materialize toàn bộ ở bước sau, nên hiệu quả bộ nhớ phải được xét theo toàn luồng xử lý.
+
+Batching nhóm nhiều ảnh trong một lần gọi, có thể tăng hiệu suất thiết bị và nhu cầu bộ nhớ. Với video, \code{vid\_stride} thay đổi số frame được lấy mẫu. Khi so FPS, cần công bố batch, phạm vi dữ liệu và timer.
+
+GPU thực thi nhiều phép toán theo hàng đợi bất đồng bộ. Nếu chỉ đo thời gian CPU phát lệnh mà không đồng bộ thiết bị, số đo có thể chưa bao gồm thời gian tính toán thực tế. Thực nghiệm vì vậy đặt điểm đồng bộ trước và sau vùng đo. Warm-up được thực hiện trước để giảm ảnh hưởng khởi tạo; thời gian nạp checkpoint và tải dữ liệu không được trộn vào timer suy luận.
+
+Với thời gian $t_i$ của $m$ ảnh tính bằng mili giây, $\bar{t}=\frac{1}{m}\sum_i t_i$ và $\mathrm{FPS}_{seq}=1000/\bar{t}$ cho xử lý tuần tự batch một. Báo cáo bổ sung trung vị, phân vị 90 và thời gian từng lượt. Lặp trên cùng ảnh không làm tăng số mẫu dữ liệu độc lập.
+
+\input{chapters/klygo02_mining}

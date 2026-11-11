@@ -1,0 +1,141 @@
+\appendix
+\titleformat{\chapter}[display]
+  {\normalfont\bfseries\centering\fontsize{16pt}{20pt}\selectfont}
+  {PHỤ LỤC \thechapter}{8pt}{\fontsize{16pt}{20pt}\selectfont\MakeUppercase}
+\chapter{Phụ Lục Tái Lập Và Đối Chiếu}
+\label{chap:appendix}
+\section{Cài đặt môi trường}
+Các lệnh chạy từ workspace chứa \code{klygo/} và \code{report/}. Môi trường thực nghiệm dùng Python 3.11.9. Cần cài cặp PyTorch/Torchvision phù hợp với thiết bị trước danh sách phụ thuộc đã khóa; cài CUDA wheel không thay thế driver GPU hệ thống.
+\begin{lstlisting}[language={},caption={Tạo môi trường riêng và cài đặt phụ thuộc}]
+py -3.11 -m venv .venv-report
+.venv-report\Scripts\python.exe -m pip install --upgrade pip
+.venv-report\Scripts\python.exe -m pip install torch==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu126
+.venv-report\Scripts\python.exe -m pip install -r report\experiments\requirements.lock.txt
+.venv-report\Scripts\python.exe -m pip install -e .\klygo
+.venv-report\Scripts\python.exe -m pip check
+\end{lstlisting}
+Tệp khóa phiên bản ghi các phụ thuộc của môi trường đã sử dụng. Klygo editable được cài riêng để tránh cố định đường dẫn tuyệt đối của máy thí nghiệm. Tiện ích đọc PDF phục vụ kiểm tra báo cáo có thể có trong bản xuất môi trường, nhưng không tham gia timer suy luận.
+
+\section{Chuẩn bị dữ liệu và checkpoint}
+\begin{lstlisting}[language={},caption={Tải mẫu ảnh cố định và checkpoint công khai}]
+.venv-report\Scripts\python.exe -u report\experiments\prepare_coco.py --image-limit 0 --annotation-json-url https://huggingface.co/datasets/LibreYOLO/coco2017/resolve/main/instances_val2017.json
+.venv-report\Scripts\python.exe -X utf8 -u report\experiments\run_pilot.py --prepare-weights
+\end{lstlisting}
+Script tạo manifest với seed 20261105 và lưu thứ tự 500 image ID. Khi manifest đã tồn tại, nó kiểm tra seed, số mẫu, danh sách ID và checksum annotation để tránh thay đổi tập ảnh ngoài ý muốn. Mỗi ảnh được tải xong mới nhận tên chính thức; tệp tải dở có hậu tố riêng. SHA-256 từng ảnh được lưu trong manifest.
+
+Checkpoint YOLO lấy từ release assets của Ultralytics; Faster R-CNN lấy từ kho trọng số Torchvision. Nguồn đầy đủ được lưu trong \code{configuration.json}. Các checksum định danh đúng tệp được dùng, không chỉ dựa trên tên tệp. SHA-256 của annotation là:
+\begin{center}\footnotesize\ttfamily
+e8c7f7908f1d7278341fae127d0da654f\\
+102f11bd7b21d8aeefa635b8c810b6f
+\end{center}
+\begin{table}[H]\centering\footnotesize
+\caption{SHA-256 của ba checkpoint; mỗi hash được chia hai dòng}
+\input{generated/checksums}
+\end{table}
+
+\section{Lệnh kiểm thử và thực nghiệm}
+\label{sec:reproduce}
+\begin{lstlisting}[language={},caption={Các lệnh dùng cho kết quả báo cáo}]
+.venv-report\Scripts\python.exe -X utf8 report\experiments\check_library.py
+.venv-report\Scripts\python.exe -X utf8 report\experiments\test_evaluation.py
+.venv-report\Scripts\python.exe -X utf8 -u report\experiments\run_main.py
+.venv-report\Scripts\python.exe -X utf8 report\experiments\demo_klygo.py
+.venv-report\Scripts\python.exe -X utf8 report\experiments\build_report_assets.py
+\end{lstlisting}
+\code{run\_main.py} không ghi đè bộ số liệu thời gian đã hoàn tất. Khi chạy mới, nên dùng workspace riêng hoặc một run directory được chỉ định rõ trong mã, giữ nguyên bằng chứng cũ. Nếu đã có dự đoán và metric, có thể sinh lại bảng và hình mà không chạy model một lần nữa.
+
+Audit được chạy từ repository Klygo bằng công cụ \code{.agents/skills/klygo-module-guides/scripts/audit\_public\_api.py --all}. Log và lý do skip nằm trong \code{artifacts/report/logs}. Ba test metric thuộc công cụ báo cáo, không được cộng vào tổng 360 ca hiện có của thư viện.
+
+\section{Tổ chức bằng chứng}
+\begin{lstlisting}[language={},caption={Các tệp bằng chứng chính trong artifacts/report}]
+data/
+  manifest.json
+  instances_val2017.json
+  instances_sample.json
+  images/
+weights/
+pilot/{yolo,world,faster}/
+main/{yolo,world,faster}/
+  environment.json
+  configuration.json
+  predictions.json
+  latencies.json
+  metrics.json
+  diagnostics.json
+  cocoeval.txt
+  timing_controlled/
+    paired_timing.json
+    timing_summary.json
+demo/
+  prediction.png
+  verification.json
+logs/
+  unittest.log
+  unittest_summary.json
+  api_audit.log
+  main_run.log
+  controlled_timing.log
+\end{lstlisting}
+\code{latencies.json} ở thư mục model là thời gian một lượt tạo dự đoán trên 500 ảnh. Bảng thời gian chính lấy từ \code{timing\_controlled}, gồm 100 ảnh và ba lượt đo cặp. Hai tập thời gian có mục đích khác nhau; không ghép chúng để tính trung bình chung.
+
+\code{diagnostics.json} chứa AP theo lớp, đường precision nội suy tại IoU 0,50 và số đếm theo ảnh tại confidence 0,25. \code{summary.json} trong generated tổng hợp dữ liệu cho phần soạn báo cáo. Bảng LaTeX và biểu đồ được tạo từ những bằng chứng này để giảm sai số nhập tay.
+
+\section{Schema dự đoán và tính lại metric}
+Dự đoán theo COCO gồm image ID, category ID gốc, box $xywh$ và score. Giá trị được lấy sau chuẩn hóa Klygo, đã chịu quy tắc làm tròn của builder.
+\begin{lstlisting}[language={},caption={Schema minh họa; giá trị bên dưới chỉ giải thích trường}]
+{
+  "image_id": 125778,
+  "category_id": 1,
+  "bbox": [10.0, 20.0, 100.0, 120.0],
+  "score": 0.75
+}
+\end{lstlisting}
+Ví dụ không được dùng như kết quả đo thật của ảnh đó. Để tính lại, nạp annotation, tệp dự đoán và danh sách image ID, đặt \code{iouType="bbox"}, rồi chạy evaluate, accumulate và summarize của COCOeval. Không dùng class ID liên tiếp của model thay category ID COCO nếu chưa đổi ánh xạ đúng cho cả nhãn và dự đoán.
+
+\section{Các ca kiểm thử bỏ qua}
+\begin{table}[H]\centering\small
+\caption{Bảy ca skip trong suite gốc và lý do}
+\begin{tabularx}{\textwidth}{p{4.4cm}p{1.1cm}Y}
+\toprule Nhóm & Số ca & Lý do \\\midrule
+COCO15: nguồn và 15 lớp & 1 & Chưa sinh dataset từ archive được ghim \\
+COCO15: đọc toàn bộ ảnh & 1 & Cùng điều kiện dataset chưa được chuẩn bị \\
+COCO15: bundle tái lập & 1 & Chưa tạo bundle theo workflow tương ứng \\
+Checkpoint YOLO, YOLO-World & 2 & Chưa đặt biến môi trường cho test opt-in; đã có phép chạy thật riêng trong báo cáo \\
+Grounding DINO, Locate Anything & 2 & Chưa cấu hình checkpoint thật; không thuộc phép đo chính \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\clearpage
+\section{AP theo toàn bộ lớp COCO}
+\input{generated/classes_all}
+``--'' nghĩa là không có ground truth hợp lệ để xác định AP của lớp trong mẫu. Giá trị 0 khác với không xác định: lớp có GT nhưng chưa có kết quả tích lũy đúng theo quy tắc đánh giá. Các lớp có ít GT cần được diễn giải cùng quy mô hỗ trợ.
+
+\section{Biên dịch và chỉnh thông tin nhóm}
+Thư mục report dùng XeLaTeX để hỗ trợ Unicode tiếng Việt, phông TeX Gyre Termes và BibTeX cho tài liệu tham khảo. Có thể chọn XeLaTeX trên Overleaf hoặc dùng MiKTeX/TeX Live ở máy cục bộ.
+\begin{lstlisting}[language={},caption={Biên dịch thủ công trong thư mục report}]
+xelatex -interaction=nonstopmode -halt-on-error main.tex
+bibtex main
+xelatex -interaction=nonstopmode -halt-on-error main.tex
+xelatex -interaction=nonstopmode -halt-on-error main.tex
+\end{lstlisting}
+Tên đề tài, tên môn, giảng viên và ba dòng thành viên là macro ở đầu \code{main.tex}. Khi chốt họ tên, MSSV và phân công, nhóm cập nhật các macro cùng bảng phân công. Ngày tháng trên bìa là tháng biên soạn, không thay một hạn nộp chính thức chưa được cung cấp.
+
+\section{Tái lập phần mở rộng}
+Mã nguồn mở rộng được cố định bằng commit
+\begin{center}\small\texttt{c4388f10bba7cf5ff02b9ebc4aa217b9f740e759}\end{center}
+Snapshot nằm tại \code{tmp/klygo-c4388f1}; checkout nền tảng giữ nguyên. Tạo snapshot từ bản Git có commit này bằng \code{git archive}, giải nén vào thư mục trên, sau đó chạy theo thứ tự:
+\begin{lstlisting}[language={},caption={Lệnh tái lập mining, huấn luyện và benchmark}]
+python report/experiments/run_mining_extension.py
+python report/experiments/prepare_training_canonical.py
+python report/experiments/benchmark_execution.py
+python report/experiments/run_scheduling_study.py
+python report/experiments/train_mining_extension.py
+python report/experiments/check_extension.py
+python report/experiments/build_extension_assets.py
+python report/experiments/build_scheduling_assets.py
+\end{lstlisting}
+Không chạy train đồng thời với benchmark suy luận. Dữ liệu, cấu hình, manifest tuyển chọn, bảng đo, dự đoán đối chiếu và kết quả theo seed được lưu dưới \code{klygo/artifacts/report/extension}. Script không ghi đè các kết quả mining đã hoàn tất; các lượt benchmark/train đã có JSON được bỏ qua khi tiếp tục. Muốn thực nghiệm cấu hình mới cần thư mục kết quả mới.
+
+\input{generated/extension_checks}
+

@@ -1,0 +1,29 @@
+\section{Khai phá và tuyển chọn dữ liệu huấn luyện}
+Trong báo cáo này, mining là quá trình phân tích và tuyển chọn các ảnh đã có để tạo bộ dữ liệu phục vụ huấn luyện. Đơn vị lựa chọn là một ảnh cùng toàn bộ bounding box của ảnh đó. Mining không mặc nhiên sinh ảnh mới, sửa nhãn hoặc thực hiện active learning. Khi đầu vào là nhãn do detector tạo ra, nhãn đó là pseudo-label và cần đánh giá chất lượng riêng; thực nghiệm trong báo cáo dùng annotation COCO do con người gán.
+
+\subsection{Phân bố nhãn, độ hiếm và cân bằng dữ liệu}
+Với tập ảnh $D=\{x_i\}_{i=1}^{N}$, gọi $L_i$ là tập lớp xuất hiện trong ảnh $i$. Tần suất theo ảnh của lớp $c$ là $n_c=\sum_i\mathbf{1}[c\in L_i]$. Tần suất theo box đếm từng đối tượng, nên một ảnh có mười người đóng góp một đơn vị cho tần suất ảnh và mười đơn vị cho tần suất box. Cần công bố cách đếm trước khi so sánh mức cân bằng.
+
+Chỉ số imbalance trong cài đặt là $\max_c n_c/\min_{c:n_c>0}n_c$, chỉ xét lớp hiện diện. Chỉ số thấp chưa đủ để kết luận tập tốt hơn: loại bỏ hoàn toàn một lớp có thể làm tỷ lệ giảm. Vì vậy báo cáo luôn trình bày kèm số lớp còn xuất hiện, số ảnh và số box. Với ảnh đa nhãn, chọn một ảnh để tăng lớp hiếm cũng có thể tăng một lớp phổ biến cùng xuất hiện.
+
+Điểm độ hiếm của một ảnh lấy trung bình nghịch đảo tần suất các lớp hiện diện, sau đó chuẩn hóa min--max giữa các ảnh. Điểm tổng hợp mặc định của Klygo có dạng
+\begin{equation}
+ s_i=0{,}4q_i+0{,}3r_i+0{,}2c_i+0{,}1b_i,
+\end{equation}
+trong đó $q_i$ là điểm chất lượng ảnh, $r_i$ là độ hiếm đã chuẩn hóa, $c_i=|L_i|/C$ là tỷ lệ lớp xuất hiện và $b_i$ là số box chuẩn hóa. Chất lượng ảnh tổng hợp độ sắc nét, tương phản, entropy, mức nhiễu đảo chiều và phơi sáng. Đây là heuristic lựa chọn, không phải xác suất một ảnh sẽ cải thiện AP sau huấn luyện.
+
+\subsection{Cluster và lựa chọn theo tính đa dạng}
+Cluster là một nhóm ảnh gần nhau trong không gian đặc trưng đã xác định. Nhóm hình thành từ màu sắc và kết cấu không nhất thiết tương ứng một lớp ngữ nghĩa như người hay xe. Trong phiên bản mở rộng, đặc trưng mặc định gồm histogram HSV, histogram hướng gradient, chất lượng ảnh, thống kê box và sự hiện diện của lớp. Mỗi chiều được chuẩn hóa bằng trung bình và độ lệch chuẩn của tập đang phân cụm; chiều không biến thiên dùng mẫu số bằng một.
+
+K-means tìm các tâm $\mu_k$ và phép gán cụm $z_i$ nhằm giảm tổng khoảng cách bình phương:
+\begin{equation}
+ J=\sum_{i=1}^{N}\|\widetilde{\mathbf{x}}_i-\mu_{z_i}\|_2^2.
+\end{equation}
+Cài đặt gọi OpenCV với khởi tạo K-means++, tối đa 100 vòng, ngưỡng dừng $10^{-4}$ và một lần khởi tạo \citep{opencvKmeans}. Ảnh gần tâm nhất trong mỗi cụm được dùng làm đại diện. Giá trị $K$ quyết định độ phân giải của phân nhóm, không phải số lớp đối tượng.
+
+Đối chiếu vòng lặp đặc trưng cho thấy histogram hướng gradient gồm $8\times8$ ô, mỗi ô chín bin, tức 576 chiều; không phải 72 chiều như một số chú thích trong mã. Histogram HSV có 64 chiều, chất lượng có sáu chiều, thống kê box có ba chiều và vector lớp có $C$ chiều. Tập mining có 77 lớp hiện diện nên vector thực nghiệm có 726 chiều. Chuẩn hóa từng chiều không cân bằng tổng trọng số giữa các nhóm đặc trưng; nhóm có nhiều chiều vẫn có thể ảnh hưởng mạnh hơn đến khoảng cách. Do đó phân cụm ở đây là một lựa chọn kỹ thuật cần kiểm chứng bằng kết quả, không phải bảo đảm đa dạng ngữ nghĩa tối ưu.
+
+\subsection{Đánh giá phương pháp chọn dữ liệu}
+Đánh giá công cụ bao gồm thời gian lựa chọn, thời gian tạo bộ dữ liệu, phân bố nhãn và khả năng đọc lại dữ liệu đã xuất. Đánh giá tác động đến học máy cần huấn luyện cùng kiến trúc và khởi tạo trên các tập được chọn, rồi đo trên một tập giữ riêng. Random cùng số ảnh là đối chứng cho hiệu quả lựa chọn; full-data là đối chứng khi dùng toàn bộ tập train của thực nghiệm.
+
+Ngân sách cùng epoch và cùng số lần cập nhật trả lời hai câu hỏi khác nhau. Với cùng epoch, tập ít ảnh có ít bước tối ưu hơn và thường giảm thời gian. Với cùng số bước, mỗi ảnh trong tập nhỏ được lặp lại nhiều hơn. Báo cáo chọn cùng epoch và công bố giới hạn này; không suy ra ưu thế về khả năng học từ đầu khi các mô hình đều khởi tạo từ checkpoint pretrained.

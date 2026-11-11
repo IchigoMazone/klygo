@@ -1,0 +1,52 @@
+\section{Worker, prefetch và điều phối chuẩn bị batch}
+\label{sec:worker-prefetch}
+Revision mở rộng dùng \code{ThreadPoolExecutor} để giải mã/materialize ảnh trước khi gọi adapter. \code{workers} đặt số luồng tối đa của executor; đây là worker chuẩn bị ảnh trong Klygo, khác với worker DataLoader khi huấn luyện. Nó không tạo nhiều bản sao mô hình hay nhiều lời gọi GPU inference chạy đồng thời.
+
+\code{prefetch} đặt số batch được đưa vào hàng đợi Future ở bước nạp trước. Mỗi batch chứa tối đa \code{batch} ảnh; một Future chuẩn bị một ảnh. Khi batch đầu hàng đợi sẵn sàng, chương trình lấy kết quả theo thứ tự nguồn, đưa batch tiếp theo vào hàng đợi rồi nhường batch hiện tại cho vòng suy luận. Nhờ đó, luồng chuẩn bị có thể làm việc trong lúc mô hình xử lý batch hiện tại. Worker hoàn thành khác thứ tự không làm thay đổi thứ tự đầu ra.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[x=.95cm,y=.75cm,>=Stealth,every node/.style={font=\small}]
+\node[anchor=west,font=\small\bfseries] at (0,1.1) {Chuẩn bị tuần tự};
+\node[anchor=east] at (-.25,.3) {CPU};
+\node[anchor=east] at (-.25,-.5) {GPU};
+\foreach \a/\b/\lab in {0/1/D0,3/4/D1,6/7/D2}{
+  \draw[fill=blue!12] (\a,0) rectangle (\b,.6);
+  \node at ({(\a+\b)/2},.3) {\lab};
+}
+\foreach \a/\b/\lab in {1/3/I0,4/6/I1,7/9/I2}{
+  \draw[fill=teal!18] (\a,-.8) rectangle (\b,-.2);
+  \node at ({(\a+\b)/2},-.5) {\lab};
+}
+\node[anchor=west,font=\small\bfseries] at (0,-2) {Chuẩn bị trước khi GPU đang xử lý};
+\node[anchor=east] at (-.25,-2.8) {CPU};
+\node[anchor=east] at (-.25,-3.6) {GPU};
+\foreach \a/\b/\lab in {0/1/D0,1/2/D1,3/4/D2}{
+  \draw[fill=blue!12] (\a,-3.1) rectangle (\b,-2.5);
+  \node at ({(\a+\b)/2},-2.8) {\lab};
+}
+\foreach \a/\b/\lab in {1/3/I0,3/5/I1,5/7/I2}{
+  \draw[fill=teal!18] (\a,-3.9) rectangle (\b,-3.3);
+  \node at ({(\a+\b)/2},-3.6) {\lab};
+}
+\draw[->] (0,-4.5)--(9.5,-4.5) node[right] {Thời gian};
+\node[anchor=west,font=\footnotesize] at (0,-5.1) {D: giải mã/chuẩn bị batch; I: suy luận và xử lý kết quả.};
+\end{tikzpicture}
+\caption{Minh họa chồng lấp chuẩn bị batch với suy luận; độ dài các đoạn là giả định giải thích, không phải số đo thực nghiệm}
+\label{fig:prefetch-timeline}
+\end{figure}
+
+Nếu \code{workers=0} hoặc \code{prefetch=0}, mã đi theo nhánh tuần tự. Nếu nguồn chỉ có một batch, cài đặt cũng chuẩn bị trực tiếp để tránh tạo executor không cần thiết. Với nhiều batch, tăng worker có thể giúp khi phần giải mã là nút thắt; tăng prefetch cho phép chuẩn bị xa hơn nhưng không tự làm GPU chạy nhanh hơn. Khi inference đã chiếm phần lớn thời gian, các giá trị lớn có thể chỉ bổ sung chi phí điều phối và giữ thêm pixel trong RAM.
+
+Giới hạn prefetch chỉ áp dụng hàng đợi chuẩn bị, không phải giới hạn tổng bộ nhớ tiến trình. RAM còn chứa batch đang xử lý, nguồn ảnh, model/runtime, metadata và các kết quả người gọi giữ lại. Managed non-stream vẫn tích lũy collection đầu ra, còn Managed stream cho phép người gọi tiêu thụ rồi giải phóng từng frame. Ở native, Klygo không dùng executor này để đọc nguồn; backend sở hữu pipeline và có tham số riêng.
+
+\begin{table}[H]\centering\small
+\caption{Vai trò và sự đánh đổi của các điều khiển chuẩn bị dữ liệu}
+\begin{tabularx}{\textwidth}{p{2.2cm}YY}
+\toprule Tham số & Tác động trực tiếp & Giới hạn cần kiểm chứng \\\midrule
+batch & Số ảnh mỗi lần gọi adapter & Tác động cả kích thước tensor và độ trễ; giữ bằng một trong phép đo bổ sung \\
+workers & Số luồng chuẩn bị ảnh tối đa & Nhiều luồng chưa chắc nhanh hơn khi decode nhẹ hoặc tài nguyên CPU đã đủ tải \\
+prefetch & Độ sâu hàng đợi theo batch & Có thể giảm chờ dữ liệu và tăng lượng ảnh đã giải mã được giữ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+Phần thực nghiệm khảo sát worker khi prefetch cố định bằng một và khảo sát prefetch khi worker cố định bằng hai. Cấu hình tuần tự là đối chứng; không chọn giá trị tối ưu chỉ từ sơ đồ minh họa.

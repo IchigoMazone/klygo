@@ -1,0 +1,204 @@
+\chapter{Thực Nghiệm Và Đánh Giá}
+\label{chap:experiments}
+\section{Mục tiêu và nguyên tắc thực nghiệm}
+Thực nghiệm được thiết kế để trả lời hai nhóm câu hỏi: thư viện có thực hiện đúng các hợp đồng phần mềm đã công bố hay không; những cấu hình mô hình cụ thể tạo ra chất lượng và độ trễ như thế nào khi được sử dụng qua Klygo. Nhóm không xem số test pass là chỉ số nhận dạng và cũng không xem một vài ảnh minh họa đẹp là bằng chứng chất lượng trên cả tập dữ liệu.
+
+Các lựa chọn chính được chốt trước khi chạy mẫu 500 ảnh: danh sách mô hình, seed chọn ảnh, FP32, batch bằng một, kích thước giới hạn 640, ngưỡng thấp để tính AP, cấu hình NMS và điểm làm việc confidence 0,25. Pilot 16 ảnh kiểm tra khả năng chạy và schema; không dùng để tìm ngưỡng tốt nhất hay loại một mô hình vì điểm thấp. Ba mô hình vượt qua pilot đều được đưa vào đánh giá chính.
+
+Mã nguồn cùng dữ liệu thí nghiệm được lưu để người đọc có thể tính lại metric mà không suy luận lại. Khi sửa lỗi kỹ thuật ở bước ghi thống kê NumPy sang JSON, nhóm giữ log ban đầu và không đổi tập ảnh hoặc tham số mô hình. Một lần đo thời gian ban đầu chưa đồng nhất inference context ở hai nhánh được giữ lại để truy vết, nhưng bảng kết quả chính dùng lần đo đã kiểm soát cùng chế độ tắt gradient.
+
+\section{Dữ liệu và cách chọn mẫu}
+\subsection{Nguồn dữ liệu và manifest}
+COCO là bộ dữ liệu về vật thể trong bối cảnh tự nhiên, phù hợp cho khảo sát phát hiện nhiều loại vật thể trong một ảnh~\cite{lin2014coco}. Thực nghiệm dùng split validation năm 2017 và annotation detection theo định dạng COCO. Do kết nối HTTP tới nguồn annotation gốc không truyền được dữ liệu trong môi trường chạy, tệp \code{instances\_val2017.json} được tải từ bản sao công khai LibreYOLO trên Hugging Face~\cite{cocomirror}. Manifest lưu URL thực tế và SHA-256 của tệp, không che giấu việc dùng mirror.
+
+Danh sách 5.000 image ID của validation được sắp tăng, sau đó lấy mẫu không hoàn lại bằng \code{random.Random(20261105).sample(ids, 500)} trên Python 3.11.9. Thứ tự được lưu trước khi suy luận. Ảnh được tải từ bucket công khai COCO qua HTTPS; mỗi tệp có checksum và được kiểm tra kích thước theo annotation. Không thay ảnh vì ít vật thể, bị che khuất hoặc cho kết quả thấp.
+
+\begin{table}[H]\centering
+\caption{Đặc điểm mẫu dữ liệu được sử dụng}
+\begin{tabularx}{\textwidth}{p{7.6cm}Y}
+\toprule Thuộc tính & Giá trị \\\midrule
+Nguồn & COCO 2017 validation \\
+Số ảnh toàn split / số ảnh đánh giá & 5.000 / 500 \\
+Seed chọn mẫu & 20261105 \\
+Tổng annotation trong mẫu & \AnnotationCount \\
+Annotation không phải crowd & \ValidGtCount \\
+Annotation crowd & \CrowdCount \\
+Số lớp định nghĩa / có GT hợp lệ trong mẫu & 80 / \SupportedClasses \\
+Nhãn dùng để tính metric & Annotation JSON với category ID COCO gốc \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Mẫu có 79 lớp được hỗ trợ bởi ground truth hợp lệ. Khi không có ground truth cho một lớp trong một cấu hình diện tích, COCOeval dùng giá trị không hợp lệ để loại nó khỏi phần trung bình tương ứng. Vì vậy, kết quả này là điểm trên mẫu 500 ảnh, không phải con số toàn bộ 5.000 ảnh hoặc điểm của một leaderboard. Trường hợp đánh giá theo kích thước cũng có thể có số lớp đủ điều kiện khác nhau.
+
+\subsection{Phân bố và hệ quả khi diễn giải}
+\begin{figure}[H]\centering
+\includegraphics[width=0.94\textwidth]{klygo/distribution.pdf}
+\caption{Hai mươi lớp có nhiều annotation không phải crowd nhất trong mẫu. Phân bố được tính trước khi xét dự đoán của mô hình.}
+\label{fig:distribution}
+\end{figure}
+Lớp person có 1.087 annotation, chiếm khoảng 31,3\% trong tổng 3.475 ground truth hợp lệ, trong khi nhiều lớp còn lại có ít mẫu hơn đáng kể. Sự lệch phân bố làm cho P/R/F1 micro chịu ảnh hưởng mạnh từ các lớp phổ biến. AP trung bình theo lớp phân bổ trọng số khác, nên thứ tự mô hình theo một chỉ số không nhất thiết hoàn toàn giống theo chỉ số khác.
+
+Các lớp ít annotation có độ nhạy cao đối với từng dự đoán đúng hoặc sai. Một lớp có AP cao trên vài vật thể không đủ để kết luận mô hình mạnh với lớp đó nói chung. Báo cáo cung cấp số GT theo lớp và bảng đầy đủ ở phụ lục để người đọc đánh giá mức hỗ trợ của mỗi nhận xét. Bộ COCO15 có trong dự án được xem là tài nguyên minh họa và kiểm thử tích hợp, không tham gia vào benchmark chính này.
+
+\section{Môi trường và cấu hình mô hình}
+\subsection{Phần cứng và phần mềm}
+\begin{table}[H]\centering\small
+\caption{Môi trường chạy thực nghiệm}
+\begin{tabularx}{\textwidth}{p{5.1cm}Y}
+\toprule Thành phần & Giá trị ghi nhận \\\midrule
+Hệ điều hành & Windows, build 22631 \\
+GPU & NVIDIA GeForce GTX 1650 Ti with Max-Q Design \\
+VRAM / RAM hệ thống & Xấp xỉ 4 GiB / 31,73 GiB \\
+Python / Klygo & 3.11.9 / 2.1.0 \\
+PyTorch / Torchvision & 2.8.0+cu126 / 0.23.0+cu126 \\
+CUDA runtime / Ultralytics & 12.6 / 8.3.228 \\
+NumPy / Pillow / pycocotools & 2.2.6 / 11.3.0 / 2.0.10 \\
+Độ chính xác số / batch & FP32 / 1 \\
+Revision source & \code{0ca8a6a77600e1caf770ae8157d2df35360ee719} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+CUDA được kiểm tra bằng phép tính tensor thực tế, không chỉ dựa trên việc tìm thấy tên GPU. Các model chạy lần lượt, mỗi lần giữ một model cho suy luận. Yếu tố xung nhịp, nhiệt độ và tải nền của máy không được khóa ở mức hệ điều hành; đây là một giới hạn khi diễn giải chênh lệch thời gian nhỏ.
+
+\subsection{Checkpoint và tham số}
+\begin{table}[H]\centering\small
+\caption{Cấu hình model và hậu xử lý trong đánh giá chính}
+\begin{tabularx}{\textwidth}{p{2.6cm}YY}
+\toprule Cấu hình & Trọng số và backend & Tham số đáng chú ý \\\midrule
+YOLOv8n & \code{yolov8n.pt}; Ultralytics & imgsz 640; conf 0,001; NMS IoU 0,7; max\_det 100 \\
+YOLO-World v2 small & \code{yolov8s-worldv2.pt}; Ultralytics & Như YOLOv8n; vocabulary COCO của checkpoint \\
+Faster R-CNN MobileNetV3-Large FPN & \code{COCO\_V1}; Torchvision & min\_size = max\_size = 640; score 0,001; NMS IoU 0,7; tối đa 100 box \\
+\bottomrule
+\end{tabularx}
+\end{table}
+Các ngưỡng số giống nhau không bảo đảm tác động giống nhau giữa các mô hình, vì confidence chưa được hiệu chuẩn chung và cấu trúc hậu xử lý khác nhau. Việc đặt min/max size cho Faster R-CNN cũng thay đổi cấu hình mặc định. Mục đích là công bố rõ một cấu hình giới hạn tài nguyên, không tái lập điểm model zoo hoặc chứng minh một họ kiến trúc luôn hơn họ khác.
+
+Không áp dụng thêm một vòng NMS Klygo sau kết quả backend. Box chuyển sang định dạng COCO $xywh$, nhãn chuyển theo tên sang category ID gốc. AP được tính với confidence đầu vào thấp để giữ phần lớn đường cong PR. P/R/F1 được trích riêng tại confidence 0,25 và IoU 0,50, sử dụng quy tắc match/ignore của COCOeval.
+
+\section{Kết quả kiểm thử thư viện}
+\begin{table}[H]\centering\small
+\caption{Phân bố 360 ca unittest theo nhóm; cột thực hiện bao gồm ca skip}
+\input{generated/test_groups}
+\label{tab:tests}
+\end{table}
+Tổng cộng 353 ca đạt, 7 ca bỏ qua, không có fail hoặc error sau khi đủ phụ thuộc. Ba ca skip thuộc quy trình COCO15 cần dataset và bundle đã sinh; bốn ca opt-in cần đường dẫn checkpoint thật cho YOLO, YOLO-World, Grounding DINO và Locate Anything. Hai mô hình YOLO đã được chạy thật qua mã thực nghiệm báo cáo, nhưng các ca opt-in tương ứng trong unittest vẫn được ghi đúng là skip vì không cấu hình biến môi trường của chúng.
+
+Công cụ audit cả 12 mô-đun cũng hoàn tất với trạng thái đạt đối với source, tài liệu, ví dụ và hợp đồng notebook. Các kiểm tra này hỗ trợ RQ1 và RQ2 ở mức phần mềm. Chúng không chứng minh mọi backend đã chạy trên mọi loại phần cứng, và không suy ra tỷ lệ nhận dạng đúng ngoài dữ liệu đánh giá.
+
+\section{Chất lượng phát hiện trên 500 ảnh}
+\subsection{AP tổng hợp và precision--recall}
+\begin{table}[H]\centering
+\caption{Chất lượng phát hiện sau pipeline Klygo trên cùng 500 ảnh; điểm tính theo phần trăm}
+\input{generated/quality}
+\label{tab:quality}
+\end{table}
+YOLO-World có AP cao nhất trong ba cấu hình được đo, hơn YOLOv8n khoảng 0,82 điểm phần trăm. Chênh lệch này nhỏ so với sự khác nhau giữa từng lớp, nên chưa đủ để kết luận ưu thế ổn định trên dữ liệu khác. Faster R-CNN thấp hơn trong cấu hình khảo sát; kết quả gắn với checkpoint MobileNetV3, chính sách resize và ngưỡng cụ thể, không đại diện cho mọi mô hình hai giai đoạn.
+
+AP50 của cả ba đều cao hơn AP75, phù hợp với việc ngưỡng IoU chặt hơn đòi hỏi box chính xác hơn. Điều này gợi ý cần phân tích cả định vị thay vì chỉ nhìn số đối tượng được gán đúng tên. Tuy nhiên, khoảng cách AP50--AP75 không tách riêng hoàn toàn lỗi định vị khỏi các yếu tố khác của đường cong PR, nên không được diễn giải thành tỷ lệ chính xác của một loại lỗi duy nhất.
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.94\textwidth]{klygo/pr.pdf}
+\caption{Precision nội suy trung bình theo lớp tại IoU 0,50. Đây là đường macro từ COCOeval, khác P/R micro ở một điểm confidence.}
+\label{fig:pr}
+\end{figure}
+Đường cong cho thấy precision giảm khi yêu cầu đạt recall cao hơn. Nó giúp nhìn rộng hơn một điểm confidence 0,25 và thể hiện mức mất precision để tăng độ bao phủ. Phần đuôi đường cong chịu ảnh hưởng số dự đoán tối đa, score threshold, các vật thể khó và khả năng nhận dạng. Do score đã được làm tròn trong builder, các nhóm dự đoán đồng hạng còn có thể tác động đến thứ tự tích lũy; đây là đặc điểm của pipeline đã đánh giá.
+
+\subsection{Điểm làm việc tại confidence 0,25}
+\begin{table}[H]\centering\small
+\caption{Số đếm và P/R/F1 micro tại confidence 0,25, IoU 0,50}
+\input{generated/operating}
+\label{tab:operating}
+\end{table}
+YOLOv8n có Precision khoảng 0,716 và Recall khoảng 0,504. YOLO-World tìm được thêm 143 TP so với YOLOv8n, đồng thời có thêm 308 FP; vì vậy Recall cao hơn nhưng Precision thấp hơn tại cùng ngưỡng. F1 của hai cấu hình gần nhau, khoảng 0,592 và 0,595. Những con số này minh họa vì sao một thay đổi về số TP không thể được đánh giá tách khỏi số FP và FN.
+
+Faster R-CNN tạo nhiều FP hơn tại điểm làm việc đã chọn. Không thể từ đó kết luận confidence 0,25 có cùng ý nghĩa xác suất cho cả ba model. Trong một ứng dụng triển khai, người dùng có thể hiệu chuẩn hoặc chọn ngưỡng theo chi phí lỗi trên một tập phát triển riêng. Báo cáo không thực hiện bước tối ưu đó trên chính tập đánh giá, vì làm như vậy sẽ làm thay đổi cách diễn giải kết quả kiểm chứng.
+
+\subsection{Kết quả theo kích thước vật thể}
+\begin{table}[H]\centering
+\caption{AP theo các nhóm kích thước của COCOeval}
+\input{generated/size_ap}
+\label{tab:sizeap}
+\end{table}
+Trong mẫu này, nhóm small khó hơn rõ rệt ở cả ba mô hình. YOLO-World có AP small 26,21\%, cao hơn 21,75\% của YOLOv8n, trong khi Faster R-CNN chỉ đạt 5,51\% theo cấu hình giới hạn kích thước đang dùng. Ở nhóm large, khoảng cách giữa các mô hình thu hẹp. Kết quả phù hợp với nhu cầu giữ chi tiết ảnh khi phát hiện vật thể nhỏ, nhưng không đủ xác định riêng resize là nguyên nhân của mọi sai khác.
+
+COCOeval phân nhóm bằng diện tích annotation gốc, không bằng cách tự so kích thước box dự đoán với một ngưỡng pixel sau resize. Một lớp có thể có mặt trong nhóm large mà không có ground truth trong nhóm small. Vì vậy, các AP theo kích thước có thể được trung bình trên các tập lớp hợp lệ khác nhau; chúng cần được xem cùng quy mô dữ liệu, không như ba bài toán có cùng phân bố hoàn toàn.
+
+\subsection{Khác biệt theo lớp}
+\begin{table}[H]\centering\small
+\caption{AP theo lớp của 12 lớp nhiều GT nhất; các cột mô hình là AP tính bằng phần trăm}
+\input{generated/classes12}
+\label{tab:classes}
+\end{table}
+Các lớp trong bảng được chọn theo số ground truth, không theo việc mô hình nào có điểm cao. Person có AP cao hơn book và handbag đối với cả ba cấu hình. Điều này cho thấy điểm tổng hợp che khuất nhiều khác biệt giữa các nhóm vật thể. Đặc biệt, book có 80 annotation nhưng AP chỉ khoảng 11,8\% đối với hai biến thể YOLO, nên không thể giải thích mọi điểm thấp chỉ bằng thiếu mẫu.
+
+YOLO-World không cao hơn YOLOv8n trên mọi lớp: traffic light, dining table và umbrella trong bảng có các mức chênh lệch khác nhau. Những kết quả này củng cố cách chọn mô hình theo tập lớp và mục tiêu ứng dụng thay vì chỉ lấy một AP tổng hợp. Các lớp ít mẫu và lớp không có GT được giữ trong bảng đầy đủ ở phụ lục, với ký hiệu không áp dụng khi metric không xác định.
+
+\section{Độ trễ và sự đánh đổi chất lượng--thời gian}
+\subsection{Thiết kế phép đo}
+Một trăm ảnh đầu theo thứ tự manifest được nạp thành ảnh RGB trong RAM. Mỗi model warm-up năm lần, sau đó đo ba lượt trên cùng 100 ảnh. Các nhánh đều batch bằng một, FP32, inference mode và có CUDA synchronize trước/sau timer. Tải mạng, đọc ảnh từ đĩa và nạp checkpoint nằm ngoài vùng đo. Model được đánh giá lần lượt trên một GPU.
+
+\begin{table}[H]\centering
+\caption{Thời gian predict trên 100 ảnh, ba lượt; 300 lần gọi mỗi model}
+\input{generated/latency}
+\label{tab:latency}
+\end{table}
+YOLOv8n có độ trễ trung bình thấp nhất trong cấu hình đo. YOLO-World mất thêm khoảng 5,44 ms nhưng có AP cao hơn khoảng 0,82 điểm phần trăm trên mẫu chất lượng. Faster R-CNN chậm hơn và có điểm thấp hơn trong lần khảo sát này. Các so sánh chỉ phản ánh cấu hình end-to-end qua Klygo; chúng không tách độc lập đóng góp của backbone, backend, preprocessing và output conversion.
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.94\textwidth]{klygo/latency.pdf}
+\caption{Phân bố độ trễ predict qua 300 lần gọi mỗi model. Boxplot lược điểm ngoại lai khi vẽ; tệp latency vẫn giữ toàn bộ mẫu.}
+\label{fig:latency}
+\end{figure}
+Trung vị Faster R-CNN thấp hơn trung bình và p90 lớn hơn đáng kể, cho thấy thời gian không có phân bố đối xứng đơn giản. Sự khác biệt kích thước/tỷ lệ ảnh, số box và công việc hậu xử lý có thể cùng góp phần vào biến thiên. Đề tài chưa thực hiện phân rã timer theo từng thành phần nên không gán một nguyên nhân duy nhất cho các lần gọi chậm.
+
+\begin{table}[H]\centering
+\caption{Độ trễ predict trung bình theo từng lượt lặp}
+\input{generated/repeat_latency}
+\end{table}
+Các lượt dùng lại cùng ảnh, nên có thể phản ánh biến thiên do tải máy, cache hoặc xung nhịp. Ba lượt không biến 100 ảnh thành 300 ảnh độc lập để đánh giá tổng quát hóa. FPS trong Bảng~\ref{tab:latency} được suy từ thời gian trung bình tuần tự, không phải tốc độ tối đa của hệ thống xử lý video có pipeline hoặc batching.
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.94\textwidth]{klygo/tradeoff.pdf}
+\caption{Chất lượng trên 500 ảnh và độ trễ lặp trên 100 ảnh. Mỗi điểm biểu diễn một cấu hình hệ thống, không phải một phép đo riêng của backend.}
+\label{fig:tradeoff}
+\end{figure}
+
+\subsection{Chi phí của lớp điều phối predict}
+Để trả lời RQ4, mã gọi cùng model theo hai cách: trực tiếp \code{forward([image])} trả frame \code{Detection}, và \code{predict(image)} tạo kết quả có điều phối nguồn, cấu hình, metadata và collection. Cả hai giữ preprocessing, inference, hậu xử lý backend và đóng gói Detection. Vì baseline vẫn sử dụng adapter và kiểu đầu ra Klygo, phép đo chỉ tách chi phí lifecycle của predict; nó không đo toàn bộ chi phí Klygo so với một framework thuần.
+
+\begin{table}[H]\centering\small
+\caption{Đo cặp predict và forward với cùng inference mode và đầu ra tương đương}
+\input{generated/overhead}
+\label{tab:overhead}
+\end{table}
+Mỗi mô hình có 300 cặp đo, đổi thứ tự nhánh theo ảnh và lượt. Không có cặp nào khác về số box, nhãn, tọa độ hoặc score vượt sai số cho phép. Chênh lệch trung bình khoảng 2,38--2,49 ms, tương ứng khoảng 4,03--10,15\% của baseline forward. Tỷ lệ tương đối của YOLOv8n lớn hơn vì thời gian nền của nó thấp hơn; không có nghĩa lớp điều phối phải thực hiện một lượng công việc gấp đôi cho model đó.
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.94\textwidth]{klygo/overhead.pdf}
+\caption{Phân bố chênh lệch trong từng cặp thời gian. Chênh lệch âm riêng lẻ được giữ lại như biến thiên đo, không bị cắt về không.}
+\end{figure}
+Các cặp chậm hoặc chênh lệch âm có thể xuất hiện vì hai lời gọi không chạy tại cùng một thời điểm tuyệt đối. Vì thế, chênh lệch không nên được xem là hằng số chính xác của mọi lần gọi. Kết quả hỗ trợ một nhận xét có phạm vi: trên nguồn PIL đã sẵn trong RAM và batch một, lớp điều phối bổ sung vài mili giây trong ba cấu hình được đo. Tình huống video, ảnh lazy chưa giải mã, batch lớn hoặc nhiều luồng cần đo lại.
+
+\section{Phân tích trường hợp thành công và lỗi}
+Ba ảnh được chọn bằng quy tắc công bố: ảnh tốt có F1 YOLOv8n cao nhất trong nhóm ít nhất ba GT hợp lệ; ảnh khó có tổng FP+FN YOLOv8n lớn nhất trong cùng nhóm; ảnh small có nhiều annotation small nhất sau khi loại hai ảnh trước. Tiêu chí sử dụng YOLOv8n làm điểm chọn ảnh, nên đây là phân tích trường hợp có chủ đích, không phải một ước lượng trung lập về phân bố lỗi của toàn bộ mô hình.
+
+Ảnh ID 67406 có bốn ground truth hợp lệ. Hai mô hình YOLO đều đạt bốn TP, không FP tại điểm làm việc; Faster R-CNN có bốn TP nhưng thêm sáu FP. Trường hợp này cho thấy việc tìm đủ vật thể vẫn có thể đi kèm kết quả dư thừa. Ảnh ID 65288 là một cảnh có nhiều đối tượng, che khuất và khác biệt tỷ lệ: 37 GT hợp lệ nhưng chỉ có 6, 10 và 6 TP tương ứng. Ảnh ID 432898 có 35 GT hợp lệ và nhiều vật thể nhỏ; Faster R-CNN có 11 TP nhưng 46 FP tại ngưỡng đã chọn.
+
+\input{generated/cases}
+Các panel giữ vị trí ảnh giống nhau giữa ground truth và model. Để hình không bị che bởi nhãn chồng lấn, chỉ vẽ tối đa 20 box và không in nhãn lên từng box trong montage. Dữ liệu định lượng sử dụng toàn bộ dự đoán đã lưu. Một box dự đoán có vẻ nằm gần vật thể khi nhìn ảnh vẫn có thể là FP nếu không đúng lớp hoặc chưa đạt IoU 0,50; các số đếm được xác định bằng quy tắc ghép, không bằng nhận xét bằng mắt.
+
+Từ ba trường hợp có thể đặt ra hướng khảo sát tiếp theo: kiểm tra ảnh dày vật thể và che khuất, tăng độ phân giải cho nhóm small, hoặc điều chỉnh ngưỡng theo yêu cầu giảm FP trên một tập phát triển riêng. Những hướng này là giả thuyết cần thử nghiệm thêm; số liệu hiện tại chưa đủ chứng minh một thay đổi cụ thể sẽ cải thiện đồng thời mọi chỉ số.
+
+\section{Giới hạn và các mối đe dọa tới tính hợp lệ}
+\textbf{Giới hạn về dữ liệu.} Mẫu 500 ảnh chỉ là một phần validation. Các lớp hiếm có số mẫu thấp và một lớp không có GT hợp lệ, làm điểm theo lớp không ổn định. Các checkpoint được huấn luyện hoặc tiền huấn luyện trên các dữ liệu do tác giả công bố; báo cáo không chứng minh toàn bộ dữ liệu tiền huấn luyện độc lập với mọi ảnh/khái niệm trong mẫu. Do đó không dùng kết quả này để khẳng định zero-shot trên lớp mới.
+
+\textbf{Giới hạn về cấu hình.} Các model dùng chính sách resize khác nhau, score chưa được hiệu chuẩn chung và Faster R-CNN đã thay đổi min/max size so với mặc định. Kết quả là so sánh các cấu hình triển khai cụ thể. Builder Klygo làm tròn dữ liệu, nên AP có thể khác kết quả tính từ tensor gốc. Thí nghiệm chưa đo riêng ảnh hưởng của làm tròn hoặc resize.
+
+\textbf{Giới hạn về hiệu năng.} Chỉ dùng một máy và một GPU, không khóa xung nhịp, nhiệt độ hoặc tải nền. Thời gian không bao gồm mạng, đọc đĩa, hiển thị và nạp checkpoint. Độ trễ thấp trong phép đo không chứng minh hệ thống phục vụ thời gian thực cho một ứng dụng có thêm nhiều bước khác.
+
+\textbf{Giới hạn về suy luận thống kê.} Báo cáo công bố điểm và các lượt lặp thời gian, chưa cung cấp khoảng tin cậy bootstrap cho chênh lệch AP. Chênh lệch 0,82 điểm phần trăm giữa hai biến thể YOLO vì vậy được xem là kết quả quan sát trên mẫu cố định, không phải khẳng định có ý nghĩa thống kê. Tính tương đương của hai nhánh thời gian được kiểm tra trên dữ liệu đo, không phải chứng minh cho mọi đầu vào có thể có.
+
+\textbf{Giới hạn về phạm vi sản phẩm.} Kiểm thử giả lập không thay thế checkpoint thật; khả năng có mã adapter không đồng nghĩa mọi backend đã được xác nhận trong báo cáo. Grounding DINO, Locate Anything và KerasHub chưa tham gia phép đo chính. Khả năng streaming có kiểm thử hợp đồng, nhưng chưa có benchmark bộ nhớ dài hạn hay thử tải nhiều người dùng.
+
+\input{chapters/klygo05_extension}

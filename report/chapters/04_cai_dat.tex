@@ -1,0 +1,246 @@
+\chapter{Cài Đặt Hệ Thống}
+
+\section{Công nghệ sử dụng}
+
+Ứng dụng được viết bằng Python 3.11. Streamlit cung cấp giao diện và session
+state; NetworkX biểu diễn graph; OSMnx đọc/ghi dữ liệu OpenStreetMap; Folium và
+streamlit-folium hiển thị bản đồ; Shapely xử lý hình học cạnh; scikit-learn được
+OSMnx dùng trong tìm nút gần nhất \cite{networkx,streamlit}. Các phiên bản trực
+tiếp được khóa trong \texttt{requirements.txt} để hạn chế sai khác môi trường.
+
+\begin{table}[H]
+\centering
+\caption{Một số thư viện chính trong phiên bản được kiểm tra}
+\begin{tabularx}{\linewidth}{p{4.0cm}p{2.2cm}Y}
+\toprule
+\textbf{Thư viện} & \textbf{Phiên bản} & \textbf{Vai trò} \\
+\midrule
+Streamlit & 1.50.0 & Giao diện web cục bộ và quản lý phiên \\
+OSMnx & 2.0.6 & Nạp graph OSM, ánh xạ tọa độ, tiện ích địa lý \\
+NetworkX & 3.5 & Cấu trúc MultiDiGraph và kiểm chứng oracle trong test \\
+Folium / streamlit-folium & 0.20.0 / 0.25.3 & Bản đồ, marker, sự kiện click \\
+Shapely & 2.2.0 & Chia hình học cạnh dài \\
+Pandas / NumPy & 2.3.2 / 2.2.6 & Bảng dữ liệu và tính toán hỗ trợ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Cấu trúc mã nguồn}
+
+\begin{table}[H]
+\centering
+\caption{Trách nhiệm của các mô-đun chính}
+\begin{tabularx}{\linewidth}{p{5.3cm}Y}
+\toprule
+\textbf{Mô-đun} & \textbf{Trách nhiệm} \\
+\midrule
+\texttt{app.py} & Điểm vào duy nhất, chuyển chế độ, widget và trình bày kết quả \\
+\texttt{src/shortest\_path.py} & Dijkstra tự cài đặt, nhiều đích, hỗ trợ MultiDiGraph \\
+\texttt{src/tsp.py} & Held--Karp cho các chế độ kết thúc \\
+\texttt{src/heuristics.py} & Nearest-neighbor và 2-opt \\
+\texttt{src/route\_optimizer.py} & Lập ma trận, gọi thuật toán và ghép tuyến \\
+\texttt{src/map\_service.py} & Nạp/cache graph, kiểm tra metadata và truy vấn mạng phụ \\
+\texttt{src/chase.py} & Luật, trạng thái, Arena, tập niềm tin và chính sách máy \\
+\texttt{src/chase\_maps.py} & Sân lưới, sân OSM, chia cạnh và sinh kịch bản bằng seed \\
+\texttt{src/chase\_ui.py} & Điều khiển ván, bản đồ, replay và xuất JSON \\
+\texttt{tests/} & Unit test, oracle test, AppTest và test dữ liệu \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Cài đặt Dijkstra}
+
+Phiên bản trong dự án không gọi trực tiếp hàm shortest-path của NetworkX. Heap
+chứa bộ ba khoảng cách, thứ tự chèn và nút để tránh yêu cầu so sánh trực tiếp hai
+kiểu định danh nút. Với đa cạnh $(u,v)$, thuật toán chọn trọng số nhỏ nhất hợp lệ
+giữa các cạnh song song. Đầu vào bị từ chối nếu trọng số là boolean, không phải
+số hữu hạn hoặc âm.
+
+\begin{lstlisting}[float,caption={Giả mã Dijkstra nhiều đích},label={lst:dijkstra}]
+distance[source] = 0
+push(heap, (0, source))
+while heap is not empty and targets remain:
+    du, u = pop_min(heap)
+    if du is stale: continue
+    if u is a target: mark u settled
+    for each outgoing neighbor v of u:
+        weight = minimum valid parallel-edge weight(u, v)
+        if du + weight < distance[v]:
+            distance[v] = du + weight
+            predecessor[v] = u
+            push(heap, (distance[v], v))
+return distances and reconstructed paths
+\end{lstlisting}
+
+Test dùng NetworkX làm oracle trên nhiều graph sinh ngẫu nhiên. Oracle không làm
+cho cài đặt đúng một cách tự động, nhưng giúp phát hiện sai khác về khoảng cách
+trên nhiều cấu hình hơn các ví dụ viết tay.
+
+\section{Cài đặt Held--Karp và khôi phục tuyến}
+
+Tập điểm được mã hóa bằng bitmask. Khóa bảng động là $(mask,last)$; giá trị lưu
+chi phí và nút trước. Cấu hình điểm cuối được xử lý ở bước chọn trạng thái cuối,
+không nhân bản ba thuật toán. Trước khi chạy, ma trận được kiểm tra vuông, hữu
+hạn tại các cung cần thiết và nhất quán kích thước.
+
+Sau khi khôi phục thứ tự, bộ điều phối lấy đường đi chi tiết đã lưu từ từng lần
+Dijkstra. Khi ghép hai đoạn liên tiếp, nút đầu của đoạn sau bị bỏ để không lặp
+nút nối. Tổng quãng đường và thời gian được tính từ cạnh thực của tuyến ghép,
+không suy ra từ khoảng cách Euclid giữa marker.
+
+\section{Cài đặt Arena và tiền tính khoảng cách}
+
+\texttt{Arena} sao chép rồi đóng băng graph để tránh thay đổi trong ván. Vì sân
+giới hạn tối đa 600 nút, hệ thống chạy Dijkstra từ mọi nguồn và lưu cả khoảng
+cách lẫn đường đi. Nếu $N=|V|$, chi phí khởi tạo xấp xỉ
+$O(N(|E|+|V|)\log |V|)$; đổi lại, truy vấn khoảng cách trong mỗi lượt là $O(1)$
+và việc lấy các nút trong ngân sách chỉ quét danh sách nút.
+
+Đây là lựa chọn phù hợp cho sân nhỏ, nhưng không mở rộng trực tiếp sang graph
+350 nghìn nút. Nếu dùng sân lớn, cần chuyển sang Dijkstra theo nhu cầu, landmark,
+multi-source search hoặc cache có giới hạn.
+
+\section{Cài đặt một lượt chơi}
+
+Hàm \texttt{step} là điểm chuyển trạng thái duy nhất. Trình tự cài đặt như sau:
+\begin{enumerate}
+  \item kiểm tra ván còn hoạt động và điểm đến nằm trong ngân sách;
+  \item tăng lượt, lan truyền tập niềm tin và áp dụng tiết lộ định kỳ;
+  \item xét bắt tại vị trí đội máy, sau đó xét thoát;
+  \item loại vị trí đội máy khỏi tập niềm tin khi người trốn còn sống;
+  \item gọi chính sách chỉ với \texttt{Observation};
+  \item di chuyển đồng thời các đội, xét bắt rồi xét hết lượt;
+  \item trả về một \texttt{State} mới thay vì sửa trạng thái cũ.
+\end{enumerate}
+
+Tính bất biến giúp replay đơn giản: lịch sử chỉ là danh sách các snapshot. JSON
+được xuất với schema version 1, nguồn sân, seed, chiến thuật và toàn bộ trạng
+thái cần thiết để kiểm tra diễn biến.
+
+\section{Tích hợp giao diện và session state}
+
+Hai nút \textit{Lộ trình/Trốn tìm} cập nhật \texttt{workspace\_mode} và query
+parameter. Nhánh trò chơi trả về trước khi graph định tuyến lớn được nạp, nhờ đó
+chế độ này vẫn mở nhanh. Các khóa widget định tuyến được giữ sống trong session
+state khi widget tạm ẩn; khi quay lại, tiêu chí, kiểu điểm cuối, lựa chọn điểm và
+tùy chọn click bản đồ vẫn còn.
+
+Click bản đồ trò chơi sử dụng đối tượng marker trả về bởi streamlit-folium thay
+vì click nền chung. Chỉ các chấm xanh trong phạm vi di chuyển được chấp nhận;
+dropdown cung cấp phương án truy cập thay thế và giúp kiểm thử ổn định.
+
+\section{Chuẩn bị và bảo toàn dữ liệu}
+\enlargethispage{5\baselineskip}
+
+Graph lớn được quản lý bằng Git LFS. Tệp Pickle giúp nạp nhanh; GraphML là phương
+án dự phòng. Metadata chứa bbox, quy mô, nguồn và thời điểm tạo. Script PBF đọc
+dữ liệu Việt Nam cục bộ, cắt theo bbox, kiểm tra kết nối các hành lang quan trọng
+rồi mới thay gói hiện tại. Thiết kế này tránh phụ thuộc Overpass trong mỗi lần
+người dùng tối ưu.
+
+Script chuẩn bị sân trò chơi dùng tệp tạm và chỉ thay tệp đích sau khi graph mới
+vượt kiểm tra. Test mô phỏng lỗi tải để bảo đảm tệp sân đang hoạt động không bị
+ghi đè bởi dữ liệu dở dang.
+
+\section{Trích đoạn mã nguồn cốt lõi}
+\label{sec:trich-doan-ma}
+
+Ba đoạn dưới đây là mã thật trong dự án, không phải giả mã. Chúng được chọn vì mỗi
+đoạn tương ứng với một phát biểu lý thuyết ở Chương~2 và là chỗ dễ sai nhất khi
+cài đặt.
+
+\subsection{Vòng lặp quy hoạch động Held--Karp}
+
+Đoạn sau là phần truy hồi và ba cách chọn trạng thái cuối trong
+\texttt{src/tsp.py}. Điểm đáng chú ý là ba kiểu kết thúc chỉ khác nhau ở bước
+chọn trạng thái cuối, còn bảng \texttt{dp} dùng chung; nhờ vậy không có ba bản sao
+của cùng một thuật toán.
+
+\begin{lstlisting}[caption={Truy hồi Held--Karp và ba kiểu kết thúc},
+                   label={lst:heldkarp}]
+for mask in range(1, 1 << n):
+    for j in range(n):
+        if not mask & (1 << j) or not isfinite(dp[mask][j]):
+            continue
+        for k in range(n):
+            if mask & (1 << k):
+                continue
+            next_mask = mask | (1 << k)
+            candidate = dp[mask][j] + costs[destinations[j]][destinations[k]]
+            # Transition: noi them mot diem chua ghe vao cuoi tuyen.
+            if candidate < dp[next_mask][k]:
+                dp[next_mask][k] = candidate
+                parent[next_mask][k] = j
+
+full_mask = (1 << n) - 1
+if return_to_start:
+    # Closed TSP: chon diem cuoi tam thoi roi cong canh quay ve start.
+    last = min(range(n),
+               key=lambda j: dp[full_mask][j] + costs[destinations[j]][start_index])
+    optimal_cost = dp[full_mask][last] + costs[destinations[last]][start_index]
+elif end_index is not None:
+    # Fixed end: trang thai cuoi bat buoc nam tai end_index.
+    last = destinations.index(end_index)
+    optimal_cost = dp[full_mask][last]
+else:
+    # Free end: lay min tren moi diem cuoi, KHONG cong canh ve start.
+    last = min(range(n), key=lambda j: dp[full_mask][j])
+    optimal_cost = dp[full_mask][last]
+\end{lstlisting}
+
+Việc kiểm tra \texttt{isfinite(dp[mask][j])} trước khi mở rộng là bắt buộc trên
+graph có hướng: nếu một trạng thái đã không tới được, mọi trạng thái mở rộng từ nó
+cũng vô nghĩa, và phép cộng với $+\infty$ sẽ lan giá trị vô hạn vào bảng. Khi
+\texttt{optimal\_cost} vẫn vô hạn ở cuối, hệ thống báo lỗi cho người dùng thay vì
+trả về một tuyến không hợp lệ.
+
+\subsection{Lan truyền tập niềm tin trong một lượt}
+
+Đoạn sau trong \texttt{src/chase.py} thực hiện đúng công thức lan truyền ở
+Chương~2 và hai lần thu hẹp tập niềm tin.
+
+\begin{lstlisting}[caption={Cập nhật tập niềm tin theo lượt},label={lst:belief}]
+turn = obs.turn + 1
+belief = arena.expand(obs.belief, obs.rules.runner_budget)
+revealed = turn % obs.rules.reveal_every == 0
+if revealed:
+    belief = frozenset({destination})
+obs = replace(obs, turn=turn, belief=belief,
+              last_seen=destination if revealed else obs.last_seen,
+              last_seen_turn=turn if revealed else obs.last_seen_turn)
+...
+# Surviving the runner phase also rules out all currently occupied hunter nodes.
+obs = replace(obs, belief=obs.belief.difference(obs.hunters))
+\end{lstlisting}
+
+Dòng cuối là một suy luận chứ không phải một thủ thuật: nếu người trốn còn sống
+sau pha di chuyển của mình, thì vị trí hiện tại của người trốn không thể là một nút
+đang có đội truy tìm. Đây là thông tin hợp lệ rút ra từ quan sát công khai, nên
+chính sách máy được phép dùng. Ngược lại, biến \texttt{state.runner} không bao giờ
+xuất hiện trong \texttt{Observation}.
+
+\subsection{Hàm điểm phối hợp và danh sách rút gọn}
+
+\begin{lstlisting}[caption={Chiến thuật phối hợp chặn lối thoát},label={lst:contain}]
+def joint_score(moves):
+    belief_score = sum(max(1 / (1 + arena.distance(m, p) / budget) for m in moves)
+                       for p in belief) / len(belief)
+    exit_score = sum(max(1 / (1 + arena.distance(m, e) / budget) for m in moves)
+                     for e in observation.exits) / len(observation.exits)
+    return belief_score + 0.35 * exit_score
+
+# Include exit-directed moves so the coverage shortlist cannot hide a blockade.
+for index, hunter in enumerate(hunters):
+    pools[index] = list(dict.fromkeys([
+        *pools[index], *(arena.advance(hunter, e, budget) for e in observation.exits)
+    ]))
+moves = max(product(*pools), key=joint_score)
+\end{lstlisting}
+
+Hai chi tiết triển khai đáng nói. Thứ nhất, \texttt{max} bên trong tổng chứ không
+phải tổng của mọi đội: một vị trí nghi ngờ chỉ cần \textit{một} đội ở gần là đã
+được bao phủ, nên cộng dồn khoảng cách của cả hai đội sẽ thưởng cho việc hai đội
+đứng chồng lên nhau. Thứ hai, các nước đi hướng lối thoát được thêm vào danh sách
+rút gọn sau khi đã cắt còn tám ứng viên theo coverage; nếu không, một nước chặn
+lối thoát tốt có thể bị loại ngay ở bước cắt và hệ số 0,35 sẽ không bao giờ có cơ
+hội phát huy tác dụng.

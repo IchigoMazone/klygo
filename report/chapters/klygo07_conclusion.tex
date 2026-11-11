@@ -1,0 +1,56 @@
+\chapter{Kết Luận Và Hướng Phát Triển}
+\label{chap:conclusion}
+\section{Kết quả đạt được}
+Đề tài đã mô tả và kiểm chứng revision nền tảng của Klygo với 12 mô-đun và khảo sát revision mở rộng có thêm mining, kết nối quản lý dữ liệu với pipeline phát hiện đối tượng. Cấu trúc BaseModel, Detector, adapter và backend runtime phân chia trách nhiệm giữa phần điều phối dùng chung và xử lý đặc thù framework. Các kiểu Box, Detection và Detections tạo ranh giới đầu ra thống nhất cho hậu xử lý và trực quan hóa.
+
+Trong phạm vi kiểm thử, 353 trong 360 ca đạt và bảy ca được bỏ qua với lý do đã công bố; không có fail hoặc error sau khi cài đủ phụ thuộc. Công cụ audit các mô-đun cũng hoàn tất. Mã demo chạy thật xác nhận luồng ảnh, hậu xử lý, vẽ kết quả, phép hoàn tác tọa độ hình học và một stream hữu hạn. Những bằng chứng này cho thấy các đường đi đã khảo sát có thể vận hành nhất quán, đồng thời không thay thế kiểm chứng cho mọi cấu hình hoặc mọi nguồn dữ liệu.
+
+Thực nghiệm chính đánh giá ba checkpoint pretrained trên cùng 500 ảnh COCO validation. AP lần lượt là \APYolo, \APWorld{} và \APFaster{} cho YOLOv8n, YOLO-World và Faster R-CNN theo cấu hình đã nêu. Độ trễ predict trung bình trong phép đo lặp lần lượt là \LatencyYolo, \LatencyWorld{} và \LatencyFaster{} ms. Những con số này cho phép thảo luận cụ thể sự đánh đổi chất lượng và thời gian thay vì chỉ dựa trên mô tả lý thuyết của kiến trúc.
+
+\section{Trả lời các câu hỏi nghiên cứu}
+\textbf{RQ1 -- Giao diện thống nhất.} Klygo đặt hợp đồng chung ở mức nguồn ảnh và kết quả Detection, để adapter dịch dữ liệu riêng của backend. Các mảng box, score, nhãn và class ID được kiểm tra trước khi đóng gói. Cách tổ chức này giúp tái sử dụng hậu xử lý và hiển thị qua nhiều mô hình; vẫn cần adapter đúng để ánh xạ nhãn và tiền xử lý.
+
+\textbf{RQ2 -- Tính đúng của trạng thái và tọa độ.} Snapshot, bản sao metadata, kiểm tra số kết quả theo batch và guard vòng đời giúp hạn chế các lỗi trạng thái. Trace lưu tham số hình học để hoàn tác tọa độ khi người dùng gọi API phù hợp. Đối chiếu mã cho thấy cần sử dụng restore tường minh trong luồng ảnh đã biến đổi, và không nên coi mọi mô tả ``tự động khôi phục'' trong tài liệu là đã được chứng minh cho mọi đường đi.
+
+\textbf{RQ3 -- Chất lượng và độ trễ.} YOLO-World có AP cao nhất trên mẫu nhưng mất thêm thời gian so với YOLOv8n. Faster R-CNN chậm hơn và có AP thấp hơn ở cấu hình giới hạn kích thước đang dùng. Kết quả khác nhau theo lớp và kích thước vật thể; do đó việc chọn cấu hình cần gắn với yêu cầu ứng dụng. Thực nghiệm chưa cung cấp bằng chứng để xếp hạng phổ quát các họ mô hình hoặc các framework.
+
+\textbf{RQ4 -- Chi phí điều phối.} Khi hai nhánh có cùng inference mode, model, ảnh và kết quả Detection, lớp predict bổ sung trung bình khoảng 2,38--2,49 ms so với forward trên phép đo 300 cặp mỗi mô hình. Không ghi nhận khác biệt đầu ra vượt sai số đặt trước. Baseline forward vẫn chứa các thành phần Klygo, nên kết luận chỉ áp dụng cho phần lifecycle và điều phối bổ sung, không phải toàn bộ overhead của thư viện so với framework gốc.
+
+\section{Bài học từ thiết kế và thực nghiệm}
+Bài học thứ nhất là phải xác định rõ ranh giới dữ liệu. Sự khác nhau giữa box ID và class ID, chỉ số lớp của từng backend hoặc ảnh gốc và ảnh sau letterbox đều có thể tạo lỗi khó thấy nếu chỉ quan sát chương trình chạy không báo lỗi. Kiểm thử nghiệm hình học và kiểm tra ánh xạ lớp cung cấp bằng chứng trực tiếp hơn cho những ranh giới đó.
+
+Bài học thứ hai là cấu hình và phép đo phải đi cùng kết quả. Một score threshold cao có thể làm hình minh họa gọn hơn nhưng làm mất phần đường cong PR khi tính AP. Một timer không đồng bộ GPU hoặc hai nhánh khác inference context cũng có thể dẫn đến kết luận sai. Việc lưu tệp thô cho phép phát hiện và sửa phương pháp trong khi giữ lại dấu vết các lần thử.
+
+Bài học thứ ba là chuẩn hóa giao diện cần đi kèm công bố các khác biệt còn lại. Cùng tên tham số hoặc cùng kích thước giới hạn không bảo đảm tensor giống nhau. Tương tự, kiểu kết quả tiện dụng có thể thực hiện thêm sao chép, registry và làm tròn. Những lựa chọn đó phục vụ kỹ thuật phần mềm nhưng cần được xét khi dùng thư viện như một công cụ đo chất lượng mô hình.
+
+\section{Hạn chế còn tồn tại}
+Mẫu dữ liệu chưa bao phủ đầy đủ phân bố COCO và chưa có benchmark ngoài miền. Một số lớp có ít ground truth; các chênh lệch AP nhỏ chưa được bổ sung khoảng tin cậy. Thực nghiệm chỉ dùng một GPU, batch một và FP32, nên chưa mô tả được khả năng mở rộng hoặc hiệu năng trên thiết bị khác.
+
+Mã builder làm tròn confidence và tọa độ trước khi lưu kết quả; ảnh hưởng định lượng của lựa chọn này chưa được tách riêng. Luồng khôi phục hình học cần được tài liệu hóa thống nhất với cài đặt; nguồn stream thư mục ảnh trong demo revision nền tảng có frame index rỗng; phát hiện này không tự động áp dụng cho revision mở rộng. Các backend Hugging Face và Keras có trong thiết kế nhưng chưa được đánh giá với checkpoint thật ở phép đo chính.
+
+Phần mở rộng đã thực hiện fine-tune ngắn với ba seed; chưa huấn luyện từ đầu, đo năng lượng hay thử tải phục vụ đồng thời. Do vậy báo cáo đóng góp một quy trình thư viện và đánh giá có thể tái lập, không đặt mục tiêu đề xuất kiến trúc học sâu mới hoặc đạt điểm cao nhất trên benchmark.
+
+\section{Hướng phát triển theo mức ưu tiên}
+\begin{table}[H]\centering\small
+\caption{Hướng phát triển gắn với giới hạn đã quan sát}
+\begin{tabularx}{\textwidth}{p{1.2cm}YY}
+\toprule Ưu tiên & Công việc & Tiêu chí kiểm chứng \\\midrule
+1 & Giữ precision đầy đủ của dữ liệu nội bộ, chỉ làm tròn khi hiển thị & So AP và thứ tự score trước/sau trên cùng dự đoán gốc \\
+1 & Đồng bộ tài liệu restore và chỉ số frame với cài đặt & Test nguồn ảnh, thư mục, video và trace qua pipeline công khai \\
+2 & Đánh giá toàn bộ validation và bộ dữ liệu ngoài miền & Manifest riêng, cùng protocol; khoảng tin cậy và phân tích theo lớp \\
+2 & Bổ sung checkpoint Hugging Face và KerasHub thật & Kiểm tra nhãn, thiết bị, precision và dự đoán theo cùng schema \\
+3 & Khảo sát FP16, batch lớn, streaming dài và nhiều thiết bị & Đo chất lượng, độ trễ, bộ nhớ; không chỉ báo FPS \\
+3 & Hiệu chuẩn ngưỡng theo ứng dụng & Tập phát triển tách biệt; đánh giá độc lập sau khi chọn ngưỡng \\
+\bottomrule
+\end{tabularx}
+\end{table}
+Kết quả của bài tập lớn cho thấy một hệ thống AI có thể được đánh giá thuyết phục khi đi cùng hợp đồng dữ liệu rõ ràng, kiểm thử có mục tiêu và hồ sơ thực nghiệm kiểm tra được. Klygo là nền tảng để nhóm tiếp tục mở rộng quy trình này, với những bước phát triển được dẫn dắt bởi các giới hạn đã quan sát trong mã và số liệu.
+
+\section{Kết luận từ phần mở rộng}
+\textbf{RQ5 -- Tuyển chọn dữ liệu.} Mining cung cấp chuỗi đọc, thống kê, chọn, cân bằng và so sánh bộ dữ liệu theo ảnh. Thực nghiệm kiểm chứng dữ liệu sau export và ghép ảnh có thể được đọc lại và dùng fine-tune. Số box và phân bố lớp thay đổi ngay cả khi cùng số ảnh. Kết quả train được báo cáo với ba seed và checkpoint ban đầu làm tham chiếu, không giả định mọi thao tác cân bằng hay phân cụm đều tăng AP.
+
+Trong cấu hình fine-tune năm epoch đã khảo sát, cả bốn tập đều cho AP thấp hơn checkpoint pretrained ban đầu. Kết quả xác nhận khả năng chạy toàn quy trình nhưng chưa chứng minh lợi ích chất lượng của fine-tune này. Weighted gần Random về AP trung bình, còn Diversity thấp hơn; không đủ cơ sở kết luận một phương pháp luôn tốt hơn. Hướng tiếp theo là hiệu chỉnh learning rate, lịch huấn luyện và ngân sách cập nhật bằng tập validation, rồi kiểm chứng một lần trên tập test mới hoặc tập test được giữ kín cho nghiên cứu đó.
+
+\textbf{RQ6 -- Các chế độ thực thi.} Benchmark mới gọi framework gốc trực tiếp, phân biệt sáu cấu hình Raw/native/managed và bổ sung thời gian tới kết quả đầu cùng bộ nhớ. Native với backend stream vẫn thu toàn bộ generator trước khi trả collection trong revision khảo sát; điều này giải thích vì sao không đồng nhất nó với Managed stream. Phép đo worker/prefetch giữ batch cố định và thay từng tham số theo hai nhóm để phân tích chi phí chuẩn bị ảnh. Kết quả chỉ áp dụng cho workload, revision và phần cứng đã đo; khác biệt container và media là một phần chi phí của giao diện công khai. Bằng chứng đối chiếu tọa độ, score và class được lưu riêng ngoài timer.
+
+Hai giới hạn cài đặt đáng lưu ý là Quota/Coverage dùng chung thuật toán ở revision khảo sát, và export chỉ ghi annotation/manifest. Bước ghép ảnh, tạo YAML và huấn luyện do script thực nghiệm đảm nhiệm. Các điểm này giúp mô tả đúng năng lực thư viện, tránh biến tên API hoặc biểu đồ đẹp thành bằng chứng chất lượng mô hình.

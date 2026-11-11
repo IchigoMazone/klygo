@@ -1,0 +1,97 @@
+\section{Phạm vi phiên bản và mô-đun mining mở rộng}
+\label{sec:extension-version}
+Báo cáo phân biệt hai revision để các kết quả có thể truy nguyên. Phần nền tảng và benchmark ba checkpoint ban đầu dùng revision \code{0ca8a6a} với 12 mô-đun. Phần mining và benchmark các chế độ thực thi dùng revision \code{c4388f1} của nhánh \code{v2-release}, có thêm mô-đun thứ 13 là \code{mining}. Hai revision đều khai báo phiên bản package 2.1.0, vì vậy chỉ ghi số phiên bản package là chưa đủ. Mã nguồn của revision mở rộng được chụp riêng, không thay đổi checkout nền tảng.
+
+\begin{table}[H]\centering\small
+\caption{Các nhóm API mining và trách nhiệm}
+\begin{tabularx}{\textwidth}{p{3.6cm}Y}
+\toprule API & Chức năng \\\midrule
+\code{stats}, \code{compare} & Thống kê ảnh, box, lớp, đồng xuất hiện và thay đổi giữa hai tập \\
+\code{score} & Điểm chất lượng, độ hiếm, độ bao phủ lớp và mật độ box \\
+\code{find\_duplicates}, \code{deduplicate} & Nhận diện và loại ảnh trùng theo các tiêu chí hỗ trợ \\
+\code{cluster} & Trích đặc trưng cổ điển, chuẩn hóa, K-means và tìm đại diện \\
+\code{select}, \code{balance} & Chọn nguyên ảnh; trả collection độc lập với đầu vào \\
+\bottomrule
+\end{tabularx}
+\end{table}
+Mining nhận \code{Detections} đã materialize. Điều này làm rõ ranh giới bộ nhớ: việc suy luận có thể dùng stream, nhưng trước khi phân tích toàn tập cần có một collection hữu hạn. Các báo cáo có \code{to\_dict()}, \code{save()} và \code{show()}; dữ liệu biểu đồ được tạo từ kết quả này. Export thuộc trách nhiệm của \code{Detections}, tránh lặp logic ghi annotation trong mining.
+
+\begin{table}[H]\centering\small
+\caption{Nguyên lý các phương pháp tuyển chọn đã cài đặt}
+\begin{tabularx}{\textwidth}{p{2.6cm}Y}
+\toprule Phương pháp & Cách chọn và giới hạn \\\midrule
+Random & Lấy mẫu không hoàn lại với seed; đối chứng cùng số ảnh \\
+Weighted & Xếp hạng theo điểm tổng hợp; ưu tiên ảnh nhiều tín hiệu theo trọng số đã đặt \\
+Rare-first & Xếp hạng theo độ hiếm lớp; không bảo đảm mọi lớp đạt quota \\
+Quality & Lọc theo điểm chất lượng và ngưỡng; có thể bỏ ảnh khó nhưng hữu ích \\
+Class & Lọc ảnh theo điều kiện any/all/only/exclude trên tập lớp \\
+Boxes & Lọc số box và điều kiện diện tích; không cắt riêng từng box \\
+Quota,\newline Coverage & Cùng dùng một thuật toán greedy để đáp ứng quota lớp trong revision khảo sát \\
+Diversity & Chọn đại diện cụm; số mẫu phụ thuộc số cụm và \code{per\_cluster} \\
+Balance & Đặt quota theo min/median/mean hoặc số nguyên rồi chọn greedy; không sinh thêm ảnh \\
+\bottomrule
+\end{tabularx}
+\end{table}
+Ở mỗi bước greedy, ảnh được chọn có tổng đóng góp lớn nhất vào các quota còn thiếu; hòa điểm được phá bằng thứ tự ảnh. Quota là mục tiêu đáp ứng, không phải ràng buộc cứng cấm vượt số lượng của mọi lớp. Vì ảnh có nhiều nhãn, lớp phổ biến có thể vượt target. Cùng tham số, Quota và Coverage hiện đi qua cùng nhánh mã nên không nên trình bày như hai thuật toán độc lập. Tham số seed của \code{balance} chưa tham gia đường chọn greedy trong revision này.
+
+\section{Prefix, priority và quyền thay đổi cấu hình}
+Các nhóm tham số như \code{model}, \code{processor} và \code{post} tạo namespace. Prefix chỉ rõ nhóm đích: \code{post\_threshold=0.4} được đưa vào \code{post.threshold}. Priority đăng ký những tên phổ biến được viết ngắn; chẳng hạn \code{threshold=0.4} có cùng đích khi \code{threshold} đã được khai báo cho nhóm \code{post}. Một tên ngắn chỉ được thuộc một nhóm.
+
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[caption={Khai báo nhóm, tên ngắn và quyền cập nhật}]
+from klygo import models
+flags = models.flags(model=False, post=True)
+schema = models.metadata(
+    flags,
+    priority=models.priority(flags, post=("threshold", "iou")),
+)
+\end{lstlisting}
+\vspace{4pt}
+\end{minipage}
+Ba cách truyền trên chỉ tương đương khi dùng riêng. Nếu đồng thời truyền hai cách cho cùng đích, resolver báo lỗi trùng tham số, kể cả khi hai giá trị bằng nhau. Priority không phải quy tắc lấy giá trị có độ ưu tiên cao hơn khi xung đột. Tên không thuộc priority và không có prefix hợp lệ cũng bị từ chối. Khi dò prefix, nhóm có tên dài hơn được xét trước để tránh tách sai tên nhóm lồng nhau về mặt ký tự.
+
+Flags xác định quyền override tại thời điểm managed predict: nhóm \code{model=False} bị khóa, nhóm \code{post=True} được đổi. Tại configure/load có thể thiết lập các nhóm trước khi chạy. Revision mở rộng phân giải native với \code{runtime=False}, nên không áp dụng khóa runtime theo cùng cách managed; báo cáo không khái quát quyền override của hai đường thực thi thành một hành vi duy nhất.
+
+\section{Raw backend, native và managed}
+Raw backend gọi trực tiếp Ultralytics và trả \code{Results}. Klygo native giao nguồn dữ liệu cho framework giải mã/suy luận, sau đó chuyển thành \code{Detection}. Klygo managed sở hữu việc đọc nguồn, chia batch, điều phối inference và tạo kết quả thống nhất. Trong managed, non-stream trả collection sau khi hoàn tất; stream cho phép tiêu thụ lần lượt.
+
+Hai điều khiển stream có vị trí khác nhau trong hợp đồng API. \code{stream=True} điều khiển cách Klygo trả kết quả ở managed; \code{model\_stream=True} là tham số có prefix để yêu cầu backend tạo kết quả theo generator. Ở revision \code{c4388f1}, tổ hợp \code{native=True, stream=True} bị từ chối, nhưng \code{native=True, model\_stream=True} được hỗ trợ trên Ultralytics. Nhánh sau vẫn gọi \code{list(frames())} trước khi trả collection. Vì vậy, backend streaming không đồng nghĩa người dùng nhận được kết quả đầu tiên trước khi toàn bộ nguồn đã xử lý xong.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[>=Stealth,every node/.style={font=\small},b/.style={draw,rounded corners,align=center,text width=3.8cm,minimum height=1.2cm,inner sep=5pt}]
+\node[draw,fill=blue!5,align=center,text width=5cm,minimum height=.7cm] (source) at (5,2.2) {Nguồn ảnh hoặc video};
+\node[b,fill=blue!4] (raw) at (0,0) {\textbf{Raw}\\Framework giải mã\\và chạy mô hình};
+\node[b,fill=teal!5] (native) at (5,0) {\textbf{Klygo native}\\Framework giải mã\\và chạy mô hình};
+\node[b,fill=orange!7] (managed) at (10,0) {\textbf{Klygo managed}\\Đọc nguồn ở Klygo\\và điều phối mô hình};
+\node[b] (rout) at (0,-3) {\textbf{Results gốc}\\Non-stream: toàn tập\\Stream: lần lượt};
+\node[b] (nout) at (5,-3) {\textbf{Detections toàn tập}\\Backend non-stream\\hoặc backend stream};
+\node[b] (mout) at (10,-3) {\textbf{Kết quả chuẩn hóa}\\Non-stream: toàn tập\\Stream: lần lượt};
+\draw[->] (source.south) -- ++(0,-.25) -| (raw.north);
+\draw[->] (source.south) -- (native.north);
+\draw[->] (source.south) -- ++(0,-.25) -| (managed.north);
+\draw[->] (raw.south)--(rout.north);
+\draw[->] (native.south)--(nout.north);
+\draw[->] (managed.south)--(mout.north);
+\end{tikzpicture}
+\caption{Trách nhiệm đọc nguồn và thời điểm trả kết quả của Raw, native và managed ở revision mở rộng}
+\label{fig:execution-paths}
+\end{figure}
+
+\begin{table}[H]\centering\small
+\caption{Sáu cấu hình thực thi được phân biệt trước khi benchmark Ultralytics}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.1cm}YY}
+\toprule Cấu hình & Điều khiển chính & Kết quả phía người gọi \\\midrule
+Raw non-stream & Framework: \code{stream=False} & Danh sách Results sau khi xử lý nguồn \\
+Raw stream & Framework: \code{stream=True} & Generator Results theo từng ảnh \\
+Native non-stream & \code{native=True}, \code{model\_stream=False} & Detections sau khi đóng gói toàn tập \\
+Native backend stream & \code{native=True}, \code{model\_stream=True} & Backend dùng generator; Klygo vẫn trả Detections toàn tập \\
+Managed non-stream & \code{native=False}, \code{stream=False} & Detections đã materialize \\
+Managed stream & \code{native=False}, \code{stream=True} & Stream một lượt của các Detection \\
+\bottomrule
+\end{tabularx}
+\end{table}
+Tên Native backend stream nhấn mạnh nơi streaming diễn ra. Phép đo thời gian tới kết quả đầu của nhánh này phải bắt đầu trước lời gọi predict, kể cả thời gian Klygo thu và đóng gói toàn bộ generator. Không suy rộng sáu cấu hình này sang mọi backend nếu giao diện nguồn hoặc generator của backend không tương ứng.
+
+Revision mở rộng dùng stream một lượt: frame được trả lần lượt và không được tích lũy vào cache phát lại của collection như revision nền tảng. Truy cập theo chỉ số và các API cần toàn tập yêu cầu materialize. Tính chất này giải thích cơ sở thiết kế để giảm giữ kết quả trong RAM, nhưng bộ nhớ toàn pipeline còn phụ thuộc model, bộ giải mã, prefetch và cách người gọi giữ frame.
+
+\input{chapters/klygo03_scheduling}

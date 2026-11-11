@@ -1,0 +1,97 @@
+\chapter{Giới Thiệu}
+
+\section{Bối cảnh}
+
+Đồ thị là một mô hình trung tâm của thuật toán ứng dụng. Trong giao thông, nút
+biểu diễn giao lộ hoặc điểm trên đường, cạnh biểu diễn đoạn đường và trọng số
+biểu diễn chi phí di chuyển. Cùng một cấu trúc đó còn mô tả được những bài toán
+động như tìm kiếm, truy đuổi và ra quyết định khi thông tin không đầy đủ. Đồ án
+khai thác điểm chung này để xây dựng một ứng dụng vừa có giá trị thực hành, vừa
+cho phép quan sát trực tiếp hành vi của nhiều lớp thuật toán.
+
+Phần lõi của đề tài là tối ưu lộ trình đi qua nhiều địa điểm tại Hà Nội. Nếu chỉ
+cần đi từ một nguồn tới một đích, bài toán có thể giải bằng đường đi ngắn nhất;
+đây cũng là nền của các hệ thống định tuyến quy mô lớn \cite{delling2009}.
+Khi cần chọn cả thứ tự ghé nhiều điểm, không gian phương án tăng theo giai thừa;
+vì vậy hệ thống kết hợp Dijkstra với quy hoạch động Held--Karp. Phần mở rộng
+``Bắt tôi nếu có thể'' biến mạng đường thành một sân pursuit--evasion theo lượt.
+Ở đây khó khăn không chỉ nằm ở tìm đường, mà còn ở việc ra quyết định dựa trên
+một tập vị trí khả dĩ thay vì biết chính xác đối thủ đang ở đâu.
+
+\section{Bài toán thực tế}
+
+Người dùng cần chọn một điểm xuất phát và từ một đến mười điểm cần ghé. Hệ thống
+phải trả về thứ tự ghé, tuyến đường chi tiết, tổng quãng đường và thời gian ước
+tính. Ba dạng kết thúc được hỗ trợ:
+\begin{itemize}
+  \item \textbf{Tuyến mở}: điểm kết thúc do thuật toán tự chọn;
+  \item \textbf{Điểm cuối cố định}: người dùng chỉ định điểm cuối;
+  \item \textbf{Chu trình}: quay lại điểm xuất phát.
+\end{itemize}
+
+Trên cùng giao diện, người dùng có thể chuyển sang trò chơi truy tìm. Người trốn
+di chuyển trước với ngân sách tính theo mét. Hai đội máy di chuyển sau, chỉ dựa
+trên quan sát công khai. Người trốn thắng khi tới một lối thoát chưa bị chiếm;
+máy thắng nếu bắt được người trốn hoặc người trốn hết số lượt. Vị trí thật của
+người trốn chỉ được tiết lộ theo chu kỳ cấu hình.
+
+\section{Câu hỏi và mục tiêu}
+
+Đồ án trả lời bốn câu hỏi kỹ thuật:
+\begin{enumerate}
+  \item Làm thế nào chuyển mạng đường có hướng thành ma trận chi phí giữa các
+  điểm quan tâm mà vẫn khôi phục được tuyến đường thật?
+  \item Làm thế nào tìm thứ tự ghé tối ưu chính xác trong giới hạn nhỏ, đồng thời
+  có baseline heuristic để đối chiếu?
+  \item Làm thế nào mô hình hóa trạng thái ẩn của người trốn để chính sách máy
+  không vô tình đọc thông tin bí mật?
+  \item Làm thế nào kiểm thử các bất biến thuật toán và quy tắc kết thúc thay vì
+  chỉ kiểm thử giao diện?
+\end{enumerate}
+
+Mục tiêu sản phẩm là một ứng dụng chạy cục bộ, không cần gọi dịch vụ định tuyến
+trong luồng tối ưu thông thường; cung cấp phản hồi trực quan trên bản đồ; và duy
+trì được trạng thái khi chuyển qua lại giữa hai chế độ. Mục tiêu học thuật là
+trình bày rõ mô hình toán, giả định, độ phức tạp, điều kiện đúng và giới hạn của
+từng thuật toán.
+
+\section{Phạm vi và giả định}
+
+\begin{table}[H]
+\centering
+\caption{Phạm vi được thực hiện và nội dung không tuyên bố}
+\begin{tabularx}{\linewidth}{Y Y}
+\toprule
+\textbf{Trong phạm vi} & \textbf{Ngoài phạm vi hoặc chưa được chứng minh} \\
+\midrule
+Graph ô tô Hà Nội đóng gói cục bộ; tối đa 10 điểm ghé & Dữ liệu giao thông thời
+gian thực, ùn tắc hoặc đóng đường phát sinh tức thời \\
+Tối ưu chính xác thứ tự ghé theo ma trận chi phí tĩnh & Tối ưu toàn cục cho số
+điểm lớn tùy ý hoặc bài toán VRP nhiều xe \cite{toth2014} \\
+Trò chơi theo lượt, bắt tại nút cuối bước, tối đa hai đội máy & Va chạm giữa cạnh,
+chuyển động liên tục hoặc cân bằng Nash \\
+So sánh ba heuristic trên bot và seed cố định & Chứng minh chiến thuật máy tối ưu
+hoặc tổng quát hóa cho người chơi thật \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Chi phí thời gian trong graph là ước lượng tĩnh được lưu trên cạnh. Vì vậy việc
+chọn mục tiêu thời gian không đồng nghĩa với định tuyến phụ thuộc thời gian.
+Tương tự, graph trò chơi OSM đi kèm được trích từ một nguồn tải dở và điều chỉnh
+hai chiều để phục vụ mô phỏng; nó không được dùng làm hướng dẫn giao thông.
+
+\section{Đóng góp của đồ án}
+
+Các kết quả chính của đồ án gồm:
+\begin{itemize}
+  \item Một pipeline hoàn chỉnh từ điểm địa lý tới đường đi chi tiết: ánh xạ nút,
+  Dijkstra nhiều đích, ma trận chi phí, Held--Karp và khôi phục tuyến.
+  \item Một giao diện hợp nhất hai chế độ, giữ độc lập trạng thái lộ trình và ván
+  chơi khi người dùng chuyển màn hình.
+  \item Một mô hình pursuit--evasion thông tin ẩn với kiểu \texttt{Observation}
+  không chứa vị trí hoặc lịch sử bí mật của người trốn.
+  \item Ba chính sách truy tìm có giải thích, benchmark 360 ván và bộ 112 kiểm
+  thử bao phủ thuật toán, dữ liệu, quy tắc biên và tích hợp giao diện.
+\end{itemize}
+

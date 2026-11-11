@@ -1,0 +1,136 @@
+\documentclass[12pt,a4paper,oneside]{report}
+
+\usepackage{fontspec}
+\IfFontExistsTF{Times New Roman}{\setmainfont{Times New Roman}}{\setmainfont{TeX Gyre Termes}}
+\usepackage[vietnamese]{babel}
+\usepackage[a4paper,top=2.5cm,bottom=3cm,left=3cm,right=2cm]{geometry}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs,longtable,array,multirow,tabularx}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{indentfirst}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage[fontsize=13pt]{scrextend}
+\usepackage{microtype}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit}
+\usepackage[most]{tcolorbox}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
+\usepackage{placeins}
+\hypersetup{pdftitle={Klygo: xử lý dữ liệu và đánh giá mô hình phát hiện đối tượng},pdfauthor={Nhóm sinh viên, Đại học Phenikaa}}
+\newcommand{\tenDeTai}{Thiết kế và xây dựng thư viện Klygo hỗ trợ xử lý dữ liệu và đánh giá các mô hình phát hiện đối tượng}
+\newcommand{\tenMonHoc}{Nhập môn Trí tuệ nhân tạo}
+\newcommand{\giangVien}{TS. Trần Đình Tân}
+\newcommand{\thanhVienMot}{Trịnh Như Nhất -- 23010600}
+\newcommand{\thanhVienHai}{Trần Đức Anh -- 23017114}
+\newcommand{\thanhVienBa}{Phạm Văn Tuấn Kiệt -- 23010881}
+\newcommand{\ngayBaoCao}{Hà Nội, tháng 11 năm 2026}
+\newcommand{\code}[1]{\texttt{\small #1}}
+\input{generated/numbers}
+
+\setlength{\parindent}{1cm}
+\setlength{\parskip}{6pt}
+\setstretch{1.2}
+\renewcommand{\arraystretch}{1.25}
+\setlist[itemize]{leftmargin=1.8cm,itemsep=2pt,topsep=4pt,parsep=0pt}
+\setlist[enumerate]{leftmargin=1.8cm,itemsep=2pt,topsep=4pt,parsep=0pt}
+\graphicspath{{images/}}
+\captionsetup{font=normalsize,labelfont=bf,justification=centering}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+\sloppy
+\emergencystretch=2em
+\raggedbottom
+\clubpenalty=10000
+\widowpenalty=10000
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+
+\titleformat{\chapter}[display]
+  {\normalfont\bfseries\centering\fontsize{16pt}{20pt}\selectfont}
+  {CHƯƠNG \thechapter}{8pt}{\fontsize{16pt}{20pt}\selectfont\MakeUppercase}
+\titlespacing*{\chapter}{0pt}{0pt}{18pt}
+\titleformat{\section}
+  {\normalfont\bfseries\fontsize{14pt}{18pt}\selectfont}
+  {\thesection}{0.7em}{}
+\titlespacing*{\section}{0pt}{16pt}{6pt}
+\titleformat{\subsection}
+  {\normalfont\bfseries\fontsize{13pt}{17pt}\selectfont}
+  {\thesubsection}{0.7em}{}
+\titlespacing*{\subsection}{0pt}{12pt}{4pt}
+
+\definecolor{formulaTitle}{HTML}{087F8C}
+\definecolor{formulaFrame}{HTML}{0A98A7}
+\definecolor{formulaBack}{HTML}{F1FAFA}
+\definecolor{codeBack}{HTML}{F7F8FA}
+\newtcolorbox{formulabox}[1][]{
+  enhanced,breakable,colback=formulaBack,colframe=formulaFrame,boxrule=0.8pt,
+  arc=0pt,left=8pt,right=8pt,top=11pt,bottom=8pt,
+  fonttitle=\bfseries\color{white},coltitle=white,colbacktitle=formulaTitle,
+  attach boxed title to top left={xshift=0pt,yshift=-\tcboxedtitleheight/2},
+  boxed title style={boxrule=0pt,arc=0pt},title={Công thức},#1
+}
+\newtcolorbox{notebox}[1][]{breakable,colback=blue!3,colframe=blue!45!black,
+  boxrule=0.6pt,arc=1pt,title={Lưu ý},fonttitle=\bfseries,#1}
+
+\lstset{
+  language=Python,basicstyle=\ttfamily\footnotesize,backgroundcolor=\color{codeBack},
+  breaklines=true,frame=single,numbers=left,numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue!70!black}\bfseries,commentstyle=\color{gray}\itshape,
+  stringstyle=\color{teal!70!black},showstringspaces=false,tabsize=2
+}
+\renewcommand{\lstlistingname}{Mã nguồn}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+\begin{document}
+\hypersetup{pageanchor=false}
+\pagenumbering{gobble}
+\input{chapters/klygo00_front}
+
+\tableofcontents
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{DANH MỤC HÌNH ẢNH}
+\listoffigures
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{DANH MỤC BẢNG}
+\listoftables
+\clearpage
+\input{chapters/klygo00_abbreviations}
+
+\hypersetup{pageanchor=true}
+\pagenumbering{arabic}
+\setcounter{page}{1}
+\input{chapters/klygo01_intro}
+\input{chapters/klygo02_theory}
+\input{chapters/klygo03_design}
+\input{chapters/klygo04_implementation}
+\input{chapters/klygo05_experiments}
+\input{chapters/klygo06_demo}
+\input{chapters/klygo07_conclusion}
+\label{page:main-end}
+\input{chapters/klygo08_appendix}
+
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{TÀI LIỆU THAM KHẢO}
+\bibliographystyle{ieeetr}
+\setlength{\bibsep}{3pt}
+\renewcommand{\bibfont}{\small\setstretch{1.0}\raggedright}
+\begingroup\small\setstretch{1.0}
+\bibliography{klygo_references}
+\endgroup
+\end{document}

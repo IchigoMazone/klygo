@@ -1,0 +1,177 @@
+\chapter{Phân Tích Và Thiết Kế Hệ Thống}
+
+\section{Yêu cầu chức năng}
+
+\begin{longtable}{p{1.2cm}p{5.0cm}p{8.0cm}}
+\caption{Yêu cầu chức năng chính}\label{tab:functional}\\
+\toprule
+\textbf{Mã} & \textbf{Chức năng} & \textbf{Mô tả} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Mã} & \textbf{Chức năng} & \textbf{Mô tả} \\
+\midrule
+\endhead
+F01 & Chọn địa điểm & Chọn từ danh sách, tìm tên/địa chỉ hoặc nhấp bản đồ; điểm
+được ánh xạ về nút graph gần nhất. \\
+F02 & Thiết lập mục tiêu & Tối ưu tổng chiều dài hoặc tổng thời gian ước tính. \\
+F03 & Thiết lập điểm cuối & Tuyến mở, điểm cuối cố định hoặc quay về điểm đầu. \\
+F04 & Tối ưu và hiển thị & Hiển thị thứ tự ghé, polyline, khoảng cách, thời gian
+và thời gian chạy thuật toán. \\
+F05 & Chuyển chế độ & Chuyển giữa Lộ trình và Trốn tìm mà không mất trạng thái
+của chế độ còn lại. \\
+F06 & Cấu hình ván & Chọn sân, chiến thuật, seed, ngân sách, chu kỳ tiết lộ và
+giới hạn lượt. \\
+F07 & Chơi theo lượt & Chỉ cho chọn nút khả đạt; cập nhật tập niềm tin, nước máy
+và trạng thái thắng/thua. \\
+F08 & Phát lại và xuất log & Xem lại từng lượt và tải lịch sử ván ở dạng JSON. \\
+\bottomrule
+\end{longtable}
+
+\section{Yêu cầu phi chức năng}
+
+Hệ thống phải chạy cục bộ trên Python 3.11; graph định tuyến được tải một lần và
+cache trong phiên; lỗi dữ liệu phải hiện thành thông báo có thể hiểu thay vì làm
+sập giao diện. Phần trò chơi phải chạy ngay cả khi graph định tuyến lớn không có
+sẵn. Với tối đa 10 điểm ghé, thời gian Held--Karp cần nhỏ so với bước tính ma
+trận đường đi. Các trạng thái và cấu hình phải có thể tái lập bằng seed.
+
+Về độ tin cậy, dữ liệu biên phải được kiểm tra: tọa độ hữu hạn, trọng số dương,
+ngân sách dương, graph trò chơi từ 3 đến 600 nút, điểm xuất phát/đội/lối thoát
+không trùng nhau và người trốn có thể tới ít nhất một lối thoát. Đây là các nghĩa
+vụ triển khai tương ứng với giả định trong mô hình toán.
+
+\section{Kiến trúc tổng thể}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.75cm and 0.85cm,
+  box/.style={draw,rounded corners,align=center,minimum width=3.2cm,minimum height=1.0cm,fill=blue!4},
+  data/.style={draw,shape=cylinder,shape border rotate=90,aspect=0.25,align=center,minimum width=2.8cm,minimum height=1.0cm,fill=teal!7},
+  arr/.style={-{Latex[length=2mm]},thick}
+]
+\node[box] (ui) {Streamlit\\\texttt{app.py}};
+\node[box,below left=of ui] (route) {Bộ điều phối tuyến\\\texttt{route\_optimizer.py}};
+\node[box,below right=of ui] (chaseui) {Giao diện trò chơi\\\texttt{chase\_ui.py}};
+\node[box,below=of route] (alg) {Dijkstra / Held--Karp\\NN / 2-opt};
+\node[box,below=of chaseui] (game) {Luật và chính sách\\\texttt{chase.py}};
+\node[data,below=of alg] (biggraph) {Graph định tuyến\\350.930 nút};
+\node[data,below=of game] (smallgraph) {Sân trò chơi\\81 hoặc 358 nút};
+\draw[arr] (ui) -- (route);
+\draw[arr] (ui) -- (chaseui);
+\draw[arr] (route) -- (alg);
+\draw[arr] (chaseui) -- (game);
+\draw[arr] (biggraph) -- (alg);
+\draw[arr] (smallgraph) -- (game);
+\end{tikzpicture}
+\caption{Kiến trúc hai chế độ dùng chung giao diện nhưng tách graph theo mục đích}
+\label{fig:architecture}
+\end{figure}
+
+Việc tách hai graph giải quyết hai nhu cầu khác nhau. Định tuyến cần mạng lớn và
+giữ đúng chiều đường ô tô. Trò chơi cần graph nhỏ để tiền tính khoảng cách mọi
+cặp và phản hồi nhanh mỗi lượt. Không dùng graph trò chơi để thay thế graph định
+tuyến khi tệp lớn thiếu, vì việc đó sẽ làm thay đổi ngầm ý nghĩa ứng dụng.
+
+\section{Luồng tối ưu lộ trình}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.55cm,
+  flowbox/.style={draw,rounded corners,align=center,text width=10.5cm,minimum height=0.8cm,fill=blue!3},
+  arr/.style={-{Latex[length=2mm]},thick}
+]
+\node[flowbox] (s1) {1. Chuẩn hóa điểm người dùng và tìm nút graph gần nhất};
+\node[flowbox,below=of s1] (s2) {2. Chạy Dijkstra từ từng điểm quan tâm tới các điểm còn lại};
+\node[flowbox,below=of s2] (s3) {3. Lập ma trận chi phí có hướng và lưu đường đi để khôi phục};
+\node[flowbox,below=of s3] (s4) {4. Chạy Held--Karp theo chế độ điểm cuối; chạy NN và 2-opt để so sánh};
+\node[flowbox,below=of s4] (s5) {5. Ghép các đoạn Dijkstra, tính chỉ số và vẽ tuyến trên Folium};
+\draw[arr] (s1)--(s2); \draw[arr] (s2)--(s3); \draw[arr] (s3)--(s4); \draw[arr] (s4)--(s5);
+\end{tikzpicture}
+\caption{Pipeline tối ưu lộ trình}
+\label{fig:route-pipeline}
+\end{figure}
+
+Điểm tách quan trọng là Dijkstra tối ưu từng đoạn trên graph đường, còn
+Held--Karp tối ưu thứ tự trên graph đầy đủ của các điểm quan tâm. Do chi phí của
+mỗi cung trong graph đầy đủ đã là đường đi ngắn nhất, ghép các cung theo thứ tự
+Held--Karp tạo tuyến tối ưu đối với mô hình chi phí tĩnh và tập điểm đã ánh xạ.
+
+\section{Thiết kế trạng thái trò chơi}
+
+Ba kiểu dữ liệu bất biến được sử dụng:
+\begin{itemize}
+  \item \texttt{Rules}: ngân sách người trốn, ngân sách đội máy, chu kỳ tiết lộ,
+  giới hạn lượt;
+  \item \texttt{Observation}: chỉ chứa thông tin chính sách máy được phép biết;
+  \item \texttt{State}: chứa vị trí thật của người trốn, quan sát công khai,
+  trạng thái kết thúc và các đường đi của lượt gần nhất.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.7cm and 1cm,
+  box/.style={draw,rounded corners,align=left,text width=5.1cm,minimum height=1.3cm},
+  arr/.style={-{Latex[length=2mm]},thick}
+]
+\node[box,fill=red!5] (hidden) {\textbf{State riêng tư}\\vị trí thật, đường đi thật của người trốn};
+\node[box,fill=green!7,right=of hidden] (obs) {\textbf{Observation công khai}\\đội máy, lối thoát, tập niềm tin, dấu vết};
+\node[box,fill=blue!5,below=of obs] (policy) {\textbf{hunter\_decision}\\chỉ nhận Arena + Observation};
+\node[box,fill=yellow!8,below=of hidden] (step) {\textbf{step}\\cập nhật luật, gọi policy, tạo State mới};
+\draw[arr] (hidden) -- (step);
+\draw[arr] (obs) -- (policy);
+\draw[arr] (policy) -- (step);
+\draw[arr] (step) -- (obs);
+\draw[dashed,-{Latex[length=2mm]},gray] (hidden) -- node[above,sloped]{bị cấm} (policy);
+\end{tikzpicture}
+\caption{Ranh giới thông tin giữa trạng thái ẩn và chính sách máy}
+\label{fig:information-boundary}
+\end{figure}
+
+Thiết kế này biến một yêu cầu khái niệm thành nghĩa vụ có thể kiểm thử: hai trạng
+thái có cùng \texttt{Observation} nhưng vị trí người trốn khác nhau phải tạo cùng
+đầu vào và cùng quyết định máy. Tuy nhiên, điều này chỉ chứng minh ranh giới tại
+API chính sách hiện tại; nếu mã tương lai thêm biến toàn cục hoặc truy cập session
+state bên ngoài API, bất biến phải được kiểm tra lại.
+
+\section{Thiết kế dữ liệu}
+
+\begin{table}[H]
+\centering
+\caption{Các nguồn dữ liệu của hệ thống}
+\begin{tabularx}{\linewidth}{p{4.0cm}p{2.3cm}Y Y}
+\toprule
+\textbf{Nguồn} & \textbf{Quy mô} & \textbf{Mục đích} & \textbf{Giới hạn} \\
+\midrule
+\texttt{hanoi\_urban\_drive} & 350.930 nút, 864.982 cạnh & Định tuyến ô tô trên
+phạm vi Hà Nội mở rộng & Tĩnh; không phản ánh ùn tắc thời gian thực \\
+Lưới mô phỏng & 81 nút, 288 cạnh & Sân chuẩn, đối xứng, dễ tái lập & Không phải
+đường thực tế \\
+\texttt{chase\_hanoi} & 358 nút, 1.184 cạnh & Hình học phố Hà Nội cho trò chơi &
+Trích từ nguồn gián đoạn, điều chỉnh hai chiều \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Cạnh dài trong sân trò chơi được chia thành các đoạn không quá 90 m. Phép chia
+bảo toàn tổng chiều dài và chiều cạnh; các cạnh ngược chiều dùng chung nút trung
+gian khi tọa độ trùng. Mục đích là tạo đủ điểm dừng cho ngân sách 160 m/lượt,
+không phải làm tăng độ chính xác địa lý.
+
+\section{Mô hình lỗi và xử lý}
+
+Lỗi được chia thành ba lớp. Lỗi đầu vào gồm tọa độ sai, ngân sách không dương và
+điểm trùng; hệ thống từ chối sớm. Lỗi dữ liệu gồm tệp GraphML/Pickle thiếu hoặc
+không hợp lệ; giao diện vẫn mở và hiển thị cảnh báo, còn chế độ trò chơi độc lập
+vẫn dùng được. Lỗi kết nối chỉ ảnh hưởng geocoding, tải tile hoặc làm mới dữ liệu;
+thuật toán định tuyến trên graph đóng gói không phụ thuộc tile nền.
+
+\begin{notebox}[title={Phân biệt bản đồ nền và thuật toán}]
+Tile bản đồ chỉ là ảnh nền trực quan. Một lỗi DNS hoặc chính sách tile có thể làm
+nền màu xám trong khi graph, Dijkstra và tuyến kết quả vẫn hoạt động. Vì vậy kiểm
+thử đúng phải kiểm tra cả giá trị thuật toán lẫn lớp hiển thị, không suy ra lỗi
+thuật toán chỉ từ việc tile không tải.
+\end{notebox}

@@ -1,0 +1,347 @@
+{
+  "metrics": {
+    "yolo": {
+      "coco_stats": [
+        0.382443979917149,
+        0.5255203046965298,
+        0.4165724661699405,
+        0.21753554412150403,
+        0.44433298113569497,
+        0.5652641733398772,
+        0.30058408101750717,
+        0.5077280399151296,
+        0.5377575883189277,
+        0.31146017087425215,
+        0.6114529059296517,
+        0.723849750662599
+      ],
+      "AP": 0.382443979917149,
+      "AP50": 0.5255203046965298,
+      "AP75": 0.4165724661699405,
+      "operating_point": {
+        "confidence": 0.25,
+        "iou": 0.5,
+        "aggregation": "micro; COCO ignore/crowd rules",
+        "tp": 1752,
+        "fp": 695,
+        "fn": 1723,
+        "precision": 0.7159787494891704,
+        "recall": 0.5041726618705036,
+        "f1": 0.5916919959473151
+      },
+      "phase": "main",
+      "image_count": 500,
+      "mean_latency_ms": 27.525940598454326,
+      "peak_allocated_vram_bytes": 40335360
+    },
+    "world": {
+      "coco_stats": [
+        0.3906724583760988,
+        0.532307567232896,
+        0.42412299833304923,
+        0.262100471882176,
+        0.4343785532614916,
+        0.5540619844232624,
+        0.3217262245220541,
+        0.5388412315162607,
+        0.5656069346365075,
+        0.38207366173231405,
+        0.6164019143201501,
+        0.7248271208305014
+      ],
+      "AP": 0.3906724583760988,
+      "AP50": 0.532307567232896,
+      "AP75": 0.42412299833304923,
+      "operating_point": {
+        "confidence": 0.25,
+        "iou": 0.5,
+        "aggregation": "micro; COCO ignore/crowd rules",
+        "tp": 1895,
+        "fp": 1003,
+        "fn": 1580,
+        "precision": 0.6538992408557626,
+        "recall": 0.5453237410071943,
+        "f1": 0.5946963753334379
+      },
+      "phase": "main",
+      "image_count": 500,
+      "mean_latency_ms": 32.75969739863649,
+      "peak_allocated_vram_bytes": 134733824
+    },
+    "faster": {
+      "coco_stats": [
+        0.25081916396044096,
+        0.39493452072944113,
+        0.2630629548473113,
+        0.05505562977355451,
+        0.2903716797375052,
+        0.5183605593508137,
+        0.2407773285355715,
+        0.36480406717037156,
+        0.38632899353603645,
+        0.09002429200036088,
+        0.4713672078190783,
+        0.681779213525751
+      ],
+      "AP": 0.25081916396044096,
+      "AP50": 0.39493452072944113,
+      "AP75": 0.2630629548473113,
+      "operating_point": {
+        "confidence": 0.25,
+        "iou": 0.5,
+        "aggregation": "micro; COCO ignore/crowd rules",
+        "tp": 1574,
+        "fp": 3258,
+        "fn": 1901,
+        "precision": 0.3257450331125828,
+        "recall": 0.4529496402877698,
+        "f1": 0.37895750571806913
+      },
+      "phase": "main",
+      "image_count": 500,
+      "mean_latency_ms": 61.47016220353544,
+      "peak_allocated_vram_bytes": 223474688
+    }
+  },
+  "timing": {
+    "yolo": {
+      "image_count": 100,
+      "repeats": 3,
+      "paired_calls": 300,
+      "mismatches": [],
+      "scope": "Same backend/model/input, FP32, torch.inference_mode and Detection outputs; predict lifecycle versus direct forward, not pure native backend overhead",
+      "environment": {
+        "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+        "platform": "Windows-10-10.0.22631-SP0",
+        "processor": "Intel64 Family 6 Model 165 Stepping 2, GenuineIntel",
+        "versions": {
+          "klygo": "2.1.0",
+          "torch": "2.8.0+cu126",
+          "torchvision": "0.23.0+cu126",
+          "ultralytics": "8.3.228",
+          "numpy": "2.2.6",
+          "pillow": "11.3.0",
+          "pycocotools": "2.0.10"
+        },
+        "cuda_runtime": "12.6",
+        "cuda_available": true,
+        "gpu": "NVIDIA GeForce GTX 1650 Ti with Max-Q Design",
+        "vram_bytes": 4294639616,
+        "source_commit": "0ca8a6a77600e1caf770ae8157d2df35360ee719",
+        "source_status": "",
+        "script_sha256": "f68558fcb17cd937ee299a05d1e29e499227ede5b80c9268abd369726dab65eb"
+      },
+      "forward": {
+        "mean_ms": 24.527365004178137,
+        "median_ms": 25.8896000450477,
+        "p90_ms": 28.3049299614504,
+        "sequential_fps": 40.77078804957867,
+        "repeat_mean_ms": [
+          24.803304991219193,
+          24.790378008037806,
+          23.98841201327741
+        ]
+      },
+      "predict": {
+        "mean_ms": 27.01680132575954,
+        "median_ms": 28.315299889072776,
+        "p90_ms": 30.923289968632165,
+        "sequential_fps": 37.014004283569136,
+        "repeat_mean_ms": [
+          27.511940991971642,
+          27.140190994832665,
+          26.398271990474313
+        ]
+      },
+      "paired_difference": {
+        "mean_ms": 2.4894363215814033,
+        "median_ms": 2.4695999454706907,
+        "relative_mean_percent": 10.149628063011816
+      }
+    },
+    "world": {
+      "image_count": 100,
+      "repeats": 3,
+      "paired_calls": 300,
+      "mismatches": [],
+      "scope": "Same backend/model/input, FP32, torch.inference_mode and Detection outputs; predict lifecycle versus direct forward, not pure native backend overhead",
+      "environment": {
+        "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+        "platform": "Windows-10-10.0.22631-SP0",
+        "processor": "Intel64 Family 6 Model 165 Stepping 2, GenuineIntel",
+        "versions": {
+          "klygo": "2.1.0",
+          "torch": "2.8.0+cu126",
+          "torchvision": "0.23.0+cu126",
+          "ultralytics": "8.3.228",
+          "numpy": "2.2.6",
+          "pillow": "11.3.0",
+          "pycocotools": "2.0.10"
+        },
+        "cuda_runtime": "12.6",
+        "cuda_available": true,
+        "gpu": "NVIDIA GeForce GTX 1650 Ti with Max-Q Design",
+        "vram_bytes": 4294639616,
+        "source_commit": "0ca8a6a77600e1caf770ae8157d2df35360ee719",
+        "source_status": "",
+        "script_sha256": "f68558fcb17cd937ee299a05d1e29e499227ede5b80c9268abd369726dab65eb"
+      },
+      "forward": {
+        "mean_ms": 29.975877996378888,
+        "median_ms": 31.58800001256168,
+        "p90_ms": 33.601209870539606,
+        "sequential_fps": 33.36015712770118,
+        "repeat_mean_ms": [
+          30.3452479862608,
+          29.770695995539427,
+          29.811690007336438
+        ]
+      },
+      "predict": {
+        "mean_ms": 32.45719033836698,
+        "median_ms": 34.13124999497086,
+        "p90_ms": 36.23898990917951,
+        "sequential_fps": 30.809814083565964,
+        "repeat_mean_ms": [
+          33.090357987675816,
+          31.960535019170493,
+          32.32067800825462
+        ]
+      },
+      "paired_difference": {
+        "mean_ms": 2.4813123419880867,
+        "median_ms": 2.4815502110868692,
+        "relative_mean_percent": 8.277696961162677
+      }
+    },
+    "faster": {
+      "image_count": 100,
+      "repeats": 3,
+      "paired_calls": 300,
+      "mismatches": [],
+      "scope": "Same backend/model/input, FP32, torch.inference_mode and Detection outputs; predict lifecycle versus direct forward, not pure native backend overhead",
+      "environment": {
+        "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+        "platform": "Windows-10-10.0.22631-SP0",
+        "processor": "Intel64 Family 6 Model 165 Stepping 2, GenuineIntel",
+        "versions": {
+          "klygo": "2.1.0",
+          "torch": "2.8.0+cu126",
+          "torchvision": "0.23.0+cu126",
+          "ultralytics": "8.3.228",
+          "numpy": "2.2.6",
+          "pillow": "11.3.0",
+          "pycocotools": "2.0.10"
+        },
+        "cuda_runtime": "12.6",
+        "cuda_available": true,
+        "gpu": "NVIDIA GeForce GTX 1650 Ti with Max-Q Design",
+        "vram_bytes": 4294639616,
+        "source_commit": "0ca8a6a77600e1caf770ae8157d2df35360ee719",
+        "source_status": "",
+        "script_sha256": "f68558fcb17cd937ee299a05d1e29e499227ede5b80c9268abd369726dab65eb"
+      },
+      "forward": {
+        "mean_ms": 59.1567570126305,
+        "median_ms": 53.4051499562338,
+        "p90_ms": 84.61404016707093,
+        "sequential_fps": 16.9042396929651,
+        "repeat_mean_ms": [
+          59.620786011219025,
+          58.31950702704489,
+          59.52997799962759
+        ]
+      },
+      "predict": {
+        "mean_ms": 61.5388653264381,
+        "median_ms": 55.372699978761375,
+        "p90_ms": 88.46846006345004,
+        "sequential_fps": 16.24989337543706,
+        "repeat_mean_ms": [
+          61.80923199513927,
+          61.289891989436,
+          61.517471994739026
+        ]
+      },
+      "paired_difference": {
+        "mean_ms": 2.382108313807597,
+        "median_ms": 2.460150048136711,
+        "relative_mean_percent": 4.026772991120854
+      }
+    }
+  },
+  "dataset": {
+    "annotations": 3516,
+    "crowd": 41,
+    "valid_gt": 3475,
+    "supported_classes": 79
+  },
+  "cases": [
+    {
+      "case": "good",
+      "image_id": 67406,
+      "criterion": "F1 cao nhất của YOLOv8n trong các ảnh có ít nhất ba GT hợp lệ",
+      "stats": {
+        "yolo": {
+          "tp": 4,
+          "fp": 0,
+          "gt": 4
+        },
+        "world": {
+          "tp": 4,
+          "fp": 0,
+          "gt": 4
+        },
+        "faster": {
+          "tp": 4,
+          "fp": 6,
+          "gt": 4
+        }
+      }
+    },
+    {
+      "case": "hard",
+      "image_id": 65288,
+      "criterion": "tổng FP và FN lớn nhất của YOLOv8n trong các ảnh có ít nhất ba GT hợp lệ",
+      "stats": {
+        "yolo": {
+          "tp": 6,
+          "fp": 1,
+          "gt": 37
+        },
+        "world": {
+          "tp": 10,
+          "fp": 6,
+          "gt": 37
+        },
+        "faster": {
+          "tp": 6,
+          "fp": 8,
+          "gt": 37
+        }
+      }
+    },
+    {
+      "case": "small",
+      "image_id": 432898,
+      "criterion": "số annotation small nhiều nhất, sau khi loại hai ảnh đã chọn",
+      "stats": {
+        "yolo": {
+          "tp": 11,
+          "fp": 3,
+          "gt": 35
+        },
+        "world": {
+          "tp": 10,
+          "fp": 3,
+          "gt": 35
+        },
+        "faster": {
+          "tp": 11,
+          "fp": 46,
+          "gt": 35
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,148 @@
+\chapter{Phân Tích Và Thiết Kế Thư Viện}
+\label{chap:design}
+\section{Yêu cầu hệ thống}
+\subsection{Yêu cầu chức năng}
+Klygo được thiết kế như một thư viện dùng trong mã Python và notebook. Người sử dụng cần có khả năng chuẩn bị nguồn dữ liệu, kiểm tra cấu trúc, áp dụng tiền xử lý, nạp mô hình phù hợp và nhận một kiểu kết quả thống nhất. Các bước hậu xử lý và hiển thị cần hoạt động với đầu ra đó mà không yêu cầu người dùng viết lại phần chuyển đổi cho từng backend.
+
+Hệ thống cần tiếp nhận nguồn ảnh đơn, danh sách ảnh hoặc video; hỗ trợ cách đọc phù hợp với dữ liệu lớn; quản lý tùy chọn suy luận và text prompt; cung cấp phương thức reset, benchmark và unload. Đối với mô hình mới, người phát triển cần một ranh giới mở rộng rõ ràng: cài đặt adapter cho đầu vào và đầu ra, trong khi có thể tái sử dụng logic điều phối của lớp cơ sở.
+
+Các yêu cầu xử lý dữ liệu bao gồm quản lý đường dẫn và tệp, đọc cấu hình, thao tác archive, kiểm tra và tổ chức dataset. Các yêu cầu này phục vụ pipeline AI nhưng không tự tạo ra một mô hình học máy. Việc đặt chúng trong những mô-đun riêng giúp tránh dồn toàn bộ chức năng vào một lớp phát hiện lớn.
+
+\subsection{Yêu cầu phi chức năng}
+Tính đúng được ưu tiên ở các ranh giới dữ liệu: box phải có bốn tọa độ, độ dài các mảng dự đoán phải nhất quán, nhãn và chỉ số lớp không được xung đột. Kết quả cũ cần giữ được cấu hình và nội dung khi một lần gọi mới thay đổi prompt. Khi mô hình đã unload, những thao tác cần tài nguyên mô hình phải báo trạng thái không hợp lệ thay vì tiếp tục chạy với trạng thái thiếu.
+
+Khả năng mở rộng được thể hiện qua backend tùy chọn và giao diện công khai. Việc nhập một phần thư viện không nên buộc cài toàn bộ framework AI. Khả năng tái lập được hỗ trợ bằng cấu hình có thể kiểm tra, thông tin nguồn và các tệp kết quả. Hiệu năng được xem xét qua lazy input, batch và stream, nhưng mọi tuyên bố giảm bộ nhớ hoặc tăng tốc cần có phạm vi cụ thể.
+
+\begin{table}[H]\centering\small
+\caption{Ma trận yêu cầu và phương thức kiểm chứng}
+\begin{tabularx}{\textwidth}{p{1.3cm}YY}
+\toprule Mã & Yêu cầu & Bằng chứng sử dụng \\\midrule
+F1 & Chuẩn hóa kết quả đa backend & Kiểm thử schema, ánh xạ nhãn, chạy ba checkpoint thật \\
+F2 & Tiền xử lý có lịch sử hình học & Kiểm thử letterbox và API restore \\
+F3 & Điều phối batch và stream & Kiểm thử số kết quả, stride, cấu hình stream xen kẽ \\
+F4 & Quản lý cấu hình và prompt & Kiểm thử ghi nhớ, xóa prompt, rollback và reset \\
+N1 & Bảo vệ vòng đời & Kiểm thử unload và trường hợp dùng stream sau unload \\
+N2 & Tái lập số liệu & Manifest, SHA-256, dự đoán và COCOeval lưu kèm \\
+N3 & Chi phí thời gian chấp nhận được & Phép đo cặp forward/predict, kiểm tra đầu ra tương đương \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Kiến trúc tổng thể}
+Revision nền tảng xuất 12 mô-đun công khai; revision mở rộng bổ sung mining thành mô-đun thứ 13 (Mục~\ref{sec:extension-version}). Có thể nhóm chúng theo trách nhiệm thành tầng lưu trữ và cấu hình; tầng media và tiền xử lý; tầng mô hình; tầng kết quả, hậu xử lý và trực quan hóa. Hai mô-đun tiện ích và kiểm tra dữ liệu hỗ trợ các tầng còn lại. Cách nhóm này là góc nhìn phân tích kiến trúc, không có nghĩa mã nguồn bị chia thành bốn tiến trình độc lập.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[>=Stealth,node distance=0.65cm,every node/.style={font=\small},layer/.style={draw,rounded corners,fill=blue!4,text width=10.5cm,minimum height=1.05cm,align=center}]
+\node[layer] (storage) {\textbf{Lưu trữ, cấu hình và dữ liệu}\\files \quad archive \quad config \quad datasets \quad mining};
+\node[layer,below=of storage] (media) {\textbf{Ảnh, video và tiền xử lý}\\media \quad preprocessing};
+\node[layer,below=of media] (models) {\textbf{Mô hình và adapter}\\models: Ultralytics, Torchvision, Hugging Face, Keras};
+\node[layer,below=of models] (out) {\textbf{Kết quả và sử dụng kết quả}\\outputs \quad postprocessing \quad visual};
+\node[draw,fill=teal!5,text width=10.5cm,minimum height=0.8cm,align=center,below=of out] (common) {utils và validators: chức năng hỗ trợ dùng chung};
+\draw[->] (storage)--(media);\draw[->] (media)--(models);\draw[->] (models)--(out);
+\end{tikzpicture}
+\caption{Các nhóm trách nhiệm trong kiến trúc Klygo; mining thuộc revision mở rộng. Mũi tên biểu diễn một pipeline điển hình; mô-đun có thể được sử dụng độc lập.}
+\label{fig:architecture}
+\end{figure}
+
+\begin{longtable}{>{\raggedright\arraybackslash}p{2.8cm}>{\raggedright\arraybackslash}p{5.1cm}>{\raggedright\arraybackslash}p{6.1cm}}
+\caption{Vai trò của các mô-đun công khai trong thư viện}\label{tab:modules}\\
+\toprule Mô-đun & Trách nhiệm & Liên hệ với đề tài \\\midrule\endfirsthead
+\toprule Mô-đun & Trách nhiệm & Liên hệ với đề tài \\\midrule\endhead
+files & Đường dẫn, filesystem, đọc/ghi dữ liệu có cấu trúc, checksum, download & Lưu cấu hình và kết quả, truy xuất tệp nguồn \\
+archive & Tạo, đọc, kiểm tra và chuyển đổi tệp nén & Đóng gói dữ liệu và nguồn; không nằm trong timer suy luận \\
+config & Tạo, truy cập, hợp nhất và kiểm tra cấu hình & Tách tham số khỏi mã gọi, phân nhóm metadata \\
+datasets & Đọc, kiểm tra và tổ chức dataset kiểu YOLO & Hỗ trợ quy trình dữ liệu; COCOeval chính dùng annotation JSON gốc \\
+mining & Thống kê, phát hiện trùng, chấm điểm, phân cụm, tuyển chọn và cân bằng dữ liệu & Mô-đun thứ 13 ở revision mở rộng; tạo tập ảnh được chọn để xuất nhãn và chuẩn bị huấn luyện \\
+media & LazyImage, MediaFrames, MediaStream, chuyển đổi ảnh/video & Điều phối nguồn và thời điểm giải mã pixel \\
+preprocessing & Operation, Pipeline, phép biến đổi, metric ảnh và trace & Chuẩn bị ảnh, ghi lịch sử hình học \\
+models & BaseModel, Detector, registry, adapter và backend runtime & Ranh giới nạp mô hình và điều phối suy luận \\
+outputs & Box, Crops, Detection, Detections và builder & Hợp đồng đầu ra giữa mô hình và bước sử dụng kết quả \\
+postprocessing & Lọc, chọn, cắt giới hạn, IoU, NMS và pipeline & Xử lý kết quả độc lập backend \\
+visual & Vẽ box, hiển thị ảnh, thống kê dataset & Minh chứng trực quan và kiểm tra lỗi \\
+utils & Định dạng dung lượng, ánh xạ và progress bar & Chức năng hỗ trợ cho nhiều mô-đun \\
+validators & Kiểm tra kiểu và số lượng tham số & Báo lỗi sớm ở giao diện công khai \\
+\bottomrule
+\end{longtable}
+
+Các mô-đun lưu trữ và cấu hình được nhập qua facade công khai. Riêng \code{models} được nạp theo nhu cầu ở mức top-level, giúp trì hoãn truy cập các thành phần AI. Phụ thuộc bắt buộc vẫn tồn tại cho các mô-đun được nhập sẵn, nên không diễn giải cơ chế này thành việc toàn bộ thư viện không có chi phí khởi tạo.
+
+\section{Hợp đồng dữ liệu đầu ra}
+\subsection{Box và định danh}
+\code{Box} đại diện cho một đối tượng phát hiện. Thuộc tính \code{id} xác định box trong một frame, còn \code{class\_id} xác định lớp trong bảng \code{names}. Hai trường này có vai trò khác nhau: hai box cùng lớp cần có \code{id} riêng, nhưng có thể cùng \code{class\_id}. Nếu nhầm hai khái niệm, phép đếm theo lớp hoặc chọn box có thể tạo kết quả sai mà không làm chương trình dừng.
+
+Box còn lưu nhãn, score, tọa độ và tham chiếu ảnh cha để hỗ trợ crop theo nhu cầu. Một UID cung cấp định danh đối tượng trong phạm vi cấu trúc dữ liệu, nhưng sự tồn tại của UID không có nghĩa thư viện đã thực hiện tracking xuyên khung hình. Tracking cần một thuật toán liên kết đối tượng riêng, nằm ngoài thí nghiệm detection của báo cáo.
+
+\subsection{Detection và Detections}
+\code{Detection} chứa các box của một ảnh hoặc frame, cùng ảnh nguồn, thông tin thời gian và cấu hình. \code{Detections} chứa nhiều frame, có thể bao một danh sách đã materialize hoặc một iterator stream. Sự phân chia này giúp một hàm hậu xử lý áp dụng được ở nhiều mức: một frame hoặc một tập frame.
+
+Ở mức frame, \code{names} phản ánh các lớp xuất hiện trong frame; collection giữ registry dùng cho tập kết quả. Khi hợp nhất những frame có ánh xạ lớp khác nhau, cần xử lý xung đột theo tên và ID thay vì mặc định mọi frame dùng cùng vocabulary. Mã nguồn có logic tạo bản sao và remap cần thiết để hạn chế việc một collection mới làm thay đổi kết quả đã được sở hữu ở nơi khác.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[>=Stealth,node distance=0.95cm,every node/.style={font=\small},b/.style={draw,align=center,text width=9cm,minimum height=1.45cm,inner sep=7pt}]
+\node[b] (many) {\textbf{Detections}\\danh sách hoặc stream frame\\names, fps, source type};
+\node[b,below=of many] (one) {\textbf{Detection}\\source image, objects\\config, speed, frame index};
+\node[b,below=of one] (box) {\textbf{Box}\\id, class\_id, label, score\\xyxy, parent image, metadata};
+\draw[->] (many.south)--node[right=5pt,fill=white,inner sep=2pt]{nhiều frame}(one.north);
+\draw[->] (one.south)--node[right=5pt,fill=white,inner sep=2pt]{nhiều box}(box.north);
+\end{tikzpicture}
+\caption{Quan hệ giữa các kiểu đầu ra. Registry lớp và định danh box được phân biệt để tránh nhầm lẫn khi ghép kết quả.}
+\end{figure}
+
+\subsection{Builder và ranh giới chuẩn hóa}
+Adapter đưa kết quả framework về các mảng \code{boxes}, \code{scores}, \code{labels}, \code{class\_ids}. Hàm \code{outputs.build\_detections} kiểm tra số ảnh và số mapping tương ứng, độ dài các mảng, số tọa độ của mỗi box và tính nhất quán tên lớp. Sau đó builder tạo các đối tượng đầu ra của Klygo.
+
+Trong phiên bản khảo sát, builder làm tròn score đến ba chữ số sau dấu thập phân và tọa độ đến hai chữ số. Đây là một quyết định cài đặt có ý nghĩa đối với đánh giá: các score gần nhau có thể trở thành đồng hạng, làm thay đổi thứ tự khi tính PR/AP; tọa độ cũng có thể thay đổi nhẹ quanh ngưỡng IoU. Vì vậy, thực nghiệm báo cáo chất lượng sau bước đóng gói này. Muốn xác định tác động riêng của làm tròn, cần một thí nghiệm đối chứng giữ nguyên precision; báo cáo hiện tại không ước lượng ảnh hưởng đó từ suy đoán.
+
+\section{Thiết kế lớp mô hình và backend}
+\subsection{Ba mức trách nhiệm}
+\code{BaseModel} quản lý metadata, settings, trạng thái và ranh giới truy cập sau unload. \code{Detector} điều phối tác vụ detection: giải quyết nguồn ảnh, chia batch, ghi nhớ cấu hình, tạo snapshot cho stream, gọi \code{forward} và đóng gói thông tin frame. Adapter cụ thể cài \code{forward} theo quy tắc framework. Các hàm backend xử lý thiết bị, dtype, inference context, gọi mô hình và chuẩn hóa dữ liệu thô.
+
+Sự tách biệt này tránh để mọi adapter phải tự viết lại vòng lặp batch và logic stream. Đổi lại, adapter phải tuân thủ hợp đồng rõ ràng: một ảnh vào tương ứng một kết quả ra và nhãn phải có ý nghĩa nhất quán với registry. Hệ thống báo lỗi nếu số kết quả khác số ảnh trong batch, thay vì ghép bằng một vòng \code{zip} có thể âm thầm bỏ phần dư.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[>=Stealth,node distance=0.7cm,every node/.style={font=\small},b/.style={draw,align=center,text width=7.8cm,minimum height=1.05cm}]
+\node[b] (base) {\textbf{BaseModel}\\metadata, settings, state, lifecycle guards};
+\node[b,below=of base] (det) {\textbf{Detector}\\predict, batch/stream, benchmark, reset, unload};
+\node[b,below=of det] (custom) {\textbf{Adapter cụ thể}\\YOLODetect, YOLOWorldDetect, FasterDetector, \ldots};
+\node[b,below=of custom] (backend) {\textbf{Backend runtime}\\cast inputs, inference, normalize results, synchronize};
+\draw[->] (det)--node[right]{kế thừa}(base);\draw[->] (custom)--node[right]{kế thừa}(det);\draw[->] (custom)--node[right]{ủy quyền}(backend);
+\end{tikzpicture}
+\caption{Phân chia trách nhiệm giữa lớp cơ sở, adapter và backend runtime. FasterDetector là adapter dùng trong mã thực nghiệm của báo cáo.}
+\end{figure}
+
+\subsection{Khác biệt backend cần được giữ lại}
+Ultralytics cung cấp đối tượng model có phương thức dự đoán cùng hậu xử lý tích hợp. Torchvision nhận danh sách tensor và trả danh sách mapping chứa tensor. Grounding DINO còn cần processor cho ảnh và văn bản; một số tensor văn bản phải giữ kiểu số nguyên. KerasHub có các yêu cầu converter và decode riêng. Do đó, backend-neutral không có nghĩa mọi backend dùng chung một hàm forward ở mức tensor.
+
+Trong thiết kế, sự thống nhất được đặt ở dữ liệu trước và sau adapter. Các cấu hình liên quan tải mô hình, tiền xử lý hoặc hậu xử lý có thể được phân nhóm trong metadata. Những tham số chứa credential hoặc điều khiển tải không nên được sao chép vào provenance của một lần suy luận; bộ kiểm thử hiện có kiểm tra ranh giới loại bỏ những thông tin này khỏi cấu hình kết quả.
+
+\section{Luồng suy luận và trạng thái cấu hình}
+Một lời gọi \code{predict} chuẩn hóa prompt, hợp nhất cấu hình và giải quyết nguồn ảnh. Với chế độ không stream, Detector chia ảnh thành batch, gọi adapter và thu các frame. Kết quả chứa snapshot cấu hình và thông tin nguồn. Khi có lỗi, trạng thái được khôi phục theo snapshot thay vì giữ lại một phần tùy chọn mới đã áp dụng.
+
+Prompt bị bỏ qua trong lời gọi có thể tái sử dụng giá trị đã nhớ; truyền \code{None} có ý nghĩa xóa prompt. Sự phân biệt này cần một sentinel nội bộ, vì Python không thể phân biệt ``không truyền tham số'' và ``truyền None'' nếu cả hai dùng cùng giá trị mặc định. Các điều khiển thực thi như stream hoặc bước lấy mẫu không được xem là mọi tùy chọn mô hình đều phải ghi nhớ.
+
+Đối với stream, việc tạo iterator và việc tiêu thụ dữ liệu diễn ra ở hai thời điểm khác nhau. Nếu stream chỉ đọc cấu hình hiện tại khi được tiêu thụ, một lời gọi khác có thể thay đổi prompt trước đó. Thiết kế vì vậy chụp cấu hình khi tạo stream, sử dụng nó trong từng batch và khôi phục trạng thái bên ngoài sau batch. Khóa tái nhập bảo vệ thao tác trạng thái, nhưng không tạo cam kết về một hệ thống phục vụ song song nhiều GPU hay nhiều tiến trình.
+
+\section{Theo dõi hình học và khôi phục kết quả}
+Mô-đun tiền xử lý ghi tên phép biến đổi, kích thước trước/sau cùng tham số hình học vào trace. Khi cần khôi phục box, \code{restore\_boxes} biến đổi ngược bốn góc, sau đó lấy tọa độ cực trị để tạo box trục song song trong ảnh đích. Với một box, thao tác này tốn $O(k)$ theo số bước hình học $k$; với $n$ box là $O(nk)$, chưa tính chi phí chuyển đổi dữ liệu.
+
+Trong luồng mã \code{Detector.predict} được khảo sát, không có lời gọi trực tiếp tự động hoàn tác toàn bộ trace. Kết quả có phương thức \code{Detection.restore(target="original")} và collection có phương thức tương ứng. Khi người dùng đưa một ảnh đã biến đổi hình học vào mô hình, họ cần kiểm tra không gian tọa độ hiện tại và gọi API khôi phục phù hợp trước khi so sánh với nhãn của ảnh gốc. API restore còn yêu cầu ảnh nguồn có đường dẫn trong trường hợp tải lại ảnh gốc.
+
+Thực nghiệm chính truyền ảnh RGB gốc vào adapter, để backend thực hiện resize nội bộ và trả box theo ảnh đầu vào. Nó không thêm một letterbox Klygo ở phía trước. Nhờ đó, các phép biến đổi ngoài mô hình không trở thành một yếu tố khác nhau giữa ba cấu hình. Chức năng trace và restore được kiểm chứng riêng bằng dữ liệu tổng hợp có tọa độ biết trước.
+
+\section{Vòng đời, lỗi và khả năng tái lập}
+Vòng đời cơ bản gồm LOADING, READY và UNLOADED. Trạng thái READY cho phép suy luận; unload giải phóng tham chiếu tài nguyên mô hình và chuyển sang UNLOADED. Reset phục hồi cấu hình mặc định và trạng thái backend theo hợp đồng. Người dùng cần phân biệt reset cấu hình với nạp lại checkpoint mới.
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[>=Stealth,node distance=2.4cm,every node/.style={font=\small},s/.style={draw,rounded corners,minimum width=2.9cm,minimum height=1cm,inner sep=5pt}]
+\node[s] (l) {LOADING};\node[s,right=of l] (r) {READY};\node[s,right=of r] (u) {UNLOADED};
+\draw[->] (l.east)--node[above=4pt]{khởi tạo}(r.west);
+\draw[->] (r.east)--node[above=4pt]{unload}(u.west);
+\draw[->] ([xshift=-0.75cm]r.south) -- ++(0,-0.65cm) -| ([xshift=0.75cm]r.south);
+\node[below=0.9cm of r.south,align=center] {predict / reset / benchmark};
+\end{tikzpicture}
+\caption{Vòng đời khái niệm của mô hình. Truy cập yêu cầu tài nguyên sau unload phải bị chặn; nạp lại được thực hiện bằng một thao tác tạo mô hình thích hợp.}
+\end{figure}
+
+Ở mức thực nghiệm, tính tái lập còn cần nhiều hơn thiết kế lớp. Hồ sơ chạy phải chứa revision mã nguồn, phiên bản gói, checkpoint checksum, manifest ảnh, cấu hình, dự đoán thô và định nghĩa timer. Các thông tin này được lưu bên ngoài thư mục source của package, tránh trộn trọng số và kết quả đo với mã. Khi một bước lưu kết quả gặp lỗi, log ban đầu được giữ để truy vết; việc sửa mã ghi tệp không được dùng để thay đổi ngầm mẫu ảnh hoặc các ngưỡng đã chốt.
+
+\input{chapters/klygo03_extension}
