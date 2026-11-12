@@ -1,6 +1,7 @@
 """Built-in TAR backend for raw and compressed TAR containers."""
 
 import fnmatch
+import inspect
 import re
 import shutil
 import tarfile
@@ -195,12 +196,23 @@ class TarBackend(ArchiveBackend):
                     suffix = f"… (+{len(existing) - 5} more)" if len(existing) > 5 else ""
                     raise FileExistsError(f"Files already exist in output directory: {names}{suffix}. Use overwrite=True.")
 
+            supports_filter = "filter" in inspect.signature(tar.extract).parameters
             with ProgressBar(total=len(filtered_members), desc=f"{file_utils.name(archive_path)}: extracting", verbose=verbose) as pbar:
                 for member in filtered_members:
                     target_path = file_utils.join(output_dir, member.name)
                     if not _is_safe_path(output_dir, target_path):
                         raise ValueError(f"Unsafe path detected in archive (Zip Slip): '{member.name}'")
-                    tar.extract(member, path=output_dir, filter="data")
+                    if supports_filter:
+                        tar.extract(member, path=output_dir, filter="data")
+                    else:
+                        # Fallback for Python < 3.10.12 where tarfile PEP 706 filter= is absent.
+                        if member.isdev():
+                            raise ValueError(f"Unsafe device member detected in archive: '{member.name}'")
+                        if member.issym() or member.islnk():
+                            link_base = file_utils.parent(target_path) if member.issym() else output_dir
+                            if not _is_safe_path(output_dir, file_utils.join(link_base, member.linkname)):
+                                raise ValueError(f"Unsafe link target detected in archive: '{member.name}'")
+                        tar.extract(member, path=output_dir)
                     pbar.update(1)
 
     def extract_file(
