@@ -9,7 +9,10 @@ from pathlib import Path
 from unittest.mock import patch
 from PIL import Image
 import numpy as np
-import torch
+try:
+    import torch
+except ImportError:
+    torch = None
 import cv2
 
 import klygo.media as media
@@ -164,16 +167,17 @@ class TestMedia(unittest.TestCase):
         assert isinstance(arr, np.ndarray)
         assert arr.shape == (10, 20, 3)
 
-        # 2. to_tensor
-        tensor = media.to_tensor(img_pil, normalize=True)
-        assert isinstance(tensor, torch.Tensor)
-        assert tensor.shape == (3, 10, 20)
-        assert tensor.dtype == torch.float32
+        # 2. to_tensor (optional PyTorch extra)
+        if torch is not None:
+            tensor = media.to_tensor(img_pil, normalize=True)
+            assert isinstance(tensor, torch.Tensor)
+            assert tensor.shape == (3, 10, 20)
+            assert tensor.dtype == torch.float32
 
-        # 3. to_pil from tensor & array
-        pil_from_tensor = media.to_pil(tensor)
-        assert isinstance(pil_from_tensor, Image.Image)
-        assert pil_from_tensor.size == (20, 10)
+            # 3. to_pil from tensor & array
+            pil_from_tensor = media.to_pil(tensor)
+            assert isinstance(pil_from_tensor, Image.Image)
+            assert pil_from_tensor.size == (20, 10)
 
         pil_from_arr = media.to_pil(arr)
         assert isinstance(pil_from_arr, Image.Image)

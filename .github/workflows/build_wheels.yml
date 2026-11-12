@@ -20,7 +20,14 @@ jobs:
         with:
           python-version: "3.12"
       - name: Build package
-        run: pip install build && python -m build
+        run: pip install build twine && python -m build
+      - name: Verify package metadata
+        run: twine check --strict dist/*
+      - name: Smoke test installed wheel in clean venv
+        run: |
+          python -m venv /tmp/klygo_wheel_test
+          /tmp/klygo_wheel_test/bin/pip install dist/*.whl
+          cd /tmp && /tmp/klygo_wheel_test/bin/python -c "import klygo; from klygo import archive, config, datasets, files, media, mining, models, outputs, postprocessing, preprocessing, utils, validators, visual; assert 'klygo_wheel_test' in klygo.__file__; print('Verified wheel:', klygo.__version__, klygo.__file__)"
       - name: Upload package artifacts
         uses: actions/upload-artifact@v4
         with:

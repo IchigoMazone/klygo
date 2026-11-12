@@ -36,6 +36,7 @@ class ConvertDatasetTest(unittest.TestCase):
         self.sample("batch_b", "two", labeled=False)
         target = files.join(self.root, "flat")
         with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
             output = datasets.convert(
                 self.source, target,
                 tree={"pictures": "batch_*/images", "annotations": "batch_*/labels"},

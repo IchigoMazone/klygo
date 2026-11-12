@@ -1,54 +1,75 @@
 # Klygo
 
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/IchigoMazone/klygo/blob/main/LICENSE)
 [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue.svg)](https://deepwiki.com/IchigoMazone/klygo)
 [![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/IchigoMazone/badge.svg)](https://hub.xerj.org/contributors/IchigoMazone)
 
-Klygo is a composable Python toolkit for files, archives, configuration,
-media, datasets, and object-detection workflows. It provides small public APIs
-that can be used independently and shared result types that let the modules
-work together.
+Klygo is a modular, composable Python toolkit for files, archives,
+configuration, media, dataset management, dataset mining, preprocessing, and
+multi-backend object-detection pipelines. Every public module exposes small,
+independent APIs backed by shared result types so teams can adopt a single layer
+or chain all 13 modules end to end.
 
-Klygo supports Python 3.10 and newer.
+Klygo supports **Python 3.10+** and keeps core installation lightweight—heavy
+deep-learning frameworks (`torch`, `transformers`, `ultralytics`, `torchvision`,
+`keras-hub`) are strictly optional extras.
 
-## Design
+## Architecture
 
-- `files`, `archive`, `config`, and `media` own storage and input handling.
-- `preprocessing` transforms images while retaining coordinate history.
-- `models` supplies a backend-neutral `Detector` lifecycle and optional
-  integrations for Hugging Face, Ultralytics, Torchvision, and KerasHub.
-- `outputs` converts normalized predictions into `Box`, `Detection`, and
-  `Detections` objects.
-- `postprocessing` transforms those results independently of the model.
-- `datasets` loads, inspects, and restructures existing YOLO-style datasets.
+- `files`, `archive`, `config`, and `media` handle storage, I/O, compression,
+  hierarchical settings, and lazy image/video frame streams.
+- `datasets` converts, inspects, partitions, merges, splits, and remaps
+  YOLO-style datasets.
+- `mining` audits dataset statistics, finds exact and perceptual duplicates,
+  scores sample quality/rarity, clusters visually, and balances subsets.
+- `preprocessing` applies lazy image transforms while tracking coordinate
+  history (`trace`) for automatic bounding-box restoration.
+- `models` supplies a backend-neutral `Detector` lifecycle and lazy integrations
+  for Ultralytics, Hugging Face Transformers, Torchvision, and Keras 3 / KerasHub.
+- `outputs`, `postprocessing`, and `visual` standardize detections (`Box`,
+  `Detection`, `Detections`), compose NMS/filtering pipelines, and render clean
+  annotations and dataset charts.
 
 ```text
 files / archives / images / videos
                  │
                  ▼
-       media + preprocessing
+       media + preprocessing (trace)
                  │
                  ▼
-      Detector and model backend
+      Detector & optional backend
                  │
                  ▼
-     normalized prediction mappings
+      normalized prediction mappings
                  │
                  ▼
-       outputs.build_detections
+        outputs.build_detections
                  │
                  ▼
-          postprocessing
+    postprocessing ──► visual / mining
 ```
 
-A concrete detector owns its framework model through `detector.model`.
-Calling `detector(source, ...)` runs the Klygo prediction lifecycle; calling
-`detector.model(...)` accesses the framework API directly. Model-specific
-`forward()` implementations perform inference and normalize results, while
-postprocessing remains a separate workflow step.
+A concrete detector owns its framework model through `detector.model`. Calling
+`detector(source, ...)` runs the full Klygo lifecycle (lazy loading, trace
+restoration, timing, streaming), while `detector.model(...)` accesses the native
+framework API directly.
 
 ## Installation
 
-Clone the repository and install it in editable mode:
+Install the lightweight core package from PyPI:
+
+```bash
+pip install klygo
+```
+
+Or with `uv`:
+
+```bash
+uv add klygo
+```
+
+For local development from source:
 
 ```bash
 git clone https://github.com/IchigoMazone/klygo.git
@@ -56,15 +77,9 @@ cd klygo
 pip install -e .
 ```
 
-With `uv`:
+### Optional integrations
 
-```bash
-git clone https://github.com/IchigoMazone/klygo.git
-cd klygo
-uv sync
-```
-
-Install only the optional integrations required by your workflow:
+Install only the optional backends required by your workflow:
 
 | Integration | pip | uv |
 | --- | --- | --- |
@@ -74,6 +89,7 @@ Install only the optional integrations required by your workflow:
 | KerasHub | `pip install "klygo[keras-hub]"` | `uv add "klygo[keras-hub]"` |
 | All model integrations | `pip install "klygo[models]"` | `uv add "klygo[models]"` |
 | PyTorch runtime only | `pip install "klygo[torch]"` | `uv add "klygo[torch]"` |
+| CuPy GPU outputs (`CUDA 12`) | `pip install "klygo[gpu-outputs]"` | `uv add "klygo[gpu-outputs]"` |
 | 7z archives | `pip install "klygo[py7zr]"` | `uv add "klygo[py7zr]"` |
 | RAR archives | `pip install "klygo[rarfile]"` | `uv add "klygo[rarfile]"` |
 
@@ -128,11 +144,12 @@ cleaned = postprocessing.compose(
 cleaned[0].show()
 ```
 
-`prompt` is normalized before `forward()` and is shared by every image in a
-batch. Ordinary YOLO models map prompt names to checkpoint class IDs for
-filtering. YOLO-World models use the prompt as their active vocabulary and retain
-`original_names` as a snapshot of the vocabulary loaded from the checkpoint.
-Advanced Ultralytics operations remain available through `detector.model`.
+`prompt` is normalized before `forward()` and shares one query across every
+image in a batch. Ordinary YOLO models map prompt names to checkpoint class IDs
+for filtering. YOLO-World models use the prompt as their active vocabulary and
+retain `original_names` as a snapshot of the vocabulary loaded from the
+checkpoint. Advanced Ultralytics operations remain available through
+`detector.model`.
 
 ### Build output objects from a custom backend
 
@@ -158,7 +175,7 @@ print(frames[0].labels)
 print(frames[0].names)
 ```
 
-`Box.id` identifies a box inside its frame, while `Box.class_id` indexes
+`Box.uid` identifies a box inside its frame, while `Box.class_id` indexes
 `names`. `results.names` contains the complete result vocabulary;
 `results[index].names` contains only classes present in that frame.
 
@@ -166,22 +183,26 @@ print(frames[0].names)
 image and returns `list[Detection]`. `Detector.predict()` adds timing, source,
 frame, and streaming information before returning `Detections`.
 
-### Load and restructure a dataset
+### Datasets and data mining
 
 ```python
-from klygo import datasets
+from klygo import datasets, mining
 
-info = datasets.info("dataset.zip")
-flat_path = datasets.unpartition("dataset.zip", "flat-dataset")
-samples = datasets.load(flat_path)
+samples = datasets.load("flat-dataset", format="yolo", verbose=False)
+summary = mining.stats(samples)
+print("Imbalance ratio:", summary.imbalance_ratio)
 
-print(info["classes"])
-print(samples.total_objects)
+dedup = mining.deduplicate(samples, keep="best", threshold=0.92)
+balanced = mining.balance(dedup, target="median", count_by="images")
+print(mining.compare(samples, balanced).changes)
 ```
 
 Dataset transformations expect a YOLO-style dataset root or a supported
-archive containing one. Dataset generation from model predictions belongs to
-the output workflow rather than `klygo.datasets`.
+archive containing one. On a noisy long-tail 10-class COCO `val2017` pool
+(`848` train images, `29.1x` class imbalance, evaluated on `247` clean held-out
+images on NVIDIA L4), `mining.deduplicate()` + `mining.balance()` improved
+downstream `YOLOv8n` `mAP@50-95` from `0.3139` to `0.3874` (`+23.4%` relative)
+using `6.0x` fewer training images (`142` vs `848`) and `2.4x` less training time.
 
 ### Remove consumed options
 
@@ -198,24 +219,23 @@ model_options = utils.exclude_keys(options, ["dtype", "device"])
 
 | Module | Responsibility | Documentation |
 | --- | --- | --- |
-| `klygo.files` | Paths, filesystem operations, downloads, and structured-data I/O | [Guide](docs/files/README.md) |
-| `klygo.archive` | Create, inspect, extract, convert, split, and merge archives | [Guide](docs/archive/README.md) |
-| `klygo.config` | Hierarchical configuration and model metadata | [Guide](docs/config/README.md) |
-| `klygo.media` | Lazy image and video loading, conversion, streaming, and saving | [Guide](docs/media/README.md) |
-| `klygo.preprocessing` | Lazy image transforms, metrics, and coordinate restoration | [Guide](docs/preprocessing/README.md) |
-| `klygo.models` | Detector lifecycle, metadata, loading, and backend hooks | [Guide](docs/models/README.md) |
-| `klygo.outputs` | Structured detection results and normalized-result construction | [Guide](docs/outputs/README.md) |
-| `klygo.postprocessing` | Backend-independent detection transformations | [Guide](docs/postprocessing/README.md) |
-| `klygo.datasets` | Convert, load, inspect, partition, merge, split, and relabel datasets | [Guide](docs/datasets/README.md) |
-| `klygo.mining` | Analyze, deduplicate, cluster, select, and balance detection datasets | [Guide](docs/mining/README.md) |
-| `klygo.visual` | Display images, boxes, and dataset statistics | [Guide](docs/visual/README.md) |
-| `klygo.utils` | Shared formatting, mapping, and progress helpers | [Guide](docs/utils/README.md) |
-| `klygo.validators` | Reusable runtime validation | [Guide](docs/validators/README.md) |
+| `klygo.files` | Paths, filesystem operations, downloads, and structured-data I/O | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/files/README.md) |
+| `klygo.archive` | Create, inspect, extract, convert, split, and merge archives | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/archive/README.md) |
+| `klygo.config` | Hierarchical configuration and model metadata | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/config/README.md) |
+| `klygo.media` | Lazy image and video loading, conversion, streaming, and saving | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/media/README.md) |
+| `klygo.preprocessing` | Lazy image transforms, metrics, and coordinate restoration | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/preprocessing/README.md) |
+| `klygo.models` | Detector lifecycle, metadata, loading, and backend hooks | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/models/README.md) |
+| `klygo.outputs` | Structured detection results and normalized-result construction | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/outputs/README.md) |
+| `klygo.postprocessing` | Backend-independent detection transformations | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/postprocessing/README.md) |
+| `klygo.datasets` | Convert, load, inspect, partition, merge, split, and relabel datasets | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/datasets/README.md) |
+| `klygo.mining` | Analyze, deduplicate, cluster, select, and balance detection datasets | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/mining/README.md) |
+| `klygo.visual` | Display images, boxes, and dataset statistics | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/visual/README.md) |
+| `klygo.utils` | Shared formatting, mapping, and progress helpers | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/utils/README.md) |
+| `klygo.validators` | Reusable runtime validation | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/validators/README.md) |
 
-The [documentation index](docs/README.md) links API references, runnable
-examples, and Colab tutorials. Cross-module workflows live in
-[`examples/integration`](examples/integration) with supporting guides in
-[`docs/integration`](docs/integration/README.md).
+See the full [documentation index](https://github.com/IchigoMazone/klygo/blob/main/docs/README.md),
+[cross-module integration guides](https://github.com/IchigoMazone/klygo/blob/main/docs/integration/README.md),
+and [benchmark reports](https://github.com/IchigoMazone/klygo/blob/main/benchmarks/README.md).
 
 ## Development
 
@@ -234,3 +254,7 @@ python .agents/skills/klygo-module-guides/scripts/audit_public_api.py --all
 Runtime datasets, downloaded weights, generated reports, and other artifacts
 belong outside source, test, example, documentation, and tutorial directories.
 Repository ignore rules keep those generated assets out of version control.
+
+## License
+
+Released under the [MIT License](https://github.com/IchigoMazone/klygo/blob/main/LICENSE).
