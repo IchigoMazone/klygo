@@ -1,0 +1,32 @@
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+This project presents a graph-algorithm application with two integrated modes
+on the Hanoi road network. The route optimizer uses Dijkstra's algorithm to
+construct a pairwise cost matrix and Held--Karp dynamic programming to obtain an
+exact visiting order for at most ten destinations. Nearest-neighbor and 2-opt
+heuristics provide practical baselines. The application supports open routes,
+fixed final destinations, closed tours, and either distance or estimated travel
+time as the objective.
+
+The second mode is a turn-based pursuit--evasion simulation with imperfect
+information. The hidden runner state is separated from the observation provided
+to the hunter policies. A belief set is propagated through graph reachability
+and periodically collapsed when the runner is revealed. Three hunter policies
+are compared: trail following, independent coverage search, and joint
+exit-aware containment.
+
+On 24 October 2026, all 112 automated tests passed. The bundled routing graph
+contains 350,930 nodes and 864,982 edges. A five-location offline smoke test
+produced a 26.276 km distance-optimized route and a 29.93 minute time-optimized
+route. A dedicated benchmark over 24 configurations (4 to 11 points, three
+termination modes) shows Held--Karp staying under 7.2 ms at the supported limit
+while nearest-neighbor deviates from the optimum by up to 19.53 per cent and
+2-opt by up to 3.97 per cent, which quantifies the price of dropping the
+optimality guarantee. A 360-game benchmark demonstrates that policy effectiveness depends on
+the runner behavior and arena topology; the results do not establish universal
+optimality of any heuristic.
+
+\textbf{Keywords:} street graph, Dijkstra, Held--Karp, traveling salesperson
+problem, pursuit--evasion, belief state, OpenStreetMap, Streamlit.
+\clearpage

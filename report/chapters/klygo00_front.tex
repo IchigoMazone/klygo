@@ -1,0 +1,104 @@
+\begin{titlepage}
+\begin{tikzpicture}[remember picture,overlay]
+\draw[line width=1.2pt] ([xshift=1cm,yshift=-1cm]current page.north west) rectangle ([xshift=-1cm,yshift=1cm]current page.south east);
+\draw[line width=0.4pt] ([xshift=1.15cm,yshift=-1.15cm]current page.north west) rectangle ([xshift=-1.15cm,yshift=1.15cm]current page.south east);
+\end{tikzpicture}
+\begin{center}
+{\bfseries ĐẠI HỌC PHENIKAA}\\[0.15cm]
+{\bfseries KHOA KHOA HỌC MÁY TÍNH}\\[0.6cm]
+\includegraphics[width=3cm]{logo.png}\\[0.6cm]
+{\bfseries\fontsize{15pt}{19pt}\selectfont BÁO CÁO BÀI TẬP LỚN CUỐI KỲ}\\[0.3cm]
+{\bfseries\color{blue!70!black} MÔN NHẬP MÔN TRÍ TUỆ NHÂN TẠO}\\[0.7cm]
+{\bfseries\fontsize{14pt}{19pt}\selectfont THIẾT KẾ VÀ XÂY DỰNG THƯ VIỆN KLYGO\\[0.1cm]
+HỖ TRỢ XỬ LÝ DỮ LIỆU VÀ ĐÁNH GIÁ\\[0.1cm]CÁC MÔ HÌNH PHÁT HIỆN ĐỐI TƯỢNG}\\[0.8cm]
+\begin{tabular}{@{}>{\bfseries\raggedright\arraybackslash}p{4.9cm}>{\raggedright\arraybackslash}p{7.5cm}@{}}
+Giảng viên hướng dẫn & \giangVien \\[0.2cm]
+Nhóm sinh viên & \thanhVienMot \\[0.15cm]
+& \thanhVienHai \\[0.15cm]
+& \thanhVienBa
+\end{tabular}
+\vfill
+{\bfseries\ngayBaoCao}
+\end{center}
+\end{titlepage}
+
+\begin{titlepage}
+\begin{center}
+{\bfseries ĐẠI HỌC PHENIKAA}\\[0.15cm]
+{\bfseries KHOA KHOA HỌC MÁY TÍNH}\\[0.8cm]
+\includegraphics[width=2.8cm]{logo.png}\\[0.8cm]
+{\bfseries\fontsize{15pt}{19pt}\selectfont BÌA PHỤ BÁO CÁO BÀI TẬP LỚN}\\[0.3cm]
+{\bfseries MÔN NHẬP MÔN TRÍ TUỆ NHÂN TẠO}\\[0.8cm]
+{\bfseries\fontsize{14pt}{19pt}\selectfont\MakeUppercase{\tenDeTai}}\\[1cm]
+\begin{tabular}{@{}>{\bfseries\raggedright\arraybackslash}p{4.9cm}>{\raggedright\arraybackslash}p{7.5cm}@{}}
+Giảng viên hướng dẫn & \giangVien \\[0.2cm]
+Nhóm sinh viên & \thanhVienMot \\[0.15cm]
+& \thanhVienHai \\[0.15cm]
+& \thanhVienBa
+\end{tabular}
+\vfill
+{\bfseries\ngayBaoCao}
+\end{center}
+\end{titlepage}
+
+\chapter*{Lời Cảm Ơn}
+\addcontentsline{toc}{chapter}{Lời cảm ơn}
+Nhóm chúng em xin trân trọng cảm ơn \textbf{\giangVien}, giảng viên học phần \textit{\tenMonHoc}, đã cung cấp nền tảng kiến thức và định hướng học tập để nhóm thực hiện bài tập lớn này. Quá trình xây dựng Klygo giúp nhóm liên hệ kiến thức về trí tuệ nhân tạo với những yêu cầu cụ thể của một hệ thống phát hiện đối tượng: chuẩn bị dữ liệu, tích hợp mô hình, tổ chức suy luận và kiểm chứng kết quả.
+
+Nhóm xin cảm ơn Khoa Khoa học Máy tính, Đại học Phenikaa đã tạo điều kiện học tập và nghiên cứu. Nhóm cũng ghi nhận đóng góp của cộng đồng mã nguồn mở và các tác giả của bộ dữ liệu, mô hình pretrained, framework cùng những công cụ được sử dụng trong dự án. Các thành phần kế thừa được nêu trong báo cáo và tài liệu tham khảo.
+
+Thông qua bài tập lớn, nhóm nhận thấy việc xây dựng một phần mềm trí tuệ nhân tạo đòi hỏi sự kết hợp giữa hiểu biết về mô hình và tính cẩn trọng trong kỹ thuật phần mềm. Nhóm mong nhận được ý kiến góp ý của giảng viên để hoàn thiện thiết kế, phương pháp thực nghiệm và cách trình bày kết quả.
+\begin{flushright}\textit{\ngayBaoCao}\\[0.5cm]\textbf{Nhóm sinh viên thực hiện}\end{flushright}
+\clearpage
+
+\chapter*{Lời Cam Đoan}
+\addcontentsline{toc}{chapter}{Lời cam đoan}
+Nhóm sinh viên thực hiện xác nhận thư viện Klygo trong phạm vi đề tài \textit{``\tenDeTai''} là sản phẩm do nhóm phát triển. Báo cáo mô tả mã nguồn được khảo sát và các phép đo được thực hiện cho phiên bản này. Các mô hình YOLOv8, YOLO-World và Faster R-CNN, trọng số pretrained và bộ dữ liệu COCO là những thành phần được kế thừa từ các tác giả, tổ chức bên ngoài, có dẫn nguồn tương ứng.
+
+Nhóm cam kết trình bày trung thực phạm vi đóng góp: tổ chức thư viện, chuẩn hóa giao diện và kết quả, kết nối các bước xử lý, xây dựng quy trình kiểm chứng và phân tích thực nghiệm. Báo cáo không nhận quyền tác giả đối với kiến trúc mạng, checkpoint hoặc dữ liệu kế thừa. Những mô-đun có trong mã nhưng chưa được chạy với mô hình thật trong thực nghiệm được phân biệt với các cấu hình đã được đo.
+
+Các bảng kết quả định lượng được tổng hợp từ tệp dự đoán, cấu hình, log và kết quả đánh giá lưu kèm. Mẫu dữ liệu được cố định trước thực nghiệm chính; những ca kiểm thử bỏ qua được công bố cùng lý do. Các nhận xét về chất lượng và hiệu năng chỉ áp dụng trong điều kiện thí nghiệm đã mô tả.
+
+\begin{flushright}\textit{\ngayBaoCao}\\[0.5cm]\textbf{Nhóm sinh viên thực hiện}\end{flushright}
+\clearpage
+
+\chapter*{Phân Công Công Việc}
+\addcontentsline{toc}{chapter}{Phân công công việc}
+Thông tin họ tên và mã sinh viên đã được nhóm xác nhận. Bảng dưới đây là phương án phân chia theo các nhóm nhiệm vụ của đề tài; nội dung phân công cần được nhóm rà soát lại theo công việc thực tế trước khi nộp.
+\begin{table}[H]\centering\small
+\begin{tabularx}{\textwidth}{p{3.3cm}YY}
+\toprule Thành viên & Nhóm nhiệm vụ đề xuất & Sản phẩm cần đối chiếu \\\midrule
+Trịnh Như Nhất\newline 23010600 & Thiết kế kiến trúc, dữ liệu và pipeline tiền xử lý; tổng hợp cơ sở lý thuyết & Sơ đồ kiến trúc, hợp đồng dữ liệu, nội dung lý thuyết \\
+Trần Đức Anh\newline 23017114 & Tích hợp mô hình, vòng đời suy luận và kiểm chứng tính đúng & Adapter, kết quả kiểm thử, ví dụ chạy thư viện \\
+Phạm Văn Tuấn Kiệt\newline 23010881 & Thiết kế thực nghiệm, xử lý kết quả và biên soạn báo cáo & Manifest, metric, biểu đồ, mã LaTeX và phụ lục tái lập \\
+\bottomrule
+\end{tabularx}
+\end{table}
+Các thành viên cần rà soát chéo mã và kết quả, thống nhất giải thích các chỉ số, đồng thời chuẩn bị phần trình bày bảo vệ. Khi chốt bảng chính thức, nhóm nên ghi rõ người phụ trách chính và phần phối hợp theo công việc thực tế.
+\clearpage
+
+\chapter*{Tóm Tắt}
+\addcontentsline{toc}{chapter}{Tóm tắt}
+Bài tập lớn trình bày thiết kế và xây dựng Klygo, một thư viện Python hỗ trợ xử lý dữ liệu và tổ chức pipeline phát hiện đối tượng. Revision nền tảng có 12 mô-đun công khai, revision mở rộng thêm mining thành 13 mô-đun, kết nối các chức năng quản lý tệp, cấu hình, dữ liệu, ảnh và video, tiền xử lý, tích hợp mô hình, chuẩn hóa kết quả, hậu xử lý và trực quan hóa. Trọng tâm thiết kế là giao diện \code{Detector}, các kiểu \code{Box}, \code{Detection}, \code{Detections}, cơ chế xử lý lazy và theo dõi biến đổi tọa độ.
+
+Đề tài kết hợp kiểm thử phần mềm với thực nghiệm mô hình pretrained. Bộ kiểm thử revision nền tảng thực hiện 360 ca: 353 ca đạt, 7 ca bỏ qua có lý do, không có lỗi hay thất bại. Ba cấu hình YOLOv8n, YOLO-World v2 small và Faster R-CNN MobileNetV3-Large FPN được chạy trên cùng mẫu 500 ảnh COCO 2017 validation, chọn ngẫu nhiên với seed cố định. Các giá trị AP@[0.50:0.95] thu được lần lượt là \APYolo, \APWorld{} và \APFaster; kết quả được đánh giá bằng COCOeval từ dự đoán đã lưu. Phép đo thời gian bổ sung sử dụng 100 ảnh, ba lượt lặp, batch bằng một và đồng bộ GPU trước và sau mỗi lời gọi.
+
+Báo cáo phân tích sự đánh đổi giữa chất lượng và độ trễ, chi phí điều phối của lớp \code{predict}, những lỗi phát hiện điển hình và giới hạn của thực nghiệm trên tập con. Kết quả cho thấy giá trị của việc chuẩn hóa pipeline và lưu bằng chứng tái lập, đồng thời không đưa ra kết luận vượt trội phổ quát cho một mô hình hay backend.
+
+Phần mở rộng kiểm chứng các phương pháp tuyển chọn dữ liệu, ghép ảnh với annotation đã xuất để huấn luyện, fine-tune YOLOv8n với ba seed, đo sáu đường thực thi raw/native/managed và khảo sát worker/prefetch. Mỗi nhóm kết quả ghi rõ revision, tập dữ liệu và giới hạn suy luận.
+
+\textbf{Từ khóa:} Klygo, phát hiện đối tượng, YOLOv8, YOLO-World, Faster R-CNN, COCO, chuẩn hóa pipeline, thực nghiệm tái lập.
+\clearpage
+
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+This project presents the design and implementation of Klygo, a Python library for data processing and object detection workflows. The baseline revision has twelve public modules, while the extension adds mining as a thirteenth module. These modules cover files, archives, configuration, datasets, images and videos, preprocessing, model integration, standardized outputs, postprocessing, visualization, and shared utilities. The design centers on a common Detector interface, Box/Detection/Detections result types, lazy input processing, and geometric transformation tracking.
+
+The evaluation combines software tests with real pretrained model inference. The existing suite executes 360 tests: 353 pass and seven are explicitly skipped, with no failures or errors. YOLOv8n, YOLO-World v2 small, and Faster R-CNN MobileNetV3-Large FPN are evaluated on the same fixed random sample of 500 COCO 2017 validation images. Their AP@[0.50:0.95] scores are \APYoloEN, \APWorldEN, and \APFasterEN, respectively, computed with COCOeval from saved predictions. Additional timing experiments use 100 images, three repetitions, batch size one, and explicit GPU synchronization.
+
+The report discusses quality and latency tradeoffs, the additional lifecycle cost of Detector.predict relative to a direct forward call with equivalent detection outputs, representative errors, and threats to validity. Results are limited to the evaluated sample, checkpoints, configurations, and hardware. The contribution is a unified and reproducible software workflow; the underlying pretrained architectures and datasets are attributed to their original authors.
+
+The extension evaluates dataset curation and export assembly, short YOLOv8n fine-tuning with three seeds, six raw/native/managed execution paths, and worker/prefetch scheduling. Revision boundaries and the limited scope of the training study are explicitly documented.
+
+\textbf{Keywords:} Klygo, object detection, YOLOv8, YOLO-World, Faster R-CNN, COCO, pipeline integration, reproducible evaluation.
+\clearpage

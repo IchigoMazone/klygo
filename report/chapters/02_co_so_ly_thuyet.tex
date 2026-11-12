@@ -1,0 +1,170 @@
+\chapter{Cơ Sở Lý Thuyết}
+
+\section{Biểu diễn mạng đường bằng đồ thị}
+
+Mạng đường được mô hình hóa bởi đa đồ thị có hướng có trọng số
+$G=(V,E,w)$. Mỗi $v\in V$ có tọa độ $(x_v,y_v)$. Một cạnh
+$e=(u,v,k)\in E$ là một đoạn đường từ $u$ tới $v$; chỉ số $k$ cho phép tồn tại
+nhiều cạnh song song. Trọng số $w(e)>0$ có thể là chiều dài theo mét hoặc thời
+gian ước tính theo giây. Việc dùng graph có hướng giữ được đường một chiều và sự
+khác nhau giữa hai hướng di chuyển.
+
+\begin{formulabox}[title={Chi phí của một đường đi}]
+Với đường đi $P=(v_0,e_1,v_1,\ldots,e_m,v_m)$, chi phí là
+\[
+  C(P)=\sum_{i=1}^{m} w(e_i).
+\]
+Bài toán đường đi ngắn nhất tìm $P^*\in\mathcal{P}(s,t)$ sao cho
+\[
+  P^*=\argmin_{P\in\mathcal{P}(s,t)} C(P).
+\]
+\end{formulabox}
+
+Dữ liệu đường được lấy từ OpenStreetMap và xử lý bằng OSMnx
+\cite{openstreetmap,boeing2017}. Graph định tuyến đóng gói hiện tại có 350.930
+nút, 864.982 cạnh và hộp bao địa lý $[105{,}2;20{,}5;106{,}1;21{,}45]$ theo thứ
+tự kinh độ tây, vĩ độ nam, kinh độ đông, vĩ độ bắc.
+
+\section{Thuật toán Dijkstra}
+
+Dijkstra giải bài toán đường đi ngắn nhất nguồn đơn khi mọi trọng số cạnh không
+âm \cite{dijkstra1959,cormen2009}. Thuật toán duy trì khoảng cách tạm thời $d[v]$, nút trước
+$\pi[v]$ và một hàng đợi ưu tiên. Khi nút có khoảng cách nhỏ nhất được lấy ra và
+khoảng cách đó chưa lỗi thời, giá trị của nó đã được chốt.
+
+\begin{formulabox}[title={Phép nới lỏng cạnh}]
+Với cạnh $(u,v)$, nếu
+\[
+  d[u]+w(u,v)<d[v],
+\]
+thì cập nhật $d[v]\leftarrow d[u]+w(u,v)$ và $\pi[v]\leftarrow u$.
+\end{formulabox}
+
+Trong đồ án, Dijkstra nhận một tập đích và có thể dừng khi tất cả các đích đã
+được chốt. Với heap nhị phân, độ phức tạp xấp xỉ
+$O((|V|+|E|)\log |V|)$ cho mỗi nguồn; bộ nhớ $O(|V|)$. Hàng đợi Fibonacci hạ cận
+lý thuyết xuống $O(|E|+|V|\log|V|)$ nhưng hằng số lớn hơn nên không được dùng ở
+đây \cite{fredman1987}. Để lập lộ trình qua
+$n$ điểm quan tâm, thuật toán được chạy từ từng điểm, tạo ma trận
+$D\in\mathbb{R}^{n\times n}$, trong đó $D_{ij}$ là chi phí từ điểm $i$ tới
+điểm $j$. Do graph có hướng, nói chung $D_{ij}\neq D_{ji}$.
+
+Điều kiện quan trọng là $w(e)>0$ và các điểm cần thiết phải nối được theo hướng
+di chuyển. Nếu không có đường, giá trị được biểu diễn bằng $+\infty$ và tầng tối
+ưu thứ tự phải báo lỗi thay vì tạo một tuyến không hợp lệ.
+
+\section{Bài toán thứ tự ghé nhiều điểm}
+
+Sau khi có ma trận $D$, bài toán trở thành một biến thể TSP bất đối xứng. Nút 0
+là điểm xuất phát; các nút còn lại là điểm cần ghé. Tùy chế độ, tuyến có thể kết
+thúc tự do, kết thúc tại một điểm cố định hoặc quay lại 0.
+
+\subsection{Quy hoạch động Held--Karp}
+
+Held--Karp dùng trạng thái $(S,j)$, trong đó $S$ là tập điểm đã ghé và $j\in S$
+là điểm cuối hiện tại \cite{heldkarp1962}. Gọi $F(S,j)$ là chi phí nhỏ nhất để
+đi từ 0, ghé đúng các điểm trong $S$ và kết thúc tại $j$.
+
+\begin{formulabox}[title={Truy hồi Held--Karp}]
+\[
+F(\{j\},j)=D_{0j},
+\]
+\[
+F(S,j)=\min_{i\in S\setminus\{j\}}
+  \left[F(S\setminus\{j\},i)+D_{ij}\right].
+\]
+Với tuyến mở, chọn $\min_j F(U,j)$. Với chu trình, chọn
+$\min_j[F(U,j)+D_{j0}]$. Điểm cuối cố định $t$ dùng trực tiếp $F(U,t)$.
+\end{formulabox}
+
+Thuật toán có độ phức tạp thời gian $O(n^2 2^n)$ và bộ nhớ $O(n2^n)$
+\cite{bellman1962,cormen2009}. Giới hạn
+10 điểm ghé của giao diện giữ số trạng thái ở mức phù hợp cho tương tác. Mảng
+nút trước được lưu cùng chi phí để khôi phục thứ tự tối ưu, sau đó từng cặp liên
+tiếp được thay bằng đường đi Dijkstra tương ứng.
+
+\subsection{Láng giềng gần nhất và 2-opt}
+\label{sec:nn-2opt}
+
+Láng giềng gần nhất chọn điểm chưa ghé có chi phí trực tiếp nhỏ nhất
+\cite{rosenkrantz1977}. Chi phí
+tính toán là $O(n^2)$ nhưng kết quả phụ thuộc mạnh vào lựa chọn cục bộ. 2-opt \cite{croes1958} bắt
+đầu từ một tuyến và đảo thứ tự một đoạn nếu phép đổi làm giảm tổng chi phí. Với
+ma trận bất đối xứng, hệ thống đánh giá lại toàn bộ chi phí ứng viên thay vì sử
+dụng công thức delta dành riêng cho TSP đối xứng.
+
+Khoảng cách thực đo của hai heuristic so với nghiệm chính xác được trình bày ở
+mục~\ref{sec:benchmark-tsp}.
+
+Hai heuristic được dùng làm baseline và phương án so sánh, không thay thế
+Held--Karp trong miền tối đa 10 điểm. Không có bảo đảm chúng tìm được tối ưu toàn
+cục.
+
+\section{Pursuit--evasion trên đồ thị}
+
+Pursuit--evasion trên graph là một họ bài toán trong đó bên truy tìm và bên lẩn
+trốn di chuyển trên các nút/cạnh theo luật xác định \cite{parsons1978,chung2011}. Biến thể
+của đồ án là rời rạc theo lượt, có lối thoát, ngân sách khoảng cách và quan sát
+không đầy đủ.
+
+Trạng thái đầy đủ ở lượt $t$ gồm vị trí thật $r_t$ của người trốn, vị trí các đội
+$H_t=(h_t^1,h_t^2)$, tập lối thoát $X$, tập niềm tin $B_t$ và lịch sử cần thiết.
+Chính sách máy không nhận toàn bộ trạng thái; đầu vào của nó là quan sát
+$O_t=(t,H_t,X,B_t,\ell,\tau,\rho)$, trong đó $\ell$ là vị trí được thấy gần nhất,
+$\tau$ là lượt thấy gần nhất và $\rho$ là bộ luật.
+
+\begin{formulabox}[title={Lan truyền tập niềm tin}]
+Với ngân sách người trốn $b_r$ và khoảng cách ngắn nhất $d$, tập niềm tin trước
+khi áp dụng thông tin mới là
+\[
+  \widehat{B}_{t+1}=\{v\in V\mid \exists u\in B_t:\ d(u,v)\le b_r\}.
+\]
+Nếu lượt $t+1$ là lượt tiết lộ thì $B_{t+1}=\{r_{t+1}\}$. Nếu không, các nút
+đang bị đội truy tìm chiếm và đã được loại trừ bởi sự sống sót của người trốn sẽ
+được bỏ khỏi $\widehat{B}_{t+1}$.
+\end{formulabox}
+
+Tập niềm tin là biểu diễn chính xác theo luật chuyển trạng thái đã cài đặt, nhưng
+không phải phân phối xác suất. Mọi vị trí khả dĩ được coi như nhau; vì vậy chính
+sách coverage là heuristic dựa trên khoảng cách, không phải suy luận Bayes. Dạng tổng quát của bài toán ra quyết định dưới quan sát
+một phần là POMDP, trong đó trạng thái niềm tin là một phân phối xác suất chứ
+không phải một tập \cite{kaelbling1998}.
+
+\section{Ba chiến thuật truy tìm}
+
+Gọi $b_h$ là ngân sách mỗi đội. Điểm bao phủ của vị trí ứng viên $q$ đối với tập
+$S$ được định nghĩa:
+
+\begin{formulabox}[title={Điểm bao phủ nghịch đảo khoảng cách}]
+\[
+  \operatorname{cov}(q,S)=\frac{1}{|S|}\sum_{p\in S}
+  \frac{1}{1+d(q,p)/b_h}.
+\]
+\end{formulabox}
+
+\textbf{Đuổi dấu vết} đưa mỗi đội theo đường ngắn nhất về vị trí được thấy gần
+nhất. \textbf{Tìm kiếm độc lập} để mỗi đội chọn riêng vị trí khả đạt có điểm
+bao phủ lớn nhất. \textbf{Phối hợp chặn lối thoát} xét tích Descartes của tối đa
+tám ứng viên tốt nhất cho mỗi đội, bổ sung các bước hướng lối thoát, rồi tối đa
+hóa:
+
+\begin{formulabox}[title={Điểm phối hợp}]
+\[
+J(M)=\frac{1}{|B|}\sum_{p\in B}\max_{m\in M}
+\frac{1}{1+d(m,p)/b_h}
++0{,}35\cdot\frac{1}{|X|}\sum_{x\in X}\max_{m\in M}
+\frac{1}{1+d(m,x)/b_h}.
+\]
+\end{formulabox}
+
+Hệ số 0,35 là tham số thiết kế của phiên bản hiện tại, chưa được tối ưu bằng một
+tập validation độc lập. Việc cắt còn tám ứng viên giữ thời gian phản hồi nhỏ,
+nhưng cũng có thể loại một nước đi tốt; đây là một giới hạn có chủ ý của heuristic.
+
+\section{Bất biến và thứ tự ưu tiên kết thúc}
+
+Các bất biến được dùng để kiểm thử gồm: người trốn luôn thuộc tập niềm tin khi
+ván đang diễn ra; mọi bước đi nằm trong ngân sách và đúng chiều cạnh; chính sách
+máy không nhận vị trí ẩn; tập niềm tin không rỗng trong trạng thái hợp lệ; và
+trạng thái kết thúc không được đi tiếp.
+

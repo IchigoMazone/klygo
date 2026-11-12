@@ -1,0 +1,39 @@
+\babel@toc {vietnamese}{}\relax 
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {1.1}{\ignorespaces Các vấn đề tích hợp và yêu cầu tương ứng của đề tài}}{2}{table.caption.13}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {2.1}{\ignorespaces Hợp đồng tọa độ tại các ranh giới của thực nghiệm}}{7}{table.caption.14}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {3.1}{\ignorespaces Ma trận yêu cầu và phương thức kiểm chứng}}{16}{table.caption.17}%
+\contentsline {table}{\numberline {3.2}{\ignorespaces Vai trò của các mô-đun công khai trong thư viện}}{17}{table.3.2}%
+\contentsline {table}{\numberline {3.3}{\ignorespaces Các nhóm API mining và trách nhiệm}}{23}{table.caption.22}%
+\contentsline {table}{\numberline {3.4}{\ignorespaces Nguyên lý các phương pháp tuyển chọn đã cài đặt}}{24}{table.caption.23}%
+\contentsline {table}{\numberline {3.5}{\ignorespaces Sáu cấu hình thực thi được phân biệt trước khi benchmark Ultralytics}}{26}{table.caption.25}%
+\contentsline {table}{\numberline {3.6}{\ignorespaces Vai trò và sự đánh đổi của các điều khiển chuẩn bị dữ liệu}}{28}{table.caption.27}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {5.1}{\ignorespaces Đặc điểm mẫu dữ liệu được sử dụng}}{38}{table.caption.28}%
+\contentsline {table}{\numberline {5.2}{\ignorespaces Môi trường chạy thực nghiệm}}{40}{table.caption.30}%
+\contentsline {table}{\numberline {5.3}{\ignorespaces Cấu hình model và hậu xử lý trong đánh giá chính}}{40}{table.caption.31}%
+\contentsline {table}{\numberline {5.4}{\ignorespaces Phân bố 360 ca unittest theo nhóm; cột thực hiện bao gồm ca skip}}{41}{table.caption.32}%
+\contentsline {table}{\numberline {5.5}{\ignorespaces Chất lượng phát hiện sau pipeline Klygo trên cùng 500 ảnh; điểm tính theo phần trăm}}{42}{table.caption.33}%
+\contentsline {table}{\numberline {5.6}{\ignorespaces Số đếm và P/R/F1 micro tại confidence 0,25, IoU 0,50}}{43}{table.caption.35}%
+\contentsline {table}{\numberline {5.7}{\ignorespaces AP theo các nhóm kích thước của COCOeval}}{44}{table.caption.36}%
+\contentsline {table}{\numberline {5.8}{\ignorespaces AP theo lớp của 12 lớp nhiều GT nhất; các cột mô hình là AP tính bằng phần trăm}}{45}{table.caption.37}%
+\contentsline {table}{\numberline {5.9}{\ignorespaces Thời gian predict trên 100 ảnh, ba lượt; 300 lần gọi mỗi model}}{46}{table.caption.38}%
+\contentsline {table}{\numberline {5.10}{\ignorespaces Độ trễ predict trung bình theo từng lượt lặp}}{47}{table.caption.40}%
+\contentsline {table}{\numberline {5.11}{\ignorespaces Đo cặp predict và forward với cùng inference mode và đầu ra tương đương}}{48}{table.caption.42}%
+\contentsline {table}{\numberline {5.12}{\ignorespaces Benchmark tuyển chọn trên 300 ảnh; IR chỉ tính các lớp hiện diện}}{54}{table.caption.47}%
+\contentsline {table}{\numberline {5.13}{\ignorespaces Fine-tune năm epoch: trung bình và độ lệch chuẩn mẫu qua ba seed}}{57}{table.caption.50}%
+\contentsline {table}{\numberline {5.14}{\ignorespaces YOLOv8n: cùng 100 ảnh, các chế độ thực thi}}{59}{table.caption.52}%
+\contentsline {table}{\numberline {5.15}{\ignorespaces YOLO-World: cùng 100 ảnh, các chế độ thực thi}}{59}{table.caption.53}%
+\contentsline {table}{\numberline {5.16}{\ignorespaces YOLOv8n Managed stream: ảnh hưởng của worker/prefetch trên 100 ảnh}}{61}{table.caption.55}%
+\contentsline {table}{\numberline {5.17}{\ignorespaces YOLO-World Managed stream: ảnh hưởng của worker/prefetch trên 100 ảnh}}{61}{table.caption.56}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {6.1}{\ignorespaces Tình huống lỗi khi cài đặt hoặc sử dụng và hướng xử lý}}{66}{table.caption.59}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {7.1}{\ignorespaces Hướng phát triển gắn với giới hạn đã quan sát}}{70}{table.caption.60}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {A.1}{\ignorespaces SHA-256 của ba checkpoint; mỗi hash được chia hai dòng}}{73}{table.caption.61}%
+\contentsline {table}{\numberline {A.2}{\ignorespaces Bảy ca skip trong suite gốc và lý do}}{75}{table.caption.62}%
+\contentsline {table}{\numberline {A.3}{\ignorespaces AP@[0.50:0.95] theo lớp trên mẫu, tính bằng phần trăm; GT không gồm crowd}}{76}{table.A.3}%

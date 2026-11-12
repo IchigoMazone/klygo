@@ -1,0 +1,90 @@
+\chapter{Kết Luận Và Hướng Phát Triển}
+
+\section{Kết quả đạt được}
+
+Đồ án đã hoàn thành một ứng dụng thuật toán đồ thị gồm hai chế độ tích hợp. Phần
+định tuyến xử lý graph ô tô Hà Nội quy mô 350.930 nút và 864.982 cạnh, hỗ trợ
+tối đa 10 điểm ghé, hai hàm mục tiêu và ba kiểu kết thúc. Phần thuật toán tách
+rõ Dijkstra cho đường đi giữa cặp điểm, Held--Karp cho thứ tự ghé chính xác và
+hai heuristic để đối chiếu. Benchmark 24 cấu hình xác nhận cả hai mặt của cách
+tách này: Held--Karp giữ thời gian dưới 7,2 ms ở giới hạn 10 điểm ghé, còn
+heuristic đổi bảo đảm tối ưu lấy tốc độ với cái giá đo được là tới 19,53\% chi
+phí dư thừa khi tuyến bị ràng buộc điểm cuối.
+
+Phần trò chơi mở rộng bài toán từ tối ưu tĩnh sang ra quyết định tuần tự dưới
+thông tin không đầy đủ. Tập niềm tin, chu kỳ tiết lộ và ranh giới
+\texttt{Observation} làm rõ máy biết gì ở mỗi lượt. Ba chiến thuật có mức phức
+tạp và hành vi khác nhau, được so sánh trên 360 ván tái lập.
+
+Bộ 112 test đều đạt trong lần chạy ngày 24/10/2026. Smoke test và kiểm tra trình
+duyệt chứng minh pipeline hoạt động trên graph thật và trạng thái được giữ khi
+chuyển chế độ. Sản phẩm có replay, log JSON và thông báo giới hạn dữ liệu để hỗ
+trợ trình diễn và kiểm tra.
+
+\section{Bài học thuật toán}
+
+Thứ nhất, một bài toán ứng dụng thường cần ghép nhiều tầng tối ưu. Dijkstra đúng
+cho từng đoạn chưa quyết định được thứ tự ghé; Held--Karp giải tầng tổ hợp sau khi
+ma trận chi phí được tạo. Thứ hai, thuật toán chính xác và heuristic có vai trò
+khác nhau: chính xác cho bảo đảm trong miền nhỏ, heuristic đổi bảo đảm lấy tốc độ
+hoặc hành vi thực dụng. Thứ ba, trong hệ thống thông tin ẩn, định nghĩa giao diện
+quan sát quan trọng không kém hàm đánh giá; nếu policy đọc được trạng thái thật,
+mọi kết quả chiến thuật trở nên vô nghĩa.
+
+Cuối cùng, kiểm thử cần bám vào giả định và bất biến. Kiểm tra một nút bấm hoạt
+động không chứng minh thuật toán đúng; ngược lại, unit test không chứng minh giao
+diện sử dụng được. Đồ án kết hợp oracle, test biên, AppTest, smoke test và trình
+duyệt thật để giảm khoảng cách này.
+
+\section{Hạn chế}
+
+\begin{itemize}
+  \item Thời gian di chuyển là tĩnh, chưa có dữ liệu ùn tắc theo thời điểm.
+  \item Benchmark tầng thứ tự ghé chỉ dùng một tập 11 địa điểm và các tập con lồng
+  nhau, chưa lấy mẫu ngẫu nhiên trên nhiều dạng phân bố điểm.
+  \item Held--Karp tăng theo $2^n$, nên giới hạn hiện tại là 10 điểm ghé.
+  \item Hệ thống chưa giải VRP nhiều xe, time window, capacity hoặc điểm động
+  \cite{toth2014}.
+  \item Graph trò chơi OSM không đầy đủ và được điều chỉnh hai chiều.
+  \item Bắt chỉ xét vị trí nút sau bước đi; chưa xét hai tác nhân giao nhau giữa cạnh.
+  \item Tập niềm tin không mang xác suất; hệ số 0,35 và shortlist 8 ứng viên chưa
+  được hiệu chỉnh độc lập.
+  \item Benchmark chỉ có ba bot, hai sân và 20 seed; chưa có người chơi thật hoặc
+  kiểm định thống kê.
+  \item Lớp tile trực tuyến phụ thuộc DNS và chính sách nhà cung cấp, dù thuật
+  toán cục bộ không phụ thuộc lớp nền.
+\end{itemize}
+
+\section{Hướng phát triển có thứ tự ưu tiên}
+
+\textbf{Ưu tiên 1 -- củng cố đánh giá.} Mở rộng seed và topology, thêm baseline
+ngẫu nhiên, chạy ablation hệ số lối thoát/shortlist/chu kỳ tiết lộ, báo khoảng tin
+cậy và thu thập một tập ván người chơi. Tiêu chí tiếp tục là kết quả lặp lại qua
+nhiều sân; nếu ưu thế chỉ xuất hiện trên lưới, cần thu hẹp claim thay vì đổi tên
+chiến thuật.
+
+\textbf{Ưu tiên 2 -- xác suất hóa niềm tin.} Thay tập $B_t$ bằng phân phối
+$p_t(v)$ với mô hình chuyển của người trốn, sau đó đánh giá expected capture hoặc
+information gain. Cần có positive control: khi mô hình chuyển đúng với bot sinh
+dữ liệu, phương pháp xác suất phải cải thiện so với uniform belief; nếu không,
+cơ chế chưa được hỗ trợ.
+
+\textbf{Ưu tiên 3 -- lập kế hoạch nhiều bước.} So sánh heuristic một bước với
+beam search hoặc Monte Carlo tree search \cite{browne2012} trên sân nhỏ. Trước khi mở rộng, cần đo
+trade-off giữa tỉ lệ bắt và độ trễ; không gọi là tối ưu nếu chưa có chứng minh
+hoặc oracle kích thước nhỏ.
+
+\textbf{Ưu tiên 4 -- định tuyến động và bền vững.} Nếu có dữ liệu thời gian theo
+cạnh $c_{ij}(t)$, mô hình phải kiểm tra thuộc tính FIFO và chạy thuật toán phù
+hợp; không dùng một hệ số ``giờ cao điểm'' toàn cục rồi gọi đó là time-dependent
+routing. Một hướng gần hơn là cho phép chặn một số cạnh và đo độ tăng chi phí,
+tạo kịch bản ``phá đường--cứu tuyến'' có đối chứng rõ ràng.
+
+\section{Kết luận chung}
+
+Hệ thống cho thấy một đề tài tối ưu lộ trình truyền thống có thể phát triển thành
+một phòng thí nghiệm thuật toán đồ thị có tính tương tác mà vẫn giữ được phần lõi
+ban đầu. Giá trị chính không nằm ở tuyên bố một chiến thuật luôn tốt nhất, mà ở
+việc mô hình hóa rõ, triển khai có ranh giới thông tin, so sánh đúng mức và cung
+cấp bằng chứng tái lập. Đây là nền tảng phù hợp để tiếp tục nghiên cứu các bài
+toán định tuyến và pursuit--evasion phức tạp hơn.

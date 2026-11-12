@@ -1,0 +1,74 @@
+\chapter{Giới Thiệu}
+\label{chap:intro}
+\section{Bối cảnh và động cơ thực hiện}
+Phát hiện đối tượng là một bài toán cơ bản của thị giác máy tính, yêu cầu xác định đồng thời vị trí và loại của từng vật thể trong ảnh. Một kết quả phát hiện thường gồm một tập bounding box, nhãn lớp và điểm tin cậy. Khác với phân loại toàn ảnh, một ảnh phát hiện có thể chứa nhiều đối tượng thuộc nhiều lớp, với kích thước, mức che khuất và bối cảnh khác nhau. Đặc điểm này khiến việc đánh giá phải xem xét cả định vị lẫn nhận dạng.
+
+Các framework hiện nay cung cấp nhiều mô hình pretrained với giao diện riêng. Một mô hình có thể nhận ảnh PIL và trả về đối tượng kết quả chuyên biệt; mô hình khác nhận danh sách tensor và trả về từ điển chứa box, score và chỉ số lớp. Quy tắc resize, ánh xạ tên lớp, đặt thiết bị và xử lý video cũng có thể khác nhau. Khi kết hợp các mô hình trong một ứng dụng, người phát triển phải giải quyết những khác biệt này trước khi so sánh hoặc sử dụng kết quả.
+
+Từ nhu cầu đó, nhóm xây dựng Klygo theo hướng thư viện Python có các mô-đun nhỏ, có thể dùng độc lập và kết hợp thành pipeline. Việc đưa mô hình vào một giao diện chung giúp các bước phía sau tiếp tục xử lý cùng một kiểu dữ liệu. Đồng thời, chuẩn hóa đầu ra tạo điều kiện lưu dự đoán và đánh giá bằng một quy trình thống nhất, giảm khả năng sai lệch do mã xử lý riêng cho từng mô hình.
+
+Đối với học phần Nhập môn Trí tuệ nhân tạo, đề tài tạo cơ hội kết nối hai khía cạnh: hiểu cách một bài toán AI được biểu diễn và đo lường; xây dựng phần mềm để mô hình hoạt động trong một quy trình có thể kiểm tra. Tính học thuật của báo cáo nằm ở việc xác định rõ câu hỏi, thiết kế đối chứng phù hợp, sử dụng nhãn tham chiếu và giải thích kết quả trong phạm vi bằng chứng thu được.
+
+\section{Phát biểu bài toán}
+Đầu vào của hệ thống là ảnh, video hoặc chuỗi khung hình cùng cấu hình xử lý. Cấu hình có thể chỉ định mô hình, backend, thiết bị, kích thước suy luận, ngưỡng tin cậy, số lượng kết quả tối đa hoặc text prompt. Đầu ra cần biểu diễn được các đối tượng phát hiện theo một hợp đồng chung, đồng thời giữ thông tin nguồn và trạng thái xử lý cần thiết.
+
+Gọi $I$ là một ảnh có kích thước $W\times H$ và $\mathcal{C}$ là tập lớp đang xét. Hệ thống phát hiện ánh xạ ảnh thành một tập hữu hạn
+\begin{equation}
+f_{\theta}(I)=\{(b_i,c_i,s_i)\}_{i=1}^{n},\qquad
+b_i=(x_{1i},y_{1i},x_{2i},y_{2i}),\ c_i\in\mathcal{C},\ s_i\in[0,1].
+\end{equation}
+Trong đó, $\theta$ là trọng số mô hình, $b_i$ là box, $c_i$ là lớp và $s_i$ là điểm tin cậy. Trong pipeline có tiền xử lý hình học, box cần được đưa về hệ tọa độ của ảnh gốc trước khi vẽ hoặc đánh giá.
+
+Đối với Klygo, bài toán kỹ thuật là tổ chức một lớp trung gian để những mô hình $f_{\theta}$ từ các framework khác nhau cùng tham gia quy trình. Lớp này phải kiểm soát đầu vào, cấu hình, vòng đời và đầu ra mà vẫn cho phép adapter sử dụng đặc điểm riêng của backend. Không phải mọi tùy chọn của các framework đều có cùng ý nghĩa; việc chuẩn hóa vì vậy tập trung vào hợp đồng và trách nhiệm, thay vì giả định tất cả kiến trúc đều có hành vi giống nhau.
+
+\begin{table}[H]\centering\small
+\caption{Các vấn đề tích hợp và yêu cầu tương ứng của đề tài}
+\begin{tabularx}{\textwidth}{YY}
+\toprule Vấn đề thực tế & Yêu cầu đặt ra \\\midrule
+Framework trả kết quả theo kiểu khác nhau & Chuẩn hóa box, score, tên lớp và chỉ số lớp \\
+Tiền xử lý làm thay đổi hệ tọa độ & Lưu lịch sử biến đổi và khôi phục box khi được hỗ trợ \\
+Ảnh/video lớn hoặc nhiều khung hình & Cung cấp lazy input, batch và stream; xác định rõ thời điểm materialize \\
+Thay đổi prompt và cấu hình giữa các lần gọi & Ghi nhớ có kiểm soát, snapshot cho stream, reset khi cần \\
+So sánh kết quả từ nhiều mô hình & Cùng ảnh, cùng nhãn tham chiếu và cùng quy trình metric \\
+Cần giải thích và tái lập số liệu & Lưu manifest, checksum, tham số, dự đoán và log \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Mục tiêu và câu hỏi nghiên cứu}
+\subsection{Mục tiêu}
+Mục tiêu thứ nhất là mô tả và kiểm chứng thiết kế của Klygo dựa trên mã nguồn thực tế. Báo cáo làm rõ vai trò của các mô-đun, cách dữ liệu đi qua pipeline và những bất biến quan trọng của giao diện mô hình. Phần cài đặt tập trung vào các cơ chế ảnh hưởng trực tiếp đến tính đúng hoặc khả năng sử dụng: chuẩn hóa nhãn, khôi phục tọa độ, xử lý batch và stream, cũng như bảo vệ trạng thái sau khi unload.
+
+Mục tiêu thứ hai là đánh giá các cấu hình phát hiện đối tượng qua thư viện. Thực nghiệm sử dụng mô hình pretrained, chạy trên cùng tập ảnh và tính metric từ dự đoán đã lưu. Ngoài chất lượng phát hiện, nhóm đo độ trễ với phạm vi timer được công bố. Mục tiêu này giúp phân biệt một hệ thống chạy đúng giao diện với một mô hình tạo ra kết quả tốt trên dữ liệu.
+
+\subsection{Câu hỏi nghiên cứu}
+\begin{enumerate}
+\item \textbf{RQ1:} Klygo tổ chức giao diện và cấu trúc dữ liệu như thế nào để kết nối các backend phát hiện đối tượng?
+\item \textbf{RQ2:} Những cơ chế nào giúp kiểm soát tọa độ, cấu hình và trạng thái khi suy luận trên ảnh, batch hoặc stream?
+\item \textbf{RQ3:} Với dữ liệu và thiết bị được cố định, ba cấu hình khảo sát thể hiện sự đánh đổi nào giữa chất lượng phát hiện và độ trễ?
+\item \textbf{RQ4:} Lớp điều phối \code{predict} bổ sung bao nhiêu thời gian so với \code{forward} có cùng mô hình, đầu vào và kết quả \code{Detection}?
+\end{enumerate}
+Các câu hỏi này được trả lời bằng hai nhóm bằng chứng bổ sung cho nhau. Kiểm thử phần mềm cung cấp bằng chứng về hợp đồng và xử lý trường hợp biên. Thực nghiệm có ground truth cung cấp bằng chứng về chất lượng phát hiện; phép đo lặp cung cấp số liệu hiệu năng trong điều kiện cụ thể. Một loại bằng chứng không thay thế hoàn toàn cho loại còn lại.
+
+\section{Phạm vi và giả định}
+Báo cáo khảo sát Klygo phiên bản 2.1.0 trong kho mã cục bộ với revision được công bố cho từng nhóm thí nghiệm. Phần đánh giá nền tảng gồm YOLOv8n, YOLO-World v2 small và Faster R-CNN MobileNetV3-Large FPN, dùng nguyên checkpoint công khai. Mẫu 500 ảnh được rút từ COCO 2017 validation với seed cố định, cùng nhãn và ảnh cho cả ba mô hình. Phần mở rộng thực hiện fine-tune riêng trên tập train tách từ mẫu này, đánh giá trên tập test giữ riêng và không thay thế kết quả nền tảng.
+
+Thực nghiệm dùng một GPU GTX 1650 Ti Max-Q và batch bằng một. Các kết luận thời gian không được suy rộng thành hiệu năng trên GPU khác, chế độ batching lớn, hệ thống phục vụ nhiều người dùng hoặc quá trình đọc video từ mạng. Với YOLO-World, thí nghiệm dùng vocabulary COCO được lưu trong checkpoint; điều này kiểm chứng pipeline và hiệu quả trên tập lớp khảo sát, chưa tạo bằng chứng về những lớp mới chưa xuất hiện trong dữ liệu tiền huấn luyện.
+
+Những backend có mã hỗ trợ nhưng không tham gia thí nghiệm chính được trình bày như khả năng tích hợp của thiết kế. Tương tự, kiểm thử với mô hình giả lập chỉ xác nhận luồng phần mềm và không được xem là đo AP của mô hình thật. Các thành phần phụ thuộc tùy chọn cần được cài đặt và kiểm tra riêng khi mở rộng phạm vi.
+
+\section{Đóng góp và cấu trúc báo cáo}
+Đóng góp của nhóm gồm một thư viện có giao diện công khai theo mô-đun; pipeline kết nối dữ liệu, tiền xử lý, mô hình và đầu ra; các kiểu dữ liệu thống nhất cho phát hiện; và cơ chế điều phối suy luận với cấu hình, batch, stream cùng vòng đời rõ ràng. Trong phạm vi báo cáo, nhóm bổ sung thiết kế thực nghiệm cố định, mã chuẩn bị dữ liệu, mã chạy mô hình, kiểm tra metric và hồ sơ kết quả tái lập.
+
+Kiến trúc mạng, trọng số pretrained, dữ liệu COCO và các framework là thành phần kế thừa. Sự phân biệt này giúp xác định đúng giá trị của đề tài: xây dựng và kiểm chứng một quy trình sử dụng mô hình AI có cấu trúc, thay vì nhận các mô hình sẵn có là sáng tạo mới của nhóm.
+
+Chương~2 trình bày các khái niệm phục vụ thiết kế và đánh giá. Chương~3 phân tích kiến trúc Klygo và hợp đồng dữ liệu. Chương~4 đối chiếu thiết kế với cài đặt và bộ kiểm thử. Chương~5 trình bày thực nghiệm và diễn giải kết quả. Chương~6 minh họa cách sử dụng sản phẩm. Chương~7 trả lời các câu hỏi nghiên cứu, tổng kết hạn chế và đề xuất hướng phát triển. Phụ lục lưu các thông tin để cài đặt, chạy lại và đối chiếu bằng chứng.
+
+\section{Phạm vi mở rộng và câu hỏi nghiên cứu bổ sung}
+Bên cạnh nền tảng 12 mô-đun tại revision \code{0ca8a6a}, báo cáo khảo sát revision \code{c4388f1} có 13 mô-đun, bổ sung mining và các chế độ native/managed. Các mô tả lifecycle, registry và kết quả kiểm thử ở phần nền tảng gắn với revision ban đầu; phần mở rộng nêu rõ thay đổi và được đo riêng. Không ghép số liệu hai revision thành một phép đo duy nhất.
+
+\textbf{RQ5:} Các phương pháp mining làm thay đổi quy mô, phân bố nhãn, chi phí tạo dataset và kết quả fine-tune trên cùng tập test như thế nào?
+
+\textbf{RQ6:} Trên cùng model và cấu hình, framework gốc, Klygo native và managed ở các chế độ stream/non-stream khác nhau thế nào về thời gian, bộ nhớ và tính tương đương dự đoán?
+
+Thực nghiệm bổ sung có fine-tune ngắn trên các tập con với ba seed, không huấn luyện từ đầu. Quy mô này phục vụ kiểm chứng quy trình và phân tích thăm dò; không thay thế benchmark đầy đủ trên COCO train2017.

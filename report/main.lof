@@ -1,0 +1,31 @@
+\babel@toc {vietnamese}{}\relax 
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {2.1}{\ignorespaces Sơ đồ khái niệm một giai đoạn và hai giai đoạn. Hình do nhóm dựng để giải thích luồng xử lý; không mô tả đầy đủ các tầng của từng mạng.}}{9}{figure.caption.15}%
+\contentsline {figure}{\numberline {2.2}{\ignorespaces Minh họa cách tính IoU trên hai hình chữ nhật. Đây là ví dụ hình học, không phải số liệu dự đoán của mô hình.}}{11}{figure.caption.16}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {3.1}{\ignorespaces Các nhóm trách nhiệm trong kiến trúc Klygo; mining thuộc revision mở rộng. Mũi tên biểu diễn một pipeline điển hình; mô-đun có thể được sử dụng độc lập.}}{17}{figure.caption.18}%
+\contentsline {figure}{\numberline {3.2}{\ignorespaces Quan hệ giữa các kiểu đầu ra. Registry lớp và định danh box được phân biệt để tránh nhầm lẫn khi ghép kết quả.}}{19}{figure.caption.19}%
+\contentsline {figure}{\numberline {3.3}{\ignorespaces Phân chia trách nhiệm giữa lớp cơ sở, adapter và backend runtime. FasterDetector là adapter dùng trong mã thực nghiệm của báo cáo.}}{21}{figure.caption.20}%
+\contentsline {figure}{\numberline {3.4}{\ignorespaces Vòng đời khái niệm của mô hình. Truy cập yêu cầu tài nguyên sau unload phải bị chặn; nạp lại được thực hiện bằng một thao tác tạo mô hình thích hợp.}}{23}{figure.caption.21}%
+\contentsline {figure}{\numberline {3.5}{\ignorespaces Trách nhiệm đọc nguồn và thời điểm trả kết quả của Raw, native và managed ở revision mở rộng}}{26}{figure.caption.24}%
+\contentsline {figure}{\numberline {3.6}{\ignorespaces Minh họa chồng lấp chuẩn bị batch với suy luận; độ dài các đoạn là giả định giải thích, không phải số đo thực nghiệm}}{27}{figure.caption.26}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {5.1}{\ignorespaces Hai mươi lớp có nhiều annotation không phải crowd nhất trong mẫu. Phân bố được tính trước khi xét dự đoán của mô hình.}}{39}{figure.caption.29}%
+\contentsline {figure}{\numberline {5.2}{\ignorespaces Precision nội suy trung bình theo lớp tại IoU 0,50. Đây là đường macro từ COCOeval, khác P/R micro ở một điểm confidence.}}{43}{figure.caption.34}%
+\contentsline {figure}{\numberline {5.3}{\ignorespaces Phân bố độ trễ predict qua 300 lần gọi mỗi model. Boxplot lược điểm ngoại lai khi vẽ; tệp latency vẫn giữ toàn bộ mẫu.}}{46}{figure.caption.39}%
+\contentsline {figure}{\numberline {5.4}{\ignorespaces Chất lượng trên 500 ảnh và độ trễ lặp trên 100 ảnh. Mỗi điểm biểu diễn một cấu hình hệ thống, không phải một phép đo riêng của backend.}}{47}{figure.caption.41}%
+\contentsline {figure}{\numberline {5.5}{\ignorespaces Phân bố chênh lệch trong từng cặp thời gian. Chênh lệch âm riêng lẻ được giữ lại như biến thiên đo, không bị cắt về không.}}{48}{figure.caption.43}%
+\contentsline {figure}{\numberline {5.6}{\ignorespaces So sánh kết quả trên ảnh COCO ID 67406}}{50}{figure.caption.44}%
+\contentsline {figure}{\numberline {5.7}{\ignorespaces So sánh kết quả trên ảnh COCO ID 65288}}{51}{figure.caption.45}%
+\contentsline {figure}{\numberline {5.8}{\ignorespaces So sánh kết quả trên ảnh COCO ID 432898}}{52}{figure.caption.46}%
+\contentsline {figure}{\numberline {5.9}{\ignorespaces Phân bố 15 lớp phổ biến nhất của tập đầu vào, chuẩn hóa theo số ảnh của từng tập}}{55}{figure.caption.48}%
+\contentsline {figure}{\numberline {5.10}{\ignorespaces Minh họa 12 cụm trên 300 ảnh; PCA chỉ dùng để vẽ, không dùng để chọn mẫu}}{55}{figure.caption.49}%
+\contentsline {figure}{\numberline {5.11}{\ignorespaces Chất lượng sau fine-tune và checkpoint ban đầu trên cùng tập test}}{57}{figure.caption.51}%
+\contentsline {figure}{\numberline {5.12}{\ignorespaces Throughput của framework gốc và các đường thực thi Klygo}}{59}{figure.caption.54}%
+\contentsline {figure}{\numberline {5.13}{\ignorespaces Thời gian xử lý theo cặp worker/prefetch; cột là trung vị, thanh sai số biểu diễn min--max của ba lượt}}{62}{figure.caption.57}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {6.1}{\ignorespaces Kết quả chạy demo qua API công khai của Klygo trên ảnh COCO ID 125778. Ảnh minh họa được sinh bởi mã demo, không phải ảnh giao diện ứng dụng web.}}{64}{figure.caption.58}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }

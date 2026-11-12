@@ -1,0 +1,139 @@
+\chapter{Cài Đặt Và Kiểm Chứng}
+\label{chap:implementation}
+\section{Công nghệ và tổ chức mã nguồn}
+Klygo được đóng gói bằng \code{pyproject.toml}, khai báo phiên bản 2.1.0 và Python từ 3.10 trở lên~\cite{klygosource}. Các thư viện xử lý dữ liệu và ảnh như NumPy, Pillow, OpenCV, PyYAML, python-box, Matplotlib và Rich phục vụ phần chức năng nền. Các tích hợp AI nằm trong nhóm phụ thuộc tùy chọn như Ultralytics, Torchvision, Transformers và KerasHub. Cài đặt các nhóm này theo nhu cầu giúp người dùng không phải nạp tất cả backend cho một tác vụ đơn giản.
+
+Mã nguồn có các thư mục package, kiểm thử, ví dụ, tài liệu tham chiếu và notebook hướng dẫn. Một API công khai được thể hiện đồng thời ở source, facade xuất tên, test và ví dụ. Công cụ audit của dự án kiểm tra sự phù hợp giữa các thành phần đó, các liên kết tài liệu và các quy tắc sử dụng API. Audit bổ sung một góc nhìn về chất lượng giao diện; kết quả audit không thay thế việc thực thi thuật toán trên dữ liệu thật.
+
+\begin{lstlisting}[language={},caption={Cấu trúc mã và bằng chứng của báo cáo}]
+code/
+  klygo/
+    pyproject.toml
+    klygo/                 # source: 12 public modules
+    test/                  # existing unittest suite
+    examples/              # runnable API examples
+    docs/                  # reference documentation
+    tutorials/             # notebooks
+    artifacts/report/      # data, weights, predictions, logs
+  report/
+    main.tex
+    chapters/klygo*.tex
+    experiments/           # preparation, evaluation, figures
+    generated/             # tables generated from evidence
+    images/klygo/          # figures for this report
+\end{lstlisting}
+
+Phần báo cáo và thí nghiệm được đặt ngoài package để giữ ranh giới giữa sản phẩm thư viện và công cụ phục vụ đánh giá. Trọng số và dữ liệu tải về nằm trong \code{artifacts/report}; chúng không được đưa vào thư mục mã của mô-đun. Revision source được ghi trong cấu hình chạy để liên kết kết quả với phiên bản đã khảo sát.
+
+\section{Cài đặt đầu vào lazy và pipeline tiền xử lý}
+\subsection{LazyImage và thời điểm materialize}
+\code{LazyImage} giữ nguồn ảnh hoặc chỉ số frame video, có thể kiểm tra kích thước mà chưa cần duy trì toàn bộ bộ đệm pixel đã giải mã. Các phương thức chuyển đổi như \code{to\_pil}, \code{to\_array} hoặc \code{to\_tensor} là điểm materialize khi cần dữ liệu thật. Cơ chế cache cho phép tái sử dụng kết quả giải mã và có phương thức unload để giải phóng dữ liệu được giữ.
+
+Với ảnh trong một pipeline, việc gắn một operation không nhất thiết thực hiện phép tính ngay. Pipeline có thể lưu danh sách thao tác rồi chạy khi được materialize. Điều này có ích khi người dùng chỉ cần xem metadata hoặc loại một số ảnh trước khi suy luận. Tuy nhiên, bản thân proxy và metadata vẫn sử dụng bộ nhớ; cách gọi ``lazy'' không có nghĩa chương trình dùng đúng không byte RAM.
+
+\begin{lstlisting}[caption={Gắn tiền xử lý qua API công khai}]
+from klygo import media, preprocessing as p
+
+image = media.LazyImage("input.jpg")
+pipeline = p.compose(
+    p.auto_orient(),
+    p.letterbox((640, 640)),
+)
+processed = pipeline(image)
+pixels = p.materialize(processed, output="pil")
+trace = p.get_trace(pixels)
+\end{lstlisting}
+
+Ví dụ này mô tả quy trình tiền xử lý tùy chọn, không phải phần resize được thêm vào thí nghiệm chính. Trong thực nghiệm chất lượng, backend nhận ảnh gốc RGB và thực hiện tiền xử lý nội bộ. Tách hai ngữ cảnh giúp tránh việc áp dụng letterbox hai lần mà không kiểm soát hệ tọa độ đầu ra.
+
+\subsection{Kiểm chứng lịch sử hình học}
+Một cách kiểm chứng trace là tạo ảnh có kích thước biết trước và một box xác định, áp dụng letterbox rồi so sánh tọa độ hoàn tác với box ban đầu. Đây là bài kiểm thử hợp lý vì có nghiệm hình học chính xác, độc lập với chất lượng mô hình. Những test hiện có còn kiểm tra việc khôi phục về không gian ảnh gốc hoặc ảnh chỉ có biến đổi hình học, cùng lựa chọn tạo bản sao hay cập nhật inplace.
+
+Với những phép mất thông tin như crop, test cần xác nhận đúng hợp đồng tọa độ cho vùng được giữ. Một ảnh được crop không thể dùng để chứng minh hệ thống tìm thấy đối tượng đã bị loại khỏi đầu vào. Sự phân biệt giữa tính đúng của phép biến đổi và khả năng nhận dạng của mạng là cần thiết khi diễn giải kết quả kiểm thử.
+
+\section{Cài đặt chu trình suy luận}
+\subsection{Phân giải nguồn, cấu hình và batch}
+\code{Detector.predict} kiểm tra số lượng batch, bước lấy frame và kiểu tham số, sau đó phân giải cấu hình cùng prompt. Ở chế độ không stream, nguồn ảnh được xử lý theo các lát có kích thước batch. Mỗi lần gọi adapter phải trả một kết quả cho mỗi ảnh; Detector kiểm tra bất biến này trước khi tiếp tục đóng gói.
+
+Việc tách \code{forward} và \code{predict} giúp adapter chỉ cần biết cách xử lý một danh sách ảnh đã sẵn sàng. \code{predict} chịu trách nhiệm cho ngữ cảnh inference, thông tin frame, bản sao kết quả và provenance cấu hình. Vì vậy, khi đo thời gian, \code{predict} có nhiều công việc hơn một lời gọi mạng thuần túy. Báo cáo dùng phạm vi timer bao phủ lời gọi công khai để phản ánh đường đi người dùng thực sự sử dụng.
+
+Ở revision mở rộng, vòng managed nhận cặp danh sách nguồn và pixel đã chuẩn bị từ bộ điều phối batch. Bộ điều phối dùng deque để giữ các Future theo thứ tự, chờ kết quả của batch đầu, nạp trước batch kế rồi chuyển batch sẵn sàng cho inference. Worker và prefetch được truyền tường minh ở mỗi lời gọi; ví dụ \code{workers=2, prefetch=2} cấu hình phần chuẩn bị ảnh. Hình~\ref{fig:prefetch-timeline} giải thích cơ chế và Mục~\ref{sec:scheduling-exp} đo ảnh hưởng của từng tham số. Mã giả dưới đây mô tả trách nhiệm cơ bản, chưa khai triển phần executor của revision mở rộng.
+
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[caption={Luồng điều phối rút gọn từ Detector; bỏ các nhánh xử lý lỗi để minh họa}]
+metadata, prompt = resolve_prediction(prompt, overrides)
+images = resolve_images(source)
+frames = []
+for batch_images in split_batches(images, batch_size):
+    with inference_context(backend):
+        raw = forward(materialize(batch_images), prompt)
+    if len(raw) != len(batch_images):
+        raise ValueError("One result is required per image")
+    frames.extend(pack_with_source_and_config(raw, metadata))
+return Detections(frames)
+\end{lstlisting}
+\vspace{4pt}
+\end{minipage}
+Đây là mã giả giải thích trách nhiệm, không phải một API mới của Klygo. Mã thực tế còn dùng khóa, snapshot cấu hình, sao chép dữ liệu và xử lý stream. Tên hàm rút gọn trong ví dụ không được dùng như lời gọi có thể chạy nguyên trạng.
+
+\subsection{Snapshot và tính độc lập của kết quả}
+Mã suy luận tạo bản sao các thuộc tính có thể thay đổi như tọa độ box, metadata và config. Mục đích là tránh trường hợp backend tái sử dụng đối tượng đầu ra khiến một lần dự đoán sau sửa kết quả cũ. Cấu hình được ghi trong frame phản ánh lần gọi đã tạo ra frame đó, thay vì chỉ tham chiếu cấu hình hiện tại của model.
+
+Kiểm thử lifecycle sử dụng model giả lập có thể ghi lại lời gọi để xác nhận hành vi này. Những trường hợp được khảo sát gồm thay đổi threshold, bỏ qua hoặc xóa prompt, lỗi giữa chừng, xen kẽ hai stream và thay vocabulary YOLO-World. Các test này trả lời một câu hỏi phần mềm cụ thể: khi người dùng thay cấu hình, hệ thống có giữ được hợp đồng trạng thái và nội dung kết quả hay không.
+
+\section{Adapter cho các mô hình thực nghiệm}
+\subsection{YOLODetect và YOLOWorldDetect}
+\code{YOLODetect} nạp model Ultralytics, giữ bảng tên lớp và dịch prompt thành danh sách class ID khi người dùng muốn lọc lớp. Nếu một nhãn prompt không có trong vocabulary cố định, adapter báo lỗi thay vì im lặng bỏ qua. Mô hình được gọi với cấu hình model và hậu xử lý đã phân giải; kết quả chuyển qua hàm định dạng backend rồi builder chung.
+
+\code{YOLOWorldDetect} giữ thêm vocabulary gốc. Khi prompt khác tập lớp hiện tại, adapter cập nhật model bằng \code{set\_classes}. Khi không có prompt, nó sử dụng lại vocabulary gốc theo hợp đồng. Việc cập nhật chỉ thực hiện khi cần thiết, tránh lặp công việc cho các ảnh có cùng prompt. Bộ kiểm thử kiểm tra cả thay đổi vocabulary và khôi phục trạng thái khi các stream xen kẽ.
+
+\subsection{Adapter Torchvision trong thực nghiệm}
+Torchvision cung cấp mô hình người dùng sở hữu; Klygo cung cấp backend runtime để cast tensor, chạy inference và chuẩn hóa kết quả. Mã thực nghiệm tạo \code{FasterDetector} kế thừa \code{models.Detector}, nạp checkpoint chính thức rồi chuyển model sang thiết bị được chỉ định. Mỗi ảnh PIL được chuyển thành tensor $C\times H\times W$, đổi sang float và chia 255 trước khi đưa vào model.
+
+\clearpage
+\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[caption={Phần forward của FasterDetector trong mã thực nghiệm}]
+def forward(self, images, prompt=None):
+    tensors = self.cast_inputs([
+        pil_to_tensor(image).float().div(255)
+        for image in images
+    ])
+    formatted = self.format_results(
+        self.run_inference(tensors)
+    )
+    for item in formatted:
+        item["labels"] = [
+            self.names[index] for index in item["class_ids"]
+        ]
+    return outputs.build_detections(
+        images, formatted, names=self.names
+    )
+\end{lstlisting}
+\vspace{4pt}
+\end{minipage}
+
+Torchvision sử dụng danh sách nhãn có các vị trí không tương ứng trực tiếp với thứ tự 80 lớp của Ultralytics. Vì vậy, mã đánh giá ánh xạ nhãn văn bản sang category ID COCO, thay vì lấy trực tiếp class ID model làm category ID. Đây là bước quan trọng: phép đánh giá vẫn có thể chạy nếu ánh xạ sai, nhưng kết quả khi đó không phản ánh chất lượng nhận dạng thực tế.
+
+\section{Chuẩn hóa, hậu xử lý và hiển thị}
+\subsection{Kiểm tra đầu ra trước khi tạo object}
+Builder yêu cầu các mảng box, score, label có cùng số phần tử; class ID nếu được cung cấp cũng phải cùng độ dài. Mỗi box phải có bốn tọa độ. Nếu một class ID đã được đăng ký với một nhãn khác, builder báo lỗi. Các quy tắc này làm rõ hợp đồng giữa adapter và phần còn lại của thư viện, giúp phát hiện sai sót gần nguồn tạo lỗi.
+
+Làm tròn được thực hiện trong builder trước khi tạo Box. Do các dự đoán lưu cho thực nghiệm được lấy từ Box, chúng đã chịu phép làm tròn đó. Báo cáo giữ nguyên hành vi phiên bản source và công bố giới hạn, thay vì sửa core để đạt điểm thuận lợi hơn. Một hướng cải tiến có thể là giữ precision đầy đủ trong dữ liệu và chỉ làm tròn khi hiển thị, nhưng hướng này cần thí nghiệm so sánh riêng.
+
+\subsection{Hậu xử lý dưới dạng phép toán có thể kết hợp}
+Các operation như threshold, clip, select, NMS và top có thể ghép thành pipeline. Ví dụ, người dùng có thể cắt box về biên ảnh, lọc theo ngưỡng rồi giữ một số kết quả quan trọng. Trình tự operation là một phần của cấu hình: lọc trước và sau NMS không phải lúc nào cũng cho cùng tập dự đoán nếu kết hợp thêm giới hạn top-k hoặc các điều kiện khác.
+
+Trong phần demo, việc áp dụng hậu xử lý Klygo minh họa tính composable của thư viện. Trong benchmark chính, model đã có hậu xử lý nội bộ với tham số cố định, nên chỉ xuất dữ liệu và đánh giá. Cách sử dụng được ghi rõ theo từng mục để tránh nhầm một hình minh họa đã lọc confidence cao với tập dự đoán thực tế dùng tính AP.
+
+Mô-đun visual tạo ảnh có box và nhãn để kiểm tra trực quan. Hiển thị giúp nhận ra lỗi hệ tọa độ, lớp hoặc box trùng, nhưng không thay thế metric trên toàn mẫu. Khi một ảnh có quá nhiều box, báo cáo giới hạn số box được vẽ để đọc được nhãn; giới hạn hiển thị không được áp dụng lên tệp đánh giá.
+
+\section{Kiểm chứng thư viện và công cụ thực nghiệm}
+\subsection{Kiểm thử phần mềm hiện có}
+Bộ unittest được chạy nguyên trạng trong môi trường của báo cáo. Test bao phủ thao tác tệp và archive, cấu hình, dữ liệu, media, tiền xử lý, mô hình, đầu ra, hậu xử lý và trực quan hóa. Các ca cần checkpoint thật hoặc bộ dữ liệu đóng gói có cơ chế opt-in; nếu điều kiện chưa được cấu hình, chúng được đánh dấu skip và ghi lý do.
+
+Lần chạy đầu có hai lỗi do thiếu Transformers ở những test import adapter Grounding DINO. Nhóm bổ sung phụ thuộc, giữ lại log ban đầu rồi chạy lại cùng bộ test. Kết quả sau khi đủ phụ thuộc là 353 pass và 7 skip trên 360 ca, không fail hoặc error. Mô hình Grounding DINO thật và Locate Anything thật chưa được chạy, nên không có tuyên bố kiểm chứng thực nghiệm cho các checkpoint đó.
+
+\subsection{Kiểm tra metric và tính nhất quán phép đo}
+Mã tính điểm làm việc dùng match và ignore từ COCOeval. Ba test tổng hợp kiểm tra: không có dự đoán thì ground truth trở thành FN; hai box trùng vật thể không được tính thành hai TP; dự đoán khớp một crowd được xử lý theo quy tắc ignore. Các trường hợp này giúp kiểm chứng cách trích TP/FP/FN trong công cụ báo cáo, thay vì chỉ nhìn vào một giá trị AP có vẻ hợp lý.
+
+Trong phép đo chi phí điều phối, đầu ra của hai nhánh được so sánh về số box, tên lớp, tọa độ và score với sai số số học được khai báo. Hai nhánh dùng cùng inference mode, FP32, model instance, ảnh RGB và cấu hình. Mỗi cặp đổi thứ tự gọi theo vị trí ảnh và lượt lặp để giảm thiên lệch thứ tự. Các giá trị thô được lưu, cho phép kiểm tra chênh lệch âm hoặc các lần gọi bất thường thay vì chỉ báo một số trung bình.

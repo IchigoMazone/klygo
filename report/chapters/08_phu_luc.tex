@@ -1,0 +1,221 @@
+\appendix
+\chapter{Phụ Lục Tái Lập}
+
+\section{Cài đặt trên Windows 11}
+
+\begin{lstlisting}[language=bash,caption={Tạo môi trường và cài dependency}]
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+git lfs pull
+\end{lstlisting}
+
+Hai graph lớn được quản lý bằng Git LFS. Nếu tệp chỉ có vài dòng pointer, cần
+cài Git LFS và chạy lại \texttt{git lfs pull} trước khi đánh giá định tuyến.
+
+\section{Lệnh kiểm thử và benchmark}
+\label{sec:lenh-tai-lap}
+
+\begin{lstlisting}[language=bash,caption={Các lệnh tái lập kết quả chính}]
+.\.venv\Scripts\python.exe -m unittest discover -s tests -q
+.\.venv\Scripts\python.exe scripts\smoke_offline.py
+.\.venv\Scripts\python.exe scripts\benchmark_chase.py `
+  --source demo --seeds 20 --output output\chase\benchmark-demo.json
+.\.venv\Scripts\python.exe scripts\benchmark_chase.py `
+  --source osm --seeds 20 --output output\chase\benchmark-osm.json
+.\.venv\Scripts\python.exe scripts\benchmark_tsp.py --weight length
+.\.venv\Scripts\python.exe scripts\benchmark_tsp.py --weight travel_time `
+  --output output\routing\benchmark-tsp-time.json
+\end{lstlisting}
+
+PowerShell dùng dấu backtick để nối dòng. Trên shell khác, thay bằng ký tự nối
+dòng tương ứng hoặc viết mỗi lệnh trên một dòng.
+
+\section{Cấu trúc mã nguồn và quy mô}
+
+\begin{lstlisting}[language=bash,caption={Cây thư mục dự án (bỏ qua tệp sinh ra)}]
+Hanoi_map_optimizer/
+|-- app.py                      # diem vao Streamlit, chuyen che do
+|-- chase_app.py                # shortcut mo thang che do Tron tim
+|-- data/
+|   |-- popular_locations.py    # 13 dia diem mau da kiem tra toa do
+|   |-- hanoi_urban_drive.pkl   # graph dinh tuyen (Git LFS)
+|   |-- hanoi_urban_drive.graphml
+|   `-- hanoi_urban_drive.meta.json
+|-- src/
+|   |-- shortest_path.py        # Dijkstra + ma tran chi phi
+|   |-- tsp.py                  # Held-Karp cho ba kieu ket thuc
+|   |-- heuristics.py           # nearest-neighbor, 2-opt
+|   |-- route_optimizer.py      # dieu phoi pipeline dinh tuyen
+|   |-- map_service.py          # nap/cache graph, kiem tra metadata
+|   |-- chase.py                # luat, Observation, ba chien thuat
+|   |-- chase_maps.py           # san luoi, san OSM, sinh kich ban
+|   |-- chase_ui.py             # dieu khien van, replay, xuat JSON
+|   |-- visualization.py        # ve ban do Folium
+|   |-- geocoding.py            # tim dia diem theo ten
+|   |-- utils.py, constants.py  # kieu du lieu chung, hang so
+|-- tests/                      # 112 ca kiem thu tren 11 tep
+|-- scripts/
+|   |-- smoke_offline.py        # smoke test tren graph dong goi
+|   |-- benchmark_tsp.py        # benchmark tang thu tu ghe
+|   |-- benchmark_chase.py      # benchmark 360 van tro choi
+|   |-- make_report_figures.py  # sinh hinh bieu do cho bao cao
+|   `-- preload_hanoi*.py       # chuan bi du lieu OSM
+|-- output/                     # ket qua benchmark dang JSON
+`-- report/                     # bao cao LaTeX nay
+\end{lstlisting}
+
+\begin{table}[H]
+\centering
+\caption{Quy mô mã nguồn theo nhóm tệp}
+\label{tab:quy-mo-ma}
+\begin{tabular}{l r r}
+\toprule
+\textbf{Nhóm} & \textbf{Số tệp Python} & \textbf{Số dòng} \\
+\midrule
+Giao diện (\texttt{app.py}, \texttt{chase\_app.py}) & 2 & 745 \\
+Thuật toán và dịch vụ (\texttt{src/}) & 13 & 1.425 \\
+Kiểm thử (\texttt{tests/}) & 12 & 1.344 \\
+Script dữ liệu và benchmark (\texttt{scripts/}) & 9 & 891 \\
+Dữ liệu điểm mẫu (\texttt{data/}) & 2 & 19 \\
+\midrule
+\textbf{Tổng} & \textbf{38} & \textbf{4.424} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Tỉ lệ giữa mã kiểm thử và mã thuật toán xấp xỉ 0,94:1. Con số này không phải mục
+tiêu tự thân, nhưng cho thấy phần kiểm chứng được đầu tư tương đương phần triển
+khai.
+
+\section{Kết quả chạy bộ kiểm thử}
+
+\begin{lstlisting}[language=bash,caption={Kết xuất rút gọn của lần chạy ngày 24/10/2026}]
+> .\.venv\Scripts\python.exe -m unittest discover -s tests -q
+
+[... cac dong log cua test duong loi, vi du: ]
+_pickle.UnpicklingError: invalid load key, 'n'.
+2026-10-24 09:07:56.798 No runtime found, using MemoryCacheStorageManager
+----------------------------------------------------------------------
+Ran 112 tests in 18.431s
+
+OK
+\end{lstlisting}
+
+Dòng \texttt{UnpicklingError} ở trên đến từ ca kiểm thử cố ý nạp một tệp Pickle
+hỏng để xác nhận hệ thống báo lỗi thân thiện thay vì sập. Traceback được in ra là
+dữ liệu của test, không phải test thất bại; kết luận nằm ở hai dòng cuối.
+
+\section{Lược đồ tệp kết quả benchmark}
+
+Mọi số liệu ở Chương~5 đều được lưu dưới dạng JSON để có thể kiểm tra lại mà không
+cần chạy lại. Hai lược đồ như sau.
+
+\begin{lstlisting}[language=bash,caption={Lược đồ \texttt{output/routing/benchmark-tsp.json}}]
+{
+  "weight": "length",            # muc tieu toi uu
+  "repeats": 5,                  # so lan lap moi cau hinh
+  "graph_nodes": 350930,
+  "graph_edges": 864982,
+  "max_snap_distance_m": 263.22,
+  "locations": [ ... ],          # ten 11 dia diem theo thu tu chi so
+  "dijkstra_scaling": [ {"points": 4, "dijkstra_seconds": 0.484}, ... ],
+  "results": [
+    {
+      "points": 11, "destinations": 10, "route_mode": "fixed_end",
+      "states": 10240,           # (n-1) * 2^(n-1)
+      "exact_order": [0, 9, 8, ...],
+      "unit": "km",
+      "exact_cost": 55.512,      # nghiem Held-Karp
+      "nn_cost": 66.351, "nn_gap_percent": 19.53, "nn_mean_ms": 0.012,
+      "two_opt_cost": 57.718, "two_opt_gap_percent": 3.97,
+      "held_karp_mean_ms": 6.736, "held_karp_min_ms": 6.2
+    }
+  ],
+  "status": "OK"
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash,caption={Lược đồ \texttt{output/chase/benchmark-*.json}}]
+{
+  "source": "demo",              # "demo" (san luoi) hoac "osm"
+  "nodes": 81, "edges": 288,
+  "rules": {"runner_budget": 160, "hunter_budget": 160,
+            "reveal_every": 3, "max_turns": 18},
+  "seeds": [0, 1, ..., 19],
+  "results": [
+    {
+      "runner": "nearest_exit",  # random | nearest_exit | evasive
+      "hunter": "contain",       # trail | search | contain
+      "games": 20,
+      "escaped": 13, "caught": 7, "timeout": 0,
+      "mean_turns": 3.2,
+      "mean_step_ms": 2.972, "max_step_ms": 10.62
+    }
+  ]
+}
+\end{lstlisting}
+
+Bất biến kiểm tra được trên mỗi dòng kết quả là
+\texttt{escaped + caught + timeout = games}. Nếu tổng không khớp, hoặc benchmark
+dừng giữa chừng, hoặc một kết cục chưa được phân loại.
+
+\section{Sinh lại hình vẽ của báo cáo}
+
+Hai hình biểu đồ được sinh từ chính các tệp JSON ở trên, không vẽ tay. Script cần
+\texttt{matplotlib}, thư viện này cố ý không nằm trong \texttt{requirements.txt}
+của ứng dụng vì chỉ phục vụ việc soạn báo cáo.
+
+\begin{lstlisting}[language=bash,caption={Sinh lại hình và biên dịch báo cáo}]
+python -m pip install matplotlib
+python scripts\make_report_figures.py
+cd report
+latexmk -xelatex main.tex
+\end{lstlisting}
+
+Bảng màu của biểu đồ dùng ba màu phân loại đã được kiểm định về độ tương phản và
+khả năng phân biệt với người mù màu; mỗi cột đều có nhãn số trực tiếp để không
+phụ thuộc hoàn toàn vào màu sắc khi in đen trắng.
+
+\section{Ma trận trường hợp kết thúc trò chơi}
+
+\begin{table}[H]
+\centering
+\caption{Thứ tự ưu tiên các điều kiện trong một lượt}
+\begin{tabularx}{\linewidth}{p{1.2cm}Y Y}
+\toprule
+\textbf{Bước} & \textbf{Điều kiện} & \textbf{Kết quả} \\
+\midrule
+1 & Người trốn đến nút đang có đội máy & \texttt{caught}, kể cả nút là lối thoát \\
+2 & Người trốn đến lối thoát trống & \texttt{escaped}, máy không đi tiếp \\
+3 & Máy đi đến nút người trốn & \texttt{caught} \\
+4 & Đạt giới hạn lượt và chưa thoát/bị bắt & \texttt{timeout} \\
+5 & Không điều kiện nào đúng & \texttt{playing} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Định nghĩa ký hiệu}
+
+\begin{longtable}{p{2.2cm}p{11.5cm}}
+\caption{Ký hiệu toán học sử dụng trong báo cáo}\\
+\toprule
+\textbf{Ký hiệu} & \textbf{Ý nghĩa} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Ký hiệu} & \textbf{Ý nghĩa} \\
+\midrule
+\endhead
+$G=(V,E,w)$ & Đa đồ thị có hướng và hàm trọng số dương \\
+$d(u,v)$ & Chi phí đường đi ngắn nhất từ $u$ tới $v$ \\
+$D_{ij}$ & Chi phí giữa hai điểm quan tâm $i$ và $j$ \\
+$F(S,j)$ & Chi phí Held--Karp nhỏ nhất ghé tập $S$ và kết thúc tại $j$ \\
+$r_t$ & Vị trí thật của người trốn ở lượt $t$ \\
+$H_t$ & Bộ vị trí của các đội truy tìm \\
+$X$ & Tập lối thoát \\
+$B_t$ & Tập vị trí người trốn có thể đang ở theo quan sát công khai \\
+$b_r,b_h$ & Ngân sách di chuyển của người trốn và mỗi đội máy \\
+$J(M)$ & Hàm điểm phối hợp của tập nước đi máy $M$ \\
+\bottomrule
+\end{longtable}
+

@@ -1,0 +1,93 @@
+\chapter{Minh Chứng Sản Phẩm Và Hướng Dẫn Sử Dụng}
+\label{chap:demo}
+\section{Cài đặt và chuẩn bị}
+Sản phẩm trong phạm vi đề tài là một thư viện Python cùng ví dụ và công cụ thực nghiệm, được sử dụng qua chương trình hoặc notebook. Khi chuẩn bị demo, người dùng cần chọn môi trường Python phù hợp, cài package Klygo và backend cần dùng, đồng thời kiểm tra checkpoint và dữ liệu đầu vào. Với thí nghiệm báo cáo, môi trường riêng \code{.venv-report} đã được tạo tại thư mục workspace để tách phụ thuộc khỏi môi trường Python hệ thống.
+
+Cặp PyTorch 2.8.0 và Torchvision 0.23.0 được cài từ kho CUDA 12.6 theo hướng dẫn phiên bản chính thức~\cite{pytorchversions}. Việc cài xong gói không bảo đảm có thể thực thi CUDA; mã demo và thực nghiệm kiểm tra bằng \code{torch.cuda.is\_available()} cùng một phép toán tensor trên thiết bị. Nếu không có CUDA, chương trình thực nghiệm báo lỗi khi cấu hình yêu cầu GPU, thay vì tự đổi sang CPU và giữ nhãn điều kiện đo cũ.
+
+\begin{lstlisting}[language={},caption={Lệnh kiểm tra môi trường và chạy demo từ workspace}]
+.venv-report\Scripts\python.exe -m pip check
+.venv-report\Scripts\python.exe -X utf8 report\experiments\demo_klygo.py
+\end{lstlisting}
+Mã demo sử dụng các checkpoint và ảnh đã chuẩn bị. Tệp \code{verification.json} lưu kích thước nguồn, nhãn, số box, thông tin khôi phục và số frame stream đã tiêu thụ. Các lệnh tải và tái lập toàn bộ thực nghiệm được đặt ở phụ lục để phần demo tập trung vào hành vi sử dụng thư viện.
+
+\section{Pipeline phát hiện một ảnh}
+Ảnh demo COCO ID 125778 có kích thước $640\times480$. Mã tạo một \code{LazyImage}, gọi Detector, áp dụng pipeline hậu xử lý, rồi vẽ kết quả theo các mảng box, nhãn và score. Trong lần chạy đã lưu, kết quả sau lọc confidence 0,25 có bảy box, gồm các nhãn potted plant, couch, chair và vase. Số box này chỉ mô tả một lần demo; chất lượng nhận dạng được đánh giá ở Chương~\ref{chap:experiments}.
+
+\begin{lstlisting}[caption={Các thao tác chính trong demo đã chạy}]
+image = media.LazyImage(source)
+result = detector.predict(
+    image, threshold=0.25, verbose=False
+)
+cleaned = post.compose(
+    post.clip(), post.threshold(0.25)
+)(result)
+frame = cleaned[0]
+annotated = visual.draw_bboxes(
+    image.to_pil(), frame.boxes,
+    labels=frame.labels, scores=frame.scores
+)
+media.save(output_path, annotated, overwrite=True)
+\end{lstlisting}
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.9\textwidth]{klygo/demo_prediction.png}
+\caption{Kết quả chạy demo qua API công khai của Klygo trên ảnh COCO ID 125778. Ảnh minh họa được sinh bởi mã demo, không phải ảnh giao diện ứng dụng web.}
+\label{fig:demo}
+\end{figure}
+Các bước sau model làm việc trên cấu trúc \code{Detection}, nên có thể sử dụng lại khi đổi adapter. Khi đổi model, người dùng vẫn phải kiểm tra vocabulary và tham số phù hợp. Giao diện chung giúp giảm mã chuyển đổi, nhưng không loại bỏ nhu cầu hiểu cấu hình hay chi phí lỗi của bài toán ứng dụng.
+
+\section{Minh họa trace và khôi phục tọa độ}
+Demo bổ sung letterbox ảnh $640\times480$ vào khung $640\times640$, tạo padding ở hai phía theo chiều cao. Model dự đoán trên ảnh đã biến đổi; kết quả được gọi \code{restore(target="original")} để liên kết lại với ảnh nguồn và đưa box về không gian $640\times480$. Bản kiểm chứng ghi nhận kích thước khôi phục đúng như ảnh gốc.
+
+\begin{lstlisting}[caption={Khôi phục tường minh sau tiền xử lý hình học}]
+transformed = p.compose(
+    p.letterbox((640, 640))
+)(media.LazyImage(source))
+frame = detector.predict(transformed, verbose=False)[0]
+restored = frame.restore(target="original")
+assert restored.image_size == image.size
+\end{lstlisting}
+Mã còn tạo box hình học biết trước $[10,20,110,120]$, đưa nó sang hệ tọa độ letterbox bằng scale và padding trong trace, sau đó hoàn tác. Sai số cực đại được kiểm tra nhỏ hơn $10^{-6}$. Phép thử này kiểm chứng phép chuyển đổi tọa độ độc lập với việc model có phát hiện đúng đối tượng hay không. Việc dự đoán trên ảnh letterbox trước model có thể khác dự đoán trực tiếp ảnh gốc, nên demo không ép hai tập dự đoán phải giống nhau.
+
+\section{Suy luận theo stream hữu hạn}
+Nguồn thư mục ảnh được đưa vào \code{predict} với \code{stream=True}, \code{max\_frames=6}, \code{batch=2}. Chương trình tiêu thụ iterator và xác nhận nhận đủ sáu frame. Kết quả cho thấy giao diện stream có thể được sử dụng trong một quy trình hữu hạn và các batch được chuyển thành từng frame kết quả.
+
+\begin{lstlisting}[caption={Smoke test stream của thư mục ảnh}]
+stream = detector.predict(
+    image_folder, stream=True,
+    max_frames=6, batch=2, verbose=False
+)
+frames = list(stream)
+assert len(frames) == 6
+\end{lstlisting}
+Trong lần chạy nguồn thư mục này, thuộc tính \code{frame\_index} được ghi nhận là \code{None}. Thông tin đó được giữ nguyên trong tệp kiểm chứng thay vì tự tạo các chỉ số để làm kết quả đẹp hơn. Người dùng cần dùng đường dẫn ảnh làm định danh cho trường hợp thư mục và kiểm tra hợp đồng chỉ số riêng khi xử lý video. Demo này không phải benchmark bộ nhớ video dài; việc dùng \code{list(stream)} cũng materialize toàn bộ sáu kết quả của smoke test.
+
+\section{Các tình huống lỗi cần xử lý}
+\begin{table}[H]\centering\small
+\caption{Tình huống lỗi khi cài đặt hoặc sử dụng và hướng xử lý}
+\begin{tabularx}{\textwidth}{p{4.2cm}YY}
+\toprule Tình huống & Dấu hiệu hoặc nguyên nhân & Hướng xử lý \\\midrule
+Thiếu backend tùy chọn & ImportError khi nạp adapter & Cài đúng extra và khóa phiên bản cho môi trường \\
+Không có CUDA theo yêu cầu & Kiểm tra thiết bị thất bại & Đổi cấu hình có chủ đích; đo lại và ghi rõ CPU nếu dùng CPU \\
+Prompt ngoài vocabulary YOLO & ValueError cho nhãn không hợp lệ & Đối chiếu model.names; dùng model có khả năng mở vocabulary khi phù hợp \\
+Box lệch sau resize ngoài model & Nhầm không gian tọa độ & Kiểm tra trace và gọi restore đúng nguồn ảnh \\
+Gọi suy luận sau unload & InvalidStateError & Tạo/nạp lại model trước khi dùng \\
+Giá trị AP không tương ứng hình demo & Hình đã lọc hoặc chỉ vẽ một phần box & Phân biệt tệp dự đoán đánh giá và cấu hình hiển thị \\
+\bottomrule
+\end{tabularx}
+\end{table}
+Quy trình trình bày bảo vệ có thể bắt đầu từ một ảnh, thay adapter, xem cùng kiểu đầu ra, sau đó giải thích manifest và một bảng kết quả. Phần giải thích nên làm rõ dữ liệu nào là ground truth, ngưỡng nào phục vụ hiển thị và ngưỡng nào phục vụ AP. Cách trình bày này giúp kết nối sản phẩm phần mềm với phương pháp đánh giá AI của đề tài.
+
+\clearpage
+\section{Tạo bộ dữ liệu bằng mining}
+Ví dụ dành cho revision mở rộng, với dataset YOLO đã có ảnh và nhãn:
+\begin{lstlisting}[caption={Chọn tập dữ liệu và xuất annotation cùng manifest}]
+from klygo import datasets, mining
+data = datasets.load("dataset/train", format="yolo")
+summary = mining.stats(data)
+selected = mining.select(data, method="weighted", limit=150)
+mining.compare(data, selected).save("comparison.json")
+selected.export("selected_labels", format="yolo")
+\end{lstlisting}
+Để train, script đọc manifest, sao chép ảnh nguồn sang thư mục images bằng tên tương ứng nhãn và tạo YAML trỏ tới các split. Chương trình \code{run\_mining\_extension.py} thực hiện bước ghép này, kiểm tra đọc lại và lưu ID được chọn. Sau đó \code{prepare\_training\_canonical.py} thống nhất class ID theo tên trên cả train/val/test. Chương trình \code{train\_mining\_extension.py} sử dụng bộ dữ liệu hoàn chỉnh đó, không giả định export tự sao chép ảnh hoặc các registry lớp độc lập có cùng thứ tự.
