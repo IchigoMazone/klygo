@@ -1,6 +1,6 @@
 # Complete NVIDIA L4 benchmark evidence — 2026-11-11
 
-Executed on Google Colab Pro (NVIDIA L4, 22,563.12 MiB VRAM, CUDA 13.0, PyTorch `2.14.1+cu130`, Ultralytics `8.4.208`, Transformers `4.57.1`, Keras `3.13.2`, KerasHub `0.26.0`, OpenCV `5.0.0.93`) at pinned commit [`8b872985e9f7a9910e0736b79bed6c0effe0b518`](https://github.com/IchigoMazone/klygo/commit/8b872985e9f7a9910e0736b79bed6c0effe0b518) (`perf/managed-input-pipeline`). Executed Colab notebook: [Google Colab](https://colab.research.google.com/drive/1B0C4NMDUY9eoXnTPzaJXokI3lX8E36vj).
+Executed on Google Colab Pro (NVIDIA L4, 22,563.12 MiB VRAM, CUDA 13.0, PyTorch `2.14.1+cu130`, Ultralytics `8.4.208`, Transformers `4.57.1`, Keras `3.13.2`, KerasHub `0.26.0`, OpenCV `5.0.0.93`) at pinned commit [`8b872985e9f7a9910e0736b79bed6c0effe0b518`](https://github.com/IchigoMazone/klygo/commit/8b872985e9f7a9910e0736b79bed6c0effe0b518) (`perf/managed-input-pipeline`). Executed Colab notebook: [`Klygo_L4_Benchmarks_2026_11_11.ipynb`](https://colab.research.google.com/drive/1B0C4NMDUY9eoXnTPzaJXokI3lX8E36vj?usp=sharing).
 
 33 configurations, 172 supported cases, 1,204 individual measured passes (seven repeats each); **100% parity PASS** across every supported configuration. Raw non-stream is retained for every configuration. Unsupported cases remain N/A.
 

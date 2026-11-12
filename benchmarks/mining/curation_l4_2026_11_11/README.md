@@ -4,7 +4,7 @@ Recorded on **2026-11-11** on **Google Colab Pro (NVIDIA L4, 22.03 GB VRAM)** ag
 
 - **Script**: [`benchmarks/mining/curation_accuracy_benchmark.py`](../curation_accuracy_benchmark.py)
 - **Raw Machine Summary**: [`summary.json`](summary.json) · [`summary.md`](summary.md)
-- **Colab Notebook**: [`Untitled21.ipynb`](https://colab.research.google.com/drive/1B0C4NMDUY9eoXnTPzaJXokI3lX8E36vj)
+- **Colab Notebook**: [`Klygo_L4_Benchmarks_2026_11_11.ipynb`](https://colab.research.google.com/drive/1B0C4NMDUY9eoXnTPzaJXokI3lX8E36vj?usp=sharing)
 - **Evidence ZIP SHA-256**: `7b3fb75bf927887dfb7626ad1d3c7a8933d881cdff706157f9f1b561b5ac3886` (`mining_curation_results_2.zip`)
 
 ---

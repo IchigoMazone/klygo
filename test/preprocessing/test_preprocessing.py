@@ -184,8 +184,11 @@ class TestPreprocessing(unittest.TestCase):
         other = Image.new("RGB", (100, 50), "blue")
         mask = Image.new("L", (100, 50), 128)
 
+        import importlib.util
+
         assert len(p.materialize(p.tile((30, 20))(image), output="native")) > 1
-        assert p.materialize(p.tensor()(image), output="native").ndim == 3
+        if importlib.util.find_spec("torch") is not None:
+            assert p.materialize(p.tensor()(image), output="native").ndim == 3
 
         for operation in (
             p.apply_mask(mask), p.composite(other, Image.new("RGB", other.size), mask),
