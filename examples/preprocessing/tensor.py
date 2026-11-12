@@ -12,5 +12,9 @@ from klygo import preprocessing as p, media
 
 image = Image.new("RGB", (64, 48), (120, 80, 40))
 operation = p.tensor()
-result = operation(image)
-print(operation.name, type(result).__name__)
+try:
+    result = operation(image)
+except ImportError as exc:
+    print(f"Optional extra required: {exc}")
+else:
+    print(operation.name, type(result).__name__)

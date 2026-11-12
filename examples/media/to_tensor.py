@@ -10,5 +10,9 @@ from PIL import Image
 from klygo import media, files
 with tempfile.TemporaryDirectory() as temporary:
     root = files.path(temporary)
-    tensor = media.to_tensor(Image.new("RGB", (32, 24), "red"), normalize=True)
-    print(tuple(tensor.shape), str(tensor.dtype))
+    try:
+        tensor = media.to_tensor(Image.new("RGB", (32, 24), "red"), normalize=True)
+    except ImportError as exc:
+        print(f"Optional extra required: {exc}")
+    else:
+        print(tuple(tensor.shape), str(tensor.dtype))
