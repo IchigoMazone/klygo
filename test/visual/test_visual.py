@@ -1,5 +1,6 @@
 """Behavioral tests for public visualization helpers."""
 
+import importlib
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -39,7 +40,8 @@ class TestVisual(unittest.TestCase):
 
     def test_show_image_auto_uses_desktop_viewer_outside_notebook(self):
         image = Image.new("RGB", (20, 10))
-        with patch("klygo.visual.show_image._is_notebook", return_value=False):
+        show_image_module = importlib.import_module("klygo.visual.show_image")
+        with patch.object(show_image_module, "_is_notebook", return_value=False):
             with patch.object(Image.Image, "show") as shown:
                 visual.show_image(image, title="preview", width=40)
         shown.assert_called_once_with(title="preview")

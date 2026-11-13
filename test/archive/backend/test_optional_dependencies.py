@@ -1,6 +1,6 @@
 """Packaging contract for optional archive dependencies."""
 
-import tomllib
+import tomlkit
 import unittest
 from pathlib import Path
 
@@ -8,8 +8,8 @@ from pathlib import Path
 class TestOptionalDependencies(unittest.TestCase):
     def test_archive_packages_have_independent_install_extras(self):
         repository = Path(__file__).resolve().parents[3]
-        with open(repository / "pyproject.toml", "rb") as project_file:
-            project = tomllib.load(project_file)
+        with open(repository / "pyproject.toml", "r", encoding="utf-8") as project_file:
+            project = tomlkit.load(project_file).unwrap()
 
         optional = project["project"]["optional-dependencies"]
         self.assertEqual(optional["py7zr"], ["py7zr"])

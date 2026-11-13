@@ -60,3 +60,6 @@ typings/
 .vscode/
 .idea/
 
+
+# Raw benchmark evidence is published as optional GitHub Release assets.
+/benchmarks/**/*.zip

@@ -2,7 +2,7 @@
 
 import subprocess
 import sys
-import tomllib
+import tomlkit
 import unittest
 from pathlib import Path
 
@@ -12,8 +12,8 @@ REPOSITORY = Path(__file__).resolve().parents[2]
 
 class TestOptionalModelDependencies(unittest.TestCase):
     def test_model_frameworks_are_not_core_dependencies(self):
-        with open(REPOSITORY / "pyproject.toml", "rb") as project_file:
-            project = tomllib.load(project_file)["project"]
+        with open(REPOSITORY / "pyproject.toml", "r", encoding="utf-8") as project_file:
+            project = tomlkit.load(project_file).unwrap()["project"]
 
         dependencies = {item.split("<", 1)[0].split(">", 1)[0] for item in project["dependencies"]}
         self.assertNotIn("torch", dependencies)
@@ -23,8 +23,8 @@ class TestOptionalModelDependencies(unittest.TestCase):
         self.assertNotIn("keras-hub", dependencies)
 
     def test_each_model_stack_has_an_install_extra(self):
-        with open(REPOSITORY / "pyproject.toml", "rb") as project_file:
-            optional = tomllib.load(project_file)["project"]["optional-dependencies"]
+        with open(REPOSITORY / "pyproject.toml", "r", encoding="utf-8") as project_file:
+            optional = tomlkit.load(project_file).unwrap()["project"]["optional-dependencies"]
 
         self.assertEqual(optional["torch"], ["torch>=2.7,<3.0"])
         self.assertEqual(

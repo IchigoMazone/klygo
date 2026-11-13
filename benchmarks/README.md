@@ -89,3 +89,7 @@ python benchmarks/runner.py --device cuda:0
 # Run specific model backends
 python benchmarks/runner.py --models yolov8,yolo-world,grounding-dino
 ```
+
+## Optional raw evidence downloads
+
+Benchmark ZIP archives are hosted separately in GitHub Releases. See [downloads and checksums](DOWNLOADS.md). Scripts, tables and aggregate results remain here.

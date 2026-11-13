@@ -14,8 +14,8 @@ Repeat-level statistics (mean, sample SD, CV, exploratory bootstrap intervals, a
 
 ## Original evidence
 
-- [controlled_raw_evidence.zip](controlled_raw_evidence.zip) (SHA-256 `8230f7780fd47e80552d67ac589e1bacd4a4a149a2b5e5775506e792f47fa350`): full `bundle.json`, individual timing/latency/telemetry samples, 25 job logs, environment freeze, `nvidia_smi.csv`, `driver.log`, `jobs.json`, `completion.json`, 600s `stability.json`/`stability.log`, and verified SHA-256 `manifest.json` (34 entries).
-- [extension_evidence.zip](extension_evidence.zip) (SHA-256 `89b7d60951e4b92074a9ef9e2593c0cf213ac345ce98849e05557dc9f93a35c8`): `real_people` and `real_cars` `bundle.json`, `source.json` provenance/hashes, `REPORT.md`, per-model logs, `real_jobs.json`, and verified SHA-256 `manifest.json` (15 entries).
+- [controlled_raw_evidence.zip](https://github.com/IchigoMazone/klygo/releases/download/benchmark-evidence-2026-11-11/colab_l4_complete_2026_11_11__controlled_raw_evidence.zip) (SHA-256 `8230f7780fd47e80552d67ac589e1bacd4a4a149a2b5e5775506e792f47fa350`): full `bundle.json`, individual timing/latency/telemetry samples, 25 job logs, environment freeze, `nvidia_smi.csv`, `driver.log`, `jobs.json`, `completion.json`, 600s `stability.json`/`stability.log`, and verified SHA-256 `manifest.json` (34 entries).
+- [extension_evidence.zip](https://github.com/IchigoMazone/klygo/releases/download/benchmark-evidence-2026-11-11/colab_l4_complete_2026_11_11__extension_evidence.zip) (SHA-256 `89b7d60951e4b92074a9ef9e2593c0cf213ac345ce98849e05557dc9f93a35c8`): `real_people` and `real_cars` `bundle.json`, `source.json` provenance/hashes, `REPORT.md`, per-model logs, `real_jobs.json`, and verified SHA-256 `manifest.json` (15 entries).
 - [validation.json](validation.json): verified dataset counts, parity flags, and archive SHA-256 digests.
 
 ## Stability probe (600 s managed stream)
