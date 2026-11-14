@@ -167,13 +167,10 @@ class TestMedia(unittest.TestCase):
         assert isinstance(arr, np.ndarray)
         assert arr.shape == (10, 20, 3)
 
-        # 2. to_tensor (optional PyTorch extra)
+        # 2. to_tensor is intentionally removed from public klygo.media
+        assert not hasattr(media, "to_tensor")
         if torch is not None:
-            tensor = media.to_tensor(img_pil, normalize=True)
-            assert isinstance(tensor, torch.Tensor)
-            assert tensor.shape == (3, 10, 20)
-            assert tensor.dtype == torch.float32
-
+            tensor = torch.from_numpy(arr.copy()).permute(2, 0, 1).to(torch.float32) / 255.0
             # 3. to_pil from tensor & array
             pil_from_tensor = media.to_pil(tensor)
             assert isinstance(pil_from_tensor, Image.Image)

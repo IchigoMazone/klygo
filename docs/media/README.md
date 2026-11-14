@@ -19,13 +19,13 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 `klygo.media` separates metadata discovery and pipeline attachment from pixel decoding so large image directories and high-resolution videos can be inspected, sliced, cropped, and filtered before allocating frame buffers in RAM:
 
 1. **[`LazyImage`](api/LazyImage.md) (Zero-RAM Pixel Proxy)**:
-   Subclasses `PIL.Image.Image` and wraps a file path or video frame index without decoding pixels on construction. Reading `.size`, `.width`, `.height`, or `.shape` inspects headers or cached dimensions only. Calling `.crop()` or `.lazy_crop()` records a bounding box in zero RAM, and `.process()` attaches `klygo.preprocessing` operations lazily until `.load()`, `.to_pil()`, `.to_array()`, or `.to_tensor()` materializes the image.
+   Subclasses `PIL.Image.Image` and wraps a file path or video frame index without decoding pixels on construction. Reading `.size`, `.width`, `.height`, or `.shape` inspects headers or cached dimensions only. Calling `.crop()` or `.lazy_crop()` records a bounding box in zero RAM, and `.process()` attaches `klygo.preprocessing` operations lazily until `.load()`, `.to_pil()`, or `.to_array()` materializes the image.
 2. **[`MediaFrames`](api/MediaFrames.md) (Unified Frame Container)**:
    Returned by [`load()`](api/load.md) in all modes. The default materializes lazy proxies, `indexed=True` retains only paths/frame numbers and creates proxies on demand, and `stream=True` becomes a bounded-memory sequential iterator. All modes share the same public container type.
 3. **[`VideoReader`](api/VideoReader.md) (Smart Sequential & Random-Access Seeker)**:
    Manages a single reusable `cv2.VideoCapture` handle with position tracking so consecutive reads avoid redundant seeks while out-of-order frame indices seek on demand.
 4. **Format Conversions & Media I/O**:
-   [`to_array()`](api/to_array.md), [`to_pil()`](api/to_pil.md), and [`to_tensor()`](api/to_tensor.md) normalize any `LazyImage`, `PIL.Image.Image`, `numpy.ndarray`, or `torch.Tensor` into an independent target representation. [`save()`](api/save.md), [`save_images()`](api/save_images.md), [`save_video()`](api/save_video.md), [`convert()`](api/convert.md), [`copy()`](api/copy.md), and [`info()`](api/info.md) handle persistence and header inspection using `klygo.files` path semantics.
+   [`to_array()`](api/to_array.md) and [`to_pil()`](api/to_pil.md) normalize any `LazyImage`, `PIL.Image.Image`, `numpy.ndarray`, or `torch.Tensor` into an independent target representation. [`save()`](api/save.md), [`save_images()`](api/save_images.md), [`save_video()`](api/save_video.md), [`convert()`](api/convert.md), [`copy()`](api/copy.md), and [`info()`](api/info.md) handle persistence and header inspection using `klygo.files` path semantics.
 
 | Container / Type | Decodes on Init? | Random Indexing | Best For |
 | :--- | :--- | :--- | :--- |
@@ -57,7 +57,6 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 | **Iterate decoded frames directly** | [`iter_frames()`](api/iter_frames.md) | `for frame in media.iter_frames("clip.mp4", sample_rate=2): ...` |
 | **Read specific video frame by index** | [`VideoReader`](api/VideoReader.md) | `reader = media.VideoReader("clip.mp4"); bgr = reader.read_frame(10)` |
 | **Convert any image to a NumPy array** | [`to_array()`](api/to_array.md) | `arr = media.to_array(frames[0])` |
-| **Convert any image to a CHW PyTorch tensor** | [`to_tensor()`](api/to_tensor.md) | `tensor = media.to_tensor(frames[0], normalize=True)` |
 | **Convert any image to a PIL Image** | [`to_pil()`](api/to_pil.md) | `pil_img = media.to_pil(arr)` |
 | **Save a single image to disk** | [`save()`](api/save.md) | `media.save("out/result.png", frames[0], overwrite=True)` |
 | **Save a sequence of images as numbered files** | [`save_images()`](api/save_images.md) | `media.save_images("out/frames", frames, prefix="img", extension=".jpg")` |
@@ -69,7 +68,7 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 
 ---
 
-## 3. Public APIs Reference (12 Functions, 3 Classes in `operations.py`)
+## 3. Public APIs Reference (11 Functions, 3 Classes in `operations.py`)
 
 <details open>
 <summary><b>Loading, streaming, and inspection — <code>operations.py</code> (4 functions)</b> <i>(Click to expand)</i></summary>
@@ -93,10 +92,9 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 </details>
 
 <details open>
-<summary><b>In-memory format conversions — <code>operations.py</code> (3 functions)</b> <i>(Click to expand)</i></summary>
+<summary><b>In-memory format conversions — <code>operations.py</code> (2 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`to_array(image)`](api/to_array.md) ([example](../../examples/media/to_array.py)): Convert a `LazyImage`, `PIL.Image.Image`, `numpy.ndarray`, or `torch.Tensor` into an independent `numpy.ndarray`.
-- [`to_tensor(image, normalize=True)`](api/to_tensor.md) ([example](../../examples/media/to_tensor.py)): Convert supported image data into a CHW `torch.Tensor` (requires optional `torch`).
 - [`to_pil(image)`](api/to_pil.md) ([example](../../examples/media/to_pil.py)): Convert supported image data into an independent `PIL.Image.Image`.
 
 </details>

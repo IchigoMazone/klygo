@@ -134,7 +134,8 @@ def raw(detector, key, images, prompt):
             outputs=prediction, input_ids=inputs["input_ids"], threshold=0.25,
             text_threshold=0.3, target_sizes=[image.size[::-1] for image in images])
     if key == "faster-rcnn":
-        tensors = [media.to_tensor(image).to(device=detector.device, dtype=detector.dtype) for image in images]
+        from torchvision.transforms.functional import pil_to_tensor
+        tensors = [(pil_to_tensor(image.convert("RGB")).float() / 255.0).to(device=detector.device, dtype=detector.dtype) for image in images]
         predictions = detector.model(tensors)
         result = []
         for item in predictions:

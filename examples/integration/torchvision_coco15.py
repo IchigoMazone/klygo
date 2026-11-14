@@ -1,3 +1,4 @@
+from torchvision.transforms.functional import pil_to_tensor
 """Evaluate four COCO15 classes with a caller-constructed Torchvision detector."""
 
 import os
@@ -32,7 +33,7 @@ class TorchvisionCOCODetect(Detector):
 
     def forward(self, images, prompt=None):
         del prompt
-        tensors = [media.to_tensor(image) for image in images]
+        tensors = [(pil_to_tensor(image.convert("RGB")).float() / 255.0) for image in images]
         raw = self.format_results(self.run_inference(self.cast_inputs(tensors)))
         for item in raw:
             item["labels"] = [self.categories.get(index, str(index))

@@ -1,3 +1,4 @@
+from torchvision.transforms.functional import pil_to_tensor
 """Unified Multi-Backend and Multi-GPU Benchmark Tool for Klygo.
 
 Evaluates throughput, first-frame latency, memory footprint, and output integrity
@@ -279,7 +280,7 @@ def build_torchvision_detector(device_str: str, imgsz: int = 320) -> Tuple[model
             self.names = {i: str(i) for i in range(91)}
 
         def forward(self, images, prompt=None):
-            tensors = self.cast_inputs([media.to_tensor(img) for img in images])
+            tensors = self.cast_inputs([(pil_to_tensor(img.convert("RGB")).float() / 255.0) for img in images])
             raw = self.run_inference(tensors)
             formatted = self.format_results(raw)
             return outputs.build_detections(images, formatted, names=self.names)
@@ -505,7 +506,7 @@ def make_raw_torchvision_runner(
             total_boxes = 0
             started = time.perf_counter()
             for index, path in enumerate(paths):
-                tensor = media.to_tensor(_load_pil(path)).to(device)
+                tensor = (pil_to_tensor(_load_pil(path).convert("RGB")).float() / 255.0).to(device)
                 with torch.inference_mode():
                     raw = detector.model([tensor])[0]
                 total_boxes += len(raw["boxes"])
@@ -518,7 +519,7 @@ def make_raw_torchvision_runner(
         def runner():
             synchronize_device(device_str)
             started = time.perf_counter()
-            tensors = [media.to_tensor(_load_pil(path)).to(device) for path in paths]
+            tensors = [(pil_to_tensor(_load_pil(path).convert("RGB")).float() / 255.0).to(device) for path in paths]
             with torch.inference_mode():
                 raw_list = detector.model(tensors)
             synchronize_device(device_str)

@@ -1,3 +1,4 @@
+from torchvision.transforms.functional import pil_to_tensor
 """Comprehensive 4-backend object detection workflow evaluating real local models against ground-truth COCO15.
 
 Exercises all 4 standard Klygo backends:
@@ -187,7 +188,7 @@ class LocalTorchvisionDetector(Detector):
         prompt: List[str] | None = None,
         **kwargs,
     ) -> List[Detection]:
-        tensors = self.cast_inputs([media.to_tensor(img) for img in images])
+        tensors = self.cast_inputs([(pil_to_tensor(img.convert("RGB")).float() / 255.0) for img in images])
         raw_outputs = self.run_inference(tensors)
         formatted = self.format_results(raw_outputs)
 

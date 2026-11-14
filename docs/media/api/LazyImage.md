@@ -12,7 +12,7 @@ Subclasses `PIL.Image.Image` and implements `os.PathLike` (`__fspath__`) and the
 - **Zero-RAM metadata**: `.size`, `.width`, `.height`, `.shape`, `.dtype`, and `.mode` read image headers or video metadata without decoding pixel buffers (`is_loaded` remains `False`).
 - **Zero-RAM cropping**: `.lazy_crop((xmin, ymin, xmax, ymax))` and `.crop(box)` (unless `lazy=False` is passed) return a new `LazyImage` that composes relative crop offsets in memory without reading pixels.
 - **Lazy PIL & preprocessing pipelines**: calling `.process(op_or_pipeline)` attaches `klygo.preprocessing` operations, and calling non-destructive PIL methods (`resize`, `convert`, `rotate`, `transpose`, `filter`, `point`, `quantize`, `transform`) queues instructions on a cloned `LazyImage`.
-- **Materialization & cache control**: `.load(cache=True)` decodes raw source pixels; `.to_pil(cache=False)`, `.to_array(cache=False)`, and `.to_tensor(cache=False)` decode and execute all queued operations, recording execution metadata in `.trace`. Call `.unload()` (or `.clear()`) to free RAM.
+- **Materialization & cache control**: `.load(cache=True)` decodes raw source pixels; `.to_pil(cache=False)` and `.to_array(cache=False)` decode and execute all queued operations, recording execution metadata in `.trace`. Call `.unload()` (or `.clear()`) to free RAM.
 
 ## Parameters
 

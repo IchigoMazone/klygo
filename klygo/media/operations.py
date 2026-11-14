@@ -19,7 +19,7 @@ from klygo import files
 
 __all__ = [
     "load", "save", "convert", "copy", "save_video", "save_images",
-    "iter_frames", "info", "to_array", "to_tensor", "to_pil",
+    "iter_frames", "info", "to_array", "to_pil",
     "MediaFrames", "LazyImage", "VideoReader",
     "compose",
 ]
@@ -455,24 +455,6 @@ class LazyImage(Image.Image):
         from klygo.preprocessing.core import _to_array
 
         return _to_array(self._execute_preprocessing(cache=cache))
-
-    def to_tensor(self, cache: bool = False) -> Any:
-        """Materialize LazyImage into a PyTorch Tensor."""
-        try:
-            import torch
-        except ImportError as exc:
-            raise ImportError("PyTorch is required for LazyImage.to_tensor()") from exc
-
-        result = self._execute_preprocessing(cache=cache)
-        if isinstance(result, torch.Tensor):
-            return result
-        from klygo.preprocessing.core import _to_array
-
-        array = np.array(_to_array(result), copy=True, order="C")
-        tensor = torch.from_numpy(array)
-        if tensor.ndim == 3 and tensor.shape[-1] in (1, 3, 4):
-            tensor = tensor.permute(2, 0, 1)
-        return tensor
 
     def _execute_preprocessing(self, cache: bool = False) -> Any:
         """Decode and apply queued operations, reusing the result when cached."""
@@ -2372,7 +2354,7 @@ def info(path: Union[str, Path]) -> Dict[str, Any]:
     return result
 
 # =========================================================================
-# 2. Format Conversions (to_array, to_tensor, to_pil)
+# 2. Format Conversions (to_array, to_pil)
 # =========================================================================
 
 def to_array(image: Any) -> np.ndarray:
@@ -2414,57 +2396,6 @@ def to_array(image: Any) -> np.ndarray:
         return arr
 
     raise TypeError(f"Unsupported image type for to_array: {type(image)}")
-
-
-def to_tensor(image: Any, normalize: bool = True) -> Any:
-    """Convert supported image data to a CHW PyTorch tensor.
-
-    Parameters
-    ----------
-    image : PIL image, numpy.ndarray, LazyImage, or torch.Tensor
-        Input image representation.
-    normalize : bool
-        Scale uint8 pixels to floating-point values in 0-1.
-
-    Returns
-    -------
-    torch.Tensor
-        CHW tensor.
-
-    Raises
-    ------
-    ImportError
-        PyTorch is unavailable.
-TypeError
-        Image representation is unsupported."""
-    torch = _optional_torch(required=True)
-
-    if isinstance(image, LazyImage):
-        tensor = image.to_tensor(cache=False)
-        if normalize and tensor.dtype == torch.uint8:
-            tensor = tensor.to(torch.float32) / 255.0
-        return tensor
-
-    if isinstance(image, torch.Tensor):
-        tensor = image.detach().clone()
-    elif isinstance(image, Image.Image):
-        arr = np.array(image)
-        tensor = torch.from_numpy(arr)
-        if arr.ndim == 2:
-            tensor = tensor.unsqueeze(-1)
-        tensor = tensor.permute(2, 0, 1)
-    elif isinstance(image, np.ndarray):
-        arr = image
-        if arr.ndim == 2:
-            arr = np.expand_dims(arr, axis=-1)
-        tensor = torch.from_numpy(arr).permute(2, 0, 1)
-    else:
-        raise TypeError(f"Unsupported image type for to_tensor: {type(image)}")
-
-    if normalize and tensor.dtype == torch.uint8:
-        tensor = tensor.to(torch.float32) / 255.0
-
-    return tensor
 
 
 def to_pil(image: Any) -> Image.Image:

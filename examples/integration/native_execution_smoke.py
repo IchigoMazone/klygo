@@ -1,3 +1,4 @@
+from torchvision.transforms.functional import pil_to_tensor
 """Run real pretrained detection through all four framework families.
 
 This is a correctness smoke run, not a labeled accuracy or GPU FPS benchmark.
@@ -63,7 +64,7 @@ class TorchvisionDetector(models.Detector):
         self.names = dict(enumerate(weights.meta["categories"]))
 
     def forward(self, images, prompt=None):
-        inputs = [media.to_tensor(image).to(self.device) for image in images]
+        inputs = [(pil_to_tensor(image.convert("RGB")).float() / 255.0).to(self.device) for image in images]
         raw = self.model(inputs)
         formatted = []
         for item in raw:
