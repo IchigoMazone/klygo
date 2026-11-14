@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 
 from PIL import Image
 
-from klygo import archive, config, datasets, files, media
+from klygo import archive, config, datasets, files, media, outputs, metrics
 from klygo.outputs.detect import Detections
 from test.datasets.test_api import TextPath, make_dataset
 
@@ -144,6 +144,77 @@ class TestLoad(unittest.TestCase):
             config.save(empty / "data.yaml", {"names": ["object"]}, verbose=False)
             with self.assertRaisesRegex(ValueError, "no supported images"):
                 datasets.load(empty, verbose=False)
+
+    def test_custom_dirs_and_yaml_name(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = make_dataset(root / "source")
+            flat = datasets.unpartition(source, root / "flat", verbose=False)
+            (flat / "pseudo_labels").mkdir()
+            for label_file in (flat / "labels").glob("*.txt"):
+                (flat / "pseudo_labels" / label_file.name).write_text("0 0.5 0.5 0.25 0.25\n", encoding="utf-8")
+            config.save(flat / "pseudo.yaml", {"names": {0: "pseudo_object"}}, overwrite=True, verbose=False)
+
+            pseudo = datasets.load(
+                flat,
+                labels_dir="pseudo_labels",
+                yaml_name="pseudo.yaml",
+                verbose=False,
+            )
+            self.assertEqual(pseudo.names, {0: "pseudo_object"})
+            self.assertEqual(len(pseudo), 4)
+
+            loaded_group = datasets.load(
+                flat,
+                labels_dir=["labels", "pseudo_labels"],
+                yaml_name=["data.yaml", "pseudo.yaml"],
+                verbose=False,
+            )
+            self.assertIsInstance(loaded_group, outputs.DetectionGroup)
+            self.assertEqual(list(loaded_group.keys()), ["pred", "truth"])
+            self.assertEqual(loaded_group["truth"].names, {0: "pseudo_object"})
+            self.assertEqual(len(loaded_group["pred"]), 4)
+            self.assertEqual(len(loaded_group["truth"]), 4)
+
+            shared_yaml = datasets.load(
+                flat,
+                labels_dir=["labels", "pseudo_labels"],
+                verbose=False,
+            )
+            self.assertEqual(list(shared_yaml.keys()), ["pred", "truth"])
+            self.assertEqual(shared_yaml["truth"].names, {0: "apple"})
+
+            mapped = datasets.load(
+                flat,
+                labels_dir={"gt": "labels", "pseudo": "pseudo_labels"},
+                yaml_name={"gt": "data.yaml", "pseudo": "pseudo.yaml"},
+                verbose=False,
+            )
+            self.assertEqual(set(mapped.keys()), {"gt", "pseudo"})
+            self.assertEqual(mapped["pseudo"].names, {0: "pseudo_object"})
+            self.assertIs(mapped.astype(32).pack().unpack(), mapped)
+            self.assertEqual([member.dtype for member in mapped.values()], [32, 32])
+            self.assertEqual(metrics.precision_recall(mapped["pseudo"], mapped["gt"])["tp"], 0)
+            self.assertIs(mapped[0], mapped["gt"])
+            many = datasets.load(flat, labels_dir=["labels", "pseudo_labels", "missing_labels"], verbose=False)
+            self.assertEqual(list(many.keys()), ["set_1", "set_2", "set_3"])
+            self.assertEqual(many["set_3"].total_objects, 0)
+            one = datasets.load(flat, labels_dir=["labels"], verbose=False)
+            self.assertEqual(list(one.keys()), ["set_1"])
+            self.assertIsInstance(pseudo, outputs.Detections)
+
+            with self.assertRaises(ValueError):
+                datasets.load(flat, labels_dir=[], verbose=False)
+            with self.assertRaises(ValueError):
+                datasets.load(flat, labels_dir=["labels", "labels"], verbose=False)
+            with self.assertRaises(ValueError):
+                datasets.load(flat, labels_dir=["labels", "pseudo_labels"], yaml_name=["data.yaml"], verbose=False)
+            with self.assertRaises(ValueError):
+                datasets.load(flat, labels_dir=" ", verbose=False)
+            with self.assertRaises(ValueError):
+                datasets.load(flat, yaml_name="", verbose=False)
+            with self.assertRaises(TypeError):
+                datasets.load(flat, images_dir=123, verbose=False)
 
 
 if __name__ == "__main__":

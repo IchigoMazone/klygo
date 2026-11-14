@@ -1,7 +1,7 @@
 # `media.save_video`
 
 ```python
-media.save_video(output_path, frames, fps=30.0, fourcc='mp4v', overwrite=False, verbose=False)
+media.save_video(output_path, frames, fps=30.0, fourcc='mp4v', overwrite=False, verbose=False, *, size=None)
 ```
 
 Encode an iterable of images or lazy frames into a video file using OpenCV `VideoWriter`.
@@ -15,7 +15,7 @@ RGB inputs (`PIL.Image.Image`, [`LazyImage`](LazyImage.md), and 3-channel RGB ar
 ## Parameters
 
 - `output_path`: `str | os.PathLike[str]` — destination video file path (e.g., `'clip.mp4'` or `'clip.avi'`).
-- `frames`: `Iterable[PIL.Image.Image | numpy.ndarray | LazyImage]` — non-empty sequence or iterator of frames sharing the same dimensions.
+- `frames`: `Iterable[PIL.Image.Image | numpy.ndarray | LazyImage]` — non-empty sequence or iterator of frames sharing the same dimensions unless size is provided.
 - `fps`: `float`, default `30.0` — output playback frame rate in frames per second.
 - `fourcc`: `str`, default `'mp4v'` — 4-character OpenCV codec code (such as `'mp4v'`, `'avc1'`, or `'MJPG'`).
 - `overwrite`: `bool`, default `False` — allow replacing an existing file at `output_path`.
@@ -23,7 +23,7 @@ RGB inputs (`PIL.Image.Image`, [`LazyImage`](LazyImage.md), and 3-channel RGB ar
 
 ## Returns
 
-`pathlib.Path` — resolved path to the encoded video file.
+`None` — saves files without returning paths.
 
 ## Errors and edge cases
 
@@ -50,8 +50,9 @@ with tempfile.TemporaryDirectory() as temporary:
         Image.new("RGB", (32, 24), "blue"),
     ]
 
-    video_path = media.save_video(root / "outputs" / "clip.mp4", frames, fps=5.0)
-    info = media.probe(video_path)
+    video_path = root / "outputs" / "clip.mp4"
+    media.save_video(video_path, frames, fps=5.0)
+    info = media.info(video_path)
     assert info["type"] == "video"
     assert info["frame_count"] == 3
     assert info["size"] == (32, 24)
@@ -62,3 +63,14 @@ with tempfile.TemporaryDirectory() as temporary:
     loaded.close()
     print(info["frame_count"], info["size"])
 ```
+
+## Letterbox output size
+
+Pass `size=(width, height)` to preserve each image's aspect ratio while centering
+it on a gray (114, 114, 114) canvas. Different source dimensions then produce
+uniform output dimensions. Processing remains sequential and source pixels are
+unchanged. With size=None, images keep their sizes and video frames must all
+match the first frame. Common video codecs require even output dimensions.
+The size must be a pair of positive integers; invalid sizes fail before consuming
+the input iterable. Image export normalizes resized inputs through media.to_pil
+to RGB. File names remain known from output_dir/prefix/extension or output_path.

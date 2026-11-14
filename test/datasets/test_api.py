@@ -62,7 +62,7 @@ class TestDatasetsAPI(unittest.TestCase):
         for name in expected:
             self.assertTrue(callable(getattr(datasets, name)))
             self.assertTrue(inspect.getdoc(getattr(datasets, name)))
-        self.assertIs(datasets.get_dataset_info, datasets.info)
+        self.assertFalse(hasattr(datasets, "get_dataset_info"))
 
     def test_info_partition_repartition_and_unpartition(self):
         with TemporaryDirectory() as directory:

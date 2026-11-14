@@ -83,7 +83,7 @@ def evaluate_local_detector(
     files.mkdir(preview_dir, parents=True, exist_ok=True)
 
     # 1. Inspect dataset structure with datasets.info
-    info = datasets.info(dataset_path, format="yolo", verbose=False)
+    info = datasets.info(dataset_path, format="yolo")
 
     # 2. Load ground-truth annotations with datasets.load
     gt_detections = datasets.load(dataset_path, format="yolo", verbose=False)

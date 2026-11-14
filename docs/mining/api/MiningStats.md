@@ -4,7 +4,7 @@
 
 ```python
 report = mining.stats(data)
-report.show()
+utils.tabulate(report.to_dict())
 report.save("artifacts/mining/stats.json")
 ```
 

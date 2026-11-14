@@ -120,7 +120,7 @@ def find_duplicates(
     >>> from klygo import datasets, mining
     >>> data = datasets.load("artifacts/datasets/flat_data", format="yolo", verbose=False)
     >>> report = mining.find_duplicates(data, threshold=0.95)
-    >>> report.show()
+    >>> utils.tabulate(report.to_dict())
     >>> print(f"Removable duplicates: {report.duplicate_images}")
     """
     _require(data)

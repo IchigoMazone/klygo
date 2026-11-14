@@ -46,12 +46,12 @@ with tempfile.TemporaryDirectory() as temporary:
     # Copy to a new path (parent directories are created automatically)
     duplicate = media.copy(source, root / "backup" / "copy.png")
     assert files.is_file(duplicate)
-    assert media.probe(duplicate)["size"] == (32, 24)
+    assert media.info(duplicate)["size"] == (32, 24)
     assert files.compare(source, duplicate, by="hash")
 
     # Replace an existing target when overwrite=True
     updated = media.save(root / "blue.png", Image.new("RGB", (64, 48), "blue"))
     media.copy(updated, duplicate, overwrite=True)
-    assert media.probe(duplicate)["size"] == (64, 48)
-    print(media.probe(duplicate)["size"])
+    assert media.info(duplicate)["size"] == (64, 48)
+    print(media.info(duplicate)["size"])
 ```

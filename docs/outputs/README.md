@@ -30,3 +30,28 @@ Postprocessing mutates `Detection` or `Detections` in place. Visual save methods
 CuPy arrays, `results.cpu()` for NumPy arrays, and `results.astype(16|32|64)` for
 floating coordinates and scores. Device and precision conversion remain lazy for
 streams. Install optional CUDA storage with `pip install "klygo[gpu-outputs]"`.
+
+## Same-source collection groups
+
+[group](api/group.md) and [DetectionGroup](api/DetectionGroup.md) retain independent
+collections while applying shared operations:
+
+```python
+collections = outputs.group(pred, target)
+collections.cuda(0).astype(32)
+report = metrics.evaluate(pred, target)
+collections.cpu()
+```
+
+The group requires identical frame identities and corresponding image sizes;
+annotation sets and frame order may differ. The original collections remain
+usable individually. See the [group guide](../../tutorials/outputs/Document_Outputs_Group.ipynb).
+
+Multiple label sets loaded by `datasets.load` use the same `DetectionGroup`
+returned by `outputs.group`. Two unnamed members use `pred` and `truth`;
+other counts use `set_1`, `set_2`, and so on, in input order. Pass a mapping
+for explicit names. The single-label-set load result remains `Detections`.
+
+Rename member keys together with `sets.rename({"set_1": "pred", "set_2": "truth"})`.
+The method returns the same group and preserves member order and data; invalid
+or colliding names fail before any names change. `relabel` changes class labels.

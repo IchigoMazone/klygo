@@ -264,12 +264,12 @@ class TestLocateAnything(unittest.TestCase):
         image = Image.new("RGB", (20, 10))
         model(image, prompt="dog", verbose=False)
         before = model.predict_config
-        model.benchmark(image, prompt="cat", max_new_tokens=16, iterations=1, warmup=0, verbose=False)
+        model.benchmark(image, prompt="cat", max_new_tokens=16, iterations=1, warmup=0)
         self.assertEqual(model.predict_config, before)
         self.assertEqual(model.names, {0: "dog"})
         self.native.response = RuntimeError("generation failed")
         with self.assertRaises(RuntimeError):
-            model.benchmark(image, prompt="cat", iterations=1, warmup=0, verbose=False)
+            model.benchmark(image, prompt="cat", iterations=1, warmup=0)
         self.assertEqual(model.predict_config, before)
         self.assertEqual(model.names, {0: "dog"})
 

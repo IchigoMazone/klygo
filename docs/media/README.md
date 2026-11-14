@@ -25,7 +25,7 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 3. **[`VideoReader`](api/VideoReader.md) (Smart Sequential & Random-Access Seeker)**:
    Manages a single reusable `cv2.VideoCapture` handle with position tracking so consecutive reads avoid redundant seeks while out-of-order frame indices seek on demand.
 4. **Format Conversions & Media I/O**:
-   [`to_array()`](api/to_array.md), [`to_pil()`](api/to_pil.md), and [`to_tensor()`](api/to_tensor.md) normalize any `LazyImage`, `PIL.Image.Image`, `numpy.ndarray`, or `torch.Tensor` into an independent target representation. [`save()`](api/save.md), [`save_images()`](api/save_images.md), [`save_video()`](api/save_video.md), [`convert()`](api/convert.md), [`copy()`](api/copy.md), and [`probe()`](api/probe.md) handle persistence and header inspection using `klygo.files` path semantics.
+   [`to_array()`](api/to_array.md), [`to_pil()`](api/to_pil.md), and [`to_tensor()`](api/to_tensor.md) normalize any `LazyImage`, `PIL.Image.Image`, `numpy.ndarray`, or `torch.Tensor` into an independent target representation. [`save()`](api/save.md), [`save_images()`](api/save_images.md), [`save_video()`](api/save_video.md), [`convert()`](api/convert.md), [`copy()`](api/copy.md), and [`info()`](api/info.md) handle persistence and header inspection using `klygo.files` path semantics.
 
 | Container / Type | Decodes on Init? | Random Indexing | Best For |
 | :--- | :--- | :--- | :--- |
@@ -47,7 +47,7 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 | **Load an image, video, or folder lazily** | [`load()`](api/load.md) | `frames = media.load("video.mp4")` |
 | **Stream a long video with bounded RAM** | [`load()`](api/load.md) / [`MediaFrames`](api/MediaFrames.md) | `frames = media.load("video.mp4", stream=True, sample_rate=5)` |
 | **Index a very large finite source without allocating every proxy** | [`load()`](api/load.md) / [`MediaFrames`](api/MediaFrames.md) | `frames = media.load("images/", indexed=True)` |
-| **Inspect image or video metadata** | [`probe()`](api/probe.md) | `meta = media.probe("clip.mp4", verbose=True)` |
+| **Inspect image or video metadata** | [`info()`](api/info.md) | `meta = media.info("clip.mp4")` |
 | **Check dimensions without decoding pixels** | [`LazyImage`](api/LazyImage.md) | `img = media.LazyImage("photo.jpg"); print(img.size)` |
 | **Crop a region without loading into RAM** | [`LazyImage.lazy_crop()`](api/LazyImage.md) | `patch = frames[0].lazy_crop((10, 10, 110, 90))` |
 | **Filter stream frames by visual quality** | [`MediaFrames.where_quality()`](api/MediaFrames.md) | `frames.where_quality(min_sharpness=20.0, max_blur=0.6)` |
@@ -77,7 +77,7 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 - [`load(source, recursive=False, backend='pil', verbose=False, *, stream=False, indexed=False, sample_rate=1, max_frames=None)`](api/load.md) ([example](../../examples/media/load.py)): Load an image, video, or directory into materialized, path-indexed, or streaming [`MediaFrames`](api/MediaFrames.md).
 - [`compose(*steps)`](api/compose.md) ([example](../../examples/media/compose.py)): Chain filtering, sampling, and transform steps into a reusable media pipeline.
 - [`iter_frames(source, sample_rate=1, recursive=False, backend='pil', verbose=False)`](api/iter_frames.md) ([example](../../examples/media/iter_frames.py)): Yield sampled frames from a video or image directory as a generator.
-- [`probe(path, *, verbose=False)`](api/probe.md) ([example](../../examples/media/probe.py)): Read image or video format, dimensions, codec, and timing metadata into a dictionary (with optional Rich table display).
+- [`info(path)`](api/info.md) ([example](../../examples/media/info.py)): Read image or video format, dimensions, codec, and timing metadata into a dictionary.
 
 </details>
 
@@ -85,8 +85,8 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 <summary><b>Saving, transcoding, and copying — <code>operations.py</code> (5 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`save(path, image, overwrite=False, verbose=False)`](api/save.md) ([example](../../examples/media/save.py)): Save a `PIL.Image.Image`, `numpy.ndarray`, or `LazyImage` to disk, creating parent directories automatically.
-- [`save_video(output_path, frames, fps=30.0, fourcc='mp4v', overwrite=False, verbose=False)`](api/save_video.md) ([example](../../examples/media/save_video.py)): Encode an iterable of frames into a video file via OpenCV `VideoWriter`.
-- [`save_images(output_dir, images, prefix='frame', extension='.jpg', overwrite=False, verbose=False)`](api/save_images.md) ([example](../../examples/media/save_images.py)): Write an iterable of images to numbered files (`{prefix}_{idx:06d}{extension}`).
+- [`save_video(output_path, frames, fps=30.0, fourcc='mp4v', overwrite=False, verbose=False, *, size=None)`](api/save_video.md) ([example](../../examples/media/save_video.py)): Encode an iterable of frames into a video file via OpenCV `VideoWriter`.
+- [`save_images(output_dir, images, prefix='frame', extension='.jpg', overwrite=False, verbose=False, *, size=None)`](api/save_images.md) ([example](../../examples/media/save_images.py)): Write an iterable of images to numbered files (`{prefix}_{idx:06d}{extension}`).
 - [`convert(source, target, codec=None, crf=23, fps=None, gpu=None, preset=None, overwrite=False, verbose=False)`](api/convert.md) ([example](../../examples/media/convert.py)): Convert between image formats or transcode video files via FFmpeg (with OpenCV fallback).
 - [`copy(source, target, overwrite=False)`](api/copy.md) ([example](../../examples/media/copy.py)): Copy a media file or directory tree to a target path via `klygo.files.copy`.
 
@@ -109,3 +109,9 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 - [`VideoReader(path)`](api/VideoReader.md) ([example](../../examples/media/VideoReader.py)): Reusable OpenCV video capture wrapper for sequential and random-access frame decoding.
 
 </details>
+
+## Uniform image and video exports
+
+`save_images` and `save_video`, including the matching MediaFrames methods, return
+None. Pass size=(width, height) to letterbox differently sized inputs with centered
+gray padding. No size means original image sizes; video frames must match.

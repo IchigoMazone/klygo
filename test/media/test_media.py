@@ -193,7 +193,8 @@ class TestMedia(unittest.TestCase):
 
         # 1. save_images
         batch_dir = self.tmp_path / "saved_batch"
-        saved_files = media.save_images(batch_dir, frames, prefix="frame", extension=".jpg")
+        media.save_images(batch_dir, frames, prefix="frame", extension=".jpg")
+        saved_files = files.find(batch_dir, recursive=False)
         assert len(saved_files) == 3
         assert saved_files[0].name == "frame_000001.jpg"
 
@@ -210,11 +211,12 @@ class TestMedia(unittest.TestCase):
         except FileExistsError:
             pass
 
-        saved_vid = media.save_video(vid_p, frames, fps=10, overwrite=True)
+        saved_vid = vid_p
+        media.save_video(saved_vid, frames, fps=10, overwrite=True)
         assert saved_vid.exists()
 
-        # 4. probe video metadata
-        v_info = media.probe(vid_p)
+        # 4. Inspect video metadata
+        v_info = media.info(vid_p)
         assert v_info["type"] == "video"
         assert v_info["width"] == 30
         assert v_info["height"] == 20

@@ -191,7 +191,7 @@ def stats(
     >>> from klygo import datasets, mining
     >>> data = datasets.load("artifacts/datasets/flat_data", format="yolo", verbose=False)
     >>> summary = mining.stats(data)
-    >>> summary.show()
+    >>> utils.tabulate(summary.to_dict())
     >>> print(summary.imbalance_ratio)
     """
     _require(data)
@@ -305,7 +305,7 @@ def score(
     >>> from klygo import datasets, mining
     >>> data = datasets.load("artifacts/datasets/flat_data", format="yolo", verbose=False)
     >>> scores = mining.score(data, weights={"quality": 0.6, "rarity": 0.4})
-    >>> scores.show()
+    >>> utils.tabulate(scores.to_dict())
     >>> print("Best score:", max(scores.values))
     """
     _require(data)
@@ -401,7 +401,7 @@ def compare(
     >>> raw = datasets.load("artifacts/datasets/raw", format="yolo", verbose=False)
     >>> curated = mining.select(raw, method="weighted", limit=100)
     >>> comparison = mining.compare(raw, curated)
-    >>> comparison.show()
+    >>> utils.tabulate(comparison.to_dict())
     >>> print("Removed images:", comparison.changes["images"])
     """
     first = stats(before, quality=quality)

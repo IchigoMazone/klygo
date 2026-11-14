@@ -139,7 +139,8 @@ class TestOutputs(unittest.TestCase):
 
             results = outputs.Detections([frame(index=0), frame(index=1)])
             image_dir = files.join(root, "frames")
-            paths = results.save_images(image_dir, prefix="det", mode="index", extension=".png")
+            results.save_images(image_dir, prefix="det", mode="index", extension=".png")
+            paths = files.find(image_dir, recursive=False)
             self.assertEqual(len(paths), 2)
             self.assertTrue(all(files.exists(path) for path in paths))
 
@@ -148,7 +149,7 @@ class TestOutputs(unittest.TestCase):
                 yield frame("stream", 1, ("car",))
             stream = outputs.Detections(generate(), stream=True)
             video_path = files.join(root, "result.mp4")
-            self.assertEqual(stream.save_video(video_path, fps=5.0), files.path(video_path))
+            self.assertIsNone(stream.save_video(video_path, fps=5.0))
             self.assertTrue(files.exists(video_path))
 
     def test_detection_transforms_mutate_atomically(self):
@@ -472,6 +473,45 @@ class TestOutputs(unittest.TestCase):
             self.assertEqual(len(files.find(files.join(target, "labels"), pattern="*.txt")), 1)
             self.assertFalse(files.exists(files.join(target,"manifest.json")))
 
+    def test_export_image_false_writes_only_labels_and_yaml(self):
+        with tempfile.TemporaryDirectory() as root:
+            target = files.join(root, "pseudo")
+            item = frame()
+            exported = outputs.Detections([item]).export(target, image=False)
+            self.assertEqual(exported, files.path(target))
+            self.assertTrue(files.exists(files.join(target, "pseudo.yaml")))
+            self.assertFalse(files.exists(files.join(target, "images")))
+            self.assertFalse(files.exists(files.join(target, "labels")))
+            self.assertEqual(len(files.find(files.join(target, "pseudo_labels"), pattern="*.txt")), 1)
+            with self.assertRaises(TypeError):
+                outputs.Detections([item]).export(files.join(root, "bad"), image="no")
+
+    def test_export_custom_dirs_and_yaml_preserve_existing_dataset(self):
+        with tempfile.TemporaryDirectory() as root:
+            target = files.join(root, "dataset")
+            item = frame()
+            item._source = Image.new("RGBA", item.image_size)
+            outputs.Detections([item]).export(target)
+
+            outputs.Detections([item]).export(target, image=False)
+            outputs.Detections([item]).export(
+                target,
+                image=False,
+                labels_dir="custom_pseudo",
+                yaml_name="custom.yaml",
+            )
+            self.assertTrue(files.exists(files.join(target, "images")))
+            self.assertTrue(files.exists(files.join(target, "labels")))
+            self.assertTrue(files.exists(files.join(target, "data.yaml")))
+            self.assertTrue(files.exists(files.join(target, "pseudo.yaml")))
+            self.assertTrue(files.exists(files.join(target, "custom.yaml")))
+            self.assertEqual(len(files.find(files.join(target, "pseudo_labels"), pattern="*.txt")), 1)
+            self.assertEqual(len(files.find(files.join(target, "custom_pseudo"), pattern="*.txt")), 1)
+            with self.assertRaises(ValueError):
+                outputs.Detections([item]).export(target, image=False, labels_dir=" ")
+            with self.assertRaises(ValueError):
+                outputs.Detections([item]).export(target, image=False, yaml_name="")
+
     def test_yolo_export_compacts_ids_without_mutating_results(self):
         with tempfile.TemporaryDirectory() as root:
             results = outputs.Detections([frame(labels=("a", "b", "c"))])
@@ -632,5 +672,95 @@ class TestOutputs(unittest.TestCase):
         self.assertEqual(len(results), 10_000)
         self.assertEqual(results.total_objects, 100_000)
         self.assertLess(current_bytes, 35 * 1024 * 1024)
+
+    def test_keep_labels_and_removed_show(self):
+        f1 = outputs.Detection(
+            [
+                outputs.Box([0, 0, 10, 10], label="person", score=0.9),
+                outputs.Box([10, 10, 20, 20], label="car", score=0.8),
+                outputs.Box([20, 20, 30, 30], label="dog", score=0.7),
+            ],
+            source_id="f1",
+            frame_index=0,
+            image_size=(64, 64),
+        )
+        f2 = outputs.Detection(
+            [
+                outputs.Box([0, 0, 10, 10], label="dog", score=0.6),
+                outputs.Box([5, 5, 15, 15], label="person", score=0.95),
+            ],
+            source_id="f2",
+            frame_index=1,
+            image_size=(64, 64),
+        )
+        self.assertFalse(hasattr(f1, "show"))
+        detections = outputs.Detections([f1, f2])
+        self.assertFalse(hasattr(detections, "show"))
+        detections.keep(["person", "car"])
+        self.assertEqual(detections[0].labels, ["person", "car"])
+        self.assertEqual(detections[1].labels, ["person"])
+
+    def test_combine_detections_methods_and_validation(self):
+        def make_a(frame_index=0):
+            return outputs.Detection(
+                [
+                    outputs.Box([0, 0, 20, 20], label="person", score=0.9),
+                    outputs.Box([50, 50, 70, 70], label="car", score=0.7),
+                ],
+                source_id="img",
+                frame_index=frame_index,
+                image_size=(100, 100),
+            )
+
+        def make_b(frame_index=0):
+            return outputs.Detection(
+                [
+                    outputs.Box([2, 2, 22, 22], label="person", score=0.8),
+                    outputs.Box([80, 80, 90, 90], label="dog", score=0.6),
+                ],
+                source_id="img",
+                frame_index=frame_index,
+                image_size=(100, 100),
+            )
+
+        # Default: method="union", iou=0.5
+        det = make_a().combine(make_b())
+        self.assertEqual(det.labels, ["car", "person", "dog"])
+        self.assertEqual(det[1].box, (0.0, 0.0, 22.0, 22.0))
+        self.assertAlmostEqual(det[1].score, 0.9)
+
+        # intersection, average, weighted, first, second, append
+        det_inter = make_a().combine(make_b(), "intersection")
+        self.assertEqual(det_inter[1].box, (2.0, 2.0, 20.0, 20.0))
+
+        det_avg = make_a().combine(make_b(), "average")
+        self.assertEqual(det_avg[1].box, (1.0, 1.0, 21.0, 21.0))
+
+        det_w = make_a().combine(make_b(), "weighted")
+        self.assertAlmostEqual(det_w[1].box[0], (0.9 * 0 + 0.8 * 2) / 1.7, places=5)
+
+        det_sec = make_a().combine(make_b(), "second")
+        self.assertEqual(det_sec[1].box, (2.0, 2.0, 22.0, 22.0))
+
+        det_app = make_a().combine(make_b(), "append")
+        self.assertEqual(det_app.labels, ["person", "car", "person", "dog"])
+
+        # Detections.combine across matching frames + extra frame
+        dets_a = outputs.Detections([make_a(0), make_a(1)], packed=True)
+        dets_b = outputs.Detections([make_b(0), make_b(2)])
+        dets_a.combine(dets_b, "first", iou=0.5)
+        self.assertEqual(len(dets_a), 3)
+        self.assertEqual(dets_a[0].labels, ["car", "person", "dog"])
+        self.assertEqual(dets_a[0][1].box, (0.0, 0.0, 20.0, 20.0))
+
+        # Validation
+        with self.assertRaises(TypeError):
+            make_a().combine("not a detection")
+        with self.assertRaises(ValueError):
+            make_a().combine(make_b(), method="invalid")
+        with self.assertRaises(ValueError):
+            make_a().combine(make_b(), iou=1.5)
+        with self.assertRaises(TypeError):
+            make_a().combine(make_b(), iou="0.5")
 
 if __name__ == "__main__": unittest.main()

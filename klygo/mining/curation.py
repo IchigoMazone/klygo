@@ -140,7 +140,7 @@ def cluster(
     >>> from klygo import datasets, mining
     >>> data = datasets.load("artifacts/datasets/flat_data", format="yolo", verbose=False)
     >>> result = mining.cluster(data, clusters=10, seed=42)
-    >>> result.show()
+    >>> utils.tabulate(result.to_dict())
     >>> print("Cluster 0 representative index:", result.representatives[0])
     """
     _require(data)

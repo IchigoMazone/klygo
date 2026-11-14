@@ -741,7 +741,7 @@ class Detector(BaseModel):
     def warmup(self) -> None:
         """Warm up with current settings without remembering temporary changes."""
         dummy_img = PIL.Image.new("RGB", (640, 640), color=(100, 100, 100))
-        self.benchmark(dummy_img, iterations=1, warmup=0, verbose=False)
+        self.benchmark(dummy_img, iterations=1, warmup=0)
 
     def clear_cache(self) -> None:
         """Release unused backend memory blocks."""
@@ -753,13 +753,11 @@ class Detector(BaseModel):
         prompt: Any = _UNSET,
         iterations: int = 20,
         warmup: int = 5,
-        verbose: bool = True,
         **kwargs,
     ) -> Dict[str, Any]:
         """Measure prepared-input pipeline latency without persisting overrides."""
         validators.validate_count(iterations, "iterations")
         validators.validate_count(warmup, "warmup", minimum=0)
-        validators.validate_type(verbose, bool, "verbose")
         if any(key in kwargs for key in ("stream", "batch", "workers", "prefetch", "vid_stride", "max_frames")):
             raise ValueError("benchmark accepts inference options, not stream or sampling controls")
 
@@ -803,36 +801,29 @@ class Detector(BaseModel):
                 "throughput_unit": "images/second",
                 "predict_config": self._config_snapshot(metadata, prompts),
             }
-            if verbose:
-                from rich.console import Console
-                from rich.table import Table
-                table = Table(title=f"Model Benchmark: {self.model_id}")
-                table.add_column("Metric", style="cyan")
-                table.add_column("Value", style="green")
-                for key, value in report.items():
-                    table.add_row(key, str(value))
-                Console().print(table)
             return report
 
-    def help(self) -> None:
-        """Display standardized usage guide and parameters for the model."""
-        from rich.console import Console
-        from rich.table import Table
-
-        table = Table(title=f"Model Help & Usage: {self.model_id}")
-        table.add_column("Command / Method", style="cyan", no_wrap=True)
-        table.add_column("Description", style="green")
-        table.add_row("predict(source, prompt, ...)", "Perform detection on images, videos, directories, or streams.")
-        table.add_row("benchmark(iterations=20, warmup=5)", "Evaluate inference latency (ms) and throughput (FPS).")
-        table.add_row("info()", "Print architecture, backend, state, and active settings in a table.")
-
+    def help(self) -> Dict[str, Any]:
+        """Return standardized usage guide and custom parameters for the model."""
+        guide: Dict[str, Any] = {
+            "model_id": self.model_id,
+            "methods": {
+                "predict(source, prompt, ...)": "Perform detection on images, videos, directories, or streams.",
+                "benchmark(iterations=20, warmup=5)": "Evaluate inference latency (ms) and throughput (FPS).",
+                "info()": "Return architecture, backend, state, and active settings as a dictionary.",
+            },
+        }
         settings_dict = self.settings
-        has_params = any(bool(v) for v in settings_dict.values()) if isinstance(settings_dict, dict) else False
-        if has_params:
-            param_lines = [f"{k}={v} (group: {g})" for g, val in settings_dict.items() if isinstance(val, dict) for k, v in val.items()]
-            if param_lines:
-                table.add_row("Custom Parameters", "\n".join(param_lines))
-        Console().print(table)
+        if isinstance(settings_dict, dict):
+            custom = {
+                f"{g}.{k}": v
+                for g, val in settings_dict.items()
+                if isinstance(val, dict)
+                for k, v in val.items()
+            }
+            if custom:
+                guide["custom_parameters"] = custom
+        return guide
 
     # =========================================================================
     # 3. BACKEND EXECUTION DELEGATES

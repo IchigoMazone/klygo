@@ -25,4 +25,4 @@ with TemporaryDirectory() as directory:
         classes={0: "fruit"},
         on_conflict="rename",
     )
-    print(datasets.info(output, verbose=False))
+    print(datasets.info(output))

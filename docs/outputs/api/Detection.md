@@ -19,10 +19,8 @@ frame.add_box([20, 30, 160, 190], label="car", score=0.9)
 from klygo import outputs
 frame = outputs.Detection([], source_id="sample", frame_index=0, image_size=(100, 80))
 frame.add_box([5, 5, 30, 25], label="car", score=0.8)
-frame.show(mode="uid")
+frame.keep(["car"])
 ```
-
-`show()` supports `default`, `index`, and `uid`. It does not change annotations.
 
 Pass a list of box positions to create an independent subset while retaining
 the frame identity, source handle, metadata, UIDs, precision, and restore trace.
@@ -30,14 +28,13 @@ Annotation arrays and metadata are copied; lazy source pixels remain shared.
 
 ```python
 sub_frame = frame[[5, 7, 9]]
-sub_frame.show(mode="uid")
 ```
 
 Duplicate or invalid positions raise rather than creating ambiguous duplicate
 UIDs. Integer indexing still returns one `Box`, and slicing still returns a
 tuple of boxes.
 
-`save()` uses the same `default`, `index`, and `uid` captions as `show()` and
+`save()` supports `default`, `index`, and `uid` captions and
 writes one annotated image:
 
 ```python
@@ -63,3 +60,42 @@ prevents a collection from mixing NumPy and CuPy frames or numeric precision.
 
 `filter()`, `drop()`, `relabel()`, and `clear()` mutate the frame and return the
 same instance for method chaining.
+
+## Combining predictions
+
+```python
+frame.combine(other_frame, method="weighted", iou=0.5)
+```
+
+Both frames must have identical `identity` and `image_size`; otherwise ValueError
+is raised before changing boxes. This includes empty frames and append mode.
+Matching is greedy by descending IoU, one-to-one, and requires the same label.
+The methods are `union`, `intersection`, `average`, `weighted`, `first`, `second`,
+and `append`. Unmatched boxes from both sides are retained. Intersection only
+changes matched coordinates. Matched boxes receive a new UID, the higher score,
+and combination metadata; previous tracking IDs and metadata are not retained.
+The method mutates and returns `frame`; `other_frame` is unchanged.
+
+## Source image access
+
+`frame.image` returns an independent, unannotated PIL image. It resolves an
+in-memory source or loads source_path lazily using frame_index for video frames.
+Changing the returned image does not change the source. Access raises RuntimeError
+when no source is available, or FileNotFoundError when a source path is missing.
+
+```python
+image = frame.image
+visual.compare_images(frame, other_frame)
+```
+
+[Compare images](../../visual/api/compare_images.md) supports display and saving
+directly from two Detection frames, without passing their images separately.
+
+## Device-preserving annotation arrays
+
+`frame.to_arrays()` returns independent boxes (N, 4), scores (N,), class_ids
+(N,), and a labels list. Numeric arrays remain NumPy on CPU or CuPy on the
+frame's CUDA device and retain storage precision. Editing these copies does not
+modify annotations. No images are decoded and no CUDA annotation arrays are
+copied to CPU by this method. Metrics uses this public array export rather than
+iterating Box objects.

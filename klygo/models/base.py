@@ -101,28 +101,24 @@ class BaseModel(ABC):
         cls_attrs = [m for m in dir(type(self)) if not m.startswith('_')]
         return sorted(m for m in cls_attrs if callable(getattr(type(self), m, None)))
 
-    def info(self) -> None:
-        """Print model architecture, backend, state, and active settings in a Rich table."""
-        from rich.console import Console
-        from rich.table import Table
-
-        table = Table(title=f"Model Information: {self.model_id}")
-        table.add_column("Property", style="cyan", no_wrap=True)
-        table.add_column("Value", style="green")
-        table.add_row("Class Name", str(self.class_name))
-        table.add_row("Model ID", str(self.model_id))
-        table.add_row("Backend", str(self.backend))
-        table.add_row("Task", str(self.task))
-        table.add_row("State", str(self.state))
-        table.add_row("Flags", ", ".join(self.flags) if self.flags else "(None)")
-        table.add_row("Settings", str(self.settings))
+    def info(self) -> Dict[str, Any]:
+        """Return model architecture, backend, state, and active settings as a dictionary."""
+        result: Dict[str, Any] = {
+            "class_name": self.class_name,
+            "model_id": self.model_id,
+            "backend": self.backend,
+            "task": self.task,
+            "state": self.state,
+            "flags": list(self.flags),
+            "settings": self.settings,
+        }
         if hasattr(type(self), "predict_config"):
-            table.add_row("Device", str(self.device))
-            table.add_row("Dtype", str(self.dtype))
-            table.add_row("Predict Configuration", str(self.predict_config))
+            result["device"] = str(self.device)
+            result["dtype"] = str(self.dtype)
+            result["predict_config"] = self.predict_config
         if self.params:
-            table.add_row("Parameters", ", ".join(f"{k}={v}" for k, v in self.params.items()))
-        Console().print(table)
+            result["params"] = dict(self.params)
+        return result
 
     def export(
         self,

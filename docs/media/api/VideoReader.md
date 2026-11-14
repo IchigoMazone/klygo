@@ -52,7 +52,8 @@ with tempfile.TemporaryDirectory() as temporary:
         Image.new("RGB", (32, 24), "green"),
         Image.new("RGB", (32, 24), "blue"),
     ]
-    video = media.save_video(root / "clip.mp4", frames, fps=5.0)
+    video = root / "clip.mp4"
+    media.save_video(video, frames, fps=5.0)
 
     reader = media.VideoReader(video)
     try:

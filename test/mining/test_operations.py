@@ -58,11 +58,10 @@ class MiningOperationsTest(unittest.TestCase):
         self.assertTrue(all(0 <= value <= 1 for value in scored.values))
         self.assertEqual([frame.labels for frame in self.data], [frame.labels for frame in before])
 
-    def test_report_show_and_save(self) -> None:
+    def test_report_to_dict_and_save(self) -> None:
         summary = mining.stats(self.data, quality=False)
-        stream = StringIO()
-        summary.show(Console(file=stream, force_terminal=False, width=120))
-        self.assertIn("MiningStats", stream.getvalue())
+        self.assertEqual(summary.to_dict()["images"], 6)
+        self.assertFalse(hasattr(summary, "show"))
         for suffix in ("json", "csv", "md"):
             path = files.path(self.temporary.name) / f"report.{suffix}"
             summary.save(path)

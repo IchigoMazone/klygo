@@ -2,6 +2,7 @@
 
 from . import detect
 from .detect import Box, Detection, Detections, build_detections
+from .group import DetectionGroup, group
 
 __all__ = [
     "detect",
@@ -9,4 +10,6 @@ __all__ = [
     "Detection",
     "Detections",
     "build_detections",
+    "DetectionGroup",
+    "group",
 ]

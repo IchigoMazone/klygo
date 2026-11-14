@@ -12,8 +12,6 @@ from typing import Any, Mapping, Optional, Sequence
 
 import cv2
 import numpy as np
-from rich.console import Console
-from rich.table import Table
 
 from klygo import files, media, preprocessing, validators
 from klygo.outputs import Detections
@@ -242,26 +240,6 @@ class _Report:
             for row in rows
         )
         return "\n".join(lines) + "\n"
-
-    def show(self, console: Optional[Console] = None) -> None:
-        """Render a formatted, colorful Rich table to the console.
-
-        Parameters
-        ----------
-        console : rich.console.Console, optional
-            Console instance used for rendering. Defaults to a new Console().
-        """
-        table = Table(title=self.__class__.__name__)
-        rows = self._rows()
-        columns = list(rows[0]) if rows else ["metric", "value"]
-
-        for column in columns:
-            table.add_column(column.replace("_", " ").title())
-
-        for row in rows:
-            table.add_row(*(str(row.get(column, "")) for column in columns))
-
-        (console or Console()).print(table)
 
 
 class _UnionFind:

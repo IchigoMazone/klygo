@@ -57,30 +57,30 @@ def find_dataset_root(path: str | Path) -> Path:
     return root
 
 
-def read_class_map(dataset_root: str | Path) -> dict[int, str]:
-    """Read class names while preserving numeric IDs from ``data.yaml``."""
+def read_class_map(dataset_root: str | Path, yaml_name: str = "data.yaml") -> dict[int, str]:
+    """Read class names while preserving numeric IDs from a YAML metadata file."""
     root = files.path(dataset_root)
-    yaml_path = files.join(root, "data.yaml")
+    yaml_path = files.join(root, yaml_name)
     if not files.is_file(yaml_path):
-        raise ValueError(f"data.yaml not found under {root}")
+        raise ValueError(f"{yaml_name} not found under {root}")
 
     data = config.load(yaml_path, verbose=False)
     if "names" not in data:
-        raise ValueError(f"names list not found in data.yaml under {root}")
+        raise ValueError(f"names list not found in {yaml_name} under {root}")
     names = data["names"]
     if isinstance(names, dict):
         try:
             class_map = {int(key): str(value) for key, value in names.items()}
         except (TypeError, ValueError) as error:
-            raise ValueError("class IDs in data.yaml must be integers") from error
+            raise ValueError(f"class IDs in {yaml_name} must be integers") from error
         if len(class_map) != len(names) or any(index < 0 for index in class_map):
-            raise ValueError("class IDs in data.yaml must be unique non-negative integers")
+            raise ValueError(f"class IDs in {yaml_name} must be unique non-negative integers")
     elif isinstance(names, (list, tuple)):
         class_map = {index: str(value) for index, value in enumerate(names)}
     else:
         class_map = {0: str(names)}
     if len(set(class_map.values())) != len(class_map):
-        raise ValueError("class names in data.yaml must be unique")
+        raise ValueError(f"class names in {yaml_name} must be unique")
     return dict(sorted(class_map.items()))
 
 

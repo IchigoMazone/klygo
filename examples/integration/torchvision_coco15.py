@@ -84,7 +84,7 @@ def evaluate(dataset_root=None, artifact_root=None):
                 predicted.transform(
                     postprocessing.threshold(0.25), postprocessing.nms(0.5)
                 )
-                predicted.transform(postprocessing.select(labels=[label]))
+                predicted.keep([label])
                 actual = [box for box in by_id[image_id] if box.label == label]
                 unmatched = set(range(len(actual)))
                 tp = fp = 0

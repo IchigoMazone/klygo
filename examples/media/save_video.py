@@ -10,6 +10,7 @@ from PIL import Image
 from klygo import media, files
 with tempfile.TemporaryDirectory() as temporary:
     root = files.path(temporary)
-    frames = [Image.new("RGB", (32, 24), color) for color in ("red", "blue")]
-    video = media.save_video(root / "clip.mp4", frames, fps=5)
-    print(media.probe(video)["frame_count"])
+    frames = [Image.new("RGB", (80, 40), "red"), Image.new("RGB", (40, 80), "blue")]
+    video = root / "clip.mp4"
+    media.save_video(video, frames, fps=5, size=(64, 64))
+    print(media.info(video)["size"], media.info(video)["frame_count"])

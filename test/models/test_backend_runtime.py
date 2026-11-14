@@ -198,7 +198,6 @@ class TestBackendRuntimeDispatch(unittest.TestCase):
                 harness,
                 iterations=2,
                 warmup=1,
-                verbose=False,
             )
         self.assertEqual(report["device"], "/GPU:0")
         self.assertEqual(synchronize.call_count, 4)

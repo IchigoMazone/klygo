@@ -11,4 +11,4 @@ from klygo import media, files
 with tempfile.TemporaryDirectory() as temporary:
     root = files.path(temporary)
     destination = media.save(root / "image.png", Image.new("RGB", (32, 24), "red"))
-    print(media.probe(destination)["size"])
+    print(media.info(destination)["size"])

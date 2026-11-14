@@ -390,30 +390,6 @@ def _top_boxes(result: Result, count: int) -> None:
     _frames(result, top_frame)
 
 
-def select(*, where: Optional[Callable[[Box], bool]] = None,
-           labels: Optional[str | Iterable[str]] = None,
-           class_ids: Optional[int | Iterable[int]] = None,
-           uids: Optional[int | Iterable[int]] = None):
-    """Build an operation that keeps boxes matching every selector."""
-    from .core import Operation
-    if where is not None and not callable(where):
-        raise TypeError("predicate must be callable")
-    labels = None if labels is None else ({labels} if isinstance(labels, str) else set(labels))
-    class_ids = None if class_ids is None else (
-        {int(class_ids)} if isinstance(class_ids, (int, np.integer)) else set(class_ids)
-    )
-    uids = None if uids is None else (
-        {int(uids)} if isinstance(uids, (int, np.integer)) else set(uids)
-    )
-    return Operation(
-        "select",
-        lambda result: _select(
-            result, where=where, labels=labels, class_ids=class_ids, uids=uids
-        ),
-        _trusted=where is None,
-    )
-
-
 def map_boxes(function: Callable[[Box], Optional[Box]]):
     """Build an operation that transforms every box atomically."""
     if not callable(function):
@@ -478,6 +454,6 @@ def top(count: int):
 
 
 __all__ = [
-    "select", "map_boxes", "box_iou", "threshold", "clip",
+    "map_boxes", "box_iou", "threshold", "clip",
     "remove_invalid", "nms", "top",
 ]

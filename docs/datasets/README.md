@@ -48,7 +48,7 @@ Local Tutorial Notebooks (`tutorials/datasets/`, 1-to-1 with `klygo/datasets/` s
 | I want to... | Recommended API | Key Parameters / Example |
 | :--- | :--- | :--- |
 | **Inspect classes, image/label counts, and splits** | [`info()`](api/info.md) | `stats = datasets.info("dataset.zip")` |
-| **Print dataset summary as a Rich table** | [`info()`](api/info.md) | `datasets.info("dataset.zip", verbose=True)` |
+| **Print dataset summary as a Rich table** | [`info()`](api/info.md) | `utils.tabulate(datasets.info("dataset.zip"))` |
 | **Flatten `train`/`val`/`test` splits into one folder** | [`unpartition()`](api/unpartition.md) | `flat = datasets.unpartition("dataset.zip", "flat_data")` |
 | **Load a flat dataset into `Detections` for viewing/cropping** | [`load()`](api/load.md) | `dets = datasets.load(flat, format="yolo")` |
 | **Normalize raw image and label trees into a flat dataset** | [`convert()`](api/convert.md) | `datasets.convert("raw", "flat", tree={"i": "*/images", "l": "*/labels"}, classes={0: "car"})` |
@@ -78,3 +78,8 @@ Local Tutorial Notebooks (`tutorials/datasets/`, 1-to-1 with `klygo/datasets/` s
 | [`merge(sources, output_path, ...)`](api/merge.md) | `merge.py` | `Path` | Combine two or more datasets into a single `.zip` with unified class IDs. | [`merge.py`](../../examples/datasets/merge.py) |
 | [`split(source, output_dir, ...)`](api/split.md) | `split.py` | `list[Path]` | Split a dataset into multiple `.zip` archives by class, group, or ratio. | [`split.py`](../../examples/datasets/split.py) |
 | [`remap_classes(source, target, class_map, ...)`](api/remap_classes.md) | `remap_classes.py` | `Path` | Rename classes or remap numeric class IDs across `data.yaml` and labels. | [`remap_classes.py`](../../examples/datasets/remap_classes.py) |
+
+Multiple label sets loaded by `datasets.load` use the same `DetectionGroup`
+returned by `outputs.group`. Two unnamed members use `pred` and `truth`;
+other counts use `set_1`, `set_2`, and so on, in input order. Pass a mapping
+for explicit names. The single-label-set load result remains `Detections`.

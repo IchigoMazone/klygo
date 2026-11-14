@@ -5,6 +5,7 @@ from . import config
 from . import datasets
 from . import files
 from . import media
+from . import metrics
 from . import outputs
 from . import postprocessing
 from . import preprocessing
@@ -38,6 +39,7 @@ __all__ = [
     "datasets",
     "files",
     "media",
+    "metrics",
     "mining",
     "models",
     "outputs",

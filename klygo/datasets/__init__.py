@@ -25,7 +25,7 @@ Uses klygo.files, klygo.config, klygo.archive, and klygo.media
 for filesystem, metadata, archive, and image operations.
 """
 
-from .info import get_dataset_info, info
+from .info import info
 from .convert import convert
 from .load import load
 from .merge import merge

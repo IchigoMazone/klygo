@@ -200,7 +200,7 @@ class LocalTorchvisionDetector(Detector):
         if prompt:
             requested = [prompt] if isinstance(prompt, str) else list(prompt)
             for detection in results:
-                detection.transform(postprocessing.select(labels=requested))
+                detection.keep(requested)
         return results
 
 
@@ -255,7 +255,7 @@ class LocalKerasDetector(Detector):
         if prompt:
             requested = [prompt] if isinstance(prompt, str) else list(prompt)
             for detection in results:
-                detection.transform(postprocessing.select(labels=requested))
+                detection.keep(requested)
         return results
 
 
@@ -400,7 +400,7 @@ def run_four_backend_evaluation(
     console.print(f"[green]Artifact Root:[/green]  {artifact_path}")
 
     # 1. Inspect dataset structure with datasets.info
-    info = datasets.info(dataset_path, format="yolo", verbose=False)
+    info = datasets.info(dataset_path, format="yolo")
     yaml_config = config.load(files.join(dataset_path, "data.yaml"), verbose=False)
     all_15_classes = list(yaml_config.names)
     console.print(f"[yellow]Loaded {len(all_15_classes)} classes from COCO15 dataset:[/yellow] {', '.join(all_15_classes)}")

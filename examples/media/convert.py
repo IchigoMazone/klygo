@@ -13,4 +13,4 @@ with tempfile.TemporaryDirectory() as temporary:
     image = Image.new("RGB", (32, 24), "red")
     source = media.save(root / "source.png", image)
     target = media.convert(source, root / "converted.jpg")
-    print(media.probe(target)["format"])
+    print(media.info(target)["format"])

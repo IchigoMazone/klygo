@@ -1,6 +1,7 @@
 import builtins
 import importlib
 import math
+from numbers import Integral
 import os
 import threading
 import uuid
@@ -18,7 +19,7 @@ from klygo import files
 
 __all__ = [
     "load", "save", "convert", "copy", "save_video", "save_images",
-    "iter_frames", "probe", "to_array", "to_tensor", "to_pil",
+    "iter_frames", "info", "to_array", "to_tensor", "to_pil",
     "MediaFrames", "LazyImage", "VideoReader",
     "compose",
 ]
@@ -1261,14 +1262,16 @@ class MediaFrames(list):
             cloned.total_frames = min(cloned.total_frames, max_frames)
         return cloned
 
-    def save_video(self, output_path: Union[str, Path], fps: Optional[float] = None, **kwargs: Any) -> Path:
-        """Encode and save all frames into an MP4/AVI video file."""
+    def save_video(self, output_path: Union[str, Path], fps: Optional[float] = None, *,
+                   size: Optional[Tuple[int, int]] = None, **kwargs: Any) -> None:
+        """Save frames as video, optionally letterboxing to size; return None."""
         target_fps = fps if fps is not None else getattr(self, "fps", 30.0)
-        return globals()["save_video"](output_path, self, fps=target_fps, **kwargs)
+        globals()["save_video"](output_path, self, fps=target_fps, size=size, **kwargs)
 
-    def save_images(self, output_dir: Union[str, Path], prefix: str = "frame", **kwargs: Any) -> Path:
-        """Save all frames into an image directory."""
-        return globals()["save_images"](output_dir, self, prefix=prefix, **kwargs)
+    def save_images(self, output_dir: Union[str, Path], prefix: str = "frame", *,
+                    size: Optional[Tuple[int, int]] = None, **kwargs: Any) -> None:
+        """Save numbered images, optionally letterboxing to size; return None."""
+        globals()["save_images"](output_dir, self, prefix=prefix, size=size, **kwargs)
 
     def copy(self) -> Any:
         """Copy collection without decoding pixels or losing metadata."""
@@ -1890,7 +1893,7 @@ ValueError
             cmd.append(str(tgt_p))
 
             try:
-                v_info = probe(src_p)
+                v_info = info(src_p)
                 total_frames = v_info.get("frame_count") or 1
                 with ProgressBar(total=total_frames, desc=f"Converting {files.name(src_p)} (FFmpeg)", unit="frame", verbose=verbose, colour="cyan") as pbar:
                     # Run FFmpeg with progress monitoring if verbose, or silent if not
@@ -1942,11 +1945,12 @@ ValueError
 
         # 2. Fallback to OpenCV (frame-by-frame)
         frames = load(src_p, stream=True, verbose=False)
-        v_info = probe(src_p)
+        v_info = info(src_p)
         target_fps = fps if fps is not None else v_info.get("fps", 30.0)
 
         try:
-            return save_video(tgt_p, frames, fps=target_fps, fourcc=fourcc, overwrite=overwrite, verbose=verbose)
+            save_video(tgt_p, frames, fps=target_fps, fourcc=fourcc, overwrite=overwrite, verbose=verbose)
+            return tgt_p
         except ValueError as e:
             if "iterable is empty" in str(e):
                 raise RuntimeError(
@@ -1995,6 +1999,22 @@ FileExistsError
     return files.copy(src_p, target, overwrite=overwrite)
 
 
+
+def _save_letterbox(size: Optional[Tuple[int, int]]) -> Any:
+    """Validate export size before touching files or consuming a stream."""
+    if size is None:
+        return None
+    validate_type(size, (tuple, list), "size")
+    if len(size) != 2:
+        raise ValueError("size must contain width and height")
+    for dimension in size:
+        validate_type(dimension, Integral, "size dimension")
+        if isinstance(dimension, bool) or dimension <= 0:
+            raise ValueError("size dimensions must be positive integers")
+    from klygo import preprocessing
+    return preprocessing.letterbox(tuple(int(dimension) for dimension in size))
+
+
 def save_video(
     output_path: Union[str, Path],
     frames: Iterable[Union[Image.Image, np.ndarray]],
@@ -2002,33 +2022,51 @@ def save_video(
     fourcc: str = "mp4v",
     overwrite: bool = False,
     verbose: bool = False,
-) -> Path:
-    """Encode an iterable of image frames as a video.
+    *,
+    size: Optional[Tuple[int, int]] = None,
+) -> None:
+    """Encode frames as video, optionally letterboxing to a common size.
 
     Parameters
     ----------
-    output_path : str or pathlib.Path
-        Output video path.
-frames : iterable
-        Frames with matching dimensions.
-fps : float
-        Playback frame rate.
-fourcc : str
+    output_path : str or os.PathLike[str]
+        Output video file.
+    frames : iterable
+        RGB PIL images, RGB NumPy arrays, or LazyImage frames. Without size,
+        every frame must match the first frame's dimensions.
+    fps : float, default=30.0
+        Positive playback frame rate.
+    fourcc : str, default='mp4v'
         Four-character OpenCV codec.
-overwrite, verbose : bool
+    overwrite, verbose : bool, default=False
         Replacement and progress options.
+    size : tuple of int, optional
+        Positive (width, height). Letterbox each frame with centered gray
+        padding (114, 114, 114), preserving aspect ratio. Use even dimensions
+        for common video codecs. None keeps the existing frame sizes.
 
     Returns
     -------
-    pathlib.Path
-        Encoded video path.
+    None
+        Writes the video file without returning a path.
 
     Raises
     ------
+    TypeError
+        Options, size dimensions, or frame pixels have unsupported types.
     ValueError
-        Frames iterable is empty.
-RuntimeError
-        Video writer cannot be opened."""
+        Size or fps is invalid, frames are empty, or unresized frames differ.
+    FileExistsError
+        Output exists without overwrite permission.
+    RuntimeError
+        The video writer cannot be opened.
+
+    Notes
+    -----
+    Frames are processed one at a time. Input pixels are not modified. A
+    temporary video is published only after all frames encode successfully.
+    """
+    letterbox = _save_letterbox(size)
     validate_type(output_path, (str, os.PathLike), "output_path")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
@@ -2065,6 +2103,8 @@ RuntimeError
             raise ValueError("video frames must have one, three, or four channels")
         if array.dtype != np.uint8:
             raise TypeError("video frames must use uint8 pixels")
+        if letterbox is not None:
+            array = np.asarray(letterbox(Image.fromarray(array)))
         current = int(array.shape[1]), int(array.shape[0])
         if expected is not None and current != expected:
             raise ValueError(f"all video frames must have size {expected}; received {current}")
@@ -2099,7 +2139,6 @@ RuntimeError
         writer.release()
 
     files.move(temporary, p, overwrite=overwrite)
-    return p
 
 
 def save_images(
@@ -2109,29 +2148,46 @@ def save_images(
     extension: str = ".jpg",
     overwrite: bool = False,
     verbose: bool = False,
-) -> List[Path]:
-    """Save an iterable of images to numbered files.
+    *,
+    size: Optional[Tuple[int, int]] = None,
+) -> None:
+    """Save numbered images, optionally letterboxing them to a common size.
 
     Parameters
     ----------
-    output_dir : str or pathlib.Path
-        Output directory.
-images : iterable
-        Images to write.
-prefix, extension : str
-        Generated filename components.
-overwrite, verbose : bool
+    output_dir : str or os.PathLike[str]
+        Destination directory.
+    images : iterable
+        PIL images, NumPy arrays, or LazyImage frames, consumed sequentially.
+    prefix, extension : str
+        Generated filename components, defaulting to frame and .jpg.
+    overwrite, verbose : bool, default=False
         Replacement and progress options.
+    size : tuple of int, optional
+        Positive (width, height). Normalize through media.to_pil to RGB and
+        letterbox with centered gray padding (114, 114, 114), preserving aspect
+        ratio. None preserves each image's size and existing save behavior.
 
     Returns
     -------
-    list of pathlib.Path
-        Paths written in input order.
+    None
+        Writes files without collecting or returning their paths.
 
     Raises
     ------
+    TypeError
+        Arguments, size dimensions, or images have unsupported types.
+    ValueError
+        Size is invalid or image encoding fails.
     FileExistsError
-        A generated file already exists without overwrite."""
+        A generated file already exists without overwrite permission.
+
+    Notes
+    -----
+    Empty iterables create an empty directory. Images are processed one at a
+    time without changing input pixels. A later failure keeps earlier files.
+    """
+    letterbox = _save_letterbox(size)
     validate_type(output_dir, (str, os.PathLike), "output_dir")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
@@ -2142,17 +2198,16 @@ overwrite, verbose : bool
     if not extension.startswith("."):
         extension = f".{extension}"
 
-    saved_paths: List[Path] = []
     is_sequential = bool(getattr(images, "is_stream", False))
     total = len(images) if isinstance(images, (builtins.list, tuple)) and not is_sequential else getattr(images, "total_frames", None)
     with ProgressBar(total=total, desc=f"Saving image batch to {files.name(out_p)}", unit="file", verbose=verbose, colour="cyan") as pbar:
         for idx, img in enumerate(images, start=1):
             file_path = files.join(out_p, f"{prefix}_{idx:06d}{extension}")
+            if letterbox is not None:
+                img = letterbox(to_pil(img).convert("RGB"))
             save(file_path, img, overwrite=overwrite, verbose=False)
-            saved_paths.append(file_path)
             pbar.update(1)
 
-    return saved_paths
 
 
 def iter_frames(
@@ -2227,15 +2282,13 @@ FileNotFoundError
                 yield img
 
 
-def probe(path: Union[str, Path], *, verbose: bool = False) -> Dict[str, Any]:
+def info(path: Union[str, Path]) -> Dict[str, Any]:
     """Read image or video metadata from a media file.
 
     Parameters
     ----------
     path : str or pathlib.Path
         Existing media file.
-    verbose : bool, default=False
-        Print the metadata as a Rich table while returning the dictionary.
 
     Returns
     -------
@@ -2315,18 +2368,6 @@ def probe(path: Union[str, Path], *, verbose: bool = False) -> Dict[str, Any]:
                 "height": height,
                 "size": (width, height),
             }
-
-    if verbose:
-        from rich.console import Console
-        from rich.table import Table
-
-        table = Table(title=f"Media Information: {files.name(p)}")
-        table.add_column("Property", style="cyan", no_wrap=True)
-        table.add_column("Value", style="green")
-        for key, val in result.items():
-            label = str(key).replace("_", " ").title()
-            table.add_row(label, str(val))
-        Console().print(table)
 
     return result
 

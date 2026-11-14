@@ -85,7 +85,7 @@ def notebook(class_id: int, class_name: str, source_id: int):
         validators.validate_type(TARGET_CLASS, str, "TARGET_CLASS")
         manifest = files.load(files.join(DATASET_ROOT, "manifest.json"), verbose=False)
         metadata = config.load(files.join(DATASET_ROOT, "data.yaml"), verbose=False)
-        dataset_info = datasets.get_dataset_info(DATASET_ROOT)
+        dataset_info = datasets.info(DATASET_ROOT)
         assert len(metadata.names) == 15 and metadata.names[TARGET_ID] == TARGET_CLASS
         assert dataset_info["total_images"] == 128
         print("Class:", TARGET_CLASS)
