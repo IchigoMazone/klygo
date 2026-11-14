@@ -302,9 +302,15 @@ def execute(detector,key,prompt,mode,images,args,video=None):
         # Native calls may override a frozen model group transiently. Frozen
         # options are not remembered by Detector's runtime configuration.
         kwargs = {"model_stream": mode=="native-stream"} if key in ("yolo","yolo11","yolo26","yolo-world") else {}
+        if mode != "native-stream" and getattr(args, "packed", False):
+            kwargs["packed"] = True
         return detector.predict(video or images,prompt=prompt,native=True,verbose=False,**kwargs)
-    return detector.predict(video or images,prompt=prompt,batch=args.batch,workers=1,prefetch=1,
-                            stream=mode=="managed-stream",verbose=False)
+    is_stream = mode=="managed-stream"
+    return detector.predict(video or images,prompt=prompt,batch=args.batch,
+                            workers=getattr(args, "workers", 1),
+                            prefetch=getattr(args, "prefetch", 1),
+                            packed=bool(getattr(args, "packed", False) and not is_stream),
+                            stream=is_stream,verbose=False)
 
 
 def measure(detector,key,prompt,mode,packs,args,video=None,ready_latency=False):
@@ -512,6 +518,9 @@ def main():
     parser.add_argument("--dtype",choices=("auto","float32","float16","bfloat16"),default="auto")
     parser.add_argument("--imgsz",type=int,default=640)
     parser.add_argument("--batch",type=int,default=1)
+    parser.add_argument("--workers",type=int,default=1)
+    parser.add_argument("--prefetch",type=int,default=1)
+    parser.add_argument("--packed",action="store_true")
     parser.add_argument("--iterations",type=int,default=8)
     parser.add_argument("--repeats",type=int,default=7)
     parser.add_argument("--profile",choices=("images","video"),default="images")

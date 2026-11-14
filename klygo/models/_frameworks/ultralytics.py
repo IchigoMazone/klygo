@@ -14,14 +14,23 @@ except ImportError as exc:
     ) from exc
 
 
+_EMPTY_BOXES = np.empty((0, 4), dtype=np.float64)
+_EMPTY_SCORES = np.empty((0,), dtype=np.float64)
+_EMPTY_CLASS_IDS = np.empty((0,), dtype=np.int32)
+
+
 def format_results(ultra_results: Any) -> List[Dict[str, Any]]:
     """Extract normalized ``boxes``, ``scores``, ``labels``, and ``class_ids`` from Ultralytics Results."""
     raw_list = []
     if ultra_results is not None:
         for res in ultra_results:
-            boxes_data, scores_data, labels_data, class_ids = [], [], [], []
+            boxes_data: Any = _EMPTY_BOXES
+            scores_data: Any = _EMPTY_SCORES
+            class_ids: Any = _EMPTY_CLASS_IDS
+            labels_data: List[str] = []
             boxes = getattr(res, "boxes", None)
             if boxes is not None and len(boxes):
+                res_names = res.names
                 if hasattr(boxes, "data") and boxes.data.shape[-1] >= 6:
                     # Copy the contiguous detection payload to the host once.
                     # Separate ``xyxy``, ``conf``, and ``cls`` transfers force
@@ -30,19 +39,21 @@ def format_results(ultra_results: Any) -> List[Dict[str, Any]]:
                     boxes_data = packed[:, :4]
                     scores_data = packed[:, 4]
                     class_ids = packed[:, 5].astype(np.int32, copy=False)
-                    labels_data = [res.names.get(int(class_id), str(int(class_id))) for class_id in class_ids]
+                    labels_data = [res_names.get(cid, str(cid)) for cid in class_ids.tolist()]
                 elif hasattr(boxes, "xyxy"):
                     boxes_data = boxes.xyxy.detach().cpu().numpy()
                     scores_data = boxes.conf.detach().cpu().numpy()
                     class_ids = boxes.cls.detach().to(dtype=torch_runtime.torch.int32).cpu().numpy()
-                    labels_data = [res.names.get(int(class_id), str(int(class_id))) for class_id in class_ids]
+                    labels_data = [res_names.get(cid, str(cid)) for cid in class_ids.tolist()]
                 else:
+                    boxes_list, scores_list, cids_list = [], [], []
                     for box in boxes:
-                        boxes_data.append(box.xyxy[0].tolist())
-                        scores_data.append(float(box.conf[0].item()))
+                        boxes_list.append(box.xyxy[0].tolist())
+                        scores_list.append(float(box.conf[0].item()))
                         class_id = int(box.cls[0].item())
-                        class_ids.append(class_id)
-                        labels_data.append(res.names.get(class_id, str(class_id)))
+                        cids_list.append(class_id)
+                        labels_data.append(res_names.get(class_id, str(class_id)))
+                    boxes_data, scores_data, class_ids = boxes_list, scores_list, cids_list
             raw_list.append(
                 {
                     "boxes": boxes_data,

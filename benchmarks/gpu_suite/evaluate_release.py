@@ -375,6 +375,8 @@ def main() -> None:
     parser.add_argument("--models", default="yolo,yolo-world,faster-rcnn,d-fine")
     parser.add_argument("--dtypes", default="float32,float16")
     parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("--include-scaling", action="store_true")
+    parser.add_argument("--scaling-models", default="yolo,yolo-world")
     args = parser.parse_args()
 
     out_dir = files.path(args.output)
@@ -427,12 +429,75 @@ def main() -> None:
         print("\n=== 6-Mode Model Inference Runs ===")
         utils.tabulate(model_runs, title="6-Mode Inference Summary")
 
+    scaling_rows: list[dict[str, Any]] = []
+    if args.include_scaling:
+        configs = [
+            (1, 1, 1, True),
+            (4, 2, 2, False),
+            (4, 2, 2, True),
+            (8, 4, 4, False),
+            (8, 4, 4, True),
+        ]
+        for model_id in [m.strip() for m in args.scaling_models.split(",") if m.strip()]:
+            for dtype_name in [d.strip() for d in args.dtypes.split(",") if d.strip()]:
+                for batch_sz, workers_n, prefetch_n, use_packed in configs:
+                    tag = f"{model_id}_{dtype_name}_b{batch_sz}_w{workers_n}_p{prefetch_n}_{'packed' if use_packed else 'unpacked'}"
+                    case_out = out_dir / "scaling" / tag
+                    cmd = [
+                        sys.executable,
+                        "benchmarks/gpu_suite/run.py",
+                        "--model", model_id,
+                        "--device", args.device,
+                        "--dtype", dtype_name,
+                        "--batch", str(batch_sz),
+                        "--workers", str(workers_n),
+                        "--prefetch", str(prefetch_n),
+                        "--repeats", str(args.repeats),
+                        "--output", str(case_out),
+                    ]
+                    if use_packed:
+                        cmd.append("--packed")
+                    proc = subprocess.run(cmd, capture_output=True, text=True)
+                    json_path = case_out / f"{model_id}.json"
+                    if proc.returncode == 0 and files.exists(json_path):
+                        data = files.load(json_path, verbose=False)
+                        for case in data.get("cases", []):
+                            scaling_rows.append({
+                                "model": model_id,
+                                "dtype": dtype_name,
+                                "batch": batch_sz,
+                                "workers": workers_n,
+                                "prefetch": prefetch_n,
+                                "packed": use_packed,
+                                "mode": case["mode"],
+                                "fps_median": round(case["fps_median"], 2),
+                                "p50_ms": round(case["ready_interval_p50_ms"], 2),
+                                "parity": case["all_parity_pass"],
+                            })
+                    else:
+                        scaling_rows.append({
+                            "model": model_id,
+                            "dtype": dtype_name,
+                            "batch": batch_sz,
+                            "workers": workers_n,
+                            "prefetch": prefetch_n,
+                            "packed": use_packed,
+                            "mode": "error",
+                            "fps_median": 0.0,
+                            "p50_ms": 0.0,
+                            "parity": False,
+                        })
+        files.save(out_dir / "scaling_runs.json", scaling_rows, overwrite=True, verbose=False)
+        print("\n=== Scaling (Packed / Batch / Workers / Prefetch) ===")
+        utils.tabulate(scaling_rows, title="Batch/Worker/Prefetch/Packed Scaling")
+
     summary = {
         "environment": env,
         "metrics": metrics_rows,
         "group_post": group_rows,
         "io_visual": dmv_rows,
         "models": model_runs,
+        "scaling": scaling_rows,
     }
     files.save(out_dir / "summary.json", summary, overwrite=True, verbose=False)
 
