@@ -868,8 +868,6 @@ class Detector(BaseModel):
         Subclasses may override this private hook and yield an inference callable.
         The default requires only ``forward`` and allocates no session state.
         """
-        with self._prediction_lock:
-            _compat._optimize_model(self.backend, self.model)
         yield self.forward
 
     def _infer_batch(self, images: List[Any], prompt: Any, metadata: Dict[str, Any],

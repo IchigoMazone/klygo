@@ -46,33 +46,27 @@ class TestBackendRuntimeDispatch(unittest.TestCase):
                 model = SimpleNamespace(predict=original, predictor=SimpleNamespace())
                 ultralytics.optimize_model(model)
                 self.assertEqual(model.predict(source), ["native"])
-                original.assert_called_once_with(source=source, stream=False)
+                original.assert_called_once_with(source)
 
     def test_ultralytics_optimizer_preserves_public_model_calls(self):
-        original_predict = Mock(return_value=["fallback"])
+        original_predict = Mock(return_value=["upstream"])
         model = SimpleNamespace(predict=original_predict)
         images = [np.zeros((8, 12, 3), dtype=np.uint8)]
 
-        with patch.object(ultralytics, "predict_prepared", return_value=["fast"]) as prepared:
-            optimized = ultralytics.optimize_model(model)
-            actual = optimized.predict(images, conf=0.25, verbose=False)
-
-        self.assertEqual(actual, ["fast"])
-        prepared.assert_called_once_with(
-            model,
-            images,
-            options={"conf": 0.25, "verbose": False},
-        )
-        original_predict.assert_not_called()
-        self.assertIs(ultralytics.optimize_model(model), model)
+        optimized = ultralytics.optimize_model(model)
+        self.assertIs(optimized, model)
+        self.assertIs(model.predict, original_predict)
+        self.assertFalse(getattr(model, "_klygo_predict_optimized", False))
+        actual = model.predict(images, conf=0.25, verbose=False)
+        self.assertEqual(actual, ["upstream"])
+        original_predict.assert_called_once_with(images, conf=0.25, verbose=False)
 
     def test_ultralytics_optimizer_falls_back_for_native_sources(self):
         original_predict = Mock(return_value=["native"])
         model = SimpleNamespace(predict=original_predict)
 
-        with patch.object(ultralytics, "predict_prepared", return_value=None):
-            ultralytics.optimize_model(model)
-            actual = model.predict("video.mp4", stream=True, device="cuda:0")
+        ultralytics.optimize_model(model)
+        actual = model.predict(source="video.mp4", stream=True, device="cuda:0")
 
         self.assertEqual(actual, ["native"])
         original_predict.assert_called_once_with(
@@ -122,7 +116,26 @@ class TestBackendRuntimeDispatch(unittest.TestCase):
         self.assertIsNone(
             ultralytics.predict_prepared(model, [image], options={"conf": 0.25})
         )
+        self.assertIsNone(
+            ultralytics.predict_prepared(model, [image], options={"conf": 0.5, "unknown_option": True})
+        )
         predictor.preprocess.assert_not_called()
+
+    def test_keras_run_inference_propagates_preprocessor_errors(self):
+        from klygo.models._frameworks import keras as keras_adapter
+
+        def failing_preprocessor(_inputs):
+            raise RuntimeError("bad input shape")
+
+        model = SimpleNamespace(
+            preprocessor=failing_preprocessor,
+            decode_predictions=Mock(),
+            predict=Mock(),
+        )
+        with patch.object(keras_adapter, "_require_keras", return_value=SimpleNamespace(ops=SimpleNamespace())):
+            with self.assertRaisesRegex(RuntimeError, "bad input shape"):
+                keras_adapter.run_inference(model, np.zeros((1, 8, 8, 3), dtype=np.float32))
+        model.predict.assert_not_called()
 
     def test_common_dispatch_reuses_ultralytics_predictor(self):
         model = Mock()

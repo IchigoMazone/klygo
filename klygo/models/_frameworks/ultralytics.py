@@ -96,7 +96,7 @@ def predict_prepared(
     ):
         return None
     if options and any(
-        hasattr(args, name) and not _option_matches(getattr(args, name), value)
+        (not hasattr(args, name)) or not _option_matches(getattr(args, name), value)
         for name, value in options.items()
         if name != "verbose"
     ):
@@ -139,31 +139,12 @@ def predict_prepared(
 
 
 def optimize_model(model: Any) -> Any:
-    """Reuse an initialized predictor for decoded image batches transparently.
+    """Return ``model`` untouched without monkey-patching ``model.predict``.
 
-    The concrete detector continues to call the public Ultralytics model API.
-    Unsupported sources, streaming calls, changed options, and custom predictors
-    fall back to the original ``predict`` implementation.
+    Upstream Ultralytics ``model.predict`` / ``model(...)`` already reuses its
+    initialized predictor across compatible calls while preserving argument
+    validation, ``setup_source``, callbacks, and caller-owned method identity.
     """
-    if model is None or getattr(model, "_klygo_predict_optimized", False):
-        return model
-
-    original_predict = getattr(model, "predict", None)
-    if not callable(original_predict):
-        return model
-
-    def optimized_predict(source=None, stream=False, predictor=None, **kwargs):
-        if predictor is None and not stream:
-            prepared = predict_prepared(model, source, options=kwargs)
-            if prepared is not None:
-                return prepared
-        call_options = dict(kwargs)
-        if predictor is not None:
-            call_options["predictor"] = predictor
-        return original_predict(source=source, stream=stream, **call_options)
-
-    model.predict = optimized_predict
-    model._klygo_predict_optimized = True
     return model
 
 # Historical adapter exports share the same runtime implementations.
