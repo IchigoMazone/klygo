@@ -16,6 +16,7 @@ def compare_images(
     mode: str = "show",
     output_path: Optional[Union[str, PathLike[str]]] = None,
     titles: Union[tuple[str, str], list[str]] = ("A", "B"),
+    show_labels: bool = True,
     show_scores: bool = True,
     backend: str = "auto",
     overwrite: bool = False,
@@ -34,6 +35,8 @@ def compare_images(
         Required destination for mode='save'; invalid for other modes.
     titles : tuple or list of two str, optional
         Captions above the left and right panels. Defaults to A and B.
+    show_labels : bool, default=True
+        Include text labels above boxes.
     show_scores : bool, default=True
         Include confidence scores next to labels.
     backend : str, default='auto'
@@ -83,6 +86,7 @@ def compare_images(
         raise ValueError("titles must contain exactly two strings")
     for title in titles:
         validators.validate_type(title, str, "title")
+    validators.validate_type(show_labels, bool, "show_labels")
     validators.validate_type(show_scores, bool, "show_scores")
     validators.validate_type(backend, str, "backend")
     validators.validate_type(overwrite, bool, "overwrite")
@@ -91,7 +95,7 @@ def compare_images(
         panel = detection.image.convert("RGB")
         if panel.size != detection.image_size:
             raise ValueError("each detection image_size must match its source image")
-        panels.append(draw_bboxes(panel, detection, show_scores=show_scores))
+        panels.append(draw_bboxes(panel, detection, show_labels=show_labels, show_scores=show_scores))
     header, gap = 28, 12
     preview = Image.new("RGB", (panels[0].width + gap + panels[1].width,
                                 max(panel.height for panel in panels) + header), "white")

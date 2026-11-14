@@ -2544,8 +2544,25 @@ for attr in dir(Image.Image):
     setattr(LazyImage, attr, _make_forwarder(attr))
 
 # Override specific terminal methods for consistency
-def _lazy_show(self, *args, **kwargs):
-    return self.to_pil(cache=False).show(*args, **kwargs)
+def _lazy_show(
+    self,
+    title: Optional[str] = "Image",
+    *,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
+    backend: str = "auto",
+    figsize: Tuple[int, int] = (10, 10),
+) -> None:
+    """Display the lazy image using Klygo's visual viewer without caching pixels."""
+    from klygo import visual
+    return visual.show_image(
+        self.to_pil(cache=False),
+        title="Image" if title is None else title,
+        width=width,
+        height=height,
+        backend=backend,
+        figsize=figsize,
+    )
 
 def _lazy_save(self, *args, **kwargs):
     return self.to_pil(cache=False).save(*args, **kwargs)

@@ -270,6 +270,17 @@ class TestOutputs(unittest.TestCase):
         self.assertEqual(item.to_dict(), before)
         display.assert_not_called()
 
+    def test_save_and_preview_toggle_show_labels(self):
+        item = frame()
+        with tempfile.TemporaryDirectory() as root:
+            with_labels = files.path(root) / "with_labels.png"
+            without_labels = files.path(root) / "without_labels.png"
+            item.save(with_labels, show_labels=True)
+            item.save(without_labels, show_labels=False)
+            self.assertNotEqual(with_labels.read_bytes(), without_labels.read_bytes())
+        with self.assertRaises(TypeError):
+            item._render(show_labels="no")
+
     def test_collection_crud_identity_and_net_state(self):
         first, second = frame(index=0), frame(index=1)
         results = outputs.Detections([first, second]); replacement = frame("other", 9, ("dog",))

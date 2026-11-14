@@ -95,6 +95,7 @@ class TestCompareImages(unittest.TestCase):
                                ({"titles": ["A"]}, ValueError),
                                ({"titles": "AB"}, TypeError),
                                ({"titles": ["A", 1]}, TypeError),
+                               ({"show_labels": 1}, TypeError),
                                ({"show_scores": 1}, TypeError),
                                ({"overwrite": 1}, TypeError),
                                ({"backend": None}, TypeError)):

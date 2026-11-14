@@ -1646,10 +1646,12 @@ class Detection:
                 raise RuntimeError("Cannot access frame pixels: source frame is unavailable")
             return media.to_pil(frames[position]).copy()
 
-    def _render(self, mode: str = "default", *, show_scores: bool = True,
-                line_width: Optional[int] = None, font_size: Optional[int] = None) -> Any:
+    def _render(self, mode: str = "default", *, show_labels: bool = True,
+                show_scores: bool = True, line_width: Optional[int] = None,
+                font_size: Optional[int] = None) -> Any:
         if mode not in {"default", "index", "uid"}:
             raise ValueError("mode must be 'default', 'index', or 'uid'")
+        validators.validate_type(show_labels, bool, "show_labels")
         from klygo import visual
         labels = (
             self.labels
@@ -1661,28 +1663,31 @@ class Detection:
         return visual.draw_bboxes(
             self._resolve_source(), self.boxes, labels=labels, scores=self.scores,
             line_width=line_width, font_size=font_size,
-            show_labels=True, show_scores=show_scores,
+            show_labels=show_labels, show_scores=show_scores,
         )
 
-    def save(self, output_path: Any, mode: str = "default", *, show_scores: bool = True,
-             line_width: Optional[int] = None, font_size: Optional[int] = None,
-             overwrite: bool = False, verbose: bool = False) -> Any:
+    def save(self, output_path: Any, mode: str = "default", *, show_labels: bool = True,
+             show_scores: bool = True, line_width: Optional[int] = None,
+             font_size: Optional[int] = None, overwrite: bool = False,
+             verbose: bool = False) -> Any:
         """Draw this frame's boxes and save the annotated image."""
         from klygo import media
         annotated = self._render(
-            mode, show_scores=show_scores, line_width=line_width, font_size=font_size,
+            mode, show_labels=show_labels, show_scores=show_scores,
+            line_width=line_width, font_size=font_size,
         )
         return media.save(output_path, annotated, overwrite=overwrite, verbose=verbose)
 
     def preview_box(self, box: Box | Iterable[Any], *, label: Optional[str] = None,
                     score: float = 1.0, show_existing: bool = True,
-                    show_scores: bool = True,
+                    show_labels: bool = True, show_scores: bool = True,
                     preview_color: tuple[int, int, int] = (255, 0, 0),
                     line_width: Optional[int] = None,
                     font_size: Optional[int] = None,
-                    width: Optional[int] = None, title: str = "Box preview",
-                    backend: str = "auto") -> Any:
+                    width: Optional[int] = None, height: Optional[int] = None,
+                    title: str = "Box preview", backend: str = "auto") -> Any:
         """Display and return a non-mutating preview of a proposed box."""
+        validators.validate_type(show_labels, bool, "show_labels")
         if isinstance(box, Box):
             candidate = box
         else:
@@ -1701,14 +1706,14 @@ class Detection:
             annotated = visual.draw_bboxes(
                 source, self.boxes, labels=self.labels, scores=self.scores,
                 line_width=line_width, font_size=font_size,
-                show_labels=True, show_scores=show_scores,
+                show_labels=show_labels, show_scores=show_scores,
             )
         annotated = visual.draw_bboxes(
             annotated, [candidate.box], labels=[f"[preview] {candidate.label}"],
             scores=[candidate.score], line_width=line_width, font_size=font_size,
-            box_color=preview_color, show_labels=True, show_scores=show_scores,
+            box_color=preview_color, show_labels=show_labels, show_scores=show_scores,
         )
-        visual.show_image(annotated, title=title, width=width, backend=backend)
+        visual.show_image(annotated, title=title, width=width, height=height, backend=backend)
         return annotated
 
     def to_dict(self) -> dict[str, Any]:
@@ -3128,10 +3133,10 @@ class Detections:
                 "metadata": deepcopy(self.metadata), "frames": [f.to_dict() for f in self]}
 
     def save_images(self, output_dir: Any, prefix: str = "frame", mode: str = "default", *,
-                    extension: str = ".jpg", show_scores: bool = True,
-                    line_width: Optional[int] = None, font_size: Optional[int] = None,
-                    overwrite: bool = False, verbose: bool = False,
-                    size: Optional[tuple[int, int]] = None) -> None:
+                    extension: str = ".jpg", show_labels: bool = True,
+                    show_scores: bool = True, line_width: Optional[int] = None,
+                    font_size: Optional[int] = None, overwrite: bool = False,
+                    verbose: bool = False, size: Optional[tuple[int, int]] = None) -> None:
         """Save annotated images, optionally letterboxed to size; return None.
 
         Size is (width, height). Render before letterboxing so boxes and labels
@@ -3142,7 +3147,7 @@ class Detections:
         from klygo import media
 
         rendered = (
-            frame._render(mode, show_scores=show_scores, line_width=line_width, font_size=font_size)
+            frame._render(mode, show_labels=show_labels, show_scores=show_scores, line_width=line_width, font_size=font_size)
             for frame in self
         )
         media.save_images(
@@ -3151,10 +3156,10 @@ class Detections:
         )
 
     def save_video(self, output_path: Any, fps: float = 30.0, mode: str = "default", *,
-                   fourcc: str = "mp4v", show_scores: bool = True,
-                   line_width: Optional[int] = None, font_size: Optional[int] = None,
-                   overwrite: bool = False, verbose: bool = False,
-                   size: Optional[tuple[int, int]] = None) -> None:
+                   fourcc: str = "mp4v", show_labels: bool = True,
+                   show_scores: bool = True, line_width: Optional[int] = None,
+                   font_size: Optional[int] = None, overwrite: bool = False,
+                   verbose: bool = False, size: Optional[tuple[int, int]] = None) -> None:
         """Save annotated video, optionally letterboxed to size; return None.
 
         Size is (width, height). Render before letterboxing so boxes and labels
@@ -3165,7 +3170,7 @@ class Detections:
         from klygo import media
 
         rendered = (
-            frame._render(mode, show_scores=show_scores, line_width=line_width, font_size=font_size)
+            frame._render(mode, show_labels=show_labels, show_scores=show_scores, line_width=line_width, font_size=font_size)
             for frame in self
         )
         media.save_video(
