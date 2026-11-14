@@ -38,25 +38,6 @@ MODEL_IDS = ("yolo", "yolo11", "yolo26", "yolo-world", "grounding-dino",
              "grounding-dino-base", "faster-rcnn", "d-fine", "locate-anything")
 
 
-class KerasDFine(models.Detector):
-    def __init__(self, device):
-        import keras_hub
-
-        super().__init__(backend="Keras", model_id="dfine_nano_coco")
-        self.model = keras_hub.models.ObjectDetector.from_preset(self.model_id)
-        self.model.to(device)
-        self.names = {index: str(index) for index in range(80)}
-
-    def forward(self, images, prompt=None):
-        raw = self.run_inference(self.cast_inputs(images))
-        formatted = self.format_results(raw)
-        for item in formatted:
-            keep = [i for i, score in enumerate(item["scores"]) if score >= 0.25]
-            for key in ("boxes", "scores", "class_ids", "labels"):
-                item[key] = [item[key][i] for i in keep]
-        return outputs.build_detections(images, formatted, names=self.names)
-
-
 def build(key, args):
     if key in ("yolo", "yolo11", "yolo26", "yolo-world"):
         name = {"yolo": "yolov8n.pt", "yolo11": "yolo11n.pt", "yolo26": "yolo26n.pt",
@@ -80,7 +61,7 @@ def build(key, args):
         detector.model.transform.max_size = args.imgsz*2
         return detector, None
     if key == "d-fine":
-        return KerasDFine(args.device), None
+        return models.load("dfine_nano_coco", device=args.device, threshold=0.25, iou=0.5), None
     if not args.allow_remote_code:
         raise PermissionError("LocateAnything requires --allow-remote-code for its pinned NVIDIA checkpoint")
     detector = models.load("locate-anything", model_trust_remote_code=True,
@@ -147,11 +128,18 @@ def raw(detector, key, images, prompt):
 
         inputs = keras.ops.convert_to_tensor(np.stack([np.asarray(image) for image in images]), dtype="float32")
         converter = detector.model.preprocessor.image_converter
-        prepared = detector.model.preprocessor(keras.ops.image.resize(inputs, converter.image_size))
-        prediction = detector.model(prepared, training=False)
-        decoded = detector.model.decode_predictions(prediction, inputs)
+        prepared = detector.model.preprocess_samples(inputs)
+        prepared, _, _ = keras.utils.unpack_x_y_sample_weight(prepared)
+        decoder = detector.model.prediction_decoder
+        previous = decoder.confidence_threshold, decoder.iou_threshold
+        try:
+            decoder.confidence_threshold, decoder.iou_threshold = 0.25, 0.5
+            prediction = detector.model(prepared, training=False)
+            decoded = detector.model.decode_predictions(prediction, prepared)
+        finally:
+            decoder.confidence_threshold, decoder.iou_threshold = previous
         # Retain raw tensors until timing has ended. Output conversion is untimed.
-        return [(decoded, index) for index in range(len(images))]
+        return [(decoded, index, image.size, converter.get_config(), detector.names) for index, image in enumerate(images)]
     result = []
     for image in images:
         question = f"Locate all the instances that matches the following description: {prompt[0]}."
@@ -183,14 +171,20 @@ def canonical(item, key, is_raw):
     if key == "d-fine":
         import keras
 
-        decoded, index = item
+        decoded, index, (width, height), converter, names = item
         boxes = keras.ops.convert_to_numpy(decoded["boxes"])[index]
         scores = keras.ops.convert_to_numpy(decoded.get("confidence", decoded.get("scores")))[index]
         ids = keras.ops.convert_to_numpy(decoded.get("classes", decoded.get("labels")))[index]
         keep = (scores >= 0.25) & (ids >= 0)
-        boxes = boxes[keep]
-        return {"boxes": boxes[:,[1,0,3,2]].tolist(), "scores": scores[keep].tolist(),
-                "labels": [str(int(x)) for x in ids[keep]]}
+        boxes = boxes[keep][:, [1, 0, 3, 2]].astype(float)
+        # Independent inverse of the preset's integer center crop in original pixels.
+        target_height, target_width = converter["image_size"]
+        crop_height = max(min(height, int(width * target_height / target_width)), 1)
+        crop_width = max(min(width, int(height * target_width / target_height)), 1)
+        boxes[:, [0, 2]] = boxes[:, [0, 2]] * crop_width / target_width + (width - crop_width) // 2
+        boxes[:, [1, 3]] = boxes[:, [1, 3]] * crop_height / target_height + (height - crop_height) // 2
+        return {"boxes": boxes.tolist(), "scores": scores[keep].tolist(),
+                "labels": [names[int(x)] for x in ids[keep]]}
     if key == "locate-anything":
         answer, (width,height) = item
         found = re.findall(r"<box>\s*<(\d+)>\s*<(\d+)>\s*<(\d+)>\s*<(\d+)>\s*</box>",answer)

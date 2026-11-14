@@ -140,3 +140,14 @@ truncated output or OOM is recorded as an error rather than fabricated FPS.
 Runtime outputs belong under `artifacts/benchmarks/`. Published measured reports
 are deliberately versioned only when requested; weights and generated inputs
 are never committed. See [the benchmark criteria](../../docs/models/BENCHMARK_CRITERIA.md).
+
+## D-FINE registry integration and corrected reference
+
+The current D-FINE case uses `models.load("dfine_nano_coco")` and COCO class
+names. Both paths execute native preprocessing, forward, and decoding once;
+boxes are restored from the preset's center crop to original-image pixels.
+The former harness resized before preprocessing and decoded against original
+input dimensions, bypassing the native crop geometry. Historical D-FINE timings
+and parity therefore use a different protocol: rerun compared revisions with
+this corrected reference rather than directly claiming a speedup over them.
+The raw reference calls the native stages independently of the Klygo wrapper.

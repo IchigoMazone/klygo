@@ -74,6 +74,10 @@ def current_device(model: Any) -> Any:
                     return next(model.parameters()).device
                 except Exception:
                     pass
+            for variable in getattr(model, "weights", ()):
+                value = getattr(variable, "value", None)
+                if isinstance(value, torch.Tensor):
+                    return value.device
             return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         except Exception:
             return "cpu"

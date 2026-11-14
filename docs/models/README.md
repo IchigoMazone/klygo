@@ -386,3 +386,7 @@ detector = models.load(configured)
 </details>
 
 For a complete, real-image benchmark running **Ultralytics YOLOv8**, **Ultralytics YOLO-World**, **Torchvision Faster R-CNN**, and **KerasHub RT-DETR (D-FINE)** side by side on COCO15, see [`examples/integration/multi_backend_workflow.py`](../../examples/integration/multi_backend_workflow.py) and the [integration workflows guide](../integration/README.md).
+
+Built-in KerasHub detection is available as `models.load("dfine_nano_coco")`.
+See the [Keras execution guide](execution/api/keras.md) for engine selection, native crop
+geometry, thresholds, and the runnable D-FINE example.

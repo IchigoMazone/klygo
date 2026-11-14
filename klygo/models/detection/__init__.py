@@ -10,6 +10,7 @@ _CLASS_MODULES = {
     "YOLOWorldDetect": "yolo_world",
     "LocateAnythingDetect": "locate_anything",
     "FasterRCNNDetect": "faster_rcnn",
+    "DFineDetect": "dfine",
 }
 
 

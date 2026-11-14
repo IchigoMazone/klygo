@@ -16,6 +16,9 @@ from .detection.base import Detector
 __all__ = ["load", "export", "configure", "set_backend", "get_backend"]
 
 CLASS_MAPPING = {
+    "DFineDetect": "klygo.models.detection.dfine.DFineDetect",
+    "klygo.models.detection.DFineDetect": "klygo.models.detection.dfine.DFineDetect",
+    "klygo.models.detection.dfine.DFineDetect": "klygo.models.detection.dfine.DFineDetect",
     "Detector": Detector,
     "GroundingDinoDetect": "klygo.models.detection.grounding_dino.GroundingDinoDetect",
     "YOLODetect": "klygo.models.detection.yolo.YOLODetect",

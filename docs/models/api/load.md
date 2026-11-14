@@ -91,3 +91,7 @@ configured = models.configure(
 loaded = models.load(configured, threshold=0.6)
 print(loaded.model_id, loaded.metadata.post.threshold)
 ```
+
+Built-in KerasHub detection is available as `models.load("dfine_nano_coco")`.
+See the [Keras execution guide](../execution/api/keras.md) for engine selection, native crop
+geometry, thresholds, and the runnable D-FINE example.

@@ -289,33 +289,8 @@ def build_torchvision_detector(device_str: str, imgsz: int = 320) -> Tuple[model
 
 def build_kerashub_detector(device_str: str, imgsz: int = 320) -> Tuple[models.Detector, None]:
     """Instantiate KerasHub RT-DETR / D-FINE Nano detector."""
-    import keras_hub
-
-    class KerasDFine(models.Detector):
-        def __init__(self):
-            metadata = {
-                "model_id": "kerashub-dfine-nano",
-                "details": models.details(
-                    name="D-FINE",
-                    task="Object-Detection",
-                    backend="Keras",
-                    library="keras_hub",
-                ),
-                "flags": models.flags(model=False, post=True),
-                "priority": models.priority(models.flags(model=False, post=True), post=["threshold"]),
-                "post": {"threshold": 0.25},
-            }
-            super().__init__(metadata=metadata, backend="Keras")
-            self.model = keras_hub.models.ObjectDetector.from_preset("dfine_nano_coco")
-            self.names = {i: str(i) for i in range(80)}
-
-        def forward(self, images, prompt=None):
-            inputs = self.cast_inputs(images)
-            raw = self.run_inference(inputs)
-            formatted = self.format_results(raw)
-            return outputs.build_detections(images, formatted, names=self.names)
-
-    return KerasDFine(), None
+    # The preset owns its 640px crop policy; imgsz does not override it.
+    return models.load("dfine_nano_coco", device=device_str, threshold=0.25), None
 
 
 MODEL_REGISTRY = {
@@ -560,74 +535,43 @@ def make_raw_keras_runner(
     device_str: str,
     stream: bool = False,
 ):
-    """Run the KerasHub preprocessing and decode pipeline without Klygo outputs."""
+    """Run native KerasHub stages once, independently of the Klygo wrapper."""
     import keras
-
     model = detector.model
-    preprocessor = model.preprocessor
-    image_converter = getattr(preprocessor, "image_converter", None)
-    target_size = getattr(image_converter, "image_size", None)
 
-    if stream:
-        def runner():
-            first_ms = 0.0
-            total_boxes = 0
-            started = time.perf_counter()
-            for index, path in enumerate(paths):
-                image = media.to_array(_load_pil(path))
-                inputs = keras.ops.convert_to_tensor(np.expand_dims(image, axis=0), dtype="float32")
-                prepared_input = (
-                    keras.ops.image.resize(inputs, target_size)
-                    if target_size is not None
-                    else inputs
-                )
-                prepared = preprocessor(prepared_input)
-                predictions = model(prepared, training=False)
-                decoded = model.decode_predictions(predictions, inputs)
-                score_values = decoded.get(
-                    "confidence", decoded.get("scores", decoded.get("detection_scores"))
-                )
-                class_values = decoded.get(
-                    "classes", decoded.get("labels", decoded.get("detection_classes"))
-                )
-                scores = keras.ops.convert_to_numpy(score_values)[0]
-                classes = keras.ops.convert_to_numpy(class_values)[0]
-                total_boxes += int(np.count_nonzero((scores >= 0.0) & (classes >= 0)))
-                if index == 0:
-                    synchronize_device(device_str)
-                    first_ms = (time.perf_counter() - started) * 1000.0
-            return first_ms, total_boxes, len(paths)
-        return runner
-    else:
-        def runner():
-            synchronize_device(device_str)
-            started = time.perf_counter()
-            images = [media.to_array(_load_pil(path)) for path in paths]
-            total_boxes = 0
-            for index, img_arr in enumerate(images):
-                inputs = keras.ops.convert_to_tensor(np.expand_dims(img_arr, axis=0), dtype="float32")
-                prepared_input = (
-                    keras.ops.image.resize(inputs, target_size)
-                    if target_size is not None
-                    else inputs
-                )
-                prepared = preprocessor(prepared_input)
-                predictions = model(prepared, training=False)
-                decoded = model.decode_predictions(predictions, inputs)
-                score_values = decoded.get(
-                    "confidence", decoded.get("scores", decoded.get("detection_scores"))
-                )
-                class_values = decoded.get(
-                    "classes", decoded.get("labels", decoded.get("detection_classes"))
-                )
-                scores = keras.ops.convert_to_numpy(score_values)[0]
-                classes = keras.ops.convert_to_numpy(class_values)[0]
-                total_boxes += int(np.count_nonzero((scores >= 0.0) & (classes >= 0)))
-            synchronize_device(device_str)
-            total_ms = (time.perf_counter() - started) * 1000.0
-            first_ms = total_ms / max(len(paths), 1)
-            return first_ms, total_boxes, len(paths)
-        return runner
+    def infer(image):
+        inputs = keras.ops.convert_to_tensor(np.expand_dims(image, axis=0), dtype="float32")
+        decoder = model.prediction_decoder
+        previous = decoder.confidence_threshold, decoder.iou_threshold
+        try:
+            decoder.confidence_threshold, decoder.iou_threshold = 0.25, 0.5
+            with torch.inference_mode():
+                prepared = model.preprocess_samples(inputs)
+                prepared, _, _ = keras.utils.unpack_x_y_sample_weight(prepared)
+                decoded = model.decode_predictions(model(prepared, training=False), prepared)
+            scores = keras.ops.convert_to_numpy(decoded["confidence"])[0]
+            classes = keras.ops.convert_to_numpy(decoded["labels"])[0]
+            return int(np.count_nonzero((scores >= 0.25) & (classes >= 0)))
+        finally:
+            decoder.confidence_threshold, decoder.iou_threshold = previous
+
+    def runner():
+        synchronize_device(device_str)
+        started = time.perf_counter()
+        images = (media.to_array(_load_pil(path)) for path in paths)
+        if not stream:
+            images = list(images)
+        first_ms = 0.0
+        total_boxes = 0
+        for index, image in enumerate(images):
+            total_boxes += infer(image)
+            if index == 0 and stream:
+                synchronize_device(device_str)
+                first_ms = (time.perf_counter() - started) * 1000.0
+        synchronize_device(device_str)
+        total_ms = (time.perf_counter() - started) * 1000.0
+        return (first_ms if stream else total_ms / max(len(paths), 1)), total_boxes, len(paths)
+    return runner
 
 
 def make_raw_runner(
