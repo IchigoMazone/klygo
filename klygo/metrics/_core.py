@@ -36,16 +36,15 @@ class _Composition:
     metrics: tuple
 
 
-def _dispatch(name, pred, target, **options):
+def _dispatch(name, pred, target, *, verbose=False, **options):
+    validators.validate_type(verbose, bool, "verbose")
     metric = _Metric(name, tuple(options.items()))
     if pred is _MISSING and target is _MISSING:
         return metric
     if pred is _MISSING or target is _MISSING:
         raise TypeError("pred and target must be supplied together")
-    from .evaluation import _run
-    context = _Context(pred, target)
-    with context.scope():
-        return _host(_run(context, metric), context.xp)
+    from .evaluation import _execute
+    return _execute(pred, target, (metric,), verbose)[name]
 
 
 
@@ -155,7 +154,8 @@ class _MatchReport:
 
 
 class _Context:
-    def __init__(self, pred, target):
+    def __init__(self, pred, target, progress=None):
+        self.progress = progress
         validators.validate_type(pred, (outputs.Detection, outputs.Detections), "pred")
         validators.validate_type(target, (outputs.Detection, outputs.Detections), "target")
         if isinstance(pred, outputs.Detection) != isinstance(target, outputs.Detection):
@@ -183,7 +183,7 @@ class _Context:
         self.frames = []
         with self.scope():
             xp = self.xp
-            for identity, p in pmap.items():
+            for identity, p in self._progress(pmap.items(), "Preparing metric frames"):
                 a, b = p.to_arrays(), tmap[identity].to_arrays()
                 a['scores'] = a['scores'].astype(xp.float64)
                 b['scores'] = b['scores'].astype(xp.float64)
@@ -195,6 +195,17 @@ class _Context:
         self.cache = {}
         self.class_cache = {}
 
+    def _progress(self, items, desc):
+        if self.progress is None:
+            return iter(items)
+        self.progress.bar.set_description(desc, refresh=False)
+
+        def iterate():
+            for item in items:
+                yield item
+                self.progress.update()
+        return iterate()
+
     def scope(self):
         return nullcontext() if self.device == 'cpu' else self.xp.cuda.Device(int(self.device.split(':')[1]))
 
@@ -203,7 +214,7 @@ class _Context:
         if key not in self.cache:
             xp = self.xp
             rows = []
-            for frame in self.frames:
+            for frame in self._progress(self.frames, f"Matching IoU={iou:g}"):
                 n, m = len(frame.pred_labels), len(frame.target_labels)
                 matched = xp.full(n, -1, dtype=xp.int32)
                 values = xp.zeros(n, dtype=xp.float64)

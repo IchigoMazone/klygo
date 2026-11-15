@@ -4,5 +4,5 @@ from examples.mining._sample import sample_data
 from klygo import mining
 
 data = sample_data()
-unique = mining.deduplicate(data, keep="best")
+unique = mining.deduplicate(data, keep="best", verbose=True)
 print(len(data), len(unique))

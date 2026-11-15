@@ -14,6 +14,8 @@ import numpy as np
 
 from klygo import files
 from klygo.outputs import Detections
+from klygo import validators
+from klygo.utils.progress import _iter_progress
 
 from ._common import _Report, _UnionFind, _phash, _require, _subset
 from .analysis import score
@@ -77,6 +79,7 @@ def find_duplicates(
     exact: bool = True,
     method: str = "phash",
     threshold: float = 0.95,
+    verbose: bool = False,
 ) -> DuplicateReport:
     """Detect exact and near-duplicate images across a detection dataset.
 
@@ -96,6 +99,9 @@ def find_duplicates(
     threshold : float, default=0.95
         Minimum normalized perceptual similarity in [0.0, 1.0] required to group
         two images as near-duplicates. Default 0.95 corresponds to <= 3 bit differences.
+
+    verbose : bool, default=False
+        Display throttled progress for processing stages; disabled by default.
 
     Returns
     -------
@@ -123,6 +129,7 @@ def find_duplicates(
     >>> utils.tabulate(report.to_dict())
     >>> print(f"Removable duplicates: {report.duplicate_images}")
     """
+    validators.validate_type(verbose, bool, "verbose")
     _require(data)
 
     if method != "phash":
@@ -135,7 +142,7 @@ def find_duplicates(
 
     # 1. Exact pass: group identical source files using cryptographic hashes
     if exact:
-        for index, frame in enumerate(data):
+        for index, frame in enumerate(_iter_progress(data, verbose, "Exact image hashes")):
             if frame.source_path is not None:
                 exact_map[files.hash(frame.source_path)].append(index)
         for group in exact_map.values():
@@ -143,11 +150,11 @@ def find_duplicates(
                 union.union(group[0], index)
 
     # 2. Perceptual pass: compute 63-bit DCT pHash for each frame
-    computed = [_phash(frame) for frame in data]
+    computed = [_phash(frame) for frame in _iter_progress(data, verbose, "Perceptual image hashes")]
     similarities: dict[str, float] = {}
 
     # Pairwise comparison across frames
-    for first in range(len(computed)):
+    for first in _iter_progress(range(len(computed)), verbose, "Comparing hashes", unit="row"):
         for second in range(first + 1, len(computed)):
             similarity = float(1.0 - np.mean(computed[first][1] != computed[second][1]))
             if similarity >= threshold:
@@ -182,6 +189,7 @@ def deduplicate(
     *,
     keep: str = "best",
     threshold: float = 0.95,
+    verbose: bool = False,
 ) -> Detections:
     """Return an independent detection dataset with duplicate images filtered out.
 
@@ -201,6 +209,9 @@ def deduplicate(
         - `'annotations'`: keep the frame with highest bounding box count.
     threshold : float, default=0.95
         Perceptual hash similarity threshold in [0.0, 1.0].
+
+    verbose : bool, default=False
+        Display throttled progress for processing stages; disabled by default.
 
     Returns
     -------
@@ -226,14 +237,15 @@ def deduplicate(
     >>> unique = mining.deduplicate(data, keep="best", threshold=0.95)
     >>> print(f"Removed {len(data) - len(unique)} duplicate frames.")
     """
+    validators.validate_type(verbose, bool, "verbose")
     _require(data)
 
     if keep not in {"best", "first", "quality", "annotations"}:
         raise ValueError("keep must be 'best', 'first', 'quality', or 'annotations'")
 
-    report = find_duplicates(data, threshold=threshold)
+    report = find_duplicates(data, threshold=threshold, verbose=verbose)
     ranking = (
-        score(data, weights={"quality": 1.0} if keep == "quality" else None)
+        score(data, weights={"quality": 1.0} if keep == "quality" else None, verbose=verbose)
         if keep in {"best", "quality"}
         else None
     )

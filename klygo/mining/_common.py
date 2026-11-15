@@ -6,6 +6,8 @@ across the public mining submodules (`analysis`, `curation`, `duplicates`).
 
 from __future__ import annotations
 
+from klygo.utils.progress import _iter_progress
+
 from collections import Counter
 from dataclasses import asdict
 from typing import Any, Mapping, Optional, Sequence
@@ -123,7 +125,7 @@ def _normalize(values: Sequence[float]) -> list[float]:
     return [(float(value) - low) / (high - low) for value in values]
 
 
-def _quality(data: Detections) -> list[dict[str, float]]:
+def _quality(data: Detections, verbose: bool = False) -> list[dict[str, float]]:
     """Compute six classical image-quality metrics for every frame in a dataset.
 
     Calculates brightness, contrast, sharpness, entropy, noise, and exposure
@@ -149,7 +151,7 @@ def _quality(data: Detections) -> list[dict[str, float]]:
     }
 
     rows: list[dict[str, float]] = []
-    for frame in data:
+    for frame in _iter_progress(data, verbose, "Image quality"):
         image = _image(frame).to_pil(cache=False)
         rows.append({name: float(metric(image)) for name, metric in metrics.items()})
 
@@ -286,7 +288,7 @@ def _phash(frame: Any) -> tuple[str, np.ndarray]:
     return "".join("1" if value else "0" for value in bits), bits
 
 
-def _feature_matrix(data: Detections, features: tuple[str, ...]) -> np.ndarray:
+def _feature_matrix(data: Detections, features: tuple[str, ...], verbose: bool = False) -> np.ndarray:
     """Extract and standardize a multi-modal feature matrix across all images.
 
     Supports combining HSV color histograms, HOG gradient descriptors, image
@@ -324,7 +326,7 @@ def _feature_matrix(data: Detections, features: tuple[str, ...]) -> np.ndarray:
     labels = [data.names[key] for key in sorted(data.names)]
     rows: list[np.ndarray] = []
 
-    for frame in data:
+    for frame in _iter_progress(data, verbose, "Extracting features"):
         pil_image = _image(frame).to_pil(cache=False).convert("RGB")
         image = np.asarray(pil_image)
         parts: list[np.ndarray] = []
@@ -392,7 +394,7 @@ def _feature_matrix(data: Detections, features: tuple[str, ...]) -> np.ndarray:
     return (matrix - matrix.mean(axis=0)) / deviation
 
 
-def _class_filter(data: Detections, classes: Sequence[str], match: str) -> list[int]:
+def _class_filter(data: Detections, classes: Sequence[str], match: str, verbose: bool = False) -> list[int]:
     """Filter frame indices matching class criteria.
 
     Parameters
@@ -419,7 +421,7 @@ def _class_filter(data: Detections, classes: Sequence[str], match: str) -> list[
         raise ValueError("match must be 'any', 'all', 'only', or 'exclude'")
 
     selected = []
-    for index, frame in enumerate(data):
+    for index, frame in enumerate(_iter_progress(data, verbose, "Filtering classes")):
         present = set(frame.labels)
         accepted = bool(present & requested) if match == "any" else requested <= present
         if match == "only":
@@ -438,6 +440,7 @@ def _quota(
     limit: Optional[int],
     *,
     count_by: str = "images",
+    verbose: bool = False,
 ) -> list[int]:
     """Greedily select frames to fulfill specified per-class target quotas.
 
@@ -469,7 +472,9 @@ def _quota(
     remaining = set(range(len(data)))
     chosen: list[int] = []
 
-    while remaining and (limit is None or len(chosen) < limit):
+    for _ in _iter_progress(range(len(data) if limit is None else min(len(data), limit)), verbose, "Selecting class quotas"):
+        if not remaining:
+            break
         deficits = {label: max(0, target - counts[label]) for label, target in quotas.items()}
         if not any(deficits.values()):
             break

@@ -27,3 +27,5 @@ other = outputs.Detections([
 ])
 results.combine(other, method="weighted", iou=0.5)
 print("Combined collection:", results.to_dict())
+
+# Collection combine supports optional verbose=True for frame progress.

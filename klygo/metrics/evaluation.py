@@ -1,6 +1,7 @@
 """Composition and shared execution of detection metrics."""
 from typing import Any
-from klygo import validators
+from klygo import outputs, validators
+from klygo.utils.progress import ProgressBar
 from ._core import (_Metric, _Composition, _Context, _summary, _ap, _cat,
                     _host, _Rows, _MatchReport)
 
@@ -36,7 +37,7 @@ def compose(*metrics) -> _Composition:
     return _Composition(tuple(metrics))
 
 
-def evaluate(pred, target, evaluator=None) -> dict[str, Any]:
+def evaluate(pred, target, evaluator=None, *, verbose=False) -> dict[str, Any]:
     """Evaluate matching Detection pairs or materialized Detections collections.
 
     Parameters
@@ -45,6 +46,9 @@ def evaluate(pred, target, evaluator=None) -> dict[str, Any]:
         Same-type inputs with identical frame identities and image sizes.
     evaluator : configuration, optional
         A compose result. Defaults to precision_recall and map_score.
+
+    verbose : bool, default=False
+        Display one shared bar across preparation, matching, and metric completion.
 
     Returns
     -------
@@ -58,13 +62,37 @@ def evaluate(pred, target, evaluator=None) -> dict[str, Any]:
     ValueError
         Frame identities, sizes, or devices differ, or an input is streaming.
     """
+    validators.validate_type(verbose, bool, "verbose")
     if evaluator is None:
         from .operations import precision_recall, map_score
         evaluator = compose(precision_recall(), map_score())
     validators.validate_type(evaluator, _Composition, "evaluator")
-    context = _Context(pred, target)
-    with context.scope():
-        return _host({m.name: _run(context, m) for m in evaluator.metrics}, context.xp)
+    return _execute(pred, target, evaluator.metrics, verbose)
+
+
+def _execute(pred, target, selected, verbose):
+    # Count CPU-side work only; progress never reads or synchronizes GPU arrays.
+    matching = set()
+    for metric in selected:
+        options = dict(metric.options)
+        thresholds = (options['thresholds'] if metric.name in {'map_score', 'iou_sweep'}
+                      else (options.get('iou', .5),))
+        matching.update((threshold, metric.name == 'confusion_matrix') for threshold in thresholds)
+    frames = (1 if isinstance(pred, outputs.Detection)
+              else len(pred) if isinstance(pred, outputs.Detections) and not pred.is_stream else 0)
+    total = frames * (1 + len(matching)) + len(selected)
+    with ProgressBar(total, "Evaluating metrics", unit="step", verbose=verbose) as progress:
+        if progress.bar is not None:
+            progress.bar.mininterval = 0.2
+        context = _Context(pred, target, progress=progress if verbose else None)
+        with context.scope():
+            result = {}
+            for metric in selected:
+                if progress.bar is not None:
+                    progress.bar.set_description(f"Computing {metric.name}", refresh=False)
+                result[metric.name] = _run(context, metric)
+                progress.update()
+            return _host(result, context.xp)
 
 
 def _pooled(context, iou, cutoff=0):

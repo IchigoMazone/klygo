@@ -1,7 +1,7 @@
 # metrics.map_score
 
 ```python
-metrics.map_score(pred=..., target=..., *, thresholds=None)
+metrics.map_score(pred=..., target=..., *, thresholds=None, verbose=False)
 ```
 
 ## Contract and parameters
@@ -40,3 +40,8 @@ print(metrics.evaluate(pred, target, evaluator))
 [Module conventions](../README.md) · [Standalone example](../../../examples/metrics/map_score.py) · [Tests](../../../test/metrics/test_api.py)
 
 CPU/GPU: inputs must share one device; execution follows their NumPy/CuPy storage. Results remain ordinary Python data. See [device conventions](../README.md#cpu-and-cuda-execution).
+
+## Progress output
+
+`verbose=False` keeps execution silent by default. Set `verbose=True` to show throttled progress (at most every 0.2 seconds, plus initial/final display). Results and input mutation rules are unchanged.
+Deferred metric configurations do not retain the flag or display progress. For composed evaluation, use `metrics.evaluate(pred, target, evaluator, verbose=True)`; one shared bar covers preparation, matching, and metric completion. Progress counts CPU-side work steps, not GPU execution latency.

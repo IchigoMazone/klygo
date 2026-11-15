@@ -11,7 +11,7 @@ target = outputs.Detection(
     source_id="example", image_size=(100, 100),
 )
 
-result = metrics.map_score(pred, target)
+result = metrics.map_score(pred, target, verbose=True)
 print(result)
 
 # Configure the same metric for grouped execution.

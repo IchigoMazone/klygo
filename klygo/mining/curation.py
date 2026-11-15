@@ -16,6 +16,8 @@ import cv2
 import numpy as np
 
 from klygo.outputs import Detections
+from klygo import validators
+from klygo.utils.progress import _iter_progress
 
 from ._common import _Report, _class_filter, _feature_matrix, _quota, _require, _subset
 from .analysis import MiningScores, score, stats
@@ -90,6 +92,7 @@ def cluster(
     clusters: int = 100,
     method: str = "kmeans",
     seed: int = 42,
+    verbose: bool = False,
 ) -> ClusterResult:
     """Cluster images into visual and semantic groups using classical feature vectors.
 
@@ -114,6 +117,9 @@ def cluster(
         Clustering algorithm. Currently only `'kmeans'` is supported.
     seed : int, default=42
         Random number generator seed for deterministic cluster initialization.
+
+    verbose : bool, default=False
+        Display throttled progress for processing stages; disabled by default.
 
     Returns
     -------
@@ -143,6 +149,7 @@ def cluster(
     >>> utils.tabulate(result.to_dict())
     >>> print("Cluster 0 representative index:", result.representatives[0])
     """
+    validators.validate_type(verbose, bool, "verbose")
     _require(data)
 
     if method != "kmeans":
@@ -151,18 +158,19 @@ def cluster(
         raise ValueError("clusters must be between 1 and the number of images")
 
     names = tuple(features)
-    matrix = _feature_matrix(data, names)
+    matrix = _feature_matrix(data, names, verbose=verbose)
 
     # Deterministic K-Means clustering with OpenCV
     cv2.setRNGSeed(int(seed))
-    _, labels, centers = cv2.kmeans(
-        matrix.astype(np.float32),
-        clusters,
-        None,
-        (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-4),
-        1,
-        cv2.KMEANS_PP_CENTERS,
-    )
+    for _ in _iter_progress(range(1), verbose, "K-Means clustering", unit="stage"):
+        _, labels, centers = cv2.kmeans(
+            matrix.astype(np.float32),
+            clusters,
+            None,
+            (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-4),
+            1,
+            cv2.KMEANS_PP_CENTERS,
+        )
 
     values = labels.ravel().astype(int).tolist()
     groups: dict[int, list[int]] = defaultdict(list)
@@ -208,6 +216,7 @@ def select(
     cluster_result: Optional[ClusterResult] = None,
     per_cluster: int = 1,
     seed: int = 42,
+    verbose: bool = False,
 ) -> Detections:
     """Select whole images from a dataset using specialized curation strategies.
 
@@ -257,6 +266,9 @@ def select(
     seed : int, default=42
         RNG seed for reproducible random or diversity sampling.
 
+    verbose : bool, default=False
+        Display throttled progress for processing stages; disabled by default.
+
     Returns
     -------
     Detections
@@ -280,6 +292,7 @@ def select(
     >>> # 3. Class exclusion filtering
     >>> no_cars = mining.select(data, method="class", classes=["car"], match="exclude")
     """
+    validators.validate_type(verbose, bool, "verbose")
     _require(data)
 
     if limit is not None and limit < 0:
@@ -291,7 +304,7 @@ def select(
     if method == "class":
         if not classes:
             raise ValueError("classes must contain at least one class for class selection")
-        indices = _class_filter(data, classes, match)
+        indices = _class_filter(data, classes, match, verbose=verbose)
 
     # 2. Random uniform sampling
     elif method == "random":
@@ -302,7 +315,7 @@ def select(
 
     # 3. Score-based ranking: quality, weighted, or rare_first
     elif method in {"quality", "weighted", "rare_first"}:
-        report = scores or score(data, weights={"quality": 1.0} if method == "quality" else None)
+        report = scores or score(data, weights={"quality": 1.0} if method == "quality" else None, verbose=verbose)
         if len(report.values) != len(data):
             raise ValueError("scores length must match data length")
 
@@ -321,7 +334,7 @@ def select(
     # 4. Box geometry and count constraints
     elif method == "boxes":
         indices = []
-        for index, frame in enumerate(data):
+        for index, frame in enumerate(_iter_progress(data, verbose, "Selecting images")):
             width, height = frame.image_size
             areas = [box.width * box.height / (width * height) for box in frame]
             if (
@@ -338,7 +351,7 @@ def select(
             if isinstance(per_class, int)
             else {str(k): int(v) for k, v in per_class.items()}
         )
-        indices = _quota(data, quotas, limit)
+        indices = _quota(data, quotas, limit, verbose=verbose)
 
     # 6. Cluster-based visual diversity sampling
     elif method == "diversity":
@@ -348,6 +361,7 @@ def select(
         result = cluster_result or cluster(
             data,
             clusters=min(len(data), limit or min(100, len(data))),
+            verbose=verbose,
         )
         if len(result.labels) != len(data):
             raise ValueError("cluster_result length must match data length")
@@ -400,6 +414,7 @@ def balance(
     strategy: str = "select",
     count_by: str = "images",
     seed: int = 42,
+    verbose: bool = False,
 ) -> Detections:
     """Mitigate dataset class imbalance without duplicating frames.
 
@@ -423,6 +438,9 @@ def balance(
         or total bounding box count.
     seed : int, default=42
         RNG seed for deterministic tie-breaking.
+
+    verbose : bool, default=False
+        Display throttled progress for processing stages; disabled by default.
 
     Returns
     -------
@@ -450,6 +468,7 @@ def balance(
     >>> balanced = mining.balance(data, target="median", count_by="images")
     >>> print(f"Balanced collection contains {len(balanced)} frames.")
     """
+    validators.validate_type(verbose, bool, "verbose")
     _require(data)
 
     if strategy not in {"select", "undersample"}:
@@ -457,7 +476,7 @@ def balance(
     if count_by not in {"images", "boxes"}:
         raise ValueError("count_by must be 'images' or 'boxes'")
 
-    summary = stats(data, quality=False, cooccurrence=False)
+    summary = stats(data, quality=False, cooccurrence=False, verbose=verbose)
     counts = summary.images_per_class if count_by == "images" else summary.boxes_per_class
     values = list(counts.values())
 
@@ -482,7 +501,7 @@ def balance(
         raise ValueError("target must be non-negative")
 
     quotas = {label: min(resolved, value) for label, value in counts.items()}
-    indices = _quota(data, quotas, None, count_by=count_by)
+    indices = _quota(data, quotas, None, count_by=count_by, verbose=verbose)
     result = _subset(data, indices, f"balance:{strategy}")
 
     # Record actual versus target counts in metadata

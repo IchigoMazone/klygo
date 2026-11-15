@@ -9,7 +9,7 @@ __all__ = ["precision_recall", "map_score", "confusion_matrix", "match_boxes",
            "calibration", "threshold_sweep", "iou_sweep"]
 
 
-def precision_recall(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | list[Any] | _Metric:
+def precision_recall(pred=_MISSING, target=_MISSING, *, iou=0.5, verbose=False) -> dict[str, Any] | list[Any] | _Metric:
     """Compute pooled precision, recall, F1, counts, and matched mean IoU.
 
     Parameters
@@ -18,6 +18,10 @@ def precision_recall(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, An
         Same-type, same-source inputs. Supply both to execute; omit both to configure.
     iou : float, optional
         Matching IoU in [0, 1]. Default is 0.5.
+
+    verbose : bool, default=False
+        Display progress during direct execution. Deferred configurations stay silent;
+        use evaluate(..., verbose=True) to control composed evaluation.
 
     Returns
     -------
@@ -35,10 +39,10 @@ def precision_recall(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, An
     -----
     See docs/metrics/api/precision_recall.md for the exact output schema and conventions.
     """
-    return _dispatch("precision_recall", pred, target, iou=_unit(iou, "iou"))
+    return _dispatch("precision_recall", pred, target, verbose=verbose, iou=_unit(iou, "iou"))
 
 
-def map_score(pred=_MISSING, target=_MISSING, *, thresholds=None) -> dict[str, Any] | list[Any] | _Metric:
+def map_score(pred=_MISSING, target=_MISSING, *, thresholds=None, verbose=False) -> dict[str, Any] | list[Any] | _Metric:
     """Compute class-wise 101-point interpolated AP and mean AP.
 
     Parameters
@@ -47,6 +51,10 @@ def map_score(pred=_MISSING, target=_MISSING, *, thresholds=None) -> dict[str, A
         Same-type, same-source inputs. Supply both to execute; omit both to configure.
     thresholds : iterable of float, optional
         Unique thresholds in [0, 1]. None selects the documented default grid.
+
+    verbose : bool, default=False
+        Display progress during direct execution. Deferred configurations stay silent;
+        use evaluate(..., verbose=True) to control composed evaluation.
 
     Returns
     -------
@@ -64,11 +72,11 @@ def map_score(pred=_MISSING, target=_MISSING, *, thresholds=None) -> dict[str, A
     -----
     See docs/metrics/api/map_score.md for the exact output schema and conventions.
     """
-    return _dispatch("map_score", pred, target,
+    return _dispatch("map_score", pred, target, verbose=verbose,
                      thresholds=_thresholds(thresholds, [round(.5 + .05*i, 2) for i in range(10)]))
 
 
-def confusion_matrix(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | list[Any] | _Metric:
+def confusion_matrix(pred=_MISSING, target=_MISSING, *, iou=0.5, verbose=False) -> dict[str, Any] | list[Any] | _Metric:
     """Compute geometry-matched counts with GT rows and prediction columns.
 
     Parameters
@@ -77,6 +85,10 @@ def confusion_matrix(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, An
         Same-type, same-source inputs. Supply both to execute; omit both to configure.
     iou : float, optional
         Matching IoU in [0, 1]. Default is 0.5.
+
+    verbose : bool, default=False
+        Display progress during direct execution. Deferred configurations stay silent;
+        use evaluate(..., verbose=True) to control composed evaluation.
 
     Returns
     -------
@@ -94,10 +106,10 @@ def confusion_matrix(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, An
     -----
     See docs/metrics/api/confusion_matrix.md for the exact output schema and conventions.
     """
-    return _dispatch("confusion_matrix", pred, target, iou=_unit(iou, "iou"))
+    return _dispatch("confusion_matrix", pred, target, verbose=verbose, iou=_unit(iou, "iou"))
 
 
-def match_boxes(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | list[Any] | _Metric:
+def match_boxes(pred=_MISSING, target=_MISSING, *, iou=0.5, verbose=False) -> dict[str, Any] | list[Any] | _Metric:
     """Return frame-local matched indices and unmatched prediction/target indices.
 
     Parameters
@@ -106,6 +118,10 @@ def match_boxes(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | 
         Same-type, same-source inputs. Supply both to execute; omit both to configure.
     iou : float, optional
         Matching IoU in [0, 1]. Default is 0.5.
+
+    verbose : bool, default=False
+        Display progress during direct execution. Deferred configurations stay silent;
+        use evaluate(..., verbose=True) to control composed evaluation.
 
     Returns
     -------
@@ -123,10 +139,10 @@ def match_boxes(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | 
     -----
     See docs/metrics/api/match_boxes.md for the exact output schema and conventions.
     """
-    return _dispatch("match_boxes", pred, target, iou=_unit(iou, "iou"))
+    return _dispatch("match_boxes", pred, target, verbose=verbose, iou=_unit(iou, "iou"))
 
 
-def per_class(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | list[Any] | _Metric:
+def per_class(pred=_MISSING, target=_MISSING, *, iou=0.5, verbose=False) -> dict[str, Any] | list[Any] | _Metric:
     """Return counts, precision, recall, F1, mean IoU, and AP per label.
 
     Parameters
@@ -135,6 +151,10 @@ def per_class(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | li
         Same-type, same-source inputs. Supply both to execute; omit both to configure.
     iou : float, optional
         Matching IoU in [0, 1]. Default is 0.5.
+
+    verbose : bool, default=False
+        Display progress during direct execution. Deferred configurations stay silent;
+        use evaluate(..., verbose=True) to control composed evaluation.
 
     Returns
     -------
@@ -152,10 +172,10 @@ def per_class(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | li
     -----
     See docs/metrics/api/per_class.md for the exact output schema and conventions.
     """
-    return _dispatch("per_class", pred, target, iou=_unit(iou, "iou"))
+    return _dispatch("per_class", pred, target, verbose=verbose, iou=_unit(iou, "iou"))
 
 
-def per_image(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | list[Any] | _Metric:
+def per_image(pred=_MISSING, target=_MISSING, *, iou=0.5, verbose=False) -> dict[str, Any] | list[Any] | _Metric:
     """Return counts, precision, recall, F1, and mean IoU per frame.
 
     Parameters
@@ -164,6 +184,10 @@ def per_image(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | li
         Same-type, same-source inputs. Supply both to execute; omit both to configure.
     iou : float, optional
         Matching IoU in [0, 1]. Default is 0.5.
+
+    verbose : bool, default=False
+        Display progress during direct execution. Deferred configurations stay silent;
+        use evaluate(..., verbose=True) to control composed evaluation.
 
     Returns
     -------
@@ -181,10 +205,10 @@ def per_image(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | li
     -----
     See docs/metrics/api/per_image.md for the exact output schema and conventions.
     """
-    return _dispatch("per_image", pred, target, iou=_unit(iou, "iou"))
+    return _dispatch("per_image", pred, target, verbose=verbose, iou=_unit(iou, "iou"))
 
 
-def error_analysis(pred=_MISSING, target=_MISSING, *, iou=0.5, bg_iou=0.1) -> dict[str, Any] | list[Any] | _Metric:
+def error_analysis(pred=_MISSING, target=_MISSING, *, iou=0.5, bg_iou=0.1, verbose=False) -> dict[str, Any] | list[Any] | _Metric:
     """Partition false positives into five error types and list missed GT boxes.
 
     Parameters
@@ -195,6 +219,10 @@ def error_analysis(pred=_MISSING, target=_MISSING, *, iou=0.5, bg_iou=0.1) -> di
         Matching IoU in [0, 1]. Default is 0.5.
     bg_iou : float, optional
         Background boundary in [0, iou). Default is 0.1.
+
+    verbose : bool, default=False
+        Display progress during direct execution. Deferred configurations stay silent;
+        use evaluate(..., verbose=True) to control composed evaluation.
 
     Returns
     -------
@@ -215,10 +243,10 @@ def error_analysis(pred=_MISSING, target=_MISSING, *, iou=0.5, bg_iou=0.1) -> di
     iou, bg_iou = _unit(iou, "iou"), _unit(bg_iou, "bg_iou")
     if bg_iou >= iou:
         raise ValueError("bg_iou must be smaller than iou")
-    return _dispatch("error_analysis", pred, target, iou=iou, bg_iou=bg_iou)
+    return _dispatch("error_analysis", pred, target, verbose=verbose, iou=iou, bg_iou=bg_iou)
 
 
-def size_breakdown(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | list[Any] | _Metric:
+def size_breakdown(pred=_MISSING, target=_MISSING, *, iou=0.5, verbose=False) -> dict[str, Any] | list[Any] | _Metric:
     """Return small/medium/large metrics using COCO area boundaries.
 
     Parameters
@@ -227,6 +255,10 @@ def size_breakdown(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any]
         Same-type, same-source inputs. Supply both to execute; omit both to configure.
     iou : float, optional
         Matching IoU in [0, 1]. Default is 0.5.
+
+    verbose : bool, default=False
+        Display progress during direct execution. Deferred configurations stay silent;
+        use evaluate(..., verbose=True) to control composed evaluation.
 
     Returns
     -------
@@ -244,10 +276,10 @@ def size_breakdown(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any]
     -----
     See docs/metrics/api/size_breakdown.md for the exact output schema and conventions.
     """
-    return _dispatch("size_breakdown", pred, target, iou=_unit(iou, "iou"))
+    return _dispatch("size_breakdown", pred, target, verbose=verbose, iou=_unit(iou, "iou"))
 
 
-def calibration(pred=_MISSING, target=_MISSING, *, iou=0.5, bins=10) -> dict[str, Any] | list[Any] | _Metric:
+def calibration(pred=_MISSING, target=_MISSING, *, iou=0.5, bins=10, verbose=False) -> dict[str, Any] | list[Any] | _Metric:
     """Return confidence-bin statistics, TP/FP scores, and detection ECE.
 
     Parameters
@@ -258,6 +290,10 @@ def calibration(pred=_MISSING, target=_MISSING, *, iou=0.5, bins=10) -> dict[str
         Matching IoU in [0, 1]. Default is 0.5.
     bins : int, optional
         Positive number of equal-width confidence bins. Default is 10.
+
+    verbose : bool, default=False
+        Display progress during direct execution. Deferred configurations stay silent;
+        use evaluate(..., verbose=True) to control composed evaluation.
 
     Returns
     -------
@@ -278,10 +314,10 @@ def calibration(pred=_MISSING, target=_MISSING, *, iou=0.5, bins=10) -> dict[str
     validators.validate_type(bins, Integral, "bins")
     if isinstance(bins, bool) or bins < 1:
         raise ValueError("bins must be a positive integer")
-    return _dispatch("calibration", pred, target, iou=_unit(iou, "iou"), bins=int(bins))
+    return _dispatch("calibration", pred, target, verbose=verbose, iou=_unit(iou, "iou"), bins=int(bins))
 
 
-def threshold_sweep(pred=_MISSING, target=_MISSING, *, iou=0.5, thresholds=None) -> dict[str, Any] | list[Any] | _Metric:
+def threshold_sweep(pred=_MISSING, target=_MISSING, *, iou=0.5, thresholds=None, verbose=False) -> dict[str, Any] | list[Any] | _Metric:
     """Return pooled metrics after retaining scores at or above each threshold.
 
     Parameters
@@ -292,6 +328,10 @@ def threshold_sweep(pred=_MISSING, target=_MISSING, *, iou=0.5, thresholds=None)
         Matching IoU in [0, 1]. Default is 0.5.
     thresholds : iterable of float, optional
         Unique thresholds in [0, 1]. None selects the documented default grid.
+
+    verbose : bool, default=False
+        Display progress during direct execution. Deferred configurations stay silent;
+        use evaluate(..., verbose=True) to control composed evaluation.
 
     Returns
     -------
@@ -309,11 +349,11 @@ def threshold_sweep(pred=_MISSING, target=_MISSING, *, iou=0.5, thresholds=None)
     -----
     See docs/metrics/api/threshold_sweep.md for the exact output schema and conventions.
     """
-    return _dispatch("threshold_sweep", pred, target, iou=_unit(iou, "iou"),
+    return _dispatch("threshold_sweep", pred, target, verbose=verbose, iou=_unit(iou, "iou"),
                      thresholds=_thresholds(thresholds, [i/20 for i in range(21)]))
 
 
-def iou_sweep(pred=_MISSING, target=_MISSING, *, thresholds=None) -> dict[str, Any] | list[Any] | _Metric:
+def iou_sweep(pred=_MISSING, target=_MISSING, *, thresholds=None, verbose=False) -> dict[str, Any] | list[Any] | _Metric:
     """Return pooled metrics at each requested IoU threshold.
 
     Parameters
@@ -322,6 +362,10 @@ def iou_sweep(pred=_MISSING, target=_MISSING, *, thresholds=None) -> dict[str, A
         Same-type, same-source inputs. Supply both to execute; omit both to configure.
     thresholds : iterable of float, optional
         Unique thresholds in [0, 1]. None selects the documented default grid.
+
+    verbose : bool, default=False
+        Display progress during direct execution. Deferred configurations stay silent;
+        use evaluate(..., verbose=True) to control composed evaluation.
 
     Returns
     -------
@@ -339,5 +383,5 @@ def iou_sweep(pred=_MISSING, target=_MISSING, *, thresholds=None) -> dict[str, A
     -----
     See docs/metrics/api/iou_sweep.md for the exact output schema and conventions.
     """
-    return _dispatch("iou_sweep", pred, target,
+    return _dispatch("iou_sweep", pred, target, verbose=verbose,
                      thresholds=_thresholds(thresholds, [round(.5 + .05*i, 2) for i in range(10)]))

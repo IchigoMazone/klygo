@@ -141,3 +141,7 @@ gray letterbox padding. Omit size to preserve existing dimensions. Video frames
 must have equal dimensions without size. Annotated Detection frames are rendered
 before resizing so pixels, box outlines, and captions scale together; annotations
 and source pixels are not changed. Exports consume frames sequentially.
+
+### Combine progress
+
+`results.combine(other_results, method="union", iou=0.5, verbose=False)` accepts a keyword-only progress flag. Set `verbose=True` to display sequential frame-combination and other-frame scanning stages. Single-frame `Detection.combine()` is unchanged.

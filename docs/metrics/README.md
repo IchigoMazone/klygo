@@ -82,3 +82,7 @@ report-conversion overhead may dominate. No device argument or new execution
 mode is added to metrics.
 
 [Group API](../outputs/api/group.md) · [Real GPU parity tests](../../test/metrics/test_gpu.py)
+
+## Optional progress
+
+Processing APIs accept keyword-only `verbose=False`. Enable it for large datasets; `compose()` remains a silent configuration builder. Composed evaluation uses one shared progress bar.

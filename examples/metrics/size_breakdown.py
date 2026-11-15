@@ -11,7 +11,7 @@ target = outputs.Detection(
     source_id="example", image_size=(100, 100),
 )
 
-result = metrics.size_breakdown(pred, target)
+result = metrics.size_breakdown(pred, target, verbose=True)
 print(result)
 
 # Configure the same metric for grouped execution.

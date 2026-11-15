@@ -11,7 +11,7 @@ target = outputs.Detection(
     source_id="example", image_size=(100, 100),
 )
 
-result = metrics.confusion_matrix(pred, target)
+result = metrics.confusion_matrix(pred, target, verbose=True)
 print(result)
 
 # Configure the same metric for grouped execution.

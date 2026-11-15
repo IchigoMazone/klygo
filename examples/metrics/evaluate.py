@@ -12,4 +12,4 @@ target = outputs.Detection(
 )
 
 evaluator = metrics.compose(metrics.precision_recall(), metrics.map_score())
-print(metrics.evaluate(pred, target, evaluator))
+print(metrics.evaluate(pred, target, evaluator, verbose=True))

@@ -48,6 +48,32 @@ class MiningOperationsTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    def test_verbose_is_optional_and_preserves_all_results(self) -> None:
+        from contextlib import redirect_stderr
+        from unittest.mock import patch
+        calls = [
+            (mining.stats, {}), (mining.score, {}),
+            (mining.find_duplicates, {}), (mining.deduplicate, {"keep": "first"}),
+            (mining.cluster, {"features": ("histogram",), "clusters": 2}),
+            (mining.select, {"method": "quality", "limit": 2}),
+            (mining.select, {"method": "diversity", "limit": 2}),
+            (mining.balance, {}),
+        ]
+        for operation, options in calls:
+            with self.subTest(operation=operation.__name__, options=options):
+                with patch("klygo.utils.progress.tqdm") as bars:
+                    expected = operation(self.data, **options).to_dict()
+                    bars.assert_not_called()
+                with redirect_stderr(StringIO()) as output:
+                    actual = operation(self.data, verbose=True, **options).to_dict()
+                self.assertEqual(actual, expected)
+                self.assertTrue(output.getvalue())
+                with self.assertRaises(TypeError):
+                    operation(self.data, verbose="yes", **options)
+        with redirect_stderr(StringIO()):
+            actual = mining.compare(self.data, self.data, quality=True, verbose=True)
+        self.assertEqual(actual.to_dict(), mining.compare(self.data, self.data, quality=True).to_dict())
+
     def test_stats_and_score_do_not_mutate_input(self) -> None:
         before = self.data.copy()
         summary = mining.stats(self.data)

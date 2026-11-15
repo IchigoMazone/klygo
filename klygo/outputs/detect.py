@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from PIL import Image
 
 import numpy as np
+from klygo.utils.progress import _iter_progress
 
 from klygo import files, validators
 
@@ -2902,6 +2903,8 @@ class Detections:
         other: "Detections",
         method: str = "union",
         iou: float = 0.5,
+        *,
+        verbose: bool = False,
     ) -> "Detections":
         """Combine matching source frames in place and append other-only frames.
 
@@ -2913,6 +2916,9 @@ class Detections:
             Box combination method forwarded to Detection.combine.
         iou : float, default=0.5
             Minimum IoU for matching same-label boxes.
+
+        verbose : bool, default=False
+            Display progress over input frames, including other-only frames.
 
         Returns
         -------
@@ -2931,6 +2937,7 @@ class Detections:
         All shared frame sizes are checked before combining any boxes.
         Supports regular and packed collections. The other input is unchanged.
         """
+        validators.validate_type(verbose, bool, "verbose")
         validators.validate_type(other, Detections, "other")
         self._require_materialized("combine()")
         other._require_materialized("combine()")
@@ -2944,17 +2951,17 @@ class Detections:
         extra_frames: list[Detection] = []
         with self._batch("combine"):
             if self._packed_store is not None:
-                for position in range(len(self)):
+                for position in _iter_progress(range(len(self)), verbose, "Combining frames"):
                     frame = self._packed_store.frame(self, position)
                     partner = other_by_identity.pop(frame.identity, None)
                     if partner is not None:
                         frame.combine(partner, method=method_mode, iou=iou_threshold)
             else:
-                for frame in self._frames:
+                for frame in _iter_progress(self._frames, verbose, "Combining frames"):
                     partner = other_by_identity.pop(frame.identity, None)
                     if partner is not None:
                         frame.combine(partner, method=method_mode, iou=iou_threshold)
-            extra_frames = [frame._clone() for frame in other if frame.identity in other_by_identity]
+            extra_frames = [frame._clone() for frame in _iter_progress(other, verbose, "Appending other-only frames") if frame.identity in other_by_identity]
         if extra_frames:
             self.extend(extra_frames)
         return self
