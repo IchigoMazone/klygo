@@ -123,6 +123,8 @@
 | faster-rcnn | float16 | torch.float16 | 1.6675 |  |
 | d-fine | float32 | float32 | 15.35 |  |
 | d-fine | float16 | float16 | 15.8397 |  |
+| locate-anything | float32 | torch.float32 | 49.6555 |  |
+| locate-anything | float16 | torch.float16 | 19.7765 |  |
 
 ## 6-Mode Model Run Status
 
@@ -144,6 +146,8 @@
 | faster-rcnn | float16 | 0 | passed | artifacts/benchmarks/colab_l4_full/inference/faster-rcnn_float16 |  |
 | d-fine | float32 | 0 | passed | artifacts/benchmarks/colab_l4_full/inference/d-fine_float32 |  |
 | d-fine | float16 | 0 | passed | artifacts/benchmarks/colab_l4_full/inference/d-fine_float16 |  |
+| locate-anything | float32 | 0 | passed | artifacts/benchmarks/colab_l4_full/locate_anything/fp32 |  |
+| locate-anything | float16 | 0 | passed | artifacts/benchmarks/colab_l4_full/locate_anything/fp16 |  |
 
 ## 6-Mode Model Inference Details
 
@@ -245,6 +249,18 @@
 | d-fine | float16 | float16 | native-non-stream | ok | 2.6 | 383.16 | True |
 | d-fine | float16 | float16 | managed-non-stream | ok | 2.6 | 385.0 | True |
 | d-fine | float16 | float16 | managed-stream | ok | 2.6 | 383.95 | True |
+| locate-anything | float32 | torch.float32 | raw-stream | N/A | None | None | None |
+| locate-anything | float32 | torch.float32 | native-stream | N/A | None | None | None |
+| locate-anything | float32 | torch.float32 | raw-non-stream | ok | 0.98 | 1013.43 | True |
+| locate-anything | float32 | torch.float32 | native-non-stream | ok | 0.99 | 1019.29 | True |
+| locate-anything | float32 | torch.float32 | managed-non-stream | ok | 0.98 | 1016.15 | True |
+| locate-anything | float32 | torch.float32 | managed-stream | ok | 0.99 | 1018.16 | True |
+| locate-anything | float16 | torch.float16 | raw-stream | N/A | None | None | None |
+| locate-anything | float16 | torch.float16 | native-stream | N/A | None | None | None |
+| locate-anything | float16 | torch.float16 | raw-non-stream | ok | 2.48 | 404.97 | True |
+| locate-anything | float16 | torch.float16 | native-non-stream | ok | 2.47 | 407.55 | True |
+| locate-anything | float16 | torch.float16 | managed-non-stream | ok | 2.48 | 402.04 | True |
+| locate-anything | float16 | torch.float16 | managed-stream | ok | 2.48 | 404.39 | True |
 
 ## Batch / Workers / Prefetch / Packed Scaling
 

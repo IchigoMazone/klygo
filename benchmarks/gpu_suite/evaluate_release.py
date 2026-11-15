@@ -382,6 +382,96 @@ def benchmark_mining(
     return rows
 
 
+def _benchmark_strided_image_access(
+    source_root: Any,
+    img_sub: str,
+    lbl_sub: str,
+    yaml_file: str,
+    repeats: int,
+    target_images: int = 2048,
+) -> list[dict[str, Any]]:
+    """Benchmark strided/random-access image loading across thousands of real JPEGs."""
+    rows: list[dict[str, Any]] = []
+    src_imgs = sorted(files.list_files(source_root / img_sub, extensions=(".jpg", ".jpeg", ".png")))
+    src_lbls = source_root / lbl_sub
+    if not src_imgs:
+        return rows
+
+    with tempfile.TemporaryDirectory() as tmp:
+        big_root = files.path(tmp) / "scaled_dataset"
+        big_imgs = big_root / "images"
+        big_lbls = big_root / "labels"
+        files.mkdir(big_imgs)
+        files.mkdir(big_lbls)
+        if yaml_file and files.is_file(source_root / yaml_file):
+            files.copy(source_root / yaml_file, big_root / "data.yaml", overwrite=True)
+
+        def _link_or_copy(src: Any, dst: Any) -> None:
+            try:
+                os.link(src, dst)
+            except OSError:
+                files.copy(src, dst, overwrite=True)
+
+        total = max(len(src_imgs), target_images)
+        for idx in range(total):
+            src_img = src_imgs[idx % len(src_imgs)]
+            dst_img = big_imgs / f"img_{idx:05d}{src_img.suffix}"
+            _link_or_copy(src_img, dst_img)
+            src_lbl = src_lbls / f"{src_img.stem}.txt"
+            if files.is_file(src_lbl):
+                dst_lbl = big_lbls / f"img_{idx:05d}.txt"
+                _link_or_copy(src_lbl, dst_lbl)
+
+        ds_load = _measure(
+            lambda: datasets.load(big_root, images_dir="images", labels_dir="labels", yaml_name="data.yaml", verbose=False),
+            repeats=repeats, warmup=1, use_cuda=False,
+        )
+        big_dets = ds_load["last_result"]
+        rows.append({"operation": f"datasets.load_scaled ({total} imgs)", "median_ms": ds_load["median_ms"], "status": "passed"})
+
+        idx_load = _measure(
+            lambda: media.load(big_imgs, indexed=True, verbose=False),
+            repeats=repeats, warmup=1, use_cuda=False,
+        )
+        indexed_frames = idx_load["last_result"]
+        rows.append({"operation": f"media.load_indexed ({total} imgs)", "median_ms": idx_load["median_ms"], "status": "passed"})
+
+        stride = 32
+        strided_decode = _measure(
+            lambda: [media.to_numpy(f) for f in media.load(big_imgs, sample_rate=stride, verbose=False)],
+            repeats=repeats, warmup=1, use_cuda=False,
+        )
+        rows.append({"operation": f"media.strided_decode (stride={stride}, {total // stride} imgs)", "median_ms": strided_decode["median_ms"], "status": "passed"})
+
+        rng = np.random.default_rng(42)
+        jump_indices = [int(i) for i in rng.choice(len(indexed_frames), size=min(64, len(indexed_frames)), replace=False)]
+        random_decode = _measure(
+            lambda: [media.to_numpy(indexed_frames[i]) for i in jump_indices],
+            repeats=repeats, warmup=1, use_cuda=False,
+        )
+        rows.append({"operation": f"media.random_jump_numpy (64/{total} imgs)", "median_ms": random_decode["median_ms"], "status": "passed"})
+
+        random_pil = _measure(
+            lambda: [media.to_pil(indexed_frames[i]) for i in jump_indices],
+            repeats=repeats, warmup=1, use_cuda=False,
+        )
+        rows.append({"operation": f"media.random_jump_pil (64/{total} imgs)", "median_ms": random_pil["median_ms"], "status": "passed"})
+
+        dets_slice = _measure(
+            lambda: [big_dets[i] for i in jump_indices],
+            repeats=repeats, warmup=1, use_cuda=False,
+        )
+        rows.append({"operation": f"detections.random_jump_index (64/{total})", "median_ms": dets_slice["median_ms"], "status": "passed"})
+
+        dets_image_read = _measure(
+            lambda: [big_dets[i].image for i in jump_indices],
+            repeats=repeats, warmup=1, use_cuda=False,
+        )
+        rows.append({"operation": f"detections.random_jump_image_read (64/{total})", "median_ms": dets_image_read["median_ms"], "status": "passed"})
+
+    return rows
+
+
 def _prepare_real_dataset(dataset: str, dataset_dir: str) -> tuple[Any | None, str, str, str]:
     """Resolve a real YOLO dataset directory (custom --dataset-dir or auto-downloaded coco128)."""
     if dataset_dir:
@@ -468,6 +558,9 @@ def benchmark_datasets_media_visual(
         rows.append({"operation": f"mining.stats_quality ({dataset_tag}, {num_images} imgs)", "median_ms": disk_stats["median_ms"], "status": "passed"})
         rows.append({"operation": f"mining.find_duplicates ({dataset_tag}, {num_images} imgs)", "median_ms": dup_stats["median_ms"], "status": "passed"})
         rows.append({"operation": f"mining.cluster ({dataset_tag}, {num_images} imgs, k={cluster_k})", "median_ms": cluster_stats["median_ms"], "status": "passed"})
+
+        if large_scale:
+            rows.extend(_benchmark_strided_image_access(real_root, img_sub, lbl_sub, yaml_file, repeats=repeats))
         return rows, dataset_tag
 
     num_images = 200 if large_scale else 12
@@ -737,6 +830,7 @@ def main() -> None:
     parser.add_argument("--dtypes", default="float32,float16")
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--allow-remote-code", action="store_true")
+    parser.add_argument("--locate-python", default="", help="Optional Python executable for locate-anything (e.g. isolated transformers==4.57.1 venv)")
     parser.add_argument("--include-scaling", action="store_true")
     parser.add_argument("--scaling-models", default="yolo,yolo-world")
     parser.add_argument("--large-scale", action="store_true", help="Enable large-scale (10k+ boxes / 200-image) GPU & loader workloads")
@@ -790,8 +884,9 @@ def main() -> None:
         for model_id in [m.strip() for m in args.models.split(",") if m.strip()]:
             for dtype_name in [d.strip() for d in args.dtypes.split(",") if d.strip()]:
                 case_out = out_dir / "inference" / f"{model_id}_{dtype_name}"
+                py_exec = args.locate_python if (model_id == "locate-anything" and args.locate_python) else sys.executable
                 cmd = [
-                    sys.executable,
+                    py_exec,
                     "benchmarks/gpu_suite/run.py",
                     "--model", model_id,
                     "--device", args.device,

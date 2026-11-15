@@ -1,114 +1,128 @@
 [
-    {
-        "model": "yolo",
-        "dtype": "float32",
-        "actual_dtype": "torch.float32",
-        "load_seconds": 0.0984,
-        "device": ""
-    },
-    {
-        "model": "yolo",
-        "dtype": "float16",
-        "actual_dtype": "torch.float16",
-        "load_seconds": 0.0987,
-        "device": ""
-    },
-    {
-        "model": "yolo11",
-        "dtype": "float32",
-        "actual_dtype": "torch.float32",
-        "load_seconds": 0.5516,
-        "device": ""
-    },
-    {
-        "model": "yolo11",
-        "dtype": "float16",
-        "actual_dtype": "torch.float16",
-        "load_seconds": 0.1088,
-        "device": ""
-    },
-    {
-        "model": "yolo26",
-        "dtype": "float32",
-        "actual_dtype": "torch.float32",
-        "load_seconds": 0.5627,
-        "device": ""
-    },
-    {
-        "model": "yolo26",
-        "dtype": "float16",
-        "actual_dtype": "torch.float16",
-        "load_seconds": 0.1262,
-        "device": ""
-    },
-    {
-        "model": "yolo-world",
-        "dtype": "float32",
-        "actual_dtype": "torch.float32",
-        "load_seconds": 8.9126,
-        "device": ""
-    },
-    {
-        "model": "yolo-world",
-        "dtype": "float16",
-        "actual_dtype": "torch.float16",
-        "load_seconds": 5.718,
-        "device": ""
-    },
-    {
-        "model": "grounding-dino",
-        "dtype": "float32",
-        "actual_dtype": "torch.float32",
-        "load_seconds": 7.4588,
-        "device": ""
-    },
-    {
-        "model": "grounding-dino",
-        "dtype": "float16",
-        "actual_dtype": "torch.float16",
-        "load_seconds": 7.4346,
-        "device": ""
-    },
-    {
-        "model": "grounding-dino-base",
-        "dtype": "float32",
-        "actual_dtype": "torch.float32",
-        "load_seconds": 7.7474,
-        "device": ""
-    },
-    {
-        "model": "grounding-dino-base",
-        "dtype": "float16",
-        "actual_dtype": "torch.float16",
-        "load_seconds": 7.5992,
-        "device": ""
-    },
-    {
-        "model": "faster-rcnn",
-        "dtype": "float32",
-        "actual_dtype": "torch.float32",
-        "load_seconds": 1.6281,
-        "device": ""
-    },
-    {
-        "model": "faster-rcnn",
-        "dtype": "float16",
-        "actual_dtype": "torch.float16",
-        "load_seconds": 1.6675,
-        "device": ""
-    },
-    {
-        "model": "d-fine",
-        "dtype": "float32",
-        "actual_dtype": "float32",
-        "load_seconds": 15.35,
-        "device": ""
-    },
-    {
-        "model": "d-fine",
-        "dtype": "float16",
-        "actual_dtype": "float16",
-        "load_seconds": 15.8397,
-        "device": ""
-    }
+  {
+    "model": "yolo",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 0.0984,
+    "device": ""
+  },
+  {
+    "model": "yolo",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 0.0987,
+    "device": ""
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 0.5516,
+    "device": ""
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 0.1088,
+    "device": ""
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 0.5627,
+    "device": ""
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 0.1262,
+    "device": ""
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 8.9126,
+    "device": ""
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 5.718,
+    "device": ""
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 7.4588,
+    "device": ""
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 7.4346,
+    "device": ""
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 7.7474,
+    "device": ""
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 7.5992,
+    "device": ""
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 1.6281,
+    "device": ""
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 1.6675,
+    "device": ""
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float32",
+    "actual_dtype": "float32",
+    "load_seconds": 15.35,
+    "device": ""
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float16",
+    "actual_dtype": "float16",
+    "load_seconds": 15.8397,
+    "device": ""
+  },
+  {
+    "model": "locate-anything",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 49.6555,
+    "device": ""
+  },
+  {
+    "model": "locate-anything",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 19.7765,
+    "device": ""
+  }
 ]
