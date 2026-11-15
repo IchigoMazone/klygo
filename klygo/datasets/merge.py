@@ -24,7 +24,7 @@ def merge(
     format: str = "yolo",
     overwrite: bool = False,
     verbose: bool = True,
-) -> Path:
+) -> None:
     """Merge multiple YOLO datasets into one ZIP archive.
 
     Class names are combined in first-seen order. Label IDs from each source
@@ -46,8 +46,7 @@ def merge(
 
     Returns
     -------
-    pathlib.Path
-        Created archive path.
+    None
 
     Raises
     ------
@@ -63,7 +62,7 @@ def merge(
     Examples
     --------
     >>> from klygo import datasets
-    >>> merged = datasets.merge(["cars", "buses.zip"], "transport.zip")
+    >>> datasets.merge(["cars", "buses.zip"], "transport.zip")
     """
     validate_dataset_format(format)
     params = Merge(sources, output_path, overwrite, verbose)
@@ -105,7 +104,7 @@ def merge(
         }
         set_output_metadata_path(metadata, params.output_path)
         config.save(files.join(workspace, "data.yaml"), metadata, overwrite=True, verbose=False)
-        return write_output(
+        write_output(
             workspace,
             params.output_path,
             overwrite=params.overwrite,

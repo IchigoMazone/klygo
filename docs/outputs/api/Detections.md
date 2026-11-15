@@ -87,7 +87,7 @@ results.compact()
 dataset_dir = results.export("artifacts/predictions", format="yolo")
 ```
 
-`merge()` raises on any duplicate `(source_id, frame_index)` identity. Batch operations validate before committing. `filter()`, `drop()`, `relabel()`, `compact()`, and `clear()` return the same collection for in-place chaining:
+`merge()` raises on any duplicate `(source_id, frame_index)` identity. Batch operations validate before committing. `where()`, `drop()`, `relabel()`, `compact()`, and `clear()` return the same collection for in-place chaining:
 
 ```python
 results.drop("bg").relabel({"car": "vehicle"}).compact()

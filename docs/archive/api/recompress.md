@@ -58,6 +58,6 @@ with TemporaryDirectory() as directory:
     target = root / "compact.zip"
 
     archive.recompress(source, target, compresslevel=9, verbose=False)
-    assert archive.test(target)
+    assert archive.is_valid(target)
     print(files.size(source), files.size(target))
 ```

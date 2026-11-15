@@ -58,7 +58,7 @@ level. The owning [`Detections`](Detections.md) collection controls storage for
 every frame together through `cuda()`, `cpu()`, and `astype()`. This invariant
 prevents a collection from mixing NumPy and CuPy frames or numeric precision.
 
-`filter()`, `drop()`, `relabel()`, and `clear()` mutate the frame and return the
+`where()`, `drop()`, `relabel()`, and `clear()` mutate the frame and return the
 same instance for method chaining.
 
 ## Combining predictions

@@ -1,7 +1,7 @@
-# `archive.test`
+# `archive.is_valid`
 
 ```python
-archive.test(archive_path, raise_exception=False)
+archive.is_valid(archive_path, raise_exception=False)
 ```
 
 Test archive integrity.
@@ -26,15 +26,15 @@ Raises `ValueError` if integrity fails and `raise_exception=True`.
 
 ## AI usage guidance
 
-Prefer the public form `from klygo import archive` followed by `archive.test(...)`. Use `klygo.files` for surrounding filesystem work. Do not import `archive.backend` directly unless implementing a new archive format.
+Prefer the public form `from klygo import archive` followed by `archive.is_valid(...)`. Use `klygo.files` for surrounding filesystem work. Do not import `archive.backend` directly unless implementing a new archive format.
 
 ## Example
 
-See [`test.py`](../../../examples/archive/test.py) for an executable example.
+See [`is_valid.py`](../../../examples/archive/is_valid.py) for an executable example.
 
 ## Tests
 
-See [`test_test.py`](../../../test/archive/test_test.py) for the executable behavioral contract.
+See [`test_is_valid.py`](../../../test/archive/test_is_valid.py) for the executable behavioral contract.
 
 ## Complete executable example
 
@@ -52,10 +52,10 @@ from examples.archive._support import make_archive, make_source, member_ending
 with TemporaryDirectory() as directory:
     root = files.path(directory)
     packed = make_archive(root)
-    assert archive.test(packed)
+    assert archive.is_valid(packed)
 
     broken = root / "broken.zip"
     broken.write_bytes(b"PK\x03\x04broken")
-    assert archive.test(broken) is False
+    assert archive.is_valid(broken) is False
     print("valid and corrupted cases checked")
 ```

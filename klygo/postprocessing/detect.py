@@ -1,6 +1,9 @@
 """Backend-neutral, in-place detection postprocessing."""
 import math
-from typing import Any, Callable, Iterable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional
+
+if TYPE_CHECKING:
+    from .core import Operation
 
 import numpy as np
 
@@ -192,7 +195,7 @@ def _select(result: Result, *, where: Optional[Callable[[Box], bool]] = None,
                     and (cs is None or box.class_id in cs)
                     and (us is None or box.uid in us)
                 )
-            frame.filter(matches)
+            frame.where(matches)
 
     _frames(result, select_frame)
 
@@ -277,7 +280,13 @@ def _remove_invalid_boxes(result: Result, min_area: float = 0) -> None:
 
 
 def box_iou(first: Any, second: Any) -> float:
-    """Return intersection over union for two boxes or 4-coordinate sequences."""
+    """Return intersection over union for two boxes or 4-coordinate sequences.
+
+    Raises
+    ------
+    TypeError
+        If ``first`` or ``second`` is not a :class:`Box` or a 4-coordinate sequence.
+    """
     if isinstance(first, Box):
         x1_a, y1_a, x2_a, y2_a = first.xmin, first.ymin, first.xmax, first.ymax
         area_a = first.area
@@ -390,16 +399,28 @@ def _top_boxes(result: Result, count: int) -> None:
     _frames(result, top_frame)
 
 
-def map_boxes(function: Callable[[Box], Optional[Box]]):
-    """Build an operation that transforms every box atomically."""
+def map_boxes(function: Callable[[Box], Optional[Box]]) -> "Operation":
+    """Build an operation that transforms every box atomically.
+
+    Raises
+    ------
+    TypeError
+        If ``function`` is not callable.
+    """
     if not callable(function):
         raise TypeError("function must be callable")
     from .core import Operation
     return Operation("map_boxes", lambda result: _map_boxes(result, function))
 
 
-def threshold(minimum: float):
-    """Build a score-threshold operation."""
+def threshold(minimum: float) -> "Operation":
+    """Build a score-threshold operation.
+
+    Raises
+    ------
+    ValueError
+        If ``minimum`` is not finite.
+    """
     from .core import Operation
     minimum = float(minimum)
     if not math.isfinite(minimum):
@@ -407,8 +428,16 @@ def threshold(minimum: float):
     return Operation("threshold", lambda result: _filter_score(result, minimum), _trusted=True)
 
 
-def clip(image_size: Optional[tuple[int, int]] = None):
-    """Build a clipping operation."""
+def clip(image_size: Optional[tuple[int, int]] = None) -> "Operation":
+    """Build a clipping operation.
+
+    Raises
+    ------
+    TypeError
+        If ``image_size`` is not a ``(width, height)`` integer pair.
+    ValueError
+        If ``image_size`` dimensions are not positive.
+    """
     from .core import Operation
     if image_size is not None:
         if not isinstance(image_size, (tuple, list)) or len(image_size) != 2:
@@ -421,8 +450,14 @@ def clip(image_size: Optional[tuple[int, int]] = None):
     return Operation("clip", lambda result: _clip_boxes(result, image_size), _trusted=True)
 
 
-def remove_invalid(min_area: float = 0):
-    """Build an invalid-box removal operation."""
+def remove_invalid(min_area: float = 0) -> "Operation":
+    """Build an invalid-box removal operation.
+
+    Raises
+    ------
+    ValueError
+        If ``min_area`` is not finite or is negative.
+    """
     from .core import Operation
     minimum = float(min_area)
     if not math.isfinite(minimum):
@@ -432,8 +467,16 @@ def remove_invalid(min_area: float = 0):
     return Operation("remove_invalid", lambda result: _remove_invalid_boxes(result, minimum), _trusted=True)
 
 
-def nms(iou: float = .5, class_agnostic: bool = False):
-    """Build a non-maximum-suppression operation."""
+def nms(iou: float = .5, class_agnostic: bool = False) -> "Operation":
+    """Build a non-maximum-suppression operation.
+
+    Raises
+    ------
+    ValueError
+        If ``iou`` is outside ``[0, 1]``.
+    TypeError
+        If ``class_agnostic`` is not a boolean.
+    """
     from .core import Operation
     iou = float(iou)
     if not 0 <= iou <= 1:
@@ -443,8 +486,16 @@ def nms(iou: float = .5, class_agnostic: bool = False):
     return Operation("nms", lambda result: _suppress(result, iou, class_agnostic), _trusted=True)
 
 
-def top(count: int):
-    """Build a top-score operation."""
+def top(count: int) -> "Operation":
+    """Build a top-score operation.
+
+    Raises
+    ------
+    TypeError
+        If ``count`` is not an integer.
+    ValueError
+        If ``count`` is negative.
+    """
     from .core import Operation
     if isinstance(count, bool) or not isinstance(count, int):
         raise TypeError("count must be an integer")

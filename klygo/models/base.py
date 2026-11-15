@@ -80,7 +80,7 @@ class BaseModel(ABC):
         if hasattr(self, "metadata") and isinstance(self.metadata, dict):
             self.metadata["backend"] = value
 
-    def suppress_warnings(self):
+    def suppress_warnings(self) -> Any:
         """Delegate to :func:`klygo.models.utils.suppress_warnings` to silence noisy framework warnings."""
         return utils.suppress_warnings()
 
@@ -125,7 +125,7 @@ class BaseModel(ABC):
         output_path: Union[str, os.PathLike[str]] = "config.json",
         *,
         overwrite: bool = False,
-    ) -> os.PathLike[str]:
+    ) -> None:
         """Export the resolved Klygo model configuration to ``config.json``.
 
         Parameters
@@ -137,8 +137,7 @@ class BaseModel(ABC):
 
         Returns
         -------
-        pathlib.Path
-            Path to the exported configuration file.
+        None
 
         Raises
         ------
@@ -161,7 +160,6 @@ class BaseModel(ABC):
             overwrite=overwrite,
             verbose=False,
         )
-        return output_path
 
     # =========================================================================
     # PROPERTIES: config, settings, params
@@ -228,13 +226,13 @@ class BaseModel(ABC):
     # ABSTRACT CONTRACT
     # =========================================================================
     @abstractmethod
-    def predict(self, *args, **kwargs):
+    def predict(self, *args, **kwargs) -> Any:
         raise NotImplementedError
 
     @abstractmethod
-    def benchmark(self, *args, **kwargs):
+    def benchmark(self, *args, **kwargs) -> Dict[str, Any]:
         raise NotImplementedError
 
     @abstractmethod
-    def help(self) -> None:
+    def help(self) -> Dict[str, Any]:
         raise NotImplementedError

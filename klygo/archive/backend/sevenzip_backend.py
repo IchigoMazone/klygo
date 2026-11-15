@@ -186,7 +186,7 @@ class SevenZipBackend(ArchiveBackend):
                 results.append(name)
         return results
 
-    def get_info(self, archive_path: Path) -> Dict[str, Any]:
+    def info(self, archive_path: Path) -> Dict[str, Any]:
         """Normalize 7-Zip metadata, sizes, encryption, and member counts."""
         py7zr = self._check_py7zr()
         with py7zr.SevenZipFile(archive_path, mode="r") as archive:
@@ -212,12 +212,12 @@ class SevenZipBackend(ArchiveBackend):
                 "smallest_file": files[-1] if files else None,
             }
 
-    def test(self, archive_path: Path, raise_exception: bool = False) -> bool:
+    def is_valid(self, archive_path: Path, raise_exception: bool = False) -> bool:
         """Delegate archive integrity testing to ``py7zr``."""
         py7zr = self._check_py7zr()
         try:
             with py7zr.SevenZipFile(archive_path, mode="r") as archive:
-                return archive.test()
+                return archive.is_valid()
         except Exception as e:
             if raise_exception:
                 raise ValueError(f"7z archive corrupted: {e}")

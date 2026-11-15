@@ -289,7 +289,7 @@ def export(
     *,
     overwrite: bool = False,
     **kwargs,
-) -> os.PathLike[str]:
+) -> None:
     """Export a registered model configuration without loading its weights.
 
     Parameters
@@ -305,8 +305,7 @@ def export(
 
     Returns
     -------
-    pathlib.Path
-        Path to the exported configuration file.
+    None
 
     Raises
     ------
@@ -333,7 +332,6 @@ def export(
         overwrite=overwrite,
         verbose=False,
     )
-    return output_path
 
 def configure(
     model_id: str,

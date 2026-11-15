@@ -206,7 +206,7 @@ class _Report:
         """
         return asdict(self)  # type: ignore[arg-type]
 
-    def save(self, path: Any) -> Any:
+    def save(self, path: Any) -> None:
         """Save the report to disk as JSON, Markdown, or CSV.
 
         Parameters
@@ -217,10 +217,9 @@ class _Report:
 
         Returns
         -------
-        pathlib.Path
-            Path to the saved file.
+        None
         """
-        return _save_report(self, path)
+        _save_report(self, path)
 
     def _rows(self) -> list[dict[str, Any]]:
         """Return tabular rows for CSV serialization."""

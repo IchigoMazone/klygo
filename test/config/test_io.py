@@ -18,29 +18,28 @@ class TextPath:
 
 
 class TestConfigIO(unittest.TestCase):
-    def test_load_save_convert_and_export(self):
+    def test_load_save_and_convert(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "settings.yaml"
-            self.assertEqual(config.save(source, {"model": {"batch": 16}}, verbose=False), source)
+            self.assertIsNone(config.save(source, {"model": {"batch": 16}}, verbose=False))
             loaded = config.load(source, verbose=False)
             self.assertIsInstance(loaded, Box)
             self.assertEqual(loaded.model.batch, 16)
-            converted = config.convert(source, root / "settings.toml", verbose=False)
+            converted = root / "settings.toml"
+            self.assertIsNone(config.convert(source, converted, verbose=False))
             self.assertEqual(config.load(converted, verbose=False).model.batch, 16)
-            self.assertTrue(config.export(loaded, root / "settings.json", verbose=False).is_file())
 
     def test_pathlike_inputs_are_accepted(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             source = TextPath(root / "settings.yaml")
-            saved = config.save(source, {"model": {"batch": 16}}, verbose=False)
+            self.assertIsNone(config.save(source, {"model": {"batch": 16}}, verbose=False))
             self.assertEqual(config.load(source, verbose=False).model.batch, 16)
-            converted = config.convert(source, TextPath(root / "settings.toml"), verbose=False)
+            converted = root / "settings.toml"
+            self.assertIsNone(config.convert(source, TextPath(converted), verbose=False))
             self.assertTrue(converted.is_file())
-            exported = config.export(source, TextPath(root / "settings.json"), verbose=False)
-            self.assertEqual(config.load(exported, verbose=False).model.batch, 16)
-            self.assertEqual(saved, root / "settings.yaml")
+            self.assertTrue((root / "settings.yaml").is_file())
 
     def test_root_expansion_and_invalid_document(self):
         with TemporaryDirectory() as directory:

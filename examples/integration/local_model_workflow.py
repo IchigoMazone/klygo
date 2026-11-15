@@ -63,7 +63,7 @@ class RealLocalDetector(Detector):
         all_detections: list[Detection] = []
         for img in images:
             preds = self.base_detector.predict(img, prompt=prompts, verbose=False)[0]
-            filtered = preds.filter(
+            filtered = preds.where(
                 lambda box: box.score >= self.confidence and box.label in self.target_classes
             )
             all_detections.append(filtered)

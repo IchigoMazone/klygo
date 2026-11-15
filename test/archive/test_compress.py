@@ -29,7 +29,7 @@ class TestCompress(unittest.TestCase):
                     archive.compress(source, output, verbose=False)
                     self.assertTrue(files.is_file(output))
                     self.assertEqual(archive.detect_format(output), expected)
-                    self.assertTrue(archive.test(output))
+                    self.assertTrue(archive.is_valid(output))
                     with self.assertRaises(FileExistsError):
                         archive.compress(source, output, verbose=False)
 
@@ -45,7 +45,7 @@ class TestCompress(unittest.TestCase):
             gzip_path = root / "single.txt.gz"
             archive.compress(single, gzip_path, verbose=False)
             self.assertEqual(archive.detect_format(gzip_path), "gz")
-            self.assertTrue(archive.test(gzip_path))
+            self.assertTrue(archive.is_valid(gzip_path))
 
             with self.assertRaises(FileNotFoundError):
                 archive.compress(root / "missing", root / "missing.zip", verbose=False)

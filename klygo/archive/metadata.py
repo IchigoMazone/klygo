@@ -126,7 +126,7 @@ def search(
     )
 
 
-def get_info(archive_path: Union[str, Path]) -> Dict[str, Any]:
+def info(archive_path: Union[str, Path]) -> Dict[str, Any]:
     """Return detailed archive metadata and compression statistics.
 
     Parameters
@@ -152,14 +152,14 @@ def get_info(archive_path: Union[str, Path]) -> Dict[str, Any]:
     Examples
     --------
     >>> from klygo import archive, utils
-    >>> metadata = archive.get_info("dataset.zip")
+    >>> metadata = archive.info("dataset.zip")
     >>> utils.tabulate(metadata, title="Archive Information")
     """
     path, backend = resolve_backend(archive_path)
-    return backend.get_info(path)
+    return backend.info(path)
 
 
-def test(archive_path: Union[str, Path], raise_exception: bool = False) -> bool:
+def is_valid(archive_path: Union[str, Path], raise_exception: bool = False) -> bool:
     """Test archive integrity.
 
     Corruption normally returns ``False``; ``raise_exception=True`` converts backend failures into ``ValueError``.
@@ -188,11 +188,11 @@ def test(archive_path: Union[str, Path], raise_exception: bool = False) -> bool:
     Examples
     --------
     >>> import klygo.archive as archive
-    >>> archive.test("dataset.zip")
+    >>> archive.is_valid("dataset.zip")
     True
     """
     path, backend = resolve_backend(archive_path)
-    return backend.test(path, raise_exception=raise_exception)
+    return backend.is_valid(path, raise_exception=raise_exception)
 
 
 def verify(archive_path: Union[str, Path]) -> Dict[str, Any]:
@@ -220,7 +220,7 @@ def verify(archive_path: Union[str, Path]) -> Dict[str, Any]:
     See Also
     --------
     test
-    get_info
+    info
 
     Examples
     --------
@@ -229,8 +229,8 @@ def verify(archive_path: Union[str, Path]) -> Dict[str, Any]:
     True
     """
     path, backend = resolve_backend(archive_path)
-    is_valid = backend.test(path, raise_exception=False)
-    info = backend.get_info(path)
+    is_valid = backend.is_valid(path, raise_exception=False)
+    info = backend.info(path)
 
     return {
         "valid": is_valid,
@@ -294,8 +294,8 @@ __all__ = [
     "list_files",
     "iter_files",
     "search",
-    "get_info",
-    "test",
+    "info",
+    "is_valid",
     "verify",
     "compare",
     "detect_format",

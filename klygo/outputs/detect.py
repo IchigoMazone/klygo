@@ -10,7 +10,10 @@ from numbers import Integral
 import sys
 import uuid
 import weakref
-from typing import Any, Callable, Iterable, Iterator, Mapping, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Mapping, Optional, Sequence
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 import numpy as np
 
@@ -1384,7 +1387,7 @@ class Detection:
         self._slice_keep([], "clear_boxes")
         return self
 
-    def filter(self, predicate: Callable[[Box], bool]) -> "Detection":
+    def where(self, predicate: Callable[[Box], bool]) -> "Detection":
         """Remove boxes rejected by a predicate."""
         if not callable(predicate):
             raise TypeError("predicate must be callable")
@@ -1619,7 +1622,7 @@ class Detection:
         raise RuntimeError("Cannot access frame pixels: source frame is unavailable")
 
     @property
-    def image(self) -> Any:
+    def image(self) -> "Image.Image":
         """Return an independent PIL copy of this frame's source image.
 
         Returns
@@ -1669,14 +1672,14 @@ class Detection:
     def save(self, output_path: Any, mode: str = "default", *, show_labels: bool = True,
              show_scores: bool = True, line_width: Optional[int] = None,
              font_size: Optional[int] = None, overwrite: bool = False,
-             verbose: bool = False) -> Any:
+             verbose: bool = False) -> None:
         """Draw this frame's boxes and save the annotated image."""
         from klygo import media
         annotated = self._render(
             mode, show_labels=show_labels, show_scores=show_scores,
             line_width=line_width, font_size=font_size,
         )
-        return media.save(output_path, annotated, overwrite=overwrite, verbose=verbose)
+        media.save(output_path, annotated, overwrite=overwrite, verbose=verbose)
 
     def preview_box(self, box: Box | Iterable[Any], *, label: Optional[str] = None,
                     score: float = 1.0, show_existing: bool = True,
@@ -1685,8 +1688,8 @@ class Detection:
                     line_width: Optional[int] = None,
                     font_size: Optional[int] = None,
                     width: Optional[int] = None, height: Optional[int] = None,
-                    title: str = "Box preview", backend: str = "auto") -> Any:
-        """Display and return a non-mutating preview of a proposed box."""
+                    title: str = "Box preview", backend: str = "auto") -> None:
+        """Display a non-mutating preview of a proposed box."""
         validators.validate_type(show_labels, bool, "show_labels")
         if isinstance(box, Box):
             candidate = box
@@ -1714,7 +1717,6 @@ class Detection:
             box_color=preview_color, show_labels=show_labels, show_scores=show_scores,
         )
         visual.show_image(annotated, title=title, width=width, height=height, backend=backend)
-        return annotated
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize annotations without decoding pixels."""
@@ -2759,7 +2761,7 @@ class Detections:
         other._require_materialized("merge()")
         self.extend(f._clone() for f in other); self._history[-1]["operation"] = "merge"
 
-    def filter(self, predicate: Callable[[Detection], bool]) -> "Detections":
+    def where(self, predicate: Callable[[Detection], bool]) -> "Detections":
         """Remove frames rejected by a predicate."""
         if not callable(predicate): raise TypeError("predicate must be callable")
         if self._stream_mode:
@@ -3188,8 +3190,8 @@ class Detections:
         labels_dir: Optional[str] = None,
         yaml_name: Optional[str] = None,
         overwrite: bool = False,
-    ) -> Any:
-        """Export annotations and optional source images, returning the output path."""
+    ) -> None:
+        """Export annotations and optional source images."""
         self._require_materialized("export()")
         validators.validate_type(image, bool, "image")
         validators.validate_type(images_dir, str, "images_dir")
@@ -3205,7 +3207,8 @@ class Detections:
             raise ValueError("yaml_name must be a non-empty string")
         format = str(format).lower()
         if format == "json":
-            return files.save(path, self.to_dict(), overwrite=overwrite, verbose=False)
+            files.save(path, self.to_dict(), overwrite=overwrite, verbose=False)
+            return
         if format != "yolo": raise ValueError("format must be 'yolo' or 'json'")
 
         output_dir = files.path(path)
@@ -3257,7 +3260,6 @@ class Detections:
                 verbose=False,
             )
         files.save(yaml_path, {"names": names}, overwrite=True, verbose=False)
-        return output_dir
 
     def transform(self, *operations: Any) -> "Detections":
         """Apply one or more postprocessing operations or a callable pipeline in-place.
@@ -3434,7 +3436,15 @@ def _fast_detection_arrays(
 def build_detections(images: Sequence[Any], predictions: Sequence[Mapping[str, Any]], *,
                      metadata: Optional[Mapping[str, Any]] = None,
                      names: Optional[Mapping[int, Any] | Sequence[Any]] = None) -> list[Detection]:
-    """Build one frame per image from normalized backend predictions."""
+    """Build one frame per image from normalized backend predictions.
+
+    Raises
+    ------
+    ValueError
+        If ``images`` and ``predictions`` differ in length, or prediction arrays are mismatched.
+    TypeError
+        If any prediction entry is not a mapping.
+    """
     images, predictions, registry = list(images), list(predictions), _names(names)
     if len(images) != len(predictions): raise ValueError("images and predictions must have the same length")
     registry_rev = {value: key for key, value in registry.items()}

@@ -16,7 +16,9 @@ class TestSplitBySize(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             packed = make_archive(root)
-            parts = archive.split_by_size(packed, 0.00001, root / "parts", verbose=False)
+            parts_dir = root / "parts"
+            self.assertIsNone(archive.split_by_size(packed, 0.00001, parts_dir, verbose=False))
+            parts = files.find(parts_dir)
             self.assertGreaterEqual(len(parts), 1)
             self.assertTrue(all(files.is_file(part) for part in parts))
 

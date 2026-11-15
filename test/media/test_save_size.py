@@ -116,7 +116,7 @@ class TestSaveSize(unittest.TestCase):
             media.save_video(source, [Image.new("RGB", (32, 24), "red")], fourcc="MJPG")
             with patch("shutil.which", return_value=None):
                 result = media.convert(source, destination, codec="mp4v", gpu=False)
-            self.assertEqual(result, destination)
+            self.assertIsNone(result)
             self.assertTrue(files.exists(destination))
 
 

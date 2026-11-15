@@ -41,7 +41,7 @@ uv pip install "klygo[rarfile]"
 Both extras can be selected together as `klygo[py7zr,rarfile]`.
 
 Read operations (`extract`, `extract_file`, `list_files`, `iter_files`,
-`search`, `get_info`, and `test`) are mandatory in the abstract contract and
+`search`, `info`, and `is_valid`) are mandatory in the abstract contract and
 therefore are not capability flags.
 
 ## Public symbols

@@ -12,7 +12,8 @@ with TemporaryDirectory() as directory:
     packed = files.join(root, "dataset.zip")
     archive.compress(source, packed, verbose=False)
 
-    flat = datasets.unpartition(packed, files.join(root, "flat"), verbose=False)
+    flat = files.join(root, "flat")
+    datasets.unpartition(packed, flat, verbose=False)
     results = datasets.load(flat, format="yolo", verbose=False)
     print("Images:", len(results))
     print("Objects:", results.total_objects)

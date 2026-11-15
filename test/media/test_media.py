@@ -225,13 +225,13 @@ class TestMedia(unittest.TestCase):
         # 6. media.convert
         png_p = self.tmp_path / "saved.png"
         jpg_p = self.tmp_path / "converted.jpg"
-        conv_res = media.convert(png_p, jpg_p, overwrite=True, verbose=False)
-        assert conv_res.exists()
+        self.assertIsNone(media.convert(png_p, jpg_p, overwrite=True, verbose=False))
+        assert jpg_p.exists()
 
         # 7. media.copy
         copied_p = self.tmp_path / "copied.png"
-        cp_res = media.copy(png_p, copied_p, overwrite=True)
-        assert cp_res.exists()
+        self.assertIsNone(media.copy(png_p, copied_p, overwrite=True))
+        assert copied_p.exists()
 
     def test_stream_counts_validation(self):
         img_dir = self.tmp_path / "stream_val_images"

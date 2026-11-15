@@ -14,7 +14,7 @@ The active capture handle (`.cap`) is opened lazily on the first [`read_frame(in
 - Tracks the current playhead position (`_current_pos`) so sequential reads (`0, 1, 2, ...`) call `cap.read()` directly without expensive `CAP_PROP_POS_FRAMES` seeks.
 - Seeks automatically when `index != _current_pos`, and retries with an explicit seek if a read fails due to container desynchronization.
 - Returns `None` cleanly for negative indices, indices `>= total_frames`, or unreadable frames instead of raising an exception.
-- Call `.close()` or `.release()` to free the underlying OpenCV capture descriptor deterministically.
+- Call `.close()` to free the underlying OpenCV capture descriptor deterministically.
 
 ## Parameters
 
@@ -22,7 +22,7 @@ The active capture handle (`.cap`) is opened lazily on the first [`read_frame(in
 
 ## Returns
 
-`VideoReader` — reader instance with attributes `.path`, `.total_frames`, `.fps`, `.width`, `.height`, and methods `.read_frame(index)`, `.release()`, and `.close()`.
+`VideoReader` — reader instance with attributes `.path`, `.total_frames`, `.fps`, `.width`, `.height`, and methods `.read_frame(index)` and `.close()`.
 
 ## Errors and edge cases
 

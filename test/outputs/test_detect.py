@@ -117,7 +117,7 @@ class TestOutputs(unittest.TestCase):
     def test_output_mutations_support_method_chaining(self):
         item = frame(labels=("car", "person", "bus"))
         self.assertIs(
-            item.filter(lambda box: box.score > 0.7).drop("person").relabel({"car": "vehicle"}),
+            item.where(lambda box: box.score > 0.7).drop("person").relabel({"car": "vehicle"}),
             item,
         )
         self.assertEqual(item.labels, ["vehicle"])
@@ -127,14 +127,14 @@ class TestOutputs(unittest.TestCase):
         chained = results.drop("person").relabel({"car": "vehicle"}).compact()
         self.assertIs(chained, results)
         self.assertEqual(results.names, {0: "vehicle"})
-        self.assertIs(results.filter(lambda candidate: candidate.has_objects), results)
+        self.assertIs(results.where(lambda candidate: candidate.has_objects), results)
         self.assertIs(results.clear(), results)
 
     def test_visual_exports_save_image_sequence_and_streaming_video(self):
         with tempfile.TemporaryDirectory() as root:
             item = frame(labels=("car",))
             image_path = files.join(root, "single.png")
-            self.assertEqual(item.save(image_path, mode="uid"), files.path(image_path))
+            self.assertIsNone(item.save(image_path, mode="uid"))
             self.assertTrue(files.exists(image_path))
 
             results = outputs.Detections([frame(index=0), frame(index=1)])
@@ -200,7 +200,7 @@ class TestOutputs(unittest.TestCase):
                 yield frame("stream", index, labels)
 
         results = outputs.Detections(generate(), stream=True)
-        self.assertIs(results.filter(lambda candidate: candidate.has_objects), results)
+        self.assertIs(results.where(lambda candidate: candidate.has_objects), results)
         self.assertEqual(consumed, [])
         self.assertEqual([item.frame_index for item in results], [0, 2])
 
@@ -253,14 +253,16 @@ class TestOutputs(unittest.TestCase):
     def test_preview_box_draws_candidate_without_adding_it(self):
         item = frame(); before = item.to_dict()
         with patch("klygo.visual.show_image") as display:
-            preview = item.preview_box(
+            result = item.preview_box(
                 [20, 15, 30, 25], label="bicycle", score=.75,
                 preview_color=(255, 0, 0),
             )
+        self.assertIsNone(result)
         self.assertEqual(item.to_dict(), before)
+        display.assert_called_once()
+        preview = display.call_args.args[0]
         self.assertEqual(preview.size, item.image_size)
         self.assertEqual(preview.getpixel((20, 15)), (255, 0, 0))
-        display.assert_called_once()
 
     def test_preview_box_validates_before_display(self):
         item = frame(); before = item.to_dict()
@@ -478,7 +480,7 @@ class TestOutputs(unittest.TestCase):
             item = frame()
             item._source = Image.new("RGBA", item.image_size)
             exported = outputs.Detections([item]).export(target)
-            self.assertEqual(exported, files.path(target))
+            self.assertIsNone(exported)
             self.assertTrue(files.exists(files.join(target,"data.yaml")))
             self.assertEqual(len(files.find(files.join(target, "images"), pattern="*.jpg")), 1)
             self.assertEqual(len(files.find(files.join(target, "labels"), pattern="*.txt")), 1)
@@ -489,7 +491,7 @@ class TestOutputs(unittest.TestCase):
             target = files.join(root, "pseudo")
             item = frame()
             exported = outputs.Detections([item]).export(target, image=False)
-            self.assertEqual(exported, files.path(target))
+            self.assertIsNone(exported)
             self.assertTrue(files.exists(files.join(target, "pseudo.yaml")))
             self.assertFalse(files.exists(files.join(target, "images")))
             self.assertFalse(files.exists(files.join(target, "labels")))

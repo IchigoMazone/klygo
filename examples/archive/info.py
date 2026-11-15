@@ -1,4 +1,4 @@
-"""Executable examples for klygo.archive.get_info."""
+"""Executable examples for klygo.archive.info."""
 
 from tempfile import TemporaryDirectory
 
@@ -10,7 +10,7 @@ from examples.archive._support import make_archive, make_source, member_ending
 
 with TemporaryDirectory() as directory:
     packed = make_archive(files.path(directory))
-    metadata = archive.get_info(packed)
+    metadata = archive.info(packed)
     print("format:", metadata["format"])
     print("members:", metadata["file_count"])
     print("archive size:", metadata["human_archive_size"])

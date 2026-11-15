@@ -263,11 +263,11 @@ class ArchiveBackend(ABC):
         """Return members matching a glob or regular expression."""
 
     @abstractmethod
-    def get_info(self, archive_path: Path) -> Dict[str, Any]:
+    def info(self, archive_path: Path) -> Dict[str, Any]:
         """Return normalized archive metadata used by the public facade."""
 
     @abstractmethod
-    def test(self, archive_path: Path, raise_exception: bool = False) -> bool:
+    def is_valid(self, archive_path: Path, raise_exception: bool = False) -> bool:
         """Read the archive and report whether its structure is valid."""
 
     def add(self, *args: Any, **kwargs: Any) -> None:

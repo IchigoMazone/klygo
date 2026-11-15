@@ -1,6 +1,9 @@
 """Formatting and mapping utilities shared across Klygo modules."""
 
-from typing import Any, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Mapping, Sequence
+
+if TYPE_CHECKING:
+    from rich.table import Table
 
 
 def exclude_keys(
@@ -11,6 +14,11 @@ def exclude_keys(
 
     ``keys`` accepts one string or a list of strings. The input mapping is
     never modified.
+
+    Raises
+    ------
+    TypeError
+        If ``values`` is not a mapping or ``keys`` is not a string or list of strings.
     """
     if not isinstance(values, Mapping):
         raise TypeError("values must be a mapping")
@@ -28,6 +36,13 @@ def invert(values: Mapping[Any, Any]) -> dict[Any, Any]:
 
     Values must be unique and hashable so the operation remains reversible.
     The input mapping is never modified.
+
+    Raises
+    ------
+    TypeError
+        If ``values`` is not a mapping or contains unhashable values.
+    ValueError
+        If any two keys map to the same value.
     """
     if not isinstance(values, Mapping):
         raise TypeError("values must be a mapping")
@@ -150,7 +165,7 @@ def tabulate(
     header_style: str = "none",
     title_style: str = "none",
     **table_kwargs: Any,
-) -> Any:
+) -> "Table | None":
     """Render a mapping or sequence of row mappings as a Rich table.
 
     Parameters

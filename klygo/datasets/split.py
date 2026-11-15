@@ -51,7 +51,7 @@ def split(
     ratios: tuple[float, ...] | None = None,
     overwrite: bool = False,
     verbose: bool = True,
-) -> list[Path]:
+) -> None:
     """Split a YOLO dataset into multiple ZIP archives.
 
     Exactly one strategy is selected: ``by_class=True`` creates one archive
@@ -79,8 +79,7 @@ def split(
 
     Returns
     -------
-    list[pathlib.Path]
-        Archives created in deterministic order.
+    None
 
     Raises
     ------
@@ -96,12 +95,11 @@ def split(
     Examples
     --------
     >>> from klygo import datasets
-    >>> outputs = datasets.split("dataset", "parts", ratios=(0.8, 0.2))
+    >>> datasets.split("dataset", "parts", ratios=(0.8, 0.2))
     """
     validate_dataset_format(format)
     params = Split(source, output_dir, by_class, class_groups, ratios, overwrite, verbose)
     files.mkdir(params.output_dir)
-    created: list[Path] = []
 
     with open_dataset(params.source, verbose=False) as root:
         class_map = read_class_map(root)
@@ -151,13 +149,11 @@ def split(
 
                     if copied:
                         _write_split_metadata(workspace, group)
-                        created.append(
-                            write_output(
-                                workspace,
-                                destination,
-                                overwrite=params.overwrite,
-                                verbose=params.verbose,
-                            )
+                        write_output(
+                            workspace,
+                            destination,
+                            overwrite=params.overwrite,
+                            verbose=params.verbose,
                         )
         else:
             shuffled = list(pairs)
@@ -178,15 +174,12 @@ def split(
                         if label_path is not None:
                             copy_entry(label_path, files.join(workspace, "labels", files.with_extension(image_name, ".txt")))
                     _write_split_metadata(workspace, class_map)
-                    created.append(
-                        write_output(
-                            workspace,
-                            destination,
-                            overwrite=params.overwrite,
-                            verbose=params.verbose,
-                        )
+                    write_output(
+                        workspace,
+                        destination,
+                        overwrite=params.overwrite,
+                        verbose=params.verbose,
                     )
-    return created
 
 
 __all__ = ["split"]

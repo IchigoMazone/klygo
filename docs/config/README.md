@@ -50,13 +50,11 @@ Local Tutorial Notebooks (`tutorials/config/`, 1-to-1 with `klygo/config/` submo
 | **Load configuration with `./` path expansion** | [`load()`](api/load.md) | `cfg = config.load("settings.yaml")` |
 | **Save configuration to another format** | [`save()`](api/save.md) | `config.save("settings.toml", cfg, overwrite=True)` |
 | **Convert configuration file format directly** | [`convert()`](api/convert.md) | `config.convert("settings.yaml", "settings.json")` |
-| **Export configuration object or file** | [`export()`](api/export.md) | `config.export(cfg, "resolved.toml", overwrite=True)` |
 | **Read nested value via dot notation** | [`get()`](api/get.md) | `batch = config.get(cfg, "model.batch", default=16)` |
 | **Assign nested value (pure, non-mutating)** | [`set()`](api/set.md) | `cfg2 = config.set(cfg, "model.batch", 32)` |
 | **Check if nested key exists (even if `None`)** | [`has()`](api/has.md) | `if config.has(cfg, "model.optimizer"): ...` |
 | **Delete nested key in-place** | [`delete()`](api/delete.md) | `config.delete(cfg, "model.lr")` |
 | **Recursively merge configurations left-to-right**| [`merge()`](api/merge.md) | `combined = config.merge(defaults, env_overrides, cli_flags)` |
-| **Apply updates to a configuration** | [`update()`](api/update.md) | `cfg2 = config.update(cfg, {"model": {"epochs": 50}})` |
 | **Flatten nested dictionary to dot paths** | [`flatten()`](api/flatten.md) | `flat = config.flatten(cfg)  # {'model.batch': 16}` |
 | **Expand dot paths back to nested dictionary** | [`unflatten()`](api/unflatten.md) | `nested = config.unflatten({"model.batch": 16})` |
 | **Overlay environment variables (`KLYGO_*`)** | [`from_env()`](api/from_env.md) | `cfg = config.from_env(cfg, prefix="KLYGO_", parse_values=True)` |
@@ -65,7 +63,7 @@ Local Tutorial Notebooks (`tutorials/config/`, 1-to-1 with `klygo/config/` submo
 | **Validate required paths and data types** | [`validate()`](api/validate.md) | `config.validate(cfg, {"model.batch": int})` |
 | **Get default built-in configuration template** | [`defaults()`](api/defaults.md) | `tmpl = config.defaults({"model": {"name": "yolov8m"}})` |
 | **Create default config file on disk** | [`create()`](api/create.md) | `cfg = config.create("settings.yaml", overwrite=True)` |
-| **Manage config via stateful class interface** | [`Config`](api/Config.md) | `manager = Config("settings.yaml"); manager.read()` |
+| **Manage config via stateful class interface** | [`Config`](api/Config.md) | `manager = Config("settings.yaml"); manager.load()` |
 | **Persist a model metadata schema exactly** | [`Config.create_default()`](api/Config.md) | `Config.create_default("model.toml", metadata=schema)` |
 | **Reload configured model metadata** | [`load()`](api/load.md) | `model = models.load(config.load("model.yaml"))` |
 
@@ -81,7 +79,6 @@ Local Tutorial Notebooks (`tutorials/config/`, 1-to-1 with `klygo/config/` submo
 - [`load(path, verbose=True)`](api/load.md): Load configuration file into dot-accessible `Box` with `./` expansion.
 - [`save(path, data, overwrite=False, ...)`](api/save.md): Save configuration mapping or `Box` to destination format.
 - [`convert(source, target, overwrite=False, ...)`](api/convert.md): Format conversion between configuration files.
-- [`export(source, target, overwrite=False, ...)`](api/export.md): Export configuration object or file to destination file.
 
 </details>
 
@@ -97,7 +94,6 @@ Local Tutorial Notebooks (`tutorials/config/`, 1-to-1 with `klygo/config/` submo
 <summary><b>Configuration merging and updating — <code>mapping.py</code> (2 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`merge(*configs, deep=True)`](api/merge.md): Merge multiple configurations left to right.
-- [`update(config_data, updates, deep=True)`](api/update.md): Deep update configuration mapping without mutating input.
 
 </details>
 

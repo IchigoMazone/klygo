@@ -16,7 +16,7 @@ def repartition(
     format: str = "yolo",
     overwrite: bool = False,
     verbose: bool = True,
-) -> Path:
+) -> None:
     """Flatten existing splits and create a new deterministic partition.
 
     Parameters are identical to :func:`klygo.datasets.partition`. Source
@@ -40,8 +40,7 @@ def repartition(
 
     Returns
     -------
-    pathlib.Path
-        Created dataset path.
+    None
 
     Raises
     ------
@@ -57,11 +56,11 @@ def repartition(
     Examples
     --------
     >>> from klygo import datasets
-    >>> output = datasets.repartition("old", "new", (0.7, 0.2, 0.1))
+    >>> datasets.repartition("old", "new", (0.7, 0.2, 0.1))
     """
     validate_dataset_format(format)
     params = Repartition(source, target, ratios, overwrite, verbose)
-    return execute_partition(
+    execute_partition(
         params.source,
         params.target,
         params.ratios,

@@ -1,14 +1,15 @@
 """Direct and deferred object-detection metric configurations."""
 from numbers import Integral
+from typing import Any
 from klygo import validators
-from ._core import _MISSING, _dispatch, _unit, _thresholds
+from ._core import _MISSING, _Metric, _dispatch, _unit, _thresholds
 
 __all__ = ["precision_recall", "map_score", "confusion_matrix", "match_boxes",
            "per_class", "per_image", "error_analysis", "size_breakdown",
            "calibration", "threshold_sweep", "iou_sweep"]
 
 
-def precision_recall(pred=_MISSING, target=_MISSING, *, iou=0.5):
+def precision_recall(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | list[Any] | _Metric:
     """Compute pooled precision, recall, F1, counts, and matched mean IoU.
 
     Parameters
@@ -37,7 +38,7 @@ def precision_recall(pred=_MISSING, target=_MISSING, *, iou=0.5):
     return _dispatch("precision_recall", pred, target, iou=_unit(iou, "iou"))
 
 
-def map_score(pred=_MISSING, target=_MISSING, *, thresholds=None):
+def map_score(pred=_MISSING, target=_MISSING, *, thresholds=None) -> dict[str, Any] | list[Any] | _Metric:
     """Compute class-wise 101-point interpolated AP and mean AP.
 
     Parameters
@@ -67,7 +68,7 @@ def map_score(pred=_MISSING, target=_MISSING, *, thresholds=None):
                      thresholds=_thresholds(thresholds, [round(.5 + .05*i, 2) for i in range(10)]))
 
 
-def confusion_matrix(pred=_MISSING, target=_MISSING, *, iou=0.5):
+def confusion_matrix(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | list[Any] | _Metric:
     """Compute geometry-matched counts with GT rows and prediction columns.
 
     Parameters
@@ -96,7 +97,7 @@ def confusion_matrix(pred=_MISSING, target=_MISSING, *, iou=0.5):
     return _dispatch("confusion_matrix", pred, target, iou=_unit(iou, "iou"))
 
 
-def match_boxes(pred=_MISSING, target=_MISSING, *, iou=0.5):
+def match_boxes(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | list[Any] | _Metric:
     """Return frame-local matched indices and unmatched prediction/target indices.
 
     Parameters
@@ -125,7 +126,7 @@ def match_boxes(pred=_MISSING, target=_MISSING, *, iou=0.5):
     return _dispatch("match_boxes", pred, target, iou=_unit(iou, "iou"))
 
 
-def per_class(pred=_MISSING, target=_MISSING, *, iou=0.5):
+def per_class(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | list[Any] | _Metric:
     """Return counts, precision, recall, F1, mean IoU, and AP per label.
 
     Parameters
@@ -154,7 +155,7 @@ def per_class(pred=_MISSING, target=_MISSING, *, iou=0.5):
     return _dispatch("per_class", pred, target, iou=_unit(iou, "iou"))
 
 
-def per_image(pred=_MISSING, target=_MISSING, *, iou=0.5):
+def per_image(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | list[Any] | _Metric:
     """Return counts, precision, recall, F1, and mean IoU per frame.
 
     Parameters
@@ -183,7 +184,7 @@ def per_image(pred=_MISSING, target=_MISSING, *, iou=0.5):
     return _dispatch("per_image", pred, target, iou=_unit(iou, "iou"))
 
 
-def error_analysis(pred=_MISSING, target=_MISSING, *, iou=0.5, bg_iou=0.1):
+def error_analysis(pred=_MISSING, target=_MISSING, *, iou=0.5, bg_iou=0.1) -> dict[str, Any] | list[Any] | _Metric:
     """Partition false positives into five error types and list missed GT boxes.
 
     Parameters
@@ -217,7 +218,7 @@ def error_analysis(pred=_MISSING, target=_MISSING, *, iou=0.5, bg_iou=0.1):
     return _dispatch("error_analysis", pred, target, iou=iou, bg_iou=bg_iou)
 
 
-def size_breakdown(pred=_MISSING, target=_MISSING, *, iou=0.5):
+def size_breakdown(pred=_MISSING, target=_MISSING, *, iou=0.5) -> dict[str, Any] | list[Any] | _Metric:
     """Return small/medium/large metrics using COCO area boundaries.
 
     Parameters
@@ -246,7 +247,7 @@ def size_breakdown(pred=_MISSING, target=_MISSING, *, iou=0.5):
     return _dispatch("size_breakdown", pred, target, iou=_unit(iou, "iou"))
 
 
-def calibration(pred=_MISSING, target=_MISSING, *, iou=0.5, bins=10):
+def calibration(pred=_MISSING, target=_MISSING, *, iou=0.5, bins=10) -> dict[str, Any] | list[Any] | _Metric:
     """Return confidence-bin statistics, TP/FP scores, and detection ECE.
 
     Parameters
@@ -280,7 +281,7 @@ def calibration(pred=_MISSING, target=_MISSING, *, iou=0.5, bins=10):
     return _dispatch("calibration", pred, target, iou=_unit(iou, "iou"), bins=int(bins))
 
 
-def threshold_sweep(pred=_MISSING, target=_MISSING, *, iou=0.5, thresholds=None):
+def threshold_sweep(pred=_MISSING, target=_MISSING, *, iou=0.5, thresholds=None) -> dict[str, Any] | list[Any] | _Metric:
     """Return pooled metrics after retaining scores at or above each threshold.
 
     Parameters
@@ -312,7 +313,7 @@ def threshold_sweep(pred=_MISSING, target=_MISSING, *, iou=0.5, thresholds=None)
                      thresholds=_thresholds(thresholds, [i/20 for i in range(21)]))
 
 
-def iou_sweep(pred=_MISSING, target=_MISSING, *, thresholds=None):
+def iou_sweep(pred=_MISSING, target=_MISSING, *, thresholds=None) -> dict[str, Any] | list[Any] | _Metric:
     """Return pooled metrics at each requested IoU threshold.
 
     Parameters

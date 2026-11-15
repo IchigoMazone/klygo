@@ -147,10 +147,6 @@ class TestMediaUnified(unittest.TestCase):
         self.assertEqual(len(filtered), 4)
         self.assertIsInstance(filtered, media.MediaFrames)
 
-        # filter (alias)
-        filtered2 = loaded.filter(lambda f: "02" not in str(f.path))
-        self.assertEqual(len(filtered2), 4)
-
         # where_quality on materialized frames
         quality_filtered = loaded.where_quality(min_brightness=0.3)
         self.assertIsInstance(quality_filtered, media.MediaFrames)

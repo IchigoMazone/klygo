@@ -42,7 +42,7 @@ class ConvertDatasetTest(unittest.TestCase):
                 tree={"pictures": "batch_*/images", "annotations": "batch_*/labels"},
                 classes={0: "item"},
             )
-        self.assertEqual(output, files.resolve(target))
+        self.assertIsNone(output)
         self.assertTrue(files.is_file(files.join(target, "images", "one.jpg")))
         self.assertTrue(files.is_file(files.join(target, "images", "two.jpg")))
         self.assertFalse(files.exists(files.join(target, "labels", "two.txt")))
@@ -50,8 +50,9 @@ class ConvertDatasetTest(unittest.TestCase):
         metadata = config.load(files.join(target, "data.yaml"), verbose=False).to_dict()
         self.assertEqual((metadata["path"], metadata["train"], metadata["nc"]), (".", "images", 1))
 
-        partitioned = datasets.partition(target, files.join(self.root, "partitioned"),
-                                         (0.5, 0.5, 0.0), verbose=False)
+        partitioned = files.join(self.root, "partitioned")
+        self.assertIsNone(datasets.partition(target, partitioned,
+                                             (0.5, 0.5, 0.0), verbose=False))
         split_metadata = config.load(files.join(partitioned, "data.yaml"), verbose=False).to_dict()
         self.assertEqual((split_metadata["train"], split_metadata["val"]),
                          ("images/train", "images/val"))
@@ -63,8 +64,9 @@ class ConvertDatasetTest(unittest.TestCase):
         self.sample("batch", "sample", class_id=1)
         config.save(files.join(self.source, "classes.yaml"),
                     {"names": {0: "apple", 1: "banana"}, "nc": 2}, verbose=False)
-        output = datasets.convert(
-            self.source, files.join(self.root, "flat"),
+        output = files.join(self.root, "flat")
+        datasets.convert(
+            self.source, output,
             tree={"a": "batch/images", "b": "batch/labels", "c": "classes.yaml"},
         )
         self.assertEqual(config.load(files.join(output, "data.yaml"), verbose=False).names,
@@ -89,24 +91,28 @@ class ConvertDatasetTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "conflict"):
             datasets.convert(self.source, files.join(self.root, "error"), tree=tree, classes={0: "item"})
 
-        renamed = datasets.convert(self.source, files.join(self.root, "rename"), tree=tree,
-                                   classes={0: "item"}, on_conflict="rename")
+        renamed = files.join(self.root, "rename")
+        datasets.convert(self.source, renamed, tree=tree,
+                         classes={0: "item"}, on_conflict="rename")
         self.assertEqual(sorted(files.name(path) for path in files.find(files.join(renamed, "images"))),
                          ["same.jpg", "same_1.png"])
         self.assertEqual(sorted(files.name(path) for path in files.find(files.join(renamed, "labels"))),
                          ["same.txt", "same_1.txt"])
 
-        skipped = datasets.convert(self.source, files.join(self.root, "skip"), tree=tree,
-                                   classes={0: "item"}, on_conflict="skip")
+        skipped = files.join(self.root, "skip")
+        datasets.convert(self.source, skipped, tree=tree,
+                         classes={0: "item"}, on_conflict="skip")
         self.assertTrue(files.is_file(files.join(skipped, "images", "same.jpg")))
-        overwritten = datasets.convert(self.source, files.join(self.root, "overwrite"), tree=tree,
-                                       classes={0: "item"}, on_conflict="overwrite")
+        overwritten = files.join(self.root, "overwrite")
+        datasets.convert(self.source, overwritten, tree=tree,
+                         classes={0: "item"}, on_conflict="overwrite")
         self.assertTrue(files.is_file(files.join(overwritten, "images", "same.png")))
 
     def test_overwrite_replaces_the_whole_target(self) -> None:
         self.sample("batch", "old")
-        target = datasets.convert(self.source, files.join(self.root, "flat"),
-                                  tree={"a": "batch/images", "b": "batch/labels"}, classes={0: "item"})
+        target = files.join(self.root, "flat")
+        datasets.convert(self.source, target,
+                         tree={"a": "batch/images", "b": "batch/labels"}, classes={0: "item"})
         files.save(files.join(target, "stale.txt"), "stale", verbose=False)
         with self.assertRaises(FileExistsError):
             datasets.convert(self.source, target,
@@ -125,10 +131,11 @@ class ConvertDatasetTest(unittest.TestCase):
         self.assertTrue(files.is_file(files.join(target, "images", "old.jpg")))
 
     def test_missing_metadata_or_inputs_create_a_valid_empty_layout(self) -> None:
+        output = files.join(self.root, "empty")
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            output = datasets.convert(
-                self.source, files.join(self.root, "empty"),
+            datasets.convert(
+                self.source, output,
                 tree={"a": "missing/images", "b": "missing/labels"},
             )
         self.assertTrue(files.is_dir(files.join(output, "images")))
@@ -139,10 +146,11 @@ class ConvertDatasetTest(unittest.TestCase):
         files.mkdir(files.join(self.source, "labels_only"))
         files.save(files.join(self.source, "labels_only", "orphan.txt"),
                    ["0 0.5 0.5 0.5 0.5"], verbose=False)
+        labels_only = files.join(self.root, "labels_only_output")
         with warnings.catch_warnings(record=True) as labels_only_warnings:
             warnings.simplefilter("always")
-            labels_only = datasets.convert(
-                self.source, files.join(self.root, "labels_only_output"),
+            datasets.convert(
+                self.source, labels_only,
                 tree={"a": "missing/images", "b": "labels_only"}, classes={0: "item"},
             )
         self.assertTrue(files.is_dir(files.join(labels_only, "images")))

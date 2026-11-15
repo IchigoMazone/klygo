@@ -16,12 +16,12 @@ class TestTest(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             packed = make_archive(root)
-            self.assertTrue(archive.test(packed))
+            self.assertTrue(archive.is_valid(packed))
             broken = root / "broken.zip"
             broken.write_bytes(b"PK\x03\x04broken")
-            self.assertFalse(archive.test(broken))
+            self.assertFalse(archive.is_valid(broken))
             with self.assertRaises(ValueError):
-                archive.test(broken, raise_exception=True)
+                archive.is_valid(broken, raise_exception=True)
 
 
 if __name__ == "__main__":

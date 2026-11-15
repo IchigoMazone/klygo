@@ -63,16 +63,22 @@ class TestPathLike(unittest.TestCase):
             self.assertEqual(files.find(TextPath(root)), [source])
             self.assertEqual(list(files.iter_find(TextPath(root))), [source])
             self.assertEqual(list(files.walk(TextPath(root)))[0][2], [source.name])
-            folder = files.mkdir(TextPath(root / "sub"))
-            self.assertIsInstance(folder, Path)
-            copied = files.copy(wrapped, TextPath(folder / "copy.jsonl"))
+            folder = root / "sub"
+            self.assertIsNone(files.mkdir(TextPath(folder)))
+            self.assertTrue(folder.is_dir())
+            copied = folder / "copy.jsonl"
+            self.assertIsNone(files.copy(wrapped, TextPath(copied)))
             self.assertTrue(files.compare(wrapped, TextPath(copied)))
-            moved = files.move(TextPath(copied), TextPath(root / "moved.jsonl"))
-            renamed = files.rename(TextPath(moved), TextPath("renamed.jsonl"))
-            downloaded = files.download(wrapped, TextPath(root / "downloads"), verbose=False)
+            moved = root / "moved.jsonl"
+            self.assertIsNone(files.move(TextPath(copied), TextPath(moved)))
+            renamed = root / "renamed.jsonl"
+            self.assertIsNone(files.rename(TextPath(moved), TextPath("renamed.jsonl")))
+            self.assertIsNone(files.download(wrapped, TextPath(root / "downloads"), verbose=False))
+            downloaded = root / "downloads" / source.name
             self.assertEqual(downloaded.read_bytes(), source.read_bytes())
-            converted = files.convert(wrapped, TextPath(root / "data.json"), verbose=False)
-            self.assertIsInstance(converted, Path)
+            converted = root / "data.json"
+            self.assertIsNone(files.convert(wrapped, TextPath(converted), verbose=False))
+            self.assertTrue(converted.is_file())
             files.remove(TextPath(renamed))
             self.assertFalse(renamed.exists())
 

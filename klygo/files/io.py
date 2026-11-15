@@ -408,7 +408,7 @@ def convert(
     target: PathInput,
     overwrite: bool = False,
     verbose: bool = True,
-) -> Path:
+) -> None:
     """Convert data between two supported structured-data formats.
 
     The source is decoded with ``load`` and the resulting object is encoded with ``save``.
@@ -426,8 +426,7 @@ def convert(
 
     Returns
     -------
-    pathlib.Path
-        Path to the converted file.
+    None
 
     Raises
     ------
@@ -450,7 +449,6 @@ def convert(
     """
     data = load(source, verbose=verbose)
     save(target, data, overwrite=overwrite, verbose=verbose)
-    return _to_path(target)
 
 
 __all__ = ["load", "iter_load", "save", "convert"]

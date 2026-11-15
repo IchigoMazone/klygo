@@ -11,9 +11,9 @@ from examples.archive._support import make_archive, make_source, member_ending
 with TemporaryDirectory() as directory:
     root = files.path(directory)
     packed = make_archive(root)
-    assert archive.test(packed)
+    assert archive.is_valid(packed)
 
     broken = root / "broken.zip"
     broken.write_bytes(b"PK\x03\x04broken")
-    assert archive.test(broken) is False
+    assert archive.is_valid(broken) is False
     print("valid and corrupted cases checked")

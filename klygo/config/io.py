@@ -116,7 +116,7 @@ def save(
     data: Mapping[str, Any] | Box,
     overwrite: bool = False,
     verbose: bool = True,
-) -> Path:
+) -> None:
     """Save configuration data using the destination extension.
 
     Nested mappings, sequences, booleans, and ``None`` values are preserved.
@@ -138,8 +138,7 @@ def save(
 
     Returns
     -------
-    pathlib.Path
-        Destination path.
+    None
 
     Raises
     ------
@@ -165,7 +164,6 @@ def save(
     if files.extension(destination).lower() == ".toml":
         encoded = _encode_toml_none(encoded)
     files.save(destination, encoded, overwrite=overwrite, verbose=verbose)
-    return destination
 
 
 def convert(
@@ -173,7 +171,7 @@ def convert(
     target: str | Path,
     overwrite: bool = False,
     verbose: bool = True,
-) -> Path:
+) -> None:
     """Convert a configuration file to another supported format.
 
     Parameters
@@ -189,8 +187,7 @@ def convert(
 
     Returns
     -------
-    pathlib.Path
-        Destination path.
+    None
 
     Raises
     ------
@@ -205,7 +202,7 @@ def convert(
     >>> config.convert("settings.yaml", "settings.toml", overwrite=True)
     """
     loaded = load(source, verbose=verbose)
-    return save(target, loaded, overwrite=overwrite, verbose=verbose)
+    save(target, loaded, overwrite=overwrite, verbose=verbose)
 
 
 def export(
@@ -213,7 +210,7 @@ def export(
     target: str | Path,
     overwrite: bool = False,
     verbose: bool = True,
-) -> Path:
+) -> None:
     """Export a configuration object or file to a destination file.
 
     File inputs are converted through :func:`convert`; mapping and ``Box``
@@ -232,8 +229,7 @@ def export(
 
     Returns
     -------
-    pathlib.Path
-        Path to the exported configuration file.
+    None
 
     Raises
     ------
@@ -248,10 +244,12 @@ def export(
     >>> config.export({"model": "yolo"}, "settings.yaml", overwrite=True)
     """
     if isinstance(source, (str, os.PathLike)):
-        return convert(source, target, overwrite=overwrite, verbose=verbose)
+        convert(source, target, overwrite=overwrite, verbose=verbose)
+        return
     if isinstance(source, (Mapping, Box)):
-        return save(target, source, overwrite=overwrite, verbose=verbose)
+        save(target, source, overwrite=overwrite, verbose=verbose)
+        return
     raise TypeError("source must be a path, mapping, or Box")
 
 
-__all__ = ["load", "save", "convert", "export"]
+__all__ = ["load", "save", "convert"]

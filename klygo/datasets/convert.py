@@ -168,7 +168,7 @@ def convert(
     classes: dict[int, str] | None = None,
     on_conflict: str = "error",
     overwrite: bool = False,
-) -> Path:
+) -> None:
     """Convert mapped source directories into one flat YOLO dataset.
 
     Parameters
@@ -191,8 +191,7 @@ def convert(
 
     Returns
     -------
-    pathlib.Path
-        Created flat dataset directory.
+    None
 
     Raises
     ------
@@ -270,7 +269,7 @@ def convert(
             if sample.label is not None:
                 copy_entry(sample.label, files.join(workspace, "labels", sample.stem + ".txt"))
         config.save(files.join(workspace, "data.yaml"), metadata, overwrite=True, verbose=False)
-        return write_output(workspace, destination, overwrite=overwrite, verbose=False)
+        write_output(workspace, destination, overwrite=overwrite, verbose=False)
 
 
 __all__ = ["convert"]

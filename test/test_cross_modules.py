@@ -36,7 +36,7 @@ class TestCrossModules(unittest.TestCase):
 
         # OOP Config usage
         cfg_obj = Config(cfg_file)
-        cfg_obj.read()
+        cfg_obj.load()
         assert cfg_obj.get("app.port") == 8000
         cfg_obj.set("app.port", 9000)
         config.save(cfg_file, cfg_obj.to_dict(), overwrite=True)
@@ -59,7 +59,7 @@ class TestCrossModules(unittest.TestCase):
         zip_file = self.tmp_path / "bundle.zip"
         archive.compress(data_dir, zip_file, overwrite=True)
         assert files.exists(zip_file)
-        assert archive.test(zip_file)
+        assert archive.is_valid(zip_file)
 
         extracted_dir = self.tmp_path / "extracted"
         archive.extract(zip_file, output_dir=extracted_dir, overwrite=True)

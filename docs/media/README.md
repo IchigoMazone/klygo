@@ -19,7 +19,7 @@ Local Tutorial Notebooks (`tutorials/media/`, 1-to-1 with `klygo/media/` submodu
 `klygo.media` separates metadata discovery and pipeline attachment from pixel decoding so large image directories and high-resolution videos can be inspected, sliced, cropped, and filtered before allocating frame buffers in RAM:
 
 1. **[`LazyImage`](api/LazyImage.md) (Zero-RAM Pixel Proxy)**:
-   Subclasses `PIL.Image.Image` and wraps a file path or video frame index without decoding pixels on construction. Reading `.size`, `.width`, `.height`, or `.shape` inspects headers or cached dimensions only. Calling `.crop()` or `.lazy_crop()` records a bounding box in zero RAM, and `.process()` attaches `klygo.preprocessing` operations lazily until `.load()`, `.to_pil()`, or `.to_array()` materializes the image.
+   Subclasses `PIL.Image.Image` and wraps a file path or video frame index without decoding pixels on construction. Reading `.size`, `.width`, `.height`, or `.shape` inspects headers or cached dimensions only. Calling `.crop()` or `.lazy_crop()` records a bounding box in zero RAM, and `.transform()` attaches `klygo.preprocessing` operations lazily until `.load()`, `.to_pil()`, or `.to_array()` materializes the image.
 2. **[`MediaFrames`](api/MediaFrames.md) (Unified Frame Container)**:
    Returned by [`load()`](api/load.md) in all modes. The default materializes lazy proxies, `indexed=True` retains only paths/frame numbers and creates proxies on demand, and `stream=True` becomes a bounded-memory sequential iterator. All modes share the same public container type.
 3. **[`VideoReader`](api/VideoReader.md) (Smart Sequential & Random-Access Seeker)**:

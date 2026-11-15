@@ -1,5 +1,5 @@
 """Apply shared operations to independent same-source detection collections."""
-from collections.abc import Mapping
+from collections.abc import ItemsView, KeysView, Mapping, ValuesView
 from klygo import validators
 from .detect import Detections
 
@@ -62,19 +62,19 @@ class DetectionGroup:
     def __getitem__(self, index):
         return self._named[index] if isinstance(index, str) else self._members[index]
 
-    def keys(self):
+    def keys(self) -> KeysView[str]:
         """Return member names in insertion order."""
         return self._named.keys()
 
-    def values(self):
+    def values(self) -> ValuesView[Detections]:
         """Return the original collections in insertion order."""
         return self._named.values()
 
-    def items(self):
+    def items(self) -> ItemsView[str, Detections]:
         """Return name/collection pairs in insertion order."""
         return self._named.items()
 
-    def rename(self, mapping: Mapping[str, str]):
+    def rename(self, mapping: Mapping[str, str]) -> "DetectionGroup":
         """Rename members together while preserving their order and references.
 
         Parameters
@@ -134,41 +134,41 @@ class DetectionGroup:
             getattr(member, method)(*args, **kwargs)
         return self
 
-    def cuda(self, device: int = 0):
+    def cuda(self, device: int = 0) -> "DetectionGroup":
         """Move all original collections to one CUDA device."""
         return self._apply("cuda", device)
 
-    def cpu(self):
+    def cpu(self) -> "DetectionGroup":
         """Move all original collections to CPU storage."""
         return self._apply("cpu")
 
-    def astype(self, dtype: int):
+    def astype(self, dtype: int) -> "DetectionGroup":
         """Convert all members to 16, 32, or 64-bit annotation storage."""
         return self._apply("astype", dtype)
 
-    def drop(self, labels):
+    def drop(self, labels) -> "DetectionGroup":
         """Remove the same labels from every member."""
         labels = labels if isinstance(labels, str) else tuple(labels)
         return self._apply("drop", labels)
 
-    def keep(self, labels):
+    def keep(self, labels) -> "DetectionGroup":
         """Keep the same labels in every member."""
         labels = labels if isinstance(labels, str) else tuple(labels)
         return self._apply("keep", labels)
 
-    def relabel(self, mapping):
+    def relabel(self, mapping) -> "DetectionGroup":
         """Apply the same label mapping to every member."""
         return self._apply("relabel", mapping)
 
-    def compact(self):
+    def compact(self) -> "DetectionGroup":
         """Compact each member's own active class registry."""
         return self._apply("compact")
 
-    def pack(self):
+    def pack(self) -> "DetectionGroup":
         """Pack annotation storage for every member."""
         return self._apply("pack")
 
-    def unpack(self):
+    def unpack(self) -> "DetectionGroup":
         """Unpack annotation storage for every member."""
         return self._apply("unpack")
 

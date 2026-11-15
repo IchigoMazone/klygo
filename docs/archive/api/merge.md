@@ -60,6 +60,6 @@ with TemporaryDirectory() as directory:
 
     merged = root / "merged.zip"
     archive.merge([first, second], merged, verbose=False)
-    assert archive.test(merged)
+    assert archive.is_valid(merged)
     print(archive.list_files(merged))
 ```

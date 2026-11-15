@@ -1,4 +1,4 @@
-"""Behavioral contract for klygo.archive.get_info."""
+"""Behavioral contract for klygo.archive.info."""
 
 import unittest
 from pathlib import Path
@@ -15,12 +15,12 @@ class TestGetInfo(unittest.TestCase):
     def test_metadata_contract(self):
         with TemporaryDirectory() as directory:
             packed = make_archive(Path(directory))
-            result = archive.get_info(packed)
+            result = archive.info(packed)
             required={"path","format","file_count","archive_size","human_archive_size","uncompressed_size"}
             self.assertTrue(required <= result.keys())
             self.assertEqual(result["format"], "zip")
             self.assertGreaterEqual(result["file_count"], 3)
-            self.assertFalse(hasattr(archive, "info"))
+            self.assertFalse(hasattr(archive, "get_info"))
 
 
 if __name__ == "__main__":

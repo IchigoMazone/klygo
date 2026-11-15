@@ -52,5 +52,5 @@ with TemporaryDirectory() as directory:
     with archive.open(packed) as opened:
         print("format:", opened.format)
         print("members:", opened.list_files())
-        assert opened.test()
+        assert opened.is_valid()
 ```

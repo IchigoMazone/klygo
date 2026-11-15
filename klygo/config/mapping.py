@@ -91,4 +91,4 @@ def merge(*configs: Mapping[str, Any] | Box, deep: bool = True) -> Box:
     return result
 
 
-__all__ = ["merge", "update"]
+__all__ = ["merge"]

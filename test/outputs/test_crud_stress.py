@@ -253,7 +253,7 @@ class TestIntenseCRUDStress(unittest.TestCase):
 
             elif op == "filter":
                 thresh = round(rng.uniform(0.3, 0.7), 2)
-                det.filter(lambda b: b.score >= thresh)
+                det.where(lambda b: b.score >= thresh)
                 ref = [item for item in ref if item["score"] >= thresh]
 
             # Invariant check at every iteration
@@ -429,7 +429,7 @@ class TestDetectionsCollectionCRUD(unittest.TestCase):
         stream_dets.map(add_tag)
 
         # Stream filter stays lazy and evaluates detached frame drafts.
-        self.assertIs(stream_dets.filter(lambda f: f.frame_index % 2 == 0), stream_dets)
+        self.assertIs(stream_dets.where(lambda f: f.frame_index % 2 == 0), stream_dets)
 
         # Consume the stream
         consumed = list(stream_dets)

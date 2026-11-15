@@ -16,7 +16,7 @@ def partition(
     format: str = "yolo",
     overwrite: bool = False,
     verbose: bool = True,
-) -> Path:
+) -> None:
     """Partition a YOLO dataset reproducibly.
 
     Parameters
@@ -38,8 +38,7 @@ def partition(
 
     Returns
     -------
-    pathlib.Path
-        Created dataset path.
+    None
 
     Raises
     ------
@@ -55,11 +54,11 @@ def partition(
     Examples
     --------
     >>> from klygo import datasets
-    >>> output = datasets.partition("dataset", "partitioned", (0.8, 0.1, 0.1))
+    >>> datasets.partition("dataset", "partitioned", (0.8, 0.1, 0.1))
     """
     validate_dataset_format(format)
     params = Partition(source, target, ratios, overwrite, verbose)
-    return execute_partition(
+    execute_partition(
         params.source,
         params.target,
         params.ratios,

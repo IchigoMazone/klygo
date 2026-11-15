@@ -16,13 +16,15 @@ class TestCopy(unittest.TestCase):
             source = root / "source.txt"
             target = root / "nested" / "target.txt"
             source.write_text("one", encoding="utf-8")
-            self.assertEqual(files.copy(source, target).read_text(encoding="utf-8"), "one")
+            self.assertIsNone(files.copy(source, target))
+            self.assertEqual(target.read_text(encoding="utf-8"), "one")
             with self.assertRaises(FileExistsError):
                 files.copy(source, target, overwrite=False)
             folder = root / "folder"
             folder.mkdir()
             (folder / "a.txt").touch()
-            copied = files.copy(folder, root / "folder-copy")
+            copied = root / "folder-copy"
+            self.assertIsNone(files.copy(folder, copied))
             self.assertTrue((copied / "a.txt").is_file())
 
     def test_rejects_same_and_nested_directory_without_deleting_source(self):
@@ -133,7 +135,8 @@ class TestCopy(unittest.TestCase):
                 link.symlink_to("data.txt")
             except OSError as error:
                 self.skipTest(f"Symlinks unavailable: {error}")
-            copied = files.copy(link, root / "other" / "link.txt")
+            copied = root / "other" / "link.txt"
+            self.assertIsNone(files.copy(link, copied))
             self.assertTrue(copied.is_symlink())
             self.assertEqual(copied.read_text(encoding="utf-8"), "data")
 

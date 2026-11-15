@@ -9,9 +9,10 @@ from _support import make_dataset
 with TemporaryDirectory() as directory:
     root = files.path(directory)
     source = make_dataset(root / "source")
-    output = datasets.remap_classes(
+    output = root / "remapped"
+    datasets.remap_classes(
         source,
-        root / "remapped",
+        output,
         {"apple": "fruit", 1: 3},
         verbose=False,
     )

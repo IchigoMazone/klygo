@@ -1,4 +1,5 @@
 """Composition and shared execution of detection metrics."""
+from typing import Any
 from klygo import validators
 from ._core import (_Metric, _Composition, _Context, _summary, _ap, _cat,
                     _host, _Rows, _MatchReport)
@@ -6,7 +7,7 @@ from ._core import (_Metric, _Composition, _Context, _summary, _ap, _cat,
 __all__ = ["compose", "evaluate"]
 
 
-def compose(*metrics):
+def compose(*metrics) -> _Composition:
     """Group one or more deferred metric configurations without executing them.
 
     Parameters
@@ -35,7 +36,7 @@ def compose(*metrics):
     return _Composition(tuple(metrics))
 
 
-def evaluate(pred, target, evaluator=None):
+def evaluate(pred, target, evaluator=None) -> dict[str, Any]:
     """Evaluate matching Detection pairs or materialized Detections collections.
 
     Parameters

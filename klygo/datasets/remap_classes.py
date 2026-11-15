@@ -17,7 +17,7 @@ def remap_classes(
     format: str = "yolo",
     overwrite: bool = False,
     verbose: bool = True,
-) -> Path:
+) -> None:
     """Rename classes and/or remap YOLO class IDs.
 
     String keys select a class by name; integer keys select by current ID.
@@ -41,8 +41,7 @@ def remap_classes(
 
     Returns
     -------
-    pathlib.Path
-        Created dataset path.
+    None
 
     Raises
     ------
@@ -54,7 +53,7 @@ def remap_classes(
     Examples
     --------
     >>> from klygo import datasets
-    >>> output = datasets.remap_classes(
+    >>> datasets.remap_classes(
     ...     "dataset", "renamed", {"car": "vehicle"}
     ... )
     """
@@ -112,7 +111,7 @@ def remap_classes(
         )
         set_output_metadata_path(source_config, destination)
         config.save(files.join(workspace, "data.yaml"), source_config, overwrite=True, verbose=False)
-        return write_output(workspace, destination, overwrite=params.overwrite, verbose=params.verbose)
+        write_output(workspace, destination, overwrite=params.overwrite, verbose=params.verbose)
 
 
 __all__ = ["remap_classes"]

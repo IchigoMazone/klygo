@@ -11,8 +11,8 @@ Represent an image file or video frame as a zero-RAM proxy that defers pixel dec
 Subclasses `PIL.Image.Image` and implements `os.PathLike` (`__fspath__`) and the NumPy array protocol (`__array__`):
 - **Zero-RAM metadata**: `.size`, `.width`, `.height`, `.shape`, `.dtype`, and `.mode` read image headers or video metadata without decoding pixel buffers (`is_loaded` remains `False`).
 - **Zero-RAM cropping**: `.lazy_crop((xmin, ymin, xmax, ymax))` and `.crop(box)` (unless `lazy=False` is passed) return a new `LazyImage` that composes relative crop offsets in memory without reading pixels.
-- **Lazy PIL & preprocessing pipelines**: calling `.process(op_or_pipeline)` attaches `klygo.preprocessing` operations, and calling non-destructive PIL methods (`resize`, `convert`, `rotate`, `transpose`, `filter`, `point`, `quantize`, `transform`) queues instructions on a cloned `LazyImage`.
-- **Materialization & cache control**: `.load(cache=True)` decodes raw source pixels; `.to_pil(cache=False)` and `.to_array(cache=False)` decode and execute all queued operations, recording execution metadata in `.trace`. Call `.unload()` (or `.clear()`) to free RAM.
+- **Lazy PIL & preprocessing pipelines**: calling `.transform(op_or_pipeline)` attaches `klygo.preprocessing` operations, and calling non-destructive PIL methods (`resize`, `convert`, `rotate`, `transpose`, `filter`, `point`, `quantize`) queues instructions on a cloned `LazyImage`.
+- **Materialization & cache control**: `.load(cache=True)` decodes raw source pixels; `.to_pil(cache=False)` and `.to_array(cache=False)` decode and execute all queued operations, recording execution metadata in `.trace`. Call `.unload()` to free RAM.
 
 ## Parameters
 

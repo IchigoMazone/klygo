@@ -207,7 +207,7 @@ class TestGeneratedBoundaries(unittest.TestCase):
         def test_filter_matches_label_oracle_and_preserves_uids(self, labels, allowed):
             frame = make_frame(labels=labels)
             expected = [(box.uid, box.label) for box in frame if box.label in allowed]
-            frame.filter(lambda box: box.label in allowed)
+            frame.where(lambda box: box.label in allowed)
             self.assertEqual([(box.uid, box.label) for box in frame], expected)
             assert_frame_consistent(frame)
 
@@ -429,7 +429,7 @@ if RuleBasedStateMachine is not None:
 
         @rule(allowed=st.sets(label_strategy))
         def filter_labels(self, allowed):
-            self.frame.filter(lambda box: box.label in allowed)
+            self.frame.where(lambda box: box.label in allowed)
 
         @rule()
         def callback_failure_is_atomic(self):

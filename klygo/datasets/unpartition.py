@@ -15,7 +15,7 @@ def unpartition(
     format: str = "yolo",
     overwrite: bool = False,
     verbose: bool = True,
-) -> Path:
+) -> None:
     """Flatten train, validation, and test folders into one dataset.
 
     Relative path components are joined with underscores to prevent files
@@ -36,8 +36,7 @@ def unpartition(
 
     Returns
     -------
-    pathlib.Path
-        Created flat dataset path.
+    None
 
     Raises
     ------
@@ -53,7 +52,7 @@ def unpartition(
     Examples
     --------
     >>> from klygo import datasets
-    >>> output = datasets.unpartition("partitioned", "flat")
+    >>> datasets.unpartition("partitioned", "flat")
     """
     validate_dataset_format(format)
     destination = files.path(target)
@@ -78,7 +77,7 @@ def unpartition(
         }
         set_output_metadata_path(metadata, destination)
         config.save(files.join(workspace, "data.yaml"), metadata, overwrite=True, verbose=False)
-        return write_output(workspace, destination, overwrite=overwrite, verbose=verbose)
+        write_output(workspace, destination, overwrite=overwrite, verbose=verbose)
 
 
 __all__ = ["unpartition"]
