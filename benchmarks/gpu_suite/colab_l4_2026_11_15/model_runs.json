@@ -1,0 +1,130 @@
+[
+    {
+        "model": "yolo",
+        "dtype": "float32",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/yolo_float32",
+        "error": ""
+    },
+    {
+        "model": "yolo",
+        "dtype": "float16",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/yolo_float16",
+        "error": ""
+    },
+    {
+        "model": "yolo11",
+        "dtype": "float32",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/yolo11_float32",
+        "error": ""
+    },
+    {
+        "model": "yolo11",
+        "dtype": "float16",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/yolo11_float16",
+        "error": ""
+    },
+    {
+        "model": "yolo26",
+        "dtype": "float32",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/yolo26_float32",
+        "error": ""
+    },
+    {
+        "model": "yolo26",
+        "dtype": "float16",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/yolo26_float16",
+        "error": ""
+    },
+    {
+        "model": "yolo-world",
+        "dtype": "float32",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/yolo-world_float32",
+        "error": ""
+    },
+    {
+        "model": "yolo-world",
+        "dtype": "float16",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/yolo-world_float16",
+        "error": ""
+    },
+    {
+        "model": "grounding-dino",
+        "dtype": "float32",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/grounding-dino_float32",
+        "error": ""
+    },
+    {
+        "model": "grounding-dino",
+        "dtype": "float16",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/grounding-dino_float16",
+        "error": ""
+    },
+    {
+        "model": "grounding-dino-base",
+        "dtype": "float32",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/grounding-dino-base_float32",
+        "error": ""
+    },
+    {
+        "model": "grounding-dino-base",
+        "dtype": "float16",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/grounding-dino-base_float16",
+        "error": ""
+    },
+    {
+        "model": "faster-rcnn",
+        "dtype": "float32",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/faster-rcnn_float32",
+        "error": ""
+    },
+    {
+        "model": "faster-rcnn",
+        "dtype": "float16",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/faster-rcnn_float16",
+        "error": ""
+    },
+    {
+        "model": "d-fine",
+        "dtype": "float32",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/d-fine_float32",
+        "error": ""
+    },
+    {
+        "model": "d-fine",
+        "dtype": "float16",
+        "returncode": 0,
+        "status": "passed",
+        "output_dir": "artifacts/benchmarks/colab_l4_full/inference/d-fine_float16",
+        "error": ""
+    }
+]

@@ -1,0 +1,37 @@
+[
+    {
+        "operation": "datasets.load (coco128, 128 imgs)",
+        "median_ms": 391.7079,
+        "status": "passed"
+    },
+    {
+        "operation": "media.load_eager (coco128, 128 imgs)",
+        "median_ms": 9.6336,
+        "status": "passed"
+    },
+    {
+        "operation": "media.load_stream (coco128, 128 imgs)",
+        "median_ms": 9.9604,
+        "status": "passed"
+    },
+    {
+        "operation": "preprocessing.compose (coco128, 32 imgs)",
+        "median_ms": 0.2369,
+        "status": "passed"
+    },
+    {
+        "operation": "mining.stats_quality (coco128, 128 imgs)",
+        "median_ms": 1597.2728,
+        "status": "passed"
+    },
+    {
+        "operation": "mining.find_duplicates (coco128, 128 imgs)",
+        "median_ms": 529.9362,
+        "status": "passed"
+    },
+    {
+        "operation": "mining.cluster (coco128, 128 imgs, k=8)",
+        "median_ms": 1661.5315,
+        "status": "passed"
+    }
+]

@@ -1,0 +1,22 @@
+[
+    {
+        "scope": "detections_200f",
+        "device": "cpu",
+        "stats_ms": 5.5797,
+        "score_ms": 2.8169,
+        "select_ms": 8.7466,
+        "balance_ms": 88.251,
+        "compare_ms": 8.3043,
+        "status": "passed"
+    },
+    {
+        "scope": "detections_200f",
+        "device": "cuda",
+        "stats_ms": 5.5351,
+        "score_ms": 2.8929,
+        "select_ms": 126.4428,
+        "balance_ms": 325.7531,
+        "compare_ms": 8.248,
+        "status": "passed"
+    }
+]
