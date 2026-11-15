@@ -372,9 +372,13 @@ def main() -> None:
     parser.add_argument("--output", default="artifacts/benchmarks/release_eval")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--include-models", action="store_true", help="Also run 6-mode gpu_suite/run.py models")
-    parser.add_argument("--models", default="yolo,yolo-world,faster-rcnn,d-fine")
+    parser.add_argument(
+        "--models",
+        default="yolo,yolo11,yolo26,yolo-world,grounding-dino,grounding-dino-base,faster-rcnn,d-fine,locate-anything",
+    )
     parser.add_argument("--dtypes", default="float32,float16")
     parser.add_argument("--device", default="cuda:0")
+    parser.add_argument("--allow-remote-code", action="store_true")
     parser.add_argument("--include-scaling", action="store_true")
     parser.add_argument("--scaling-models", default="yolo,yolo-world")
     args = parser.parse_args()
@@ -404,6 +408,7 @@ def main() -> None:
     utils.tabulate(dmv_rows, title="Datasets, Media, Visual & Tabulate")
 
     model_runs: list[dict[str, Any]] = []
+    model_modes: list[dict[str, Any]] = []
     if args.include_models:
         for model_id in [m.strip() for m in args.models.split(",") if m.strip()]:
             for dtype_name in [d.strip() for d in args.dtypes.split(",") if d.strip()]:
@@ -417,17 +422,44 @@ def main() -> None:
                     "--repeats", str(args.repeats),
                     "--output", str(case_out),
                 ]
+                if args.allow_remote_code:
+                    cmd.append("--allow-remote-code")
                 proc = subprocess.run(cmd, capture_output=True, text=True)
+                err_tail = ""
+                if proc.returncode != 0:
+                    lines = [ln.strip() for ln in (proc.stderr or proc.stdout or "").splitlines() if ln.strip()]
+                    err_tail = lines[-1] if lines else "failed"
                 model_runs.append({
                     "model": model_id,
                     "dtype": dtype_name,
                     "returncode": proc.returncode,
                     "status": "passed" if proc.returncode == 0 else "failed",
                     "output_dir": str(case_out),
+                    "error": err_tail,
                 })
+                json_path = case_out / f"{model_id}.json"
+                if proc.returncode == 0 and files.exists(json_path):
+                    data = files.load(json_path, verbose=False)
+                    for case in data.get("cases", []):
+                        fps_val = case.get("fps_median")
+                        p50_val = case.get("ready_interval_p50_ms")
+                        model_modes.append({
+                            "model": model_id,
+                            "dtype": dtype_name,
+                            "actual_dtype": data.get("actual_model_dtype", ""),
+                            "mode": case.get("mode", ""),
+                            "status": case.get("status", ""),
+                            "fps_median": round(float(fps_val), 2) if fps_val is not None else None,
+                            "p50_ms": round(float(p50_val), 2) if p50_val is not None else None,
+                            "parity_pass": case.get("all_parity_pass"),
+                        })
         files.save(out_dir / "model_runs.json", model_runs, overwrite=True, verbose=False)
+        files.save(out_dir / "model_modes.json", model_modes, overwrite=True, verbose=False)
         print("\n=== 6-Mode Model Inference Runs ===")
         utils.tabulate(model_runs, title="6-Mode Inference Summary")
+        if model_modes:
+            print("\n=== 6-Mode Per-Mode Details ===")
+            utils.tabulate(model_modes, title="6-Mode Per-Mode Details")
 
     scaling_rows: list[dict[str, Any]] = []
     if args.include_scaling:
@@ -497,6 +529,7 @@ def main() -> None:
         "group_post": group_rows,
         "io_visual": dmv_rows,
         "models": model_runs,
+        "model_modes": model_modes,
         "scaling": scaling_rows,
     }
     files.save(out_dir / "summary.json", summary, overwrite=True, verbose=False)
