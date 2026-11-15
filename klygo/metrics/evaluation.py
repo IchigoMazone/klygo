@@ -201,7 +201,8 @@ def _run(context, metric):
         return rows
     if name == 'confusion_matrix':
         background = len(context.labels)
-        matrix = xp.zeros((background+1, background+1), dtype=xp.int64)
+        matrix_dtype = xp.int64 if getattr(xp, "__name__", "") == "numpy" else xp.int32
+        matrix = xp.zeros((background+1, background+1), dtype=matrix_dtype)
         for frame, match in zip(context.frames, matches):
             hit = match.target >= 0
             xp.add.at(matrix, (frame.target_labels[match.target[hit]], frame.pred_labels[hit]), 1)
