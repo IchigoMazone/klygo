@@ -3,7 +3,7 @@
 - **GPU**: NVIDIA L4 (22563.1 MB VRAM, `is_nvidia_l4=True`)
 - **OS / Python / CUDA**: `Linux-6.6.159+-x86_64-with-glibc2.39` / Python `3.13.16` / CUDA `13.0`
 - **Branch / Commit**: `detection-evaluation` @ `7187774a40f838d14dea48671489a49bbd97edfb`
-- **Note**: In `klygo/metrics/evaluation.py`, `confusion_matrix` uses `int32` on CuPy CUDA 13 (`cupy.add.at` does not support `int64`). `locate-anything` failed in this shared Colab env because it requires isolated `transformers==4.57.1` (Colab had `transformers==5.22.1`).
+- **Note**: In `klygo/metrics/evaluation.py`, `confusion_matrix` uses `int32` on CuPy CUDA 13 (`cupy.add.at` does not support `int64`). `locate-anything` was benchmarked on the same NVIDIA L4 (`62c2567`) in an isolated venv (`transformers==4.57.1`), while the other 8 models ran in Colab's main env (`transformers==5.22.1`). Peak VRAM for `locate-anything`: `7910.11 MiB` (`float16`), `15031.63 MiB` (`float32`).
 
 ## 1. Model Inference Runs (9 Models x `float32` / `float16`)
 
@@ -105,8 +105,18 @@
 | d-fine | float16 | ok | float16 | native-non-stream | 2.6 | 385.39 | True |
 | d-fine | float16 | ok | float16 | managed-non-stream | 2.61 | 380.89 | True |
 | d-fine | float16 | ok | float16 | managed-stream | 2.6 | 383.3 | True |
-| locate-anything | float32 | failed | - | all | - | - | ImportError: Locate Anything requires transformers==4.57.1; use an isolated klygo[locate-anything] environment |
-| locate-anything | float16 | failed | - | all | - | - | ImportError: Locate Anything requires transformers==4.57.1; use an isolated klygo[locate-anything] environment |
+| locate-anything | float32 | N/A | torch.float32 | raw-stream | N/A | N/A | N/A |
+| locate-anything | float32 | N/A | torch.float32 | native-stream | N/A | N/A | N/A |
+| locate-anything | float32 | ok | torch.float32 | raw-non-stream | 0.99 | 1010.96 | True |
+| locate-anything | float32 | ok | torch.float32 | native-non-stream | 0.99 | 1011.09 | True |
+| locate-anything | float32 | ok | torch.float32 | managed-non-stream | 0.99 | 1011.99 | True |
+| locate-anything | float32 | ok | torch.float32 | managed-stream | 0.99 | 1018.6 | True |
+| locate-anything | float16 | N/A | torch.float16 | raw-stream | N/A | N/A | N/A |
+| locate-anything | float16 | N/A | torch.float16 | native-stream | N/A | N/A | N/A |
+| locate-anything | float16 | ok | torch.float16 | raw-non-stream | 2.49 | 406.34 | True |
+| locate-anything | float16 | ok | torch.float16 | native-non-stream | 2.48 | 405.96 | True |
+| locate-anything | float16 | ok | torch.float16 | managed-non-stream | 2.47 | 409.79 | True |
+| locate-anything | float16 | ok | torch.float16 | managed-stream | 2.48 | 404.26 | True |
 
 ## 2. Scaling Matrix (`batch`, `workers`, `prefetch`, `packed`) — Selected Highlights
 
