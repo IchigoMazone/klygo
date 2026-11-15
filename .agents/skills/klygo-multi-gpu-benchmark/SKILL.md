@@ -25,6 +25,14 @@ from the repository root, including output and dataset paths.
 python .agents/skills/klygo-multi-gpu-benchmark/scripts/run_benchmark.py --help
 ```
 
+## API selection inside benchmarks
+
+Apply root `AGENTS.md` Rule 0 and `docs/API_LEVELS.md`. Time the owning module's
+public API for a public-API benchmark rather than reimplementing it from smaller
+operations. Keep direct upstream/backend calls only in the explicitly named raw
+reference cases where using a Klygo wrapper would invalidate the comparison.
+That benchmark-specific exception is not an ordinary application usage example.
+
 ## Establish the run contract
 
 1. Record the branch, commit, dirty state, Python executable, package versions,

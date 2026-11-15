@@ -15,6 +15,13 @@ Klygo supports **Python 3.10+** and keeps core installation lightweight—heavy
 deep-learning frameworks (`torch`, `transformers`, `ultralytics`, `torchvision`,
 `keras-hub`) are strictly optional extras.
 
+## Use the public API first
+
+Each module's supported public surface is its high-level API, including `files`.
+For a task already covered by that surface, call it directly instead of rebuilding
+it from smaller operations. Compose existing APIs for workflows and customize only
+a verified missing capability. See [API levels and selection](docs/API_LEVELS.md).
+
 ## Architecture
 
 - `files`, `archive`, `config`, and `media` handle storage, I/O, compression,
