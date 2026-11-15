@@ -26,7 +26,9 @@ Install Klygo and the Locate Anything extra there, then verify:
 ```
 
 Pass that executable to `--locate-python`; this affects Locate Anything subprocesses
-only. Remote-code execution still requires the separate `--allow-remote-code` flag.
+only. Use `--locate-isolated` to force the managed environment instead. Known
+dependency failures automatically fall back to a managed venv; the main and
+supplied environments are never modified. Remote-code execution still requires the separate `--allow-remote-code` flag.
 Do not assume the isolated interpreter inherits packages from the main interpreter.
 
 ## Select a physical GPU
@@ -143,3 +145,29 @@ includes recomputing these scores. Record `score_weights` and
 separate disk-backed section. This makes the current fixture runnable without
 source pixels; do not compare its scoring/selection timings directly with old
 rows whose scoring protocol is unrecorded.
+
+
+## Locate repair and mandatory aggregation gate
+
+For the full release recipe use `--require-locate-results --locate-isolated` and
+supply `--allow-remote-code` when authorized. The managed environment lives outside
+the report directory and reuses system site packages; local pinned overrides
+provide the required Transformers version. `--locate-auto-fix` is enabled by
+default, with two known-dependency retries per precision. It checks OpenCV and
+other imports, installs the current repository Locate extra, and can install
+headless OpenCV for missing `cv2`/libGL errors. It preserves all attempts and does
+not automatically alter the benchmark precision, input size or work count.
+
+Unknown errors remain explicit failures for the executing agent to investigate.
+After correcting the cause, `--locate-only --output <existing-run>` restores the
+original precision/device/repeat contract and merges Locate measurements with
+existing utility, model, and scaling records. It requires `run_config.json` and an
+unchanged inference engine hash. Use the same hardware/software protocol; old
+summary-only published runs need a fresh, provenance-complete run.
+
+`completion.json` is the machine-readable gate. If any requested Locate precision
+has missing/partial output, failed parity, incorrect actual dtype/device, missing
+mode records or repeat measurements, retain the partial summary and exit with an
+error before generating final charts/report/ZIP. The two unsupported upstream
+stream modes remain N/A. Archive previous final charts/reports during repair;
+never display a stale final artifact as the current completed result.

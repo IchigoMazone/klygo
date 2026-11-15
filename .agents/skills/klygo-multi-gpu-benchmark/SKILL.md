@@ -77,19 +77,67 @@ CUDA_VISIBLE_DEVICES=0 python .agents/skills/klygo-multi-gpu-benchmark/scripts/r
   --device cuda:0 --repeats 3 --large-scale \
   --dataset-dir /content/coco_val2017_yolo \
   --include-models \
-  --models yolo,yolo11,yolo26,yolo-world,grounding-dino,grounding-dino-base,faster-rcnn,d-fine \
+  --models yolo,yolo11,yolo26,yolo-world,grounding-dino,grounding-dino-base,faster-rcnn,d-fine,locate-anything \
   --dtypes float32,float16 \
+  --require-locate-results --locate-isolated --allow-remote-code \
   --include-scaling --scaling-models yolo,yolo11,yolo26,yolo-world \
   --output artifacts/benchmarks/release_gpu0_val2017 \
   --zip artifacts/benchmarks/release_gpu0_val2017.zip
 ```
 
-Add `locate-anything` to `--models` only when its environment is ready. Pass
-`--locate-python /absolute/path/to/venv/bin/python` for its isolated interpreter.
-Use `--allow-remote-code` only when execution of that model's remote code is
-within the user's authorized task. Verify the isolated environment imports
-`cv2`, Klygo, PyTorch, and the required model dependencies first. Missing `cv2`
-caused both Locate Anything cases to fail in the historical val2017 run.
+For a full release, require Locate Anything before generating the combined
+report and charts. `--require-locate-results` adds the model if omitted and
+implies `--include-models`. It validates every requested precision: complete raw
+report, matching dtype/device/repeats, four measured supported modes with positive
+FPS and passing parity, and two explicit upstream-stream `N/A` modes.
+A requested Locate model is gated even without the explicit require flag.
+CPU and single-model smoke profiles intentionally do not require it.
+
+Use `--locate-isolated` to force a managed venv. Alternatively supply
+`--locate-python /absolute/path/to/venv/bin/python`. The preflight checks `cv2`,
+PyTorch, torchvision, Klygo, Transformers and Locate dependencies before inference.
+`--locate-auto-fix` defaults to enabled: on known dependency errors, create a
+managed venv, install the repository's Locate extra with Transformers 4.57.1,
+repair headless OpenCV if necessary, and retry up to `--locate-retries 2` per
+precision. Never modify the main or supplied interpreter's installed packages.
+The managed venv shares system site packages to reuse PyTorch, but dependency
+overrides are installed inside the venv. Keep it outside the report/ZIP tree;
+use `--locate-venv` to choose a location. Use `--no-locate-auto-fix` to prohibit
+automatic dependency installation.
+
+Use `--allow-remote-code` only when execution of the model's remote code is within
+the user's authorized task. The runner refuses Locate inference without it.
+Retain every stdout/stderr log, command, raw attempt, and interpreter preflight in
+`locate_runtime/run_<id>/`. Missing `cv2` is repaired as a known dependency failure.
+For an unknown model/driver/OOM error, inspect the preserved traceback and fix the
+cause; do not silently change dtype, batch, workload, repeats or parity criteria.
+If the cause cannot be fixed, leave the release incomplete and report the error.
+
+### Repair only Locate and merge before chart generation
+
+When a full run reaches Locate but fails, keep the completed utility and other
+model results. Re-run only Locate in the same output directory:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python .agents/skills/klygo-multi-gpu-benchmark/scripts/run_benchmark.py \
+  --locate-only --locate-isolated --allow-remote-code \
+  --output artifacts/benchmarks/release_gpu0_val2017
+```
+
+This restores dtype/device/repeats from `run_config.json`, retains other models
+and scaling rows, replaces failed Locate rows, and regenerates all combined charts
+and the report only after every required Locate precision passes. Repeat on the
+same physical GPU and compatible software environment. The inference runner hash
+must match. This recovery needs the configuration/raw outputs retained by the new
+runner; old published summary-only folders cannot establish that provenance.
+Do not merge unrelated GPUs or silently fabricate a configuration for old results.
+
+On failure, retain `summary.partial.json` and `completion.json` with status
+`incomplete`; final `summary.json`, `REPORT.md`, charts, and the final ZIP are not
+created. Previous finalized artifacts are archived before an in-place repair.
+The original ZIP destination is remembered for successful recovery. A venv or ZIP
+inside the source report directory is rejected to avoid bundling environments or
+recursively packaging output.
 
 ## Respect the actual scope
 

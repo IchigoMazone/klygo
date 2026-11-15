@@ -27,6 +27,8 @@ from typing import Any, Callable
 import numpy as np
 from PIL import Image
 
+from benchmarks.gpu_suite.locate_runtime import LocateRuntime, require_results, SUPPORTED
+
 from klygo import (
     archive,
     datasets,
@@ -66,6 +68,7 @@ def _git_info() -> dict[str, str]:
 def collect_environment() -> dict[str, Any]:
     """Capture hardware, OS, Python, library versions, and CUDA/CuPy capabilities."""
     gpu_name = "none"
+    gpu_uuid = None
     vram_mb = 0.0
     cuda_runtime = "none"
     torch_cuda = False
@@ -76,6 +79,7 @@ def collect_environment() -> dict[str, Any]:
         cuda_runtime = str(torch.version.cuda or "none")
         if torch_cuda:
             props = torch.cuda.get_device_properties(0)
+            gpu_uuid = str(getattr(props, "uuid", "")) or None
             gpu_name = props.name
             vram_mb = round(props.total_memory / (1024 * 1024), 1)
     except Exception:
@@ -99,6 +103,7 @@ def collect_environment() -> dict[str, Any]:
         "klygo_path": str(files.path(klygo.__file__).parent),
         "git": _git_info(),
         "gpu": gpu_name,
+        "gpu_uuid": gpu_uuid,
         "vram_mb": vram_mb,
         "is_nvidia_l4": "L4" in gpu_name.upper(),
         "torch_cuda": torch_cuda,
@@ -823,6 +828,53 @@ def _render_markdown_report(summary: dict[str, Any], charts: list[tuple[str, str
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _check_resume_environment(expected, current):
+    for key in ('gpu', 'gpu_uuid', 'vram_mb', 'python', 'cuda_runtime', 'torch_cuda', 'cupy_cuda'):
+        if expected.get(key) is not None and current.get(key) != expected[key]:
+            raise RuntimeError(f'Resume environment changed ({key}); use a fresh release run')
+    for key, value in expected.get('versions', {}).items():
+        if current.get('versions', {}).get(key) != value:
+            raise RuntimeError(f'Resume package version changed ({key}); use a fresh release run')
+
+
+def _archive_final(output, zip_path=""):
+    """Retain superseded final artifacts before an in-place Locate repair."""
+    stamp = str(time.time_ns())
+    previous = output / 'previous_final' / stamp
+    if zip_path and files.exists(zip_path):
+        old_zip = files.path(zip_path)
+        files.move(old_zip, old_zip.with_name(f'{old_zip.stem}.previous-{stamp}.zip'))
+    for name in ('summary.json', 'REPORT.md', 'charts', 'completion.json'):
+        path = output / name
+        if files.exists(path):
+            files.mkdir(previous)
+            files.move(path, previous / name)
+
+
+def _finalize(summary, output, *, require_locate=False, dtypes=(), device='cuda:0', repeats=3):
+    errors = require_results(output, dtypes, device, repeats, summary['models'],
+                             expected_env=summary.get('environment', {})) if require_locate else []
+    if require_locate:
+        for dtype in dtypes:
+            displayed = [row for row in summary.get('model_modes', [])
+                         if row.get('model') == 'locate-anything' and row.get('dtype') == dtype
+                         and row.get('status') == 'ok' and row.get('fps_median') is not None]
+            if {row.get('mode') for row in displayed} != SUPPORTED:
+                errors.append(f'{dtype}: Locate measurements are missing from the combined chart data')
+            if not any(row.get('model') == 'locate-anything' and row.get('dtype') == dtype
+                       for row in summary.get('model_loads', [])):
+                errors.append(f'{dtype}: Locate load results are missing from the combined chart data')
+    if errors:
+        files.save(output / 'summary.partial.json', summary, overwrite=True, verbose=False)
+        files.save(output / 'completion.json', {'status': 'incomplete', 'errors': errors}, overwrite=True, verbose=False)
+        raise RuntimeError('Final report and charts blocked: ' + '; '.join(errors))
+    files.save(output / 'summary.json', summary, overwrite=True, verbose=False)
+    charts = _generate_charts(summary, output)
+    files.save(output / 'REPORT.md', _render_markdown_report(summary, charts), overwrite=True, verbose=False)
+    files.save(output / 'completion.json', {'status': 'complete', 'locate_required': require_locate}, overwrite=True, verbose=False)
+    files.remove(output / 'summary.partial.json', missing_ok=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Klygo detection-evaluation benchmark suite.")
     parser.add_argument("--output", default="artifacts/benchmarks/release_eval")
@@ -836,6 +888,12 @@ def main() -> None:
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--allow-remote-code", action="store_true")
     parser.add_argument("--locate-python", default="", help="Optional Python executable for locate-anything (e.g. isolated transformers==4.57.1 venv)")
+    parser.add_argument("--locate-isolated", action="store_true", help="Force Locate Anything into a managed venv")
+    parser.add_argument("--locate-auto-fix", action=argparse.BooleanOptionalAction, default=True, help="Repair known Locate dependency failures in a managed venv")
+    parser.add_argument("--locate-retries", type=int, default=2, help="Maximum dependency-repair retries per Locate precision")
+    parser.add_argument("--locate-venv", default="", help="Managed Locate venv path outside the report directory")
+    parser.add_argument("--require-locate-results", action="store_true", help="Include Locate Anything and block final artifacts until every requested precision passes")
+    parser.add_argument("--locate-only", action="store_true", help="Repair/re-run only Locate cases in an existing release output and merge before finalizing")
     parser.add_argument("--include-scaling", action="store_true")
     parser.add_argument("--scaling-models", default="yolo,yolo-world")
     parser.add_argument("--large-scale", action="store_true", help="Enable large-scale (10k+ boxes / 200-image) GPU & loader workloads")
@@ -848,46 +906,112 @@ def main() -> None:
     out_dir = files.path(args.output)
     files.mkdir(out_dir)
 
-    env = collect_environment()
-    files.save(out_dir / "environment.json", env, overwrite=True, verbose=False)
-    print("=== Environment ===")
-    utils.tabulate({k: v for k, v in env.items() if k not in ("git", "versions")}, title="Runtime")
-    utils.tabulate(env["versions"], title="Versions")
+    if args.locate_retries < 0 or args.repeats < 1:
+        parser.error("repeats must be positive and locate-retries must be non-negative")
+    selected_models = [m.strip() for m in args.models.split(',') if m.strip()]
+    requested_dtypes = [d.strip() for d in args.dtypes.split(',') if d.strip()]
+    if not requested_dtypes or len(set(requested_dtypes)) != len(requested_dtypes):
+        parser.error("dtypes must be non-empty and unique")
+    if args.require_locate_results:
+        args.include_models = True
+        if 'locate-anything' not in selected_models:
+            selected_models.append('locate-anything')
+    config_path = out_dir / 'run_config.json'
+    if args.locate_only:
+        if not files.exists(config_path):
+            parser.error("locate-only requires an existing release run_config.json")
+        config = files.load(config_path, verbose=False)
+        if config.get('inference_runner_sha256') != files.hash('benchmarks/gpu_suite/run.py'):
+            parser.error("Inference runner changed; run a fresh release benchmark instead of merging")
+        args.device, args.repeats = config['device'], config['repeats']
+        requested_dtypes = config['dtypes']
+        args.zip = args.zip or config.get('zip', '')
+        selected_models = ['locate-anything']
+        args.include_models = True
+        args.include_scaling = False
+        args.require_locate_results = True
+    else:
+        if any(files.exists(out_dir / name) for name in ('run_config.json', 'summary.json', 'summary.partial.json')):
+            parser.error("Use a fresh output directory, or --locate-only to repair an existing run")
+        config = {'models': selected_models if args.include_models else [], 'dtypes': requested_dtypes,
+                  'device': args.device, 'repeats': args.repeats, 'zip': args.zip,
+                  'inference_runner_sha256': files.hash('benchmarks/gpu_suite/run.py')}
+    need_locate = args.include_models and 'locate-anything' in selected_models
+    if args.zip:
+        zip_destination = files.path(args.zip).resolve()
+        if zip_destination == out_dir.resolve() or out_dir.resolve() in zip_destination.parents:
+            parser.error("Keep the benchmark ZIP outside its source report directory")
+        if files.exists(zip_destination) and not args.locate_only:
+            parser.error("Use a fresh ZIP path to preserve the previous benchmark bundle")
+    if need_locate and not args.allow_remote_code:
+        parser.error("Locate Anything requires --allow-remote-code")
+    if need_locate:
+        managed = files.path(args.locate_venv or f'artifacts/benchmark-envs/locate-py{sys.version_info.major}{sys.version_info.minor}').resolve()
+        if managed == out_dir.resolve() or out_dir.resolve() in managed.parents:
+            parser.error("Keep the Locate venv outside the report directory and ZIP")
+    if args.locate_only:
+        # Load all sections before archiving the previous final artifacts.
+        env = files.load(out_dir / 'environment.json', verbose=False)
+        resume_env = collect_environment()
+        _check_resume_environment(env, resume_env)
+        files.save(out_dir / f'resume_environment_{time.time_ns()}.json', resume_env, verbose=False)
+        metrics_rows = files.load(out_dir / 'metrics_benchmark.json', verbose=False)
+        group_rows = files.load(out_dir / 'outputs_post_benchmark.json', verbose=False)
+        mining_rows = files.load(out_dir / 'mining_benchmark.json', verbose=False)
+        dmv_rows = files.load(out_dir / 'datasets_media_visual_benchmark.json', verbose=False)
+        def without_locate(name):
+            rows = files.load(out_dir / name, verbose=False)
+            return [row for row in rows if row.get('model') != 'locate-anything']
+        model_runs = without_locate('model_runs.json')
+        model_modes = without_locate('model_modes.json')
+        model_loads = without_locate('model_loads.json')
+        scaling_rows = files.load(out_dir / 'scaling_runs.json', verbose=False) if files.exists(out_dir / 'scaling_runs.json') else []
+        _archive_final(out_dir, args.zip)
+        if 'locate-anything' not in config['models']:
+            config['models'].append('locate-anything')
+    else:
+        env = collect_environment()
+        files.save(out_dir / "environment.json", env, overwrite=True, verbose=False)
+        print("=== Environment ===")
+        utils.tabulate({k: v for k, v in env.items() if k not in ("git", "versions")}, title="Runtime")
+        utils.tabulate(env["versions"], title="Versions")
 
-    metrics_rows = benchmark_metrics(env, repeats=args.repeats, large_scale=args.large_scale)
-    files.save(out_dir / "metrics_benchmark.json", metrics_rows, overwrite=True, verbose=False)
-    print("\n=== klygo.metrics Benchmark ===")
-    utils.tabulate(metrics_rows, title="Metrics (CPU vs CUDA, FP16/FP32/FP64)")
+        metrics_rows = benchmark_metrics(env, repeats=args.repeats, large_scale=args.large_scale)
+        files.save(out_dir / "metrics_benchmark.json", metrics_rows, overwrite=True, verbose=False)
+        print("\n=== klygo.metrics Benchmark ===")
+        utils.tabulate(metrics_rows, title="Metrics (CPU vs CUDA, FP16/FP32/FP64)")
 
-    group_rows = benchmark_groups_and_postprocessing(env, repeats=args.repeats, large_scale=args.large_scale)
-    files.save(out_dir / "outputs_post_benchmark.json", group_rows, overwrite=True, verbose=False)
-    print("\n=== DetectionGroup / Postprocessing / Transfer ===")
-    utils.tabulate(group_rows, title="Outputs & Postprocessing")
+        group_rows = benchmark_groups_and_postprocessing(env, repeats=args.repeats, large_scale=args.large_scale)
+        files.save(out_dir / "outputs_post_benchmark.json", group_rows, overwrite=True, verbose=False)
+        print("\n=== DetectionGroup / Postprocessing / Transfer ===")
+        utils.tabulate(group_rows, title="Outputs & Postprocessing")
 
-    mining_rows = benchmark_mining(env, repeats=args.repeats, large_scale=args.large_scale)
-    files.save(out_dir / "mining_benchmark.json", mining_rows, overwrite=True, verbose=False)
-    print("\n=== klygo.mining (CPU vs CUDA) ===")
-    utils.tabulate(mining_rows, title="Mining (CPU vs CUDA)")
+        mining_rows = benchmark_mining(env, repeats=args.repeats, large_scale=args.large_scale)
+        files.save(out_dir / "mining_benchmark.json", mining_rows, overwrite=True, verbose=False)
+        print("\n=== klygo.mining (CPU vs CUDA) ===")
+        utils.tabulate(mining_rows, title="Mining (CPU vs CUDA)")
 
-    dmv_rows, dataset_tag = benchmark_datasets_media_visual(
-        repeats=args.repeats,
-        large_scale=args.large_scale,
-        include_cpu_utils=args.include_cpu_utils,
-        dataset=args.dataset,
-        dataset_dir=args.dataset_dir,
-    )
-    env["dataset_source"] = dataset_tag
-    files.save(out_dir / "environment.json", env, overwrite=True, verbose=False)
-    files.save(out_dir / "datasets_media_visual_benchmark.json", dmv_rows, overwrite=True, verbose=False)
-    print("\n=== Loaders / Preprocessing / Disk Mining ===")
-    utils.tabulate(dmv_rows, title="Loaders, Preprocessing & Disk Mining")
+        dmv_rows, dataset_tag = benchmark_datasets_media_visual(
+            repeats=args.repeats,
+            large_scale=args.large_scale,
+            include_cpu_utils=args.include_cpu_utils,
+            dataset=args.dataset,
+            dataset_dir=args.dataset_dir,
+        )
+        env["dataset_source"] = dataset_tag
+        files.save(out_dir / "environment.json", env, overwrite=True, verbose=False)
+        files.save(out_dir / "datasets_media_visual_benchmark.json", dmv_rows, overwrite=True, verbose=False)
+        print("\n=== Loaders / Preprocessing / Disk Mining ===")
+        utils.tabulate(dmv_rows, title="Loaders, Preprocessing & Disk Mining")
 
-    model_runs: list[dict[str, Any]] = []
-    model_modes: list[dict[str, Any]] = []
-    model_loads: list[dict[str, Any]] = []
+        model_runs, model_modes, model_loads, scaling_rows = [], [], [], []
+    files.save(config_path, config, overwrite=True, verbose=False)
+    locate_runtime = LocateRuntime(out_dir, python=args.locate_python,
+        isolated=args.locate_isolated, auto_fix=args.locate_auto_fix,
+        retries=args.locate_retries, venv_dir=args.locate_venv) if need_locate else None
     if args.include_models:
-        for model_id in [m.strip() for m in args.models.split(",") if m.strip()]:
-            for dtype_name in [d.strip() for d in args.dtypes.split(",") if d.strip()]:
+        for model_id in selected_models:
+            for dtype_name in requested_dtypes:
                 case_out = out_dir / "inference" / f"{model_id}_{dtype_name}"
                 py_exec = args.locate_python if (model_id == "locate-anything" and args.locate_python) else sys.executable
                 cmd = [
@@ -901,7 +1025,8 @@ def main() -> None:
                 ]
                 if args.allow_remote_code:
                     cmd.append("--allow-remote-code")
-                proc = subprocess.run(cmd, capture_output=True, text=True)
+                proc = (locate_runtime.run(cmd, case_out, dtype_name) if model_id == "locate-anything"
+                        else subprocess.run(cmd, capture_output=True, text=True))
                 err_tail = ""
                 if proc.returncode != 0:
                     lines = [ln.strip() for ln in (proc.stderr or proc.stdout or "").splitlines() if ln.strip()]
@@ -916,7 +1041,11 @@ def main() -> None:
                 })
                 json_path = case_out / f"{model_id}.json"
                 if proc.returncode == 0 and files.exists(json_path):
-                    data = files.load(json_path, verbose=False)
+                    try:
+                        data = files.load(json_path, verbose=False)
+                    except (ValueError, OSError, TypeError) as exc:
+                        model_runs[-1].update(status='failed', error=f'Unreadable raw report: {exc}')
+                        continue
                     model_loads.append({
                         "model": model_id,
                         "dtype": dtype_name,
@@ -949,7 +1078,6 @@ def main() -> None:
             print("\n=== 6-Mode Per-Mode Details ===")
             utils.tabulate(model_modes, title="6-Mode Per-Mode Details")
 
-    scaling_rows: list[dict[str, Any]] = []
     if args.include_scaling:
         configs = [
             (1, 1, 1, True),
@@ -959,7 +1087,7 @@ def main() -> None:
             (8, 4, 4, True),
         ]
         for model_id in [m.strip() for m in args.scaling_models.split(",") if m.strip()]:
-            for dtype_name in [d.strip() for d in args.dtypes.split(",") if d.strip()]:
+            for dtype_name in requested_dtypes:
                 for batch_sz, workers_n, prefetch_n, use_packed in configs:
                     tag = f"{model_id}_{dtype_name}_b{batch_sz}_w{workers_n}_p{prefetch_n}_{'packed' if use_packed else 'unpacked'}"
                     case_out = out_dir / "scaling" / tag
@@ -1022,9 +1150,8 @@ def main() -> None:
         "model_modes": model_modes,
         "scaling": scaling_rows,
     }
-    files.save(out_dir / "summary.json", summary, overwrite=True, verbose=False)
-    charts = _generate_charts(summary, out_dir)
-    files.save(out_dir / "REPORT.md", _render_markdown_report(summary, charts), overwrite=True, verbose=False)
+    _finalize(summary, out_dir, require_locate=need_locate, dtypes=requested_dtypes,
+              device=args.device, repeats=args.repeats)
     if args.zip:
         zip_path = files.path(args.zip)
         files.mkdir(zip_path.parent)

@@ -170,3 +170,22 @@ recorded in `score_weights`; weighted selection includes recomputing these
 scores, recorded in `select_includes_scoring`. Quality scoring remains in the
 disk-backed benchmark. Do not directly compare these synthetic scoring times
 with historical results whose scoring protocol is unrecorded.
+
+
+### Isolated Locate execution and finalization
+
+The release CLI supports `--locate-isolated`, `--locate-python`,
+`--locate-venv`, `--locate-auto-fix` / `--no-locate-auto-fix`, and
+`--locate-retries` (default two). Preflight and known dependency repairs operate
+in a managed venv outside the report tree; the main/supplied environment is not
+modified. Preserve `locate_runtime/` logs and raw attempts.
+
+`--require-locate-results` includes Locate and blocks combined charts/report/ZIP
+until all requested precisions have complete, parity-passing measurements. Any
+explicitly requested Locate model is also gated. On failure, inspect
+`completion.json` and `summary.partial.json`. Retry with `--locate-only` in the
+same output directory to merge repaired Locate measurements with existing models
+and scaling results, using the saved `run_config.json` contract. Recovery requires
+the same inference-engine hash and comparable hardware/software; summary-only
+historical folders without configuration/raw provenance require a fresh run.
+The source report directory cannot contain the managed venv or the final ZIP.
