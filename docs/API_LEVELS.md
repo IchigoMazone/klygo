@@ -71,6 +71,13 @@ public API cannot preserve. Explain that requirement and keep the code local to
 that gap. Existing model adapters remain the default for supported architectures;
 local execution alone is not a reason to write a detector subclass.
 
+For a **custom object detector**, subclass `models.Detector` (directly or through
+an existing Detector subclass) and implement `forward(images, prompt=None, ...)`.
+Both are mandatory. A generic `BaseModel` subclass alone is not the detector
+integration contract. Keep backend-specific inference in `forward()` and retain
+the inherited public prediction orchestration for application code. This does not
+require users of an already supported detector to write a custom class.
+
 Library implementation may use lower primitives to implement its own public
 surface. Focused internal tests may inspect that implementation. Raw-reference
 benchmarks may call upstream frameworks directly for the explicit comparison.

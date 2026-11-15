@@ -38,7 +38,7 @@ When refactoring this checkout, inventory `test/integration/`, `examples/integra
 
 ## Dataset and model invariants
 
-Use `models.load()` and the existing detector's `predict()` for supported architectures. Define a public `models.Detector` or `BaseModel` subclass with `forward()` only for an explicit custom-model request or a verified missing adapter. Code must be concise, readable, and illustrate natural handoffs between modules.
+Use `models.load()` and the existing detector's `predict()` for supported architectures. When a custom object detector is explicitly requested or an adapter is genuinely missing, its class must inherit `models.Detector` (directly or through an existing Detector subclass) and must implement `forward(images, prompt=None, ...)`. A `BaseModel`-only subclass is insufficient; application code must retain the inherited public prediction path. Code must be concise, readable, and illustrate natural handoffs between modules.
 
 Compare predictions against ground truth using the existing public `metrics` functions. Do not rebuild matching or precision/recall aggregation. Choose the owning module's suitable public function across modules (`files`, `archive`, `datasets`, `media`, `preprocessing`, `models`, `outputs`, `postprocessing`, `metrics`, `visual`, `utils`) to optimize execution performance. Strictly avoid embedding or importing unrelated third-party libraries.
 

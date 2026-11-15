@@ -142,6 +142,15 @@ Use the pattern below only for an explicit custom-model request or a verified
 missing adapter, keeping preprocessing, evaluation and export on existing public
 APIs outside the unsupported backend boundary.
 
+**Mandatory custom-detector contract:** When implementing a custom object detector
+inside Klygo, the class **must inherit `models.Detector`** (directly or through an
+existing Detector subclass) and **must implement `forward(images, prompt=None, ...)`**
+for the custom backend behavior. Inheriting only `BaseModel` is not sufficient for
+a custom detector. Call the inherited detector `predict()` or `Detections.repredict(detector, ...)`
+from workflow code; do not replace the framework's inference orchestration with a
+standalone custom `predict()` loop. This requirement applies when customization
+is needed, not to ordinary use of a supported detector.
+
 ### Standard 4-Step Pattern for Subclassing `models.Detector`
 
 When integrating any model from **Ultralytics**, **Hugging Face**, **Torchvision**, or **Keras 3 / KerasHub**:
