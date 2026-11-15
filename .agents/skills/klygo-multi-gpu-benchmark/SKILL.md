@@ -1,133 +1,140 @@
 ---
 name: klygo-multi-gpu-benchmark
-description: Run standardized multi-backend benchmarks across multiple GPUs and accelerators (CUDA, Apple Silicon MPS, CPU) for all integrated Klygo detector architectures (YOLOv8, YOLO-World v2, Grounding DINO, Faster R-CNN, RT-DETR / D-FINE) across all 6 execution modes (Raw Stream, Raw Non-stream, Native Stream, Native Non-stream, Managed Stream, Managed Non-stream).
+description: Run and interpret the Klygo release benchmark suite for models, metrics, mining, outputs, postprocessing, datasets, and media. Use for release validation, GPU comparisons, six-mode inference, batch/worker/prefetch scaling, or reproducing the NVIDIA L4 COCO val2017 report. Use the canonical evaluate_release.py suite and preserve raw results, environment metadata, parity checks, charts, and failures.
 ---
 
-# Klygo Multi-GPU & Multi-Backend Benchmark Skill
+# Klygo release benchmarking
 
-This skill provides an authoritative, reproducible benchmarking workflow to evaluate object detection models across multiple GPUs and hardware accelerators using **Klygo**.
+## Use one implementation
 
-Read [references/multi-gpu-guide.md](references/multi-gpu-guide.md) for detailed hardware architecture profiles (RTX 4090, A100/H100, Colab T4/V100, Quadro, Apple Silicon MPS, and CPU).
+Run from the Klygo repository root. Read `AGENTS.md`, then inspect the current CLI
+before choosing a run. Treat these files as the source of truth:
 
----
+- `benchmarks/gpu_suite/evaluate_release.py`: comprehensive release orchestrator.
+- `benchmarks/gpu_suite/run.py`: per-model six-mode inference and scaling engine.
+- `benchmarks/gpu_suite/README.md`: inference protocol and report field definitions.
+- [references/multi-gpu-guide.md](references/multi-gpu-guide.md): setup, hardware
+  selection, reproduction limits, and result validation.
 
-## 1. Capabilities & Core Architecture
+Keep `scripts/run_benchmark.py` as a thin launcher for the orchestrator. Do not
+copy benchmark logic into this skill or use the legacy
+`examples/integration/multi_backend_benchmark.py` as the release entry point.
+The launcher forwards the canonical CLI unchanged and resolves relative paths
+from the repository root, including output and dataset paths.
 
-The benchmark evaluates:
-- **5 Detector Model Families**:
-  1. `yolo`: Ultralytics YOLOv8 / YOLOv11 (CNN 1-Stage)
-  2. `yolo-world`: Ultralytics YOLO-World v2 (Open-Vocabulary Text Prompts)
-  3. `grounding-dino`: Hugging Face Grounding DINO tiny (Deformable Cross-Attention Transformer)
-  4. `faster-rcnn`: Torchvision Faster R-CNN MobileNetV3 FPN (Two-Stage RPN + RoIAlign)
-  5. `d-fine`: KerasHub / Keras 3 RT-DETR / D-FINE Nano (End-to-End DETR Transformer)
-
-- **6 Execution Modes**:
-  1. `raw-non-stream`: Pure upstream framework batched/non-streaming pipeline (e.g. `model.predict(source, stream=False)`)
-  2. `raw-stream`: Pure upstream framework streaming pipeline (e.g. `model.predict(source, stream=True)`; only supported if upstream framework has a built-in video stream engine)
-  3. `native-non-stream`: Klygo native backend (`native=True`) receiving direct inputs without `media`/`preprocessing` transforms, locking Klygo decoder parameters (supported across all detector subclasses)
-  4. `native-stream`: Klygo native backend with upstream stream engine enabled (`native=True, model_stream=True`; only supported on models whose backend has an upstream stream engine like Ultralytics)
-  5. `managed-non-stream`: Klygo managed pipeline batched (`native=False, stream=False`) with `media` decoding & coordinate trace
-  6. `managed-stream`: Klygo managed pipeline generator (`native=False, stream=True`) with `media` lazy decoding & coordinate trace
-
-- **Safe Resource Bounding & Anti-Freeze Guidelines**:
-  - **Downsized Sample Clips**: When benchmarking on CPU or memory-constrained accelerators, use short clips (8–10 frames, 320×240 or 320×320 resolution) to prevent system freezing or OOM errors.
-  - **Explicit Memory Reclamation**: Run `gc.collect()` and `torch.cuda.empty_cache()` between each model and mode transition.
-  - **Structured Run Folders**: Organize every benchmark execution inside an isolated timestamped folder under `artifacts/benchmarks/run_<YYYYMMDD_HHMMSS>/` containing both raw JSON metrics (`benchmark_metrics.json`) and a formatted Markdown scorecard (`benchmark_report.md`).
-
-- **Hardware Targeting**:
-  - Multi-GPU enumeration: Automatically tests and compares each GPU card (`--device all-gpus`).
-  - Specific GPU selection: `--device cuda:0`, `--device cuda:1`, etc.
-  - Apple Silicon Metal: `--device mps`.
-  - CPU Fallback: `--device cpu`.
-
-- **Comprehensive Multi-Criteria Metrics**:
-  - Throughput: Median, Mean, and Standard Deviation (Jitter) of FPS across repeat runs.
-  - Latency: Time to First Detection (`first_frame_ms`) and sustained per-frame latency (`ms_per_frame`).
-  - Memory Profile: Peak Python heap memory (`tracemalloc`) and OS process memory delta (`psutil` RSS).
-  - Detection Parity: Total detected bounding boxes across runs ensuring zero loss of output integrity.
-
----
-
-## 2. Benchmark Script & Entry Points
-
-The benchmark runner is provided as a single unified script at:
-- `examples/integration/multi_backend_benchmark.py` (Repository integration example)
-- `.agents/skills/klygo-multi-gpu-benchmark/scripts/run_benchmark.py` (Skill local executable)
-
-Both entry points are strictly dogfooded with Klygo public APIs (`klygo.files`, `klygo.media`, `klygo.models`, `klygo.outputs`, `klygo.utils`).
-
----
-
-## 3. Standard CLI Recipes
-
-### Recipe 1: Benchmark All Models on the Primary GPU
 ```bash
-python examples/integration/multi_backend_benchmark.py \
-    --device auto \
-    --models all \
-    --modes all \
-    --repeats 3 \
-    --max-frames 10 \
-    --output artifacts/benchmark/report.json \
-    --markdown artifacts/benchmark/report.md
+python .agents/skills/klygo-multi-gpu-benchmark/scripts/run_benchmark.py --help
 ```
 
-### Recipe 2: Benchmark Across All Available GPUs in a Multi-GPU Node
+## Establish the run contract
+
+1. Record the branch, commit, dirty state, Python executable, package versions,
+   physical GPU selection, dataset provenance, image count, and run parameters.
+   Preserve a patch for a dirty checkout alongside the run metadata.
+2. Create a fresh, explicitly named output directory under `artifacts/benchmarks/`.
+   Existing paths are overwritten by the runner; do not reuse an earlier result.
+3. Start with CPU synthetic validation or one model before a full GPU run. Check
+   the selected model's optional dependencies in `pyproject.toml`.
+4. Use matching source, model weights, precision, image size, batch, repeats,
+   worker/prefetch settings, and packed state for comparisons. Keep progress
+   disabled in timed mining/metrics/combine calls (`verbose=False` by default).
+5. Read `environment.json` after the run. CUDA utility workloads depend on CuPy
+   availability; PyTorch CUDA alone does not enable them. Never label CPU results
+   as GPU measurements or claim unsupported modes succeeded.
+
+## Choose an execution profile
+
+### CPU validation without downloads or models
+
 ```bash
-python examples/integration/multi_backend_benchmark.py \
-    --device all-gpus \
-    --models yolo,yolo-world,faster-rcnn \
-    --modes native-stream,managed-stream \
-    --repeats 3 \
-    --output artifacts/benchmark/multi_gpu_matrix.json \
-    --markdown artifacts/benchmark/multi_gpu_matrix.md
+CUDA_VISIBLE_DEVICES="" python .agents/skills/klygo-multi-gpu-benchmark/scripts/run_benchmark.py \
+  --device cpu --dataset synthetic --repeats 1 --include-cpu-utils \
+  --output artifacts/benchmarks/cpu_smoke
 ```
 
-### Recipe 3: Quick Smoke Test on CPU or Colab T4
+This is a correctness/smoke profile, not a published throughput result.
+Omit `--include-models` and `--include-scaling` to avoid model inference.
+Hide CUDA devices as shown: `--device cpu` alone does not disable utility CUDA
+auto-detection. On PowerShell set `$env:CUDA_VISIBLE_DEVICES=""` first.
+
+### GPU preflight with one model
+
 ```bash
-python examples/integration/multi_backend_benchmark.py \
-    --device auto \
-    --models yolo \
-    --repeats 1 \
-    --warmup 1 \
-    --max-frames 2 \
-    --output artifacts/benchmark/smoke_report.json
+CUDA_VISIBLE_DEVICES=0 python .agents/skills/klygo-multi-gpu-benchmark/scripts/run_benchmark.py \
+  --device cuda:0 --dataset synthetic --repeats 1 \
+  --include-models --models yolo --dtypes float32 \
+  --output artifacts/benchmarks/gpu_preflight
 ```
 
-### Recipe 4: High-Resolution (640px) Real-Time Video Evaluation
+### Real-dataset release evaluation
+
+Use a prepared YOLO dataset containing `data.yaml`, images, and matching labels.
+For COCO val2017, supply the prepared 5,000-image dataset; the runner does not
+convert or download val2017 for this option.
+
 ```bash
-python examples/integration/multi_backend_benchmark.py \
-    --device cuda:0 \
-    --models yolo,d-fine \
-    --source artifacts/benchmark-4-modes/stream_120.mp4 \
-    --imgsz 640 \
-    --max-frames 60 \
-    --repeats 2
+CUDA_VISIBLE_DEVICES=0 python .agents/skills/klygo-multi-gpu-benchmark/scripts/run_benchmark.py \
+  --device cuda:0 --repeats 3 --large-scale \
+  --dataset-dir /content/coco_val2017_yolo \
+  --include-models \
+  --models yolo,yolo11,yolo26,yolo-world,grounding-dino,grounding-dino-base,faster-rcnn,d-fine \
+  --dtypes float32,float16 \
+  --include-scaling --scaling-models yolo,yolo11,yolo26,yolo-world \
+  --output artifacts/benchmarks/release_gpu0_val2017 \
+  --zip artifacts/benchmarks/release_gpu0_val2017.zip
 ```
 
----
+Add `locate-anything` to `--models` only when its environment is ready. Pass
+`--locate-python /absolute/path/to/venv/bin/python` for its isolated interpreter.
+Use `--allow-remote-code` only when execution of that model's remote code is
+within the user's authorized task. Verify the isolated environment imports
+`cv2`, Klygo, PyTorch, and the required model dependencies first. Missing `cv2`
+caused both Locate Anything cases to fail in the historical val2017 run.
 
-## 4. Output Artifacts & Reporting
+## Respect the actual scope
 
-Every benchmark execution saves its results into an isolated run folder (`artifacts/benchmarks/run_<timestamp>/`) with segregated subdirectories:
-```text
-artifacts/benchmarks/run_<timestamp>/
-├── README.md                          # Quick index and navigation guide
-├── metrics/                           # Numerical telemetry and raw tabular data
-│   ├── benchmark_metrics.json         # Complete raw JSON measurements
-│   └── benchmark_tables.md            # Markdown performance tables (FPS, Latency, RAM, VRAM)
-└── evaluations/                       # Dedicated analytical reports and insights
-    ├── summary_evaluation.md          # Multi-backend cross-tier evaluation & architectural insights
-    ├── cpu_evaluation.md              # In-depth CPU latency, memory footprint, and bottlenecks
-    └── gpu_evaluation.md              # In-depth GPU acceleration, VRAM containment, and throughput
-```
+- Expect nine model IDs, two requested precisions, and six named modes. Some
+  upstream stream modes are `N/A`; preserve that distinction from failures.
+- Expect scaling configurations `(batch, workers, prefetch, packed)` of
+  `(1,1,1,True)`, `(4,2,2,False)`, `(4,2,2,True)`, `(8,4,4,False)`,
+  `(8,4,4,True)`. Check the current source before assuming they are unchanged.
+- Treat `--include-cpu-utils` as effective only on the synthetic dataset path in
+  the current runner. The real-data branch returns before those optional helpers;
+  run the synthetic CPU profile separately to cover them.
+- Treat `--dataset-dir` as the source for loader, disk-mining, and access tests.
+  Model inference uses its own fixtures and default iterations in `run.py`.
+  Never describe the report as 5,000-image inference per model without evidence.
+- Treat `--device` as the requested model device. Utility GPU workloads are
+  auto-detected and use the visible GPU. For comparable per-GPU runs, expose one
+  physical device with `CUDA_VISIBLE_DEVICES` and use logical `cuda:0`.
+- Do not pass legacy `--device all-gpus`, `--device auto`, `--models all`, or
+  `--modes` to this launcher. The release CLI does not implement those aliases.
+  Do not claim MPS support from the old skill; this utility suite targets CPU/CUDA.
 
----
+## Validate and deliver evidence
 
-## 5. Verification & Quality Gates
+Check `summary.json`, `REPORT.md`, `environment.json`, per-module JSON files,
+`model_runs.json`, `model_modes.json`, `model_loads.json`, `scaling_runs.json`,
+per-model `inference/` and `scaling/` results, and `charts/` when generated.
+Model/scaling files are conditional on the corresponding include flags.
 
-When creating or modifying benchmarks under this skill:
-1. **Rule 1 (Facade Imports)**: Only import from `klygo` top-level facades.
-2. **Rule 2 (Dogfooding)**: Use `klygo.files` for file resolution, directories, and data serialization. Never import raw `pathlib.Path` or `json.dump`.
-3. **Rule 3 (English Only)**: All comments, docstrings, CLI help messages, and report text must be written in English.
-4. **Rule 5 (Artifact Isolation)**: Always save benchmark outputs inside `artifacts/benchmark/`, never inside package source directories.
+Inspect every requested model/dtype, case status, parity result, actual dtype,
+missing result, and scaling error. A zero orchestrator exit code or the word
+`passed` on a subprocess row is insufficient evidence of release correctness.
+Report failures explicitly; never replace missing measurements with zeros from
+error rows or silently remove failed models from a comparison.
+
+Separate output parity from detector accuracy; this suite does not establish
+COCO mAP quality for every model. Distinguish throughput FPS, first-result
+latency, and ready intervals: the report's `p50_ms` is a ready interval, not an
+independent per-frame inference latency. Batch/worker/prefetch scaling changes
+several parameters together and cannot isolate each parameter's contribution.
+Distinguish lazy media setup from actual decoding and cache-warm access tests.
+
+Preserve the complete run and optional ZIP before a Colab runtime expires.
+For the historical baseline inspect
+`benchmarks/gpu_suite/colab_l4_val2017_2026_11_15/REPORT.md` and adjacent JSONs.
+Copy only deliberately selected reports/charts into a versioned benchmark
+folder when authorized; keep weights, datasets, and generated runtime artifacts
+out of source commits. Do not claim benchmark execution when only the skill,
+CLI, or launcher has been validated.

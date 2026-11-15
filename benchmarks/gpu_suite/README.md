@@ -133,8 +133,10 @@ PYTHONPATH=. python benchmarks/gpu_suite/run.py --model yolo --profile video \
 ```
 
 LocateAnything requires the explicit `--allow-remote-code` flag and the pinned
-official NVIDIA checkpoint. It is measured separately at batch one with one
-pack per repeat due to its sequential autoregressive generation. A failed load,
+official NVIDIA checkpoint. The image profile uses `--iterations` packs per
+repeat (default eight), including LocateAnything. For a shorter autoregressive
+smoke run, explicitly pass `--iterations 1` to `run.py`; the release orchestrator
+does not forward an iterations option. A failed load,
 truncated output or OOM is recorded as an error rather than fabricated FPS.
 
 Runtime outputs belong under `artifacts/benchmarks/`. Published measured reports
@@ -151,3 +153,20 @@ input dimensions, bypassing the native crop geometry. Historical D-FINE timings
 and parity therefore use a different protocol: rerun compared revisions with
 this corrected reference rather than directly claiming a speedup over them.
 The raw reference calls the native stages independently of the Klygo wrapper.
+
+
+## Comprehensive release suite
+
+Use `evaluate_release.py` for the combined metrics, outputs/postprocessing,
+mining, dataset/media, optional inference, scaling, charts, and report workflow.
+The repository skill's `scripts/run_benchmark.py` delegates to this file rather
+than maintaining a second implementation. Consult
+[the repository skill](../../.agents/skills/klygo-multi-gpu-benchmark/SKILL.md)
+for current CLI recipes and validation rules.
+
+The synthetic mining fixture contains annotations without image sources.
+Its current scoring weights are `rarity=0.5`, `coverage=0.3`, `boxes=0.2`,
+recorded in `score_weights`; weighted selection includes recomputing these
+scores, recorded in `select_includes_scoring`. Quality scoring remains in the
+disk-backed benchmark. Do not directly compare these synthetic scoring times
+with historical results whose scoring protocol is unrecorded.

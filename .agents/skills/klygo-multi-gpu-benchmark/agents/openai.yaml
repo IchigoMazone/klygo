@@ -1,0 +1,4 @@
+interface:
+  display_name: "Klygo Release Benchmarks"
+  short_description: "Run release benchmarks and compare GPU performance"
+  default_prompt: "Use $klygo-multi-gpu-benchmark to run the release benchmark suite and review parity, failures, throughput, and artifacts."

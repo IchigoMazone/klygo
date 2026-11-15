@@ -354,15 +354,18 @@ def benchmark_mining(
     pred, _ = _synthetic_pair(num_frames, 30, 10, num_classes=5)
     devices = ["cpu"] + (["cuda"] if env["cupy_cuda"] else [])
     limit_n = max(4, num_frames // 2)
+    # These annotation-only fixtures have no image pixels for quality scoring.
+    weights = {"rarity": 0.5, "coverage": 0.3, "boxes": 0.2}
 
     for dev in devices:
         work = pred.copy()
         if dev == "cuda":
             work.cuda(0)
         stats_res = _measure(lambda: mining.stats(work, quality=False), repeats=repeats, warmup=1, use_cuda=(dev == "cuda"))
-        score_res = _measure(lambda: mining.score(work), repeats=repeats, warmup=1, use_cuda=(dev == "cuda"))
+        score_res = _measure(lambda: mining.score(work, weights=weights), repeats=repeats, warmup=1, use_cuda=(dev == "cuda"))
         select_res = _measure(
-            lambda: mining.select(work, method="weighted", limit=limit_n),
+            lambda: mining.select(work, method="weighted", limit=limit_n,
+                                  scores=mining.score(work, weights=weights)),
             repeats=repeats, warmup=1, use_cuda=(dev == "cuda"),
         )
         selected = select_res["last_result"]
@@ -370,6 +373,8 @@ def benchmark_mining(
         compare_res = _measure(lambda: mining.compare(work, selected, quality=False), repeats=repeats, warmup=1, use_cuda=(dev == "cuda"))
         rows.append({
             "scope": f"detections_{num_frames}f",
+            "score_weights": dict(weights),
+            "select_includes_scoring": True,
             "device": dev,
             "stats_ms": stats_res["median_ms"],
             "score_ms": score_res["median_ms"],
@@ -490,13 +495,13 @@ def _prepare_real_dataset(dataset: str, dataset_dir: str) -> tuple[Any | None, s
         try:
             dl_dir = files.path("artifacts/datasets")
             files.mkdir(dl_dir)
-            zip_path = files.download(
+            files.download(
                 "https://ultralytics.com/assets/coco128.zip",
                 dl_dir,
                 overwrite=True,
                 verbose=False,
             )
-            archive.extract(zip_path, dl_dir, overwrite=True, verbose=False)
+            archive.extract(dl_dir / "coco128.zip", dl_dir, overwrite=True, verbose=False)
         except Exception as exc:
             if dataset == "coco128":
                 raise RuntimeError(f"Failed to download coco128 dataset: {exc}") from exc
