@@ -17,8 +17,7 @@ before choosing a run. Treat these files as the source of truth:
   selection, reproduction limits, and result validation.
 
 Keep `scripts/run_benchmark.py` as a thin launcher for the orchestrator. Do not
-copy benchmark logic into this skill or use the legacy
-`examples/integration/multi_backend_benchmark.py` as the release entry point.
+copy benchmark logic into this skill or introduce a second release entry point.
 The launcher forwards the canonical CLI unchanged and resolves relative paths
 from the repository root, including output and dataset paths.
 
