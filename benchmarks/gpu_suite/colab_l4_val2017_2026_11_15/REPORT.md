@@ -130,6 +130,8 @@
 | faster-rcnn | float16 | torch.float16 | 1.727 |  |
 | d-fine | float32 | float32 | 22.4662 |  |
 | d-fine | float16 | float16 | 16.023 |  |
+| locate-anything | float16 |  | None |  |
+| locate-anything | float32 |  | None |  |
 
 ## 6-Mode Model Run Status
 
@@ -151,8 +153,8 @@
 | faster-rcnn | float16 | 0 | passed | artifacts/benchmarks/colab_l4_val2017/inference/faster-rcnn_float16 |  |
 | d-fine | float32 | 0 | passed | artifacts/benchmarks/colab_l4_val2017/inference/d-fine_float32 |  |
 | d-fine | float16 | 0 | passed | artifacts/benchmarks/colab_l4_val2017/inference/d-fine_float16 |  |
-| locate-anything | float32 | 1 | failed | artifacts/benchmarks/colab_l4_val2017/inference/locate-anything_float32 | ModuleNotFoundError: No module named 'cv2' |
-| locate-anything | float16 | 1 | failed | artifacts/benchmarks/colab_l4_val2017/inference/locate-anything_float16 | ModuleNotFoundError: No module named 'cv2' |
+| locate-anything | float16 | 0 | passed | artifacts/benchmarks/colab_l4_val2017/inference/locate-anything_float16 |  |
+| locate-anything | float32 | 0 | passed | artifacts/benchmarks/colab_l4_val2017/inference/locate-anything_float32 |  |
 
 ## 6-Mode Model Inference Details
 
