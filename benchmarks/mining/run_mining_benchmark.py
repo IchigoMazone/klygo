@@ -433,9 +433,46 @@ def _render_mining_report(summary: dict[str, Any], charts: list[tuple[str, str]]
     return "\n".join(lines).rstrip() + "\n"
 
 
+COCO80_NAMES = {
+    0: "person", 1: "bicycle", 2: "car", 3: "motorcycle", 4: "airplane", 5: "bus", 6: "train", 7: "truck",
+    8: "boat", 9: "traffic light", 10: "fire hydrant", 11: "stop sign", 12: "parking meter", 13: "bench",
+    14: "bird", 15: "cat", 16: "dog", 17: "horse", 18: "sheep", 19: "cow", 20: "elephant", 21: "bear",
+    22: "zebra", 23: "giraffe", 24: "backpack", 25: "umbrella", 26: "handbag", 27: "tie", 28: "suitcase",
+    29: "frisbee", 30: "skis", 31: "snowboard", 32: "sports ball", 33: "kite", 34: "baseball bat",
+    35: "baseball glove", 36: "skateboard", 37: "surfboard", 38: "tennis racket", 39: "bottle",
+    40: "wine glass", 41: "cup", 42: "fork", 43: "knife", 44: "spoon", 45: "bowl", 46: "banana",
+    47: "apple", 48: "sandwich", 49: "orange", 50: "broccoli", 51: "carrot", 52: "hot dog", 53: "pizza",
+    54: "donut", 55: "cake", 56: "chair", 57: "couch", 58: "potted plant", 59: "bed", 60: "dining table",
+    61: "toilet", 62: "tv", 63: "laptop", 64: "mouse", 65: "remote", 66: "keyboard", 67: "cell phone",
+    68: "microwave", 69: "oven", 70: "toaster", 71: "sink", 72: "refrigerator", 73: "book", 74: "clock",
+    75: "vase", 76: "scissors", 77: "teddy bear", 78: "hair drier", 79: "toothbrush",
+}
+
+
+def _resolve_dataset(dataset: str, dataset_dir: str) -> tuple[Any, str, str]:
+    if dataset_dir:
+        root = files.path(dataset_dir)
+        if not files.is_dir(root):
+            raise FileNotFoundError(f"Dataset directory not found: {root}")
+        img_sub = "images/train2017" if files.is_dir(root / "images" / "train2017") else "images"
+        lbl_sub = "labels/train2017" if files.is_dir(root / "labels" / "train2017") else "labels"
+        return root, img_sub, lbl_sub
+
+    coco128_root = files.path("artifacts/datasets/coco128")
+    if not files.is_dir(coco128_root / "images" / "train2017"):
+        dl_dir = files.path("artifacts/datasets")
+        files.mkdir(dl_dir)
+        zip_path = files.download("https://ultralytics.com/assets/coco128.zip", dl_dir, overwrite=True, verbose=False)
+        archive.extract(zip_path, dl_dir, overwrite=True, verbose=False)
+    if not files.is_file(coco128_root / "data.yaml"):
+        files.save(coco128_root / "data.yaml", {"names": COCO80_NAMES}, overwrite=True, verbose=False)
+    return coco128_root, "images/train2017", "labels/train2017"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset-dir", required=True, help="Flat YOLO dataset directory (e.g. coco128, voc2007, val2017)")
+    parser.add_argument("--dataset", default="coco128", help="Dataset preset (coco128) if --dataset-dir is omitted")
+    parser.add_argument("--dataset-dir", default="", help="Flat YOLO dataset directory (e.g. coco128, voc2007, val2017)")
     parser.add_argument("--output", default="artifacts/benchmarks/mining_curation")
     parser.add_argument("--weights", default="yolov8n.pt")
     parser.add_argument("--epochs", type=int, default=15)
@@ -453,9 +490,7 @@ def main() -> None:
     out_dir = files.path(args.output)
     files.mkdir(out_dir)
 
-    root = files.path(args.dataset_dir)
-    img_sub = "images/train2017" if files.is_dir(root / "images" / "train2017") else "images"
-    lbl_sub = "labels/train2017" if files.is_dir(root / "labels" / "train2017") else "labels"
+    root, img_sub, lbl_sub = _resolve_dataset(args.dataset, args.dataset_dir)
     all_dets = datasets.load(root, images_dir=img_sub, labels_dir=lbl_sub, yaml_name="data.yaml", verbose=False)
 
     train_pool, val_clean = _split_train_val(
