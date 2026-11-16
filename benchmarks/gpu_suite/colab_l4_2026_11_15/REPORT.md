@@ -95,20 +95,20 @@
 
 | operation | median_ms | status |
 | --- | --- | --- |
-| datasets.load (coco128, 128 imgs) | 193.7215 | passed |
-| media.load_eager (coco128, 128 imgs) | 9.6228 | passed |
-| media.load_stream (coco128, 128 imgs) | 9.9958 | passed |
-| preprocessing.compose (coco128, 32 imgs) | 0.2427 | passed |
-| mining.stats_quality (coco128, 128 imgs) | 1628.1751 | passed |
-| mining.find_duplicates (coco128, 128 imgs) | 194.9579 | passed |
-| mining.cluster (coco128, 128 imgs, k=8) | 1665.4343 | passed |
-| datasets.load_scaled (2048 imgs) | 3035.3485 | passed |
-| media.load_indexed (2048 imgs) | 76.3453 | passed |
-| media.strided_decode (stride=32, 64 imgs) | 228.8407 | passed |
-| media.random_jump_numpy (64/2048 imgs) | 139.8209 | passed |
-| media.random_jump_pil (64/2048 imgs) | 129.5884 | passed |
-| detections.random_jump_index (64/2048) | 0.0118 | passed |
-| detections.random_jump_image_read (64/2048) | 22.6058 | passed |
+| datasets.load (coco128, 128 imgs) | 198.1545 | passed |
+| media.load_eager (coco128, 128 imgs) | 9.7087 | passed |
+| media.load_stream (coco128, 128 imgs) | 10.0138 | passed |
+| preprocessing.compose (coco128, 32 imgs) | 0.2414 | passed |
+| mining.stats_quality (coco128, 128 imgs) | 567.445 | passed |
+| mining.find_duplicates (coco128, 128 imgs) | 211.2285 | passed |
+| mining.cluster (coco128, 128 imgs, k=8) | 656.9051 | passed |
+| datasets.load_scaled (2048 imgs) | 3007.3202 | passed |
+| media.load_indexed (2048 imgs) | 76.2247 | passed |
+| media.strided_decode (stride=32, 64 imgs) | 221.3596 | passed |
+| media.random_jump_numpy (64/2048 imgs) | 138.7952 | passed |
+| media.random_jump_pil (64/2048 imgs) | 129.3331 | passed |
+| detections.random_jump_index (64/2048) | 0.0116 | passed |
+| detections.random_jump_image_read (64/2048) | 22.5358 | passed |
 
 ## models.load Cold-Load Latency
 

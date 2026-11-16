@@ -95,20 +95,20 @@
 
 | operation | median_ms | status |
 | --- | --- | --- |
-| datasets.load (custom:/content/coco_val2017_yolo, 5000 imgs) | 7876.5593 | passed |
-| media.load_eager (custom:/content/coco_val2017_yolo, 5000 imgs) | 327.6144 | passed |
-| media.load_stream (custom:/content/coco_val2017_yolo, 5000 imgs) | 340.849 | passed |
-| preprocessing.compose (custom:/content/coco_val2017_yolo, 32 imgs) | 0.2421 | passed |
-| mining.stats_quality (custom:/content/coco_val2017_yolo, 5000 imgs) | 70732.9255 | passed |
-| mining.find_duplicates (custom:/content/coco_val2017_yolo, 5000 imgs) | 8538.6577 | passed |
-| mining.cluster (custom:/content/coco_val2017_yolo, 5000 imgs, k=8) | 72893.2024 | passed |
-| datasets.load_scaled (5000 imgs) | 7971.2405 | passed |
-| media.load_indexed (5000 imgs) | 192.1304 | passed |
-| media.strided_decode (stride=32, 156 imgs) | 773.5894 | passed |
-| media.random_jump_numpy (64/5000 imgs) | 250.544 | passed |
-| media.random_jump_pil (64/5000 imgs) | 239.4857 | passed |
-| detections.random_jump_index (64/5000) | 0.0116 | passed |
-| detections.random_jump_image_read (64/5000) | 22.1482 | passed |
+| datasets.load (custom:/content/coco_val2017_yolo, 5000 imgs) | 7810.8282 | passed |
+| media.load_eager (custom:/content/coco_val2017_yolo, 5000 imgs) | 326.7664 | passed |
+| media.load_stream (custom:/content/coco_val2017_yolo, 5000 imgs) | 340.6544 | passed |
+| preprocessing.compose (custom:/content/coco_val2017_yolo, 32 imgs) | 0.2416 | passed |
+| mining.stats_quality (custom:/content/coco_val2017_yolo, 5000 imgs) | 22344.9408 | passed |
+| mining.find_duplicates (custom:/content/coco_val2017_yolo, 5000 imgs) | 8611.8675 | passed |
+| mining.cluster (custom:/content/coco_val2017_yolo, 5000 imgs, k=8) | 23105.5223 | passed |
+| datasets.load_scaled (5000 imgs) | 7922.0788 | passed |
+| media.load_indexed (5000 imgs) | 192.2478 | passed |
+| media.strided_decode (stride=32, 156 imgs) | 790.8842 | passed |
+| media.random_jump_numpy (64/5000 imgs) | 251.2747 | passed |
+| media.random_jump_pil (64/5000 imgs) | 239.82 | passed |
+| detections.random_jump_index (64/5000) | 0.0113 | passed |
+| detections.random_jump_image_read (64/5000) | 22.0376 | passed |
 
 ## models.load Cold-Load Latency
 

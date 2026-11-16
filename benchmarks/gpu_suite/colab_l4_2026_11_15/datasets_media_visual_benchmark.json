@@ -1,72 +1,72 @@
 [
   {
     "operation": "datasets.load (coco128, 128 imgs)",
-    "median_ms": 193.7215,
+    "median_ms": 198.1545,
     "status": "passed"
   },
   {
     "operation": "media.load_eager (coco128, 128 imgs)",
-    "median_ms": 9.6228,
+    "median_ms": 9.7087,
     "status": "passed"
   },
   {
     "operation": "media.load_stream (coco128, 128 imgs)",
-    "median_ms": 9.9958,
+    "median_ms": 10.0138,
     "status": "passed"
   },
   {
     "operation": "preprocessing.compose (coco128, 32 imgs)",
-    "median_ms": 0.2427,
+    "median_ms": 0.2414,
     "status": "passed"
   },
   {
     "operation": "mining.stats_quality (coco128, 128 imgs)",
-    "median_ms": 1628.1751,
+    "median_ms": 567.445,
     "status": "passed"
   },
   {
     "operation": "mining.find_duplicates (coco128, 128 imgs)",
-    "median_ms": 194.9579,
+    "median_ms": 211.2285,
     "status": "passed"
   },
   {
     "operation": "mining.cluster (coco128, 128 imgs, k=8)",
-    "median_ms": 1665.4343,
+    "median_ms": 656.9051,
     "status": "passed"
   },
   {
     "operation": "datasets.load_scaled (2048 imgs)",
-    "median_ms": 3035.3485,
+    "median_ms": 3007.3202,
     "status": "passed"
   },
   {
     "operation": "media.load_indexed (2048 imgs)",
-    "median_ms": 76.3453,
+    "median_ms": 76.2247,
     "status": "passed"
   },
   {
     "operation": "media.strided_decode (stride=32, 64 imgs)",
-    "median_ms": 228.8407,
+    "median_ms": 221.3596,
     "status": "passed"
   },
   {
     "operation": "media.random_jump_numpy (64/2048 imgs)",
-    "median_ms": 139.8209,
+    "median_ms": 138.7952,
     "status": "passed"
   },
   {
     "operation": "media.random_jump_pil (64/2048 imgs)",
-    "median_ms": 129.5884,
+    "median_ms": 129.3331,
     "status": "passed"
   },
   {
     "operation": "detections.random_jump_index (64/2048)",
-    "median_ms": 0.0118,
+    "median_ms": 0.0116,
     "status": "passed"
   },
   {
     "operation": "detections.random_jump_image_read (64/2048)",
-    "median_ms": 22.6058,
+    "median_ms": 22.5358,
     "status": "passed"
   }
 ]
