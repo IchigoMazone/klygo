@@ -27,9 +27,17 @@ done
 ```
 *(Pass `--source-video /path/to/video.mp4` to benchmark a real external video instead of the generated 1280x720 H.264 bus clip.)*
 
-## 3. Saving Results
-Generate `REPORT.md` + charts and store lightweight JSONs under:
-```text
-benchmarks/results/video/<gpu>_<YYYY_MM_DD>/
-```
-Upload full raw `.zip` bundles to GitHub Releases and commit only `REPORT.md`, `charts/*.png`, `.ipynb`, and summary JSONs.
+## 3. Package `.zip`, Upload GitHub Release & Push Reports
+1. **Compress raw output** (never commit `.zip` or `artifacts/`):
+   ```python
+   from klygo import archive
+   archive.compress("artifacts/benchmarks/video", "artifacts/benchmarks/video_<gpu>_results.zip", include_root=True, overwrite=True)
+   ```
+2. **Upload `.zip` to GitHub Release** (`gh release create "benchmark-video-<gpu>-$(date +%Y%m%d)-$(git rev-parse --short HEAD)" artifacts/benchmarks/video_<gpu>_results.zip --prerelease`, or browser fallback via `releases/new`).
+3. **Commit & push** `REPORT.md`, `charts/*.png`, executed `.ipynb`, and lightweight JSON summaries under `benchmarks/results/video/<gpu>_<YYYY_MM_DD>/`:
+   ```bash
+   git add benchmarks/results/video/
+   git add -f benchmarks/results/video/**/charts/*.png
+   git commit -m "Add video streaming benchmark report (<gpu>, <YYYY-MM-DD>)"
+   git push origin HEAD
+   ```

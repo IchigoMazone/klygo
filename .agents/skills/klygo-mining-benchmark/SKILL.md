@@ -23,9 +23,17 @@ PYTHONPATH=. python benchmarks/mining/curation_accuracy_benchmark.py \
   --epochs 35
 ```
 
-## 3. Saving Results
-Store `REPORT.md`, `charts/*.png`, `.ipynb`, and summary JSONs under:
-```text
-benchmarks/results/mining/<scope>_<YYYY_MM_DD>/
-```
-Upload large raw `.zip` artifacts to GitHub Releases; commit only lightweight reports and charts.
+## 3. Package `.zip`, Upload GitHub Release & Push Reports
+1. **Compress raw output** (never commit `.zip` or `artifacts/`):
+   ```python
+   from klygo import archive
+   archive.compress("artifacts/benchmarks/mining_curation", "artifacts/benchmarks/mining_<scope>_results.zip", include_root=True, overwrite=True)
+   ```
+2. **Upload `.zip` to GitHub Release** (`gh release create "benchmark-mining-<scope>-$(date +%Y%m%d)-$(git rev-parse --short HEAD)" artifacts/benchmarks/mining_<scope>_results.zip --prerelease`, or browser fallback via `releases/new`).
+3. **Commit & push** `REPORT.md`, `charts/*.png`, executed `.ipynb`, and summary JSONs under `benchmarks/results/mining/<scope>_<YYYY_MM_DD>/`:
+   ```bash
+   git add benchmarks/results/mining/
+   git add -f benchmarks/results/mining/**/charts/*.png
+   git commit -m "Add mining curation benchmark report (<scope>, <YYYY-MM-DD>)"
+   git push origin HEAD
+   ```

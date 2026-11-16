@@ -39,8 +39,17 @@ utils.tabulate(rows, title='klygo.metrics CPU vs CUDA')
 "
 ```
 
-## 3. Saving Results
-Store `REPORT.md`, `charts/*.png`, and JSON summaries under:
-```text
-benchmarks/results/metrics/<dataset>_<YYYY_MM_DD>/
-```
+## 3. Package `.zip`, Upload GitHub Release & Push Reports
+1. **Compress raw output** (never commit `.zip` or `artifacts/`):
+   ```python
+   from klygo import archive
+   archive.compress("artifacts/benchmarks/metrics_eval", "artifacts/benchmarks/metrics_<dataset>_results.zip", include_root=True, overwrite=True)
+   ```
+2. **Upload `.zip` to GitHub Release** (`gh release create "benchmark-metrics-<dataset>-$(date +%Y%m%d)-$(git rev-parse --short HEAD)" artifacts/benchmarks/metrics_<dataset>_results.zip --prerelease`, or browser fallback via `releases/new`).
+3. **Commit & push** `REPORT.md`, `charts/*.png`, executed `.ipynb`, and summary JSONs under `benchmarks/results/metrics/<dataset>_<YYYY_MM_DD>/`:
+   ```bash
+   git add benchmarks/results/metrics/
+   git add -f benchmarks/results/metrics/**/charts/*.png
+   git commit -m "Add metrics mAP & accuracy benchmark report (<dataset>, <YYYY-MM-DD>)"
+   git push origin HEAD
+   ```

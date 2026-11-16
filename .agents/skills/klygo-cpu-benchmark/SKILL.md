@@ -45,9 +45,17 @@ PYTHONPATH=. python benchmarks/gpu_suite/evaluate_release.py \
   --repeats 7
 ```
 
-## 3. Saving & Pushing Results
-Store the generated `REPORT.md`, `environment.json`, and `datasets_media_visual_benchmark.json` (as `loaders_benchmark.json`) under:
-```text
-benchmarks/results/cpu_loaders/<cpu>_<dataset>_<YYYY_MM_DD>/
-```
-Commit and push to the active branch (never commit `artifacts/` or datasets).
+## 3. Package `.zip`, Upload GitHub Release & Push Reports
+1. **Compress raw output** (never commit `.zip` or `artifacts/`):
+   ```python
+   from klygo import archive
+   archive.compress("artifacts/benchmarks/cpu_dataset", "artifacts/benchmarks/cpu_<dataset>_results.zip", include_root=True, overwrite=True)
+   ```
+2. **Upload `.zip` to GitHub Release** (`gh release create "benchmark-cpu-<dataset>-$(date +%Y%m%d)-$(git rev-parse --short HEAD)" artifacts/benchmarks/cpu_<dataset>_results.zip --prerelease`, or browser fallback via `releases/new`).
+3. **Commit & push** `REPORT.md`, `environment.json`, `loaders_benchmark.json`, `charts/*.png`, and executed `.ipynb` under `benchmarks/results/cpu_loaders/<cpu>_<dataset>_<YYYY_MM_DD>/`:
+   ```bash
+   git add benchmarks/results/cpu_loaders/
+   git add -f benchmarks/results/cpu_loaders/**/charts/*.png
+   git commit -m "Add CPU loader benchmark report (<cpu>, <dataset>, <YYYY-MM-DD>)"
+   git push origin HEAD
+   ```
