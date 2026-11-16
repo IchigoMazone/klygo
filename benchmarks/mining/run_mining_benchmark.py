@@ -1,35 +1,54 @@
-"""Standalone full-class curation accuracy benchmark runner for klygo.mining.
+"""Standalone full-class curation accuracy & intrinsic quality benchmark runner for klygo.mining.
 
-Evaluates ALL core `klygo.mining` selection, deduplication, clustering, and
-balancing methods across ALL classes of a dataset (`coco128`, `voc2007`,
-`val2017`, or custom `--dataset-dir`) without timing/speed benchmarks:
-    1. `full_pool`           : 100% of training pool (upper-bound reference)
-    2. `random`              : Random uniform subset of size `budget`
-    3. `quality`             : `mining.select(method="quality")`
-    4. `rare_first`          : `mining.select(method="rare_first")`
-    5. `weighted`            : `mining.select(method="weighted")`
-    6. `diversity`           : `mining.cluster()` + `mining.select(method="diversity")`
-    7. `coverage`            : `mining.select(method="coverage")`
-    8. `balance_select`      : `mining.balance(strategy="select")`
-    9. `balance_undersample` : `mining.balance(strategy="undersample")`
-   10. `dedup_weighted`      : `mining.deduplicate(keep="best")` + `mining.select(method="weighted")`
+Evaluates 15 `klygo.mining` selection, deduplication, clustering, and balancing
+methods across 100% of dataset classes (`coco128`, `voc2007`, `val2017`, or
+custom `--dataset-dir`) on two complementary axes (no speed/timing benchmarks):
+
+Axis 1 — Intrinsic Multi-Class Curation Metrics (`mining.stats`, `mining.score`, `mining.compare`, `mining.cluster`, `mining.find_duplicates`):
+    - `active_classes` & `class_coverage_pct` (% of pool classes preserved)
+    - `rare_tail_coverage_pct` (% of bottom-quartile rarest classes preserved)
+    - `class_entropy_norm` (normalized Shannon entropy of class box distribution in [0, 1])
+    - `imbalance_ratio` (max/min class count ratio)
+    - `cluster_coverage_pct` (% of K-Means visual clusters covered)
+    - `mean_quality_score` & `mean_composite_score` (from `mining.score`)
+    - `boxes_per_image` & `multilabel_rate_pct`
+
+Axis 2 — Downstream Detector Training Accuracy (`yolov8n.pt` fine-tuned on each subset, evaluated on a fixed clean validation split across all classes):
+    - `mAP50_95`, `mAP50`, `precision`, `recall`, `f1`, `delta_map50_95_vs_random`
+
+15 Evaluated Methods:
+    1. `full_pool`                   : 100% of training pool (upper-bound reference)
+    2. `random`                      : `mining.select(method="random")`
+    3. `weighted`                    : `mining.select(method="weighted")`
+    4. `quality`                     : `mining.select(method="quality")`
+    5. `rare_first`                  : `mining.select(method="rare_first")`
+    6. `diversity`                   : `mining.cluster()` + `mining.select(method="diversity")`
+    7. `coverage`                    : `mining.select(method="coverage")`
+    8. `quota`                       : `mining.select(method="quota")`
+    9. `boxes`                       : `mining.select(method="boxes")`
+   10. `balance_select_median`       : `mining.balance(target="median", strategy="select", count_by="images")`
+   11. `balance_undersample_median`  : `mining.balance(target="median", strategy="undersample", count_by="images")`
+   12. `balance_boxes_mean`          : `mining.balance(target="mean", strategy="select", count_by="boxes")`
+   13. `dedup_best_weighted`         : `mining.deduplicate(keep="best")` + `mining.select(method="weighted")`
+   14. `dedup_quality_rare`          : `mining.deduplicate(keep="quality")` + `mining.select(method="rare_first")`
+   15. `dedup_annotations_diversity` : `mining.deduplicate(keep="annotations")` + `mining.select(method="diversity")`
 
 Outputs the standardized benchmark file set:
     - `environment.json`
     - `curation_leaderboard.json`
     - `curation_runs.json`
+    - `pool_analysis.json`
     - `summary.json`
     - `REPORT.md`
     - `charts/mining_map_comparison.png`
     - `charts/mining_f1_precision_recall.png`
-
-Usage:
-    PYTHONPATH=. python benchmarks/mining/run_mining_benchmark.py --dataset-dir /path/to/yolo --output artifacts/benchmarks/mining
+    - `charts/mining_class_coverage_diversity.png`
 """
 
 from __future__ import annotations
 
 import argparse
+import math
 import random
 import tempfile
 from typing import Any
@@ -40,56 +59,194 @@ from benchmarks.gpu_suite.evaluate_release import _md_table, collect_environment
 from klygo import archive, datasets, files, mining, outputs, utils
 
 
-def _split_train_val(dets: outputs.Detections, val_ratio: float = 0.2, seed: int = 42) -> tuple[outputs.Detections, outputs.Detections]:
+def _split_train_val(
+    dets: outputs.Detections,
+    val_ratio: float = 0.2,
+    seed: int = 42,
+    max_pool: int = 0,
+    max_val: int = 0,
+) -> tuple[outputs.Detections, outputs.Detections]:
     frames = list(dets)
     rng = random.Random(seed)
     indices = list(range(len(frames)))
     rng.shuffle(indices)
-    val_count = max(8, int(len(frames) * val_ratio))
-    val_set = set(indices[:val_count])
-    train_frames = [frames[i] for i in range(len(frames)) if i not in val_set]
-    val_frames = [frames[i] for i in range(len(frames)) if i in val_set]
+    val_count = max(16, int(len(frames) * val_ratio))
+    if max_val > 0:
+        val_count = min(val_count, max_val)
+    val_indices = sorted(indices[:val_count])
+    train_indices = sorted(indices[val_count:])
+    if max_pool > 0 and len(train_indices) > max_pool:
+        train_indices = sorted(rng.sample(train_indices, k=max_pool))
+    train_frames = [frames[i] for i in train_indices]
+    val_frames = [frames[i] for i in val_indices]
     return (
         outputs.Detections(train_frames, names=dets.names),
         outputs.Detections(val_frames, names=dets.names),
     )
 
 
-def _build_all_methods(pool: outputs.Detections, budget: int, seed: int) -> dict[str, outputs.Detections]:
-    rng = random.Random(seed)
-    frames = list(pool)
-    rand_indices = rng.sample(range(len(frames)), k=min(budget, len(frames)))
-    random_sub = outputs.Detections([frames[i] for i in sorted(rand_indices)], names=pool.names)
+def _pad_or_trim_to_budget(
+    sub: outputs.Detections,
+    pool: outputs.Detections,
+    budget: int,
+    fallback_scores: mining.MiningScores,
+) -> outputs.Detections:
+    if len(sub) > budget:
+        return mining.select(sub, method="weighted", limit=budget)
+    if len(sub) == budget or len(pool) <= len(sub):
+        return sub
+    chosen_ids = {(f.source, f.frame_index) for f in sub}
+    ranked_pool = sorted(
+        range(len(pool)),
+        key=lambda idx: (-fallback_scores.values[idx], idx),
+    )
+    frames = list(sub)
+    for idx in ranked_pool:
+        if len(frames) >= budget:
+            break
+        cand = pool[idx]
+        ident = (cand.source, cand.frame_index)
+        if ident not in chosen_ids:
+            frames.append(cand)
+            chosen_ids.add(ident)
+    return outputs.Detections(frames, names=pool.names)
 
+
+def _build_all_methods(
+    pool: outputs.Detections,
+    budget: int,
+    seed: int,
+) -> tuple[dict[str, outputs.Detections], dict[str, Any]]:
     q_scores = mining.score(pool, weights={"quality": 1.0, "rarity": 0.0, "coverage": 0.0, "boxes": 0.0})
     b_scores = mining.score(pool, weights={"quality": 0.35, "rarity": 0.35, "coverage": 0.20, "boxes": 0.10})
-    n_clusters = min(len(pool), max(2, budget))
+    n_clusters = min(len(pool), max(4, budget))
     clusters = mining.cluster(pool, clusters=n_clusters, seed=seed)
-    dedup = mining.deduplicate(pool, keep="best", threshold=0.95)
-    dedup_scores = mining.score(dedup, weights={"quality": 0.35, "rarity": 0.35, "coverage": 0.20, "boxes": 0.10})
+    dup_report = mining.find_duplicates(pool, threshold=0.92)
+
+    dedup_best = mining.deduplicate(pool, keep="best", threshold=0.92)
+    dedup_qual = mining.deduplicate(pool, keep="quality", threshold=0.92)
+    dedup_anno = mining.deduplicate(pool, keep="annotations", threshold=0.92)
 
     num_classes = max(1, len(pool.names))
-    per_cls = max(1, budget // num_classes)
+    per_cls_cov = max(1, budget // num_classes)
+    per_cls_quota = max(2, (budget * 2) // num_classes)
 
-    bal_select = mining.balance(pool, target="median", strategy="select", seed=seed)
-    if len(bal_select) > budget:
-        bal_select = mining.select(bal_select, method="weighted", limit=budget)
+    boxes_raw = mining.select(pool, method="boxes", min_boxes=2, min_area_ratio=0.002, limit=budget)
+    boxes_sub = _pad_or_trim_to_budget(boxes_raw, pool, budget, b_scores)
 
-    bal_under = mining.balance(pool, target="median", strategy="undersample", seed=seed)
-    if len(bal_under) > budget:
-        bal_under = mining.select(bal_under, method="weighted", limit=budget)
+    bal_sel_med = _pad_or_trim_to_budget(
+        mining.balance(pool, target="median", strategy="select", count_by="images", seed=seed),
+        pool,
+        budget,
+        b_scores,
+    )
+    bal_und_med = _pad_or_trim_to_budget(
+        mining.balance(pool, target="median", strategy="undersample", count_by="images", seed=seed),
+        pool,
+        budget,
+        b_scores,
+    )
+    bal_box_mean = _pad_or_trim_to_budget(
+        mining.balance(pool, target="mean", strategy="select", count_by="boxes", seed=seed),
+        pool,
+        budget,
+        b_scores,
+    )
 
-    return {
+    methods = {
         "full_pool": pool,
-        "random": random_sub,
+        "random": mining.select(pool, method="random", limit=budget, seed=seed),
+        "weighted": mining.select(pool, method="weighted", limit=budget, scores=b_scores),
         "quality": mining.select(pool, method="quality", threshold=0.0, limit=budget, scores=q_scores),
         "rare_first": mining.select(pool, method="rare_first", limit=budget, scores=b_scores),
-        "weighted": mining.select(pool, method="weighted", limit=budget, scores=b_scores),
         "diversity": mining.select(pool, method="diversity", limit=budget, cluster_result=clusters, per_cluster=1, seed=seed),
-        "coverage": mining.select(pool, method="coverage", per_class=per_cls, limit=budget),
-        "balance_select": bal_select,
-        "balance_undersample": bal_under,
-        "dedup_weighted": mining.select(dedup, method="weighted", limit=min(budget, len(dedup)), scores=dedup_scores),
+        "coverage": _pad_or_trim_to_budget(
+            mining.select(pool, method="coverage", per_class=per_cls_cov, limit=budget),
+            pool,
+            budget,
+            b_scores,
+        ),
+        "quota": _pad_or_trim_to_budget(
+            mining.select(pool, method="quota", per_class=per_cls_quota, limit=budget),
+            pool,
+            budget,
+            b_scores,
+        ),
+        "boxes": boxes_sub,
+        "balance_select_median": bal_sel_med,
+        "balance_undersample_median": bal_und_med,
+        "balance_boxes_mean": bal_box_mean,
+        "dedup_best_weighted": mining.select(dedup_best, method="weighted", limit=min(budget, len(dedup_best))),
+        "dedup_quality_rare": mining.select(dedup_qual, method="rare_first", limit=min(budget, len(dedup_qual))),
+        "dedup_annotations_diversity": mining.select(dedup_anno, method="diversity", limit=min(budget, len(dedup_anno)), seed=seed),
+    }
+
+    aux = {
+        "q_scores": q_scores,
+        "b_scores": b_scores,
+        "clusters": clusters,
+        "dup_report": dup_report,
+    }
+    return methods, aux
+
+
+def _compute_intrinsic_metrics(
+    sub: outputs.Detections,
+    pool: outputs.Detections,
+    pool_stats: mining.MiningStats,
+    rare_tail_classes: set[str],
+    ident_to_idx: dict[tuple[Any, Any], int],
+    q_scores: mining.MiningScores,
+    b_scores: mining.MiningScores,
+    clusters: mining.ClusterResult,
+) -> dict[str, Any]:
+    st = mining.stats(sub, quality=False, cooccurrence=False)
+    cmp_rep = mining.compare(pool, sub)
+
+    pool_active = [c for c, cnt in pool_stats.boxes_per_class.items() if cnt > 0]
+    sub_active = [c for c, cnt in st.boxes_per_class.items() if cnt > 0]
+    active_set = set(sub_active)
+
+    class_cov_pct = (100.0 * len(sub_active) / max(1, len(pool_active)))
+    tail_cov_pct = (
+        100.0 * len(active_set & rare_tail_classes) / max(1, len(rare_tail_classes))
+        if rare_tail_classes
+        else 100.0
+    )
+
+    counts = np.array([cnt for cnt in st.boxes_per_class.values() if cnt > 0], dtype=np.float64)
+    if len(counts) > 1 and counts.sum() > 0:
+        probs = counts / counts.sum()
+        entropy = float(-np.sum(probs * np.log(probs + 1e-12)))
+        norm_entropy = entropy / math.log(len(pool_active) if len(pool_active) > 1 else 2)
+    else:
+        norm_entropy = 0.0
+
+    sub_indices = [
+        ident_to_idx[(f.source, f.frame_index)]
+        for f in sub
+        if (f.source, f.frame_index) in ident_to_idx
+    ]
+    mean_qual = float(np.mean([q_scores.values[i] for i in sub_indices])) if sub_indices else 0.0
+    mean_comp = float(np.mean([b_scores.values[i] for i in sub_indices])) if sub_indices else 0.0
+    covered_clusters = len({clusters.labels[i] for i in sub_indices}) if sub_indices else 0
+    cluster_cov_pct = 100.0 * covered_clusters / max(1, clusters.clusters)
+
+    return {
+        "images_selected": len(sub),
+        "boxes_selected": int(st.boxes),
+        "boxes_per_image": round(float(st.boxes) / max(1, len(sub)), 2),
+        "multilabel_rate_pct": round(100.0 * float(st.multilabel_images) / max(1, len(sub)), 2),
+        "active_classes": len(sub_active),
+        "pool_active_classes": len(pool_active),
+        "class_coverage_pct": round(class_cov_pct, 2),
+        "rare_tail_coverage_pct": round(tail_cov_pct, 2),
+        "class_entropy_norm": round(norm_entropy, 4),
+        "imbalance_ratio": round(float(st.imbalance_ratio), 2),
+        "cluster_coverage_pct": round(cluster_cov_pct, 2),
+        "mean_quality_score": round(mean_qual, 4),
+        "mean_composite_score": round(mean_comp, 4),
+        "image_retention_pct": round(100.0 * float(cmp_rep.retained_ratio), 2),
     }
 
 
@@ -142,7 +299,15 @@ def _train_and_eval_subset(
             verbose=False,
             plots=False,
         )
-        val_res = model.val(data=str(data_yaml), split="val", imgsz=imgsz, batch=batch, device=device, verbose=False, plots=False)
+        val_res = model.val(
+            data=str(data_yaml),
+            split="val",
+            imgsz=imgsz,
+            batch=batch,
+            device=device,
+            verbose=False,
+            plots=False,
+        )
         box_m = val_res.box
         p_val = float(box_m.mp)
         r_val = float(box_m.mr)
@@ -173,16 +338,16 @@ def _generate_mining_charts(leaderboard: list[dict[str, Any]], out_dir: Any) -> 
 
     methods = [r["method"] for r in leaderboard]
     x = np.arange(len(methods))
-    width = 0.35
+    width = 0.38
 
     # 1. mAP@50 and mAP@50-95 by Curation Method
-    fig, ax = plt.subplots(figsize=(10, 4.6))
+    fig, ax = plt.subplots(figsize=(12, 5.0))
     ax.bar(x - width / 2, [float(r["mAP50"]) for r in leaderboard], width, label="mAP@50")
     ax.bar(x + width / 2, [float(r["mAP50_95"]) for r in leaderboard], width, label="mAP@50-95")
     ax.set_xticks(x)
-    ax.set_xticklabels(methods, rotation=28, ha="right")
+    ax.set_xticklabels(methods, rotation=32, ha="right")
     ax.set_ylabel("Score")
-    ax.set_title("Curation Method Accuracy Leaderboard (mAP@50 & mAP@50-95)")
+    ax.set_title("Curation Method Downstream Accuracy Leaderboard (mAP@50 & mAP@50-95)")
     ax.legend()
     fig.tight_layout()
     p1 = charts_dir / "mining_map_comparison.png"
@@ -191,13 +356,13 @@ def _generate_mining_charts(leaderboard: list[dict[str, Any]], out_dir: Any) -> 
     created.append(("Curation Method mAP Comparison", "charts/mining_map_comparison.png"))
 
     # 2. F1, Precision, Recall by Curation Method
-    width3 = 0.25
-    fig, ax = plt.subplots(figsize=(10.5, 4.6))
+    width3 = 0.26
+    fig, ax = plt.subplots(figsize=(12, 5.0))
     ax.bar(x - width3, [float(r["precision"]) for r in leaderboard], width3, label="Precision")
     ax.bar(x, [float(r["recall"]) for r in leaderboard], width3, label="Recall")
     ax.bar(x + width3, [float(r["f1"]) for r in leaderboard], width3, label="F1")
     ax.set_xticks(x)
-    ax.set_xticklabels(methods, rotation=28, ha="right")
+    ax.set_xticklabels(methods, rotation=32, ha="right")
     ax.set_ylabel("Score")
     ax.set_title("Precision, Recall & F1 by Curation Method")
     ax.legend()
@@ -207,6 +372,22 @@ def _generate_mining_charts(leaderboard: list[dict[str, Any]], out_dir: Any) -> 
     plt.close(fig)
     created.append(("Precision, Recall & F1 by Curation Method", "charts/mining_f1_precision_recall.png"))
 
+    # 3. Intrinsic Class Coverage, Rare-Tail Retention & Visual Cluster Coverage
+    fig, ax = plt.subplots(figsize=(12, 5.0))
+    ax.bar(x - width3, [float(r["class_coverage_pct"]) for r in leaderboard], width3, label="Class Coverage (%)")
+    ax.bar(x, [float(r["rare_tail_coverage_pct"]) for r in leaderboard], width3, label="Rare-Tail Class Coverage (%)")
+    ax.bar(x + width3, [float(r["cluster_coverage_pct"]) for r in leaderboard], width3, label="Visual Cluster Coverage (%)")
+    ax.set_xticks(x)
+    ax.set_xticklabels(methods, rotation=32, ha="right")
+    ax.set_ylabel("Coverage (%)")
+    ax.set_title("Intrinsic Multi-Class Coverage, Rare-Tail Retention & Visual Diversity")
+    ax.legend()
+    fig.tight_layout()
+    p3 = charts_dir / "mining_class_coverage_diversity.png"
+    fig.savefig(p3, dpi=150)
+    plt.close(fig)
+    created.append(("Intrinsic Class Coverage & Visual Diversity", "charts/mining_class_coverage_diversity.png"))
+
     return created
 
 
@@ -214,17 +395,19 @@ def _render_mining_report(summary: dict[str, Any], charts: list[tuple[str, str]]
     env = summary["environment"]
     git_info = env.get("git", {})
     ds = summary.get("dataset", {})
+    pa = summary.get("pool_analysis", {})
     lines = [
-        "# Klygo Mining Curation Accuracy Report (Full-Class Leaderboard)",
+        "# Klygo Mining Full-Class Curation & Downstream Accuracy Report",
         "",
         f"- **GPU**: `{env.get('gpu', 'none')}` ({env.get('vram_mb', 0.0)} MB VRAM)",
-        f"- **Dataset**: `{ds.get('source')}` (`{ds.get('total_classes')}` classes, train pool `{ds.get('train_pool_images')}` imgs, clean val `{ds.get('val_images')}` imgs, budget `{ds.get('budget')}` imgs)",
+        f"- **Dataset**: `{ds.get('source')}` (`{ds.get('total_classes')}` defined classes, `{pa.get('pool_active_classes')}` active in pool, train pool `{ds.get('train_pool_images')}` imgs, clean val `{ds.get('val_images')}` imgs, budget `{ds.get('budget')}` imgs)",
+        f"- **Duplicate Analysis (`mining.find_duplicates`)**: `{pa.get('duplicate_groups', 0)}` duplicate groups (`{pa.get('duplicate_images', 0)}` redundant images at threshold `0.92`)",
         f"- **Model / Epochs**: `{summary.get('config', {}).get('weights')}` / `{summary.get('config', {}).get('epochs')}` epochs",
         f"- **Git**: `{git_info.get('branch', 'unknown')}` @ `{git_info.get('commit', 'unknown')}`",
         "",
     ]
-    lines.extend(_md_table(summary.get("curation_leaderboard", []), "Curation Method Leaderboard (Sorted by mAP@50-95)"))
-    lines.extend(_md_table(summary.get("curation_runs", []), "Detailed Per-Method Evaluation Runs"))
+    lines.extend(_md_table(summary.get("curation_leaderboard", []), "Curation Method Leaderboard (Sorted by Downstream mAP@50-95)"))
+    lines.extend(_md_table(summary.get("curation_runs", []), "Detailed Intrinsic & Downstream Evaluation Metrics"))
     if charts:
         lines.extend(["## Charts", ""])
         for title, rel in charts:
@@ -237,11 +420,13 @@ def main() -> None:
     parser.add_argument("--dataset-dir", required=True, help="Flat YOLO dataset directory (e.g. coco128, voc2007, val2017)")
     parser.add_argument("--output", default="artifacts/benchmarks/mining_curation")
     parser.add_argument("--weights", default="yolov8n.pt")
-    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--epochs", type=int, default=15)
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--batch", type=int, default=32)
     parser.add_argument("--budget-ratio", type=float, default=0.35, help="Fraction of train pool to select per curation method")
     parser.add_argument("--budget", type=int, default=0, help="Explicit image budget override (0 uses budget-ratio)")
+    parser.add_argument("--max-pool", type=int, default=0, help="Optional cap on candidate training pool images (0 = use all)")
+    parser.add_argument("--max-val", type=int, default=0, help="Optional cap on validation split images (0 = use all)")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="0")
     parser.add_argument("--zip", default="", help="Optional output .zip path")
@@ -255,18 +440,57 @@ def main() -> None:
     lbl_sub = "labels/train2017" if files.is_dir(root / "labels" / "train2017") else "labels"
     all_dets = datasets.load(root, images_dir=img_sub, labels_dir=lbl_sub, yaml_name="data.yaml", verbose=False)
 
-    train_pool, val_clean = _split_train_val(all_dets, val_ratio=0.2, seed=args.seed)
+    train_pool, val_clean = _split_train_val(
+        all_dets,
+        val_ratio=0.2,
+        seed=args.seed,
+        max_pool=args.max_pool,
+        max_val=args.max_val,
+    )
     budget = args.budget if args.budget > 0 else max(16, int(len(train_pool) * args.budget_ratio))
 
     env = collect_environment()
     files.save(out_dir / "environment.json", env, overwrite=True, verbose=False)
 
-    subsets = _build_all_methods(train_pool, budget=budget, seed=args.seed)
-    runs: list[dict[str, Any]] = []
+    pool_stats = mining.stats(train_pool, quality=True, cooccurrence=True)
+    active_sorted = sorted(
+        [(cls_name, cnt) for cls_name, cnt in pool_stats.boxes_per_class.items() if cnt > 0],
+        key=lambda item: (item[1], item[0]),
+    )
+    tail_k = max(1, len(active_sorted) // 4)
+    rare_tail_classes = {cls_name for cls_name, _ in active_sorted[:tail_k]}
 
-    for method_name, sub in subsets.items():
-        st = mining.stats(sub, quality=False, cooccurrence=False)
-        metrics_res = _train_and_eval_subset(
+    ident_to_idx = {(f.source, f.frame_index): idx for idx, f in enumerate(train_pool)}
+    subsets, aux = _build_all_methods(train_pool, budget=budget, seed=args.seed)
+
+    pool_analysis = {
+        "pool_images": int(pool_stats.images),
+        "pool_boxes": int(pool_stats.boxes),
+        "defined_classes": int(pool_stats.classes),
+        "pool_active_classes": len(active_sorted),
+        "rare_tail_classes": sorted(rare_tail_classes),
+        "pool_imbalance_ratio": round(float(pool_stats.imbalance_ratio), 2),
+        "duplicate_groups": len(aux["dup_report"].groups),
+        "duplicate_images": int(aux["dup_report"].duplicate_images),
+        "clusters": int(aux["clusters"].clusters),
+        "quality_summary": pool_stats.quality,
+    }
+    files.save(out_dir / "pool_analysis.json", pool_analysis, overwrite=True, verbose=False)
+
+    runs: list[dict[str, Any]] = []
+    for idx, (method_name, sub) in enumerate(subsets.items(), 1):
+        print(f"[{idx}/{len(subsets)}] Evaluating method '{method_name}' ({len(sub)} images)...")
+        intrinsic = _compute_intrinsic_metrics(
+            sub,
+            train_pool,
+            pool_stats,
+            rare_tail_classes,
+            ident_to_idx,
+            aux["q_scores"],
+            aux["b_scores"],
+            aux["clusters"],
+        )
+        downstream = _train_and_eval_subset(
             sub,
             val_clean,
             weights=args.weights,
@@ -278,19 +502,38 @@ def main() -> None:
         )
         runs.append({
             "method": method_name,
-            "images_selected": len(sub),
-            "boxes_selected": int(st.boxes),
-            "classes_covered": int(st.classes),
-            **metrics_res,
+            **downstream,
+            **intrinsic,
         })
 
-    leaderboard = sorted(
+    random_map = next((r["mAP50_95"] for r in runs if r["method"] == "random"), 0.0)
+    for r in runs:
+        r["delta_map50_95_vs_random"] = round(float(r["mAP50_95"]) - float(random_map), 4)
+
+    leaderboard_rows = sorted(
         runs,
-        key=lambda r: (r["mAP50_95"], r["mAP50"], r["f1"]),
+        key=lambda r: (r["mAP50_95"], r["mAP50"], r["f1"], r["class_coverage_pct"]),
         reverse=True,
     )
-    for rank, row in enumerate(leaderboard, 1):
-        row["rank"] = rank
+    leaderboard: list[dict[str, Any]] = []
+    for rank, row in enumerate(leaderboard_rows, 1):
+        leaderboard.append({
+            "rank": rank,
+            "method": row["method"],
+            "images_selected": row["images_selected"],
+            "mAP50_95": row["mAP50_95"],
+            "mAP50": row["mAP50"],
+            "f1": row["f1"],
+            "precision": row["precision"],
+            "recall": row["recall"],
+            "delta_map50_95_vs_random": row["delta_map50_95_vs_random"],
+            "active_classes": f"{row['active_classes']}/{row['pool_active_classes']}",
+            "class_coverage_pct": row["class_coverage_pct"],
+            "rare_tail_coverage_pct": row["rare_tail_coverage_pct"],
+            "cluster_coverage_pct": row["cluster_coverage_pct"],
+            "class_entropy_norm": row["class_entropy_norm"],
+            "mean_quality_score": row["mean_quality_score"],
+        })
 
     summary = {
         "environment": env,
@@ -309,6 +552,7 @@ def main() -> None:
             "batch": args.batch,
             "seed": args.seed,
         },
+        "pool_analysis": pool_analysis,
         "curation_leaderboard": leaderboard,
         "curation_runs": runs,
     }
@@ -318,7 +562,7 @@ def main() -> None:
     files.save(out_dir / "summary.json", summary, overwrite=True, verbose=False)
     charts = _generate_mining_charts(leaderboard, out_dir)
     files.save(out_dir / "REPORT.md", _render_mining_report(summary, charts), overwrite=True, verbose=False)
-    utils.tabulate(leaderboard, title="Mining Curation Accuracy Leaderboard")
+    utils.tabulate(leaderboard, title="Mining 15-Method Curation Leaderboard")
 
     if args.zip:
         zip_path = files.path(args.zip)
