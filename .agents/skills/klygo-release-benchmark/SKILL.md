@@ -7,7 +7,7 @@ description: Run and verify the full Klygo detection-evaluation benchmark suite 
 
 This skill defines the exact measurement protocol, required metrics, execution recipes, and **mandatory `.zip` artifact packaging** for Klygo GPU/CPU release benchmarks using `benchmarks/gpu_suite/`.
 
-> **Note:** For lightweight 5-model `examples/integration/multi_backend_benchmark.py` runs, see `klygo-multi-gpu-benchmark`. Use **this** skill (`klygo-release-benchmark`) for full `detection-evaluation` / Colab L4 / T4 / release benchmarking.
+> **Note:** For lightweight 5-model `examples/integration/multi_backend_benchmark.py` runs, see `klygo-multi-gpu-benchmark`. For CPU-only loader / I/O / random-jump benchmarks (no GPU required), see `klygo-cpu-benchmark`. Use **this** skill (`klygo-release-benchmark`) for GPU (`L4` / `T4` / CUDA) release benchmarking.
 
 ---
 

@@ -18,6 +18,8 @@ uv.lock
 !.agents/skills/klygo-multi-gpu-benchmark/**
 !.agents/skills/klygo-release-benchmark/
 !.agents/skills/klygo-release-benchmark/**
+!.agents/skills/klygo-cpu-benchmark/
+!.agents/skills/klygo-cpu-benchmark/**
 grounding-dino-base/
 grounding-dino-base.rar
 .hf-http-test/
