@@ -20,21 +20,6 @@
     "status": "passed"
   },
   {
-    "operation": "mining.stats_quality (coco128, 128 imgs)",
-    "median_ms": 567.445,
-    "status": "passed"
-  },
-  {
-    "operation": "mining.find_duplicates (coco128, 128 imgs)",
-    "median_ms": 211.2285,
-    "status": "passed"
-  },
-  {
-    "operation": "mining.cluster (coco128, 128 imgs, k=8)",
-    "median_ms": 656.9051,
-    "status": "passed"
-  },
-  {
     "operation": "datasets.load_scaled (2048 imgs)",
     "median_ms": 3007.3202,
     "status": "passed"
