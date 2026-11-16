@@ -12,10 +12,15 @@ Use this skill when measuring **CPU and disk I/O performance** (no GPU required 
 - **Dataset & Media Loaders**:
   - `datasets.load` (single / scaled)
   - `media.load` (`stream=False` eager, `stream=True` streaming, `indexed=True`)
-- **Strided & Random-Jump Image Access** (with `--large-scale`, 2,048+ images):
+- **Strided & Random-Jump Access** (with `--large-scale`, 2,048+ images & 120-frame H.264 video):
   - `media.strided_decode` (`sample_rate=32`)
   - `media.random_jump_numpy` & `media.random_jump_pil` (`MediaFrames[i]`)
   - `detections.random_jump_index` & `detections.random_jump_image_read` (`Detections[i].image`)
+  - `media.video_load_indexed`, `media.video_random_jump_numpy` & `media.video_random_jump_pil` (MP4/H.264 frame seeking)
+- **Export, Partition, Archive & Annotation JSON I/O**:
+  - `detections.export_yolo` & `datasets.partition_yolo`
+  - `archive.compress_zip` & `archive.extract_zip`
+  - `files.save_json` & `files.load_json`
 - **Preprocessing & Disk Mining**:
   - `preprocessing.compose` (letterbox + autocontrast)
   - `mining.stats(quality=True)`, `mining.find_duplicates`, `mining.cluster`

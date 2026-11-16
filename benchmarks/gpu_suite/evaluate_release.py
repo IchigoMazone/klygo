@@ -392,6 +392,77 @@ def benchmark_mining(
     return rows
 
 
+def _benchmark_extended_cpu_io(
+    truth_dets: outputs.Detections,
+    frames: Any,
+    *,
+    repeats: int,
+    large_scale: bool = False,
+) -> list[dict[str, Any]]:
+    """Benchmark video random-jump seek, Detections.export, datasets.partition, archive ZIP, and JSON I/O."""
+    rows: list[dict[str, Any]] = []
+    if len(truth_dets) == 0 or len(frames) == 0:
+        return rows
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = files.path(tmp)
+
+        # 1. Video indexed load + random-jump frame seek (120 frames)
+        sample_pils = [media.to_pil(frames[i % len(frames)]).resize((640, 480)) for i in range(min(16, len(frames)))]
+        vid_tmp = root / "clip_tmp.mp4"
+        vid_h264 = root / "clip_h264.mp4"
+        media.save_video(vid_tmp, (sample_pils[i % len(sample_pils)] for i in range(120)), fps=30, overwrite=True, verbose=False)
+        try:
+            media.convert(vid_tmp, vid_h264, codec="h264", gpu=False, preset="fast", overwrite=True, verbose=False)
+            vid_path = vid_h264
+        except Exception:
+            vid_path = vid_tmp
+
+        vid_idx_stats = _measure(lambda: media.load(vid_path, indexed=True, verbose=False), repeats=repeats, warmup=1, use_cuda=False)
+        vid_frames = vid_idx_stats["last_result"]
+        rows.append({"operation": f"media.video_load_indexed ({len(vid_frames)} frames)", "median_ms": vid_idx_stats["median_ms"], "status": "passed"})
+
+        rng = np.random.default_rng(42)
+        v_jumps = [int(i) for i in rng.choice(len(vid_frames), size=min(32, len(vid_frames)), replace=False)]
+        v_np = _measure(lambda: [media.to_array(vid_frames[i]) for i in v_jumps], repeats=repeats, warmup=1, use_cuda=False)
+        v_pil = _measure(lambda: [media.to_pil(vid_frames[i]) for i in v_jumps], repeats=repeats, warmup=1, use_cuda=False)
+        vid_frames.close()
+        rows.append({"operation": f"media.video_random_jump_numpy ({len(v_jumps)}/{len(vid_frames)})", "median_ms": v_np["median_ms"], "status": "passed"})
+        rows.append({"operation": f"media.video_random_jump_pil ({len(v_jumps)}/{len(vid_frames)})", "median_ms": v_pil["median_ms"], "status": "passed"})
+
+        # 2. Detections.export & datasets.partition
+        sub_n = min(len(truth_dets), 500 if large_scale else 128)
+        sub_dets = outputs.Detections(list(truth_dets)[:sub_n], names=truth_dets.names)
+        exp_dir = root / "exported_yolo"
+        exp_stats = _measure(lambda: sub_dets.export(exp_dir, format="yolo", overwrite=True), repeats=repeats, warmup=1, use_cuda=False)
+        rows.append({"operation": f"detections.export_yolo ({sub_n} imgs)", "median_ms": exp_stats["median_ms"], "status": "passed"})
+
+        part_dir = root / "partitioned_yolo"
+        part_stats = _measure(
+            lambda: datasets.partition(exp_dir, part_dir, ratios=(0.8, 0.2), format="yolo", overwrite=True, verbose=False),
+            repeats=repeats, warmup=1, use_cuda=False,
+        )
+        rows.append({"operation": f"datasets.partition_yolo ({sub_n} imgs)", "median_ms": part_stats["median_ms"], "status": "passed"})
+
+        # 3. Archive compress & extract
+        zip_out = root / "dataset_bundle.zip"
+        ext_dir = root / "extracted_yolo"
+        comp_stats = _measure(lambda: archive.compress(exp_dir, zip_out, include_root=True, overwrite=True, verbose=False), repeats=repeats, warmup=1, use_cuda=False)
+        ext_stats = _measure(lambda: archive.extract(zip_out, ext_dir, overwrite=True, verbose=False), repeats=repeats, warmup=1, use_cuda=False)
+        rows.append({"operation": f"archive.compress_zip ({sub_n} imgs)", "median_ms": comp_stats["median_ms"], "status": "passed"})
+        rows.append({"operation": f"archive.extract_zip ({sub_n} imgs)", "median_ms": ext_stats["median_ms"], "status": "passed"})
+
+        # 4. Large JSON save & load
+        json_path = root / "annotations_dump.json"
+        payload = truth_dets.to_dict()
+        js_save = _measure(lambda: files.save(json_path, payload, overwrite=True, verbose=False), repeats=repeats, warmup=1, use_cuda=False)
+        js_load = _measure(lambda: files.load(json_path, verbose=False), repeats=repeats, warmup=1, use_cuda=False)
+        rows.append({"operation": f"files.save_json ({len(truth_dets)} frames)", "median_ms": js_save["median_ms"], "status": "passed"})
+        rows.append({"operation": f"files.load_json ({len(truth_dets)} frames)", "median_ms": js_load["median_ms"], "status": "passed"})
+
+    return rows
+
+
 def _benchmark_strided_image_access(
     source_root: Any,
     img_sub: str,
@@ -448,7 +519,7 @@ def _benchmark_strided_image_access(
 
         stride = 32
         strided_decode = _measure(
-            lambda: [media.to_numpy(f) for f in media.load(big_imgs, sample_rate=stride, verbose=False)],
+            lambda: [media.to_array(f) for f in media.load(big_imgs, sample_rate=stride, verbose=False)],
             repeats=repeats, warmup=1, use_cuda=False,
         )
         rows.append({"operation": f"media.strided_decode (stride={stride}, {total // stride} imgs)", "median_ms": strided_decode["median_ms"], "status": "passed"})
@@ -456,7 +527,7 @@ def _benchmark_strided_image_access(
         rng = np.random.default_rng(42)
         jump_indices = [int(i) for i in rng.choice(len(indexed_frames), size=min(64, len(indexed_frames)), replace=False)]
         random_decode = _measure(
-            lambda: [media.to_numpy(indexed_frames[i]) for i in jump_indices],
+            lambda: [media.to_array(indexed_frames[i]) for i in jump_indices],
             repeats=repeats, warmup=1, use_cuda=False,
         )
         rows.append({"operation": f"media.random_jump_numpy (64/{total} imgs)", "median_ms": random_decode["median_ms"], "status": "passed"})
@@ -574,6 +645,7 @@ def benchmark_datasets_media_visual(
 
         if large_scale:
             rows.extend(_benchmark_strided_image_access(real_root, img_sub, lbl_sub, yaml_file, repeats=repeats))
+        rows.extend(_benchmark_extended_cpu_io(truth_dets, frames, repeats=repeats, large_scale=large_scale))
         return rows, dataset_tag
 
     num_images = 200 if large_scale else 12
