@@ -254,6 +254,7 @@ def _train_and_eval_subset(
     train_sub: outputs.Detections,
     val_sub: outputs.Detections,
     *,
+    rare_tail_classes: set[str],
     weights: str,
     epochs: int,
     imgsz: int,
@@ -312,9 +313,25 @@ def _train_and_eval_subset(
         p_val = float(box_m.mp)
         r_val = float(box_m.mr)
         f1_val = (2 * p_val * r_val / (p_val + r_val)) if (p_val + r_val) > 0 else 0.0
+
+        maps_arr = getattr(box_m, "maps", None)
+        ap_cls_idx = [int(x) for x in getattr(box_m, "ap_class_index", [])]
+        tail_aps: list[float] = []
+        if maps_arr is not None and len(maps_arr) > 0:
+            active_val_ids = set(ap_cls_idx) if ap_cls_idx else set(names_map.keys())
+            for cid in active_val_ids:
+                if cid < len(maps_arr) and names_map.get(cid) in rare_tail_classes:
+                    tail_aps.append(float(maps_arr[cid]))
+            if not tail_aps:
+                for cid, cname in names_map.items():
+                    if cid < len(maps_arr) and cname in rare_tail_classes:
+                        tail_aps.append(float(maps_arr[cid]))
+        rare_tail_map = float(np.mean(tail_aps)) if tail_aps else float(box_m.map)
+
         return {
             "mAP50_95": round(float(box_m.map), 4),
             "mAP50": round(float(box_m.map50), 4),
+            "rare_tail_mAP50_95": round(rare_tail_map, 4),
             "precision": round(p_val, 4),
             "recall": round(r_val, 4),
             "f1": round(f1_val, 4),
@@ -338,16 +355,17 @@ def _generate_mining_charts(leaderboard: list[dict[str, Any]], out_dir: Any) -> 
 
     methods = [r["method"] for r in leaderboard]
     x = np.arange(len(methods))
-    width = 0.38
+    width3 = 0.26
 
-    # 1. mAP@50 and mAP@50-95 by Curation Method
-    fig, ax = plt.subplots(figsize=(12, 5.0))
-    ax.bar(x - width / 2, [float(r["mAP50"]) for r in leaderboard], width, label="mAP@50")
-    ax.bar(x + width / 2, [float(r["mAP50_95"]) for r in leaderboard], width, label="mAP@50-95")
+    # 1. mAP@50, mAP@50-95, and Rare-Tail mAP@50-95 by Curation Method
+    fig, ax = plt.subplots(figsize=(12.5, 5.0))
+    ax.bar(x - width3, [float(r["mAP50"]) for r in leaderboard], width3, label="mAP@50")
+    ax.bar(x, [float(r["mAP50_95"]) for r in leaderboard], width3, label="mAP@50-95")
+    ax.bar(x + width3, [float(r["rare_tail_mAP50_95"]) for r in leaderboard], width3, label="Rare-Tail mAP@50-95")
     ax.set_xticks(x)
     ax.set_xticklabels(methods, rotation=32, ha="right")
     ax.set_ylabel("Score")
-    ax.set_title("Curation Method Downstream Accuracy Leaderboard (mAP@50 & mAP@50-95)")
+    ax.set_title("Curation Method Downstream Accuracy Leaderboard (mAP@50, mAP@50-95 & Rare-Tail mAP@50-95)")
     ax.legend()
     fig.tight_layout()
     p1 = charts_dir / "mining_map_comparison.png"
@@ -493,6 +511,7 @@ def main() -> None:
         downstream = _train_and_eval_subset(
             sub,
             val_clean,
+            rare_tail_classes=rare_tail_classes,
             weights=args.weights,
             epochs=args.epochs,
             imgsz=args.imgsz,
@@ -512,7 +531,7 @@ def main() -> None:
 
     leaderboard_rows = sorted(
         runs,
-        key=lambda r: (r["mAP50_95"], r["mAP50"], r["f1"], r["class_coverage_pct"]),
+        key=lambda r: (r["mAP50_95"], r["mAP50"], r["rare_tail_mAP50_95"], r["f1"], r["class_coverage_pct"]),
         reverse=True,
     )
     leaderboard: list[dict[str, Any]] = []
@@ -523,6 +542,7 @@ def main() -> None:
             "images_selected": row["images_selected"],
             "mAP50_95": row["mAP50_95"],
             "mAP50": row["mAP50"],
+            "rare_tail_mAP50_95": row["rare_tail_mAP50_95"],
             "f1": row["f1"],
             "precision": row["precision"],
             "recall": row["recall"],

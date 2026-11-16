@@ -1,52 +1,73 @@
 ---
 name: klygo-metrics-benchmark
-description: Benchmark Klygo object-detection accuracy (`mAP@50`, `mAP@50-95`, Precision, Recall, F1 via `klygo.metrics.evaluate`) on real datasets (`val2017`, `voc2007`, `coco128`) as well as `klygo.metrics` CPU vs CUDA latency and FP16/FP32/FP64 precision drift. Saves reports under `benchmarks/results/metrics/<dataset>_<YYYY_MM_DD>/`.
+description: "Benchmark multi-model object-detection accuracy and diagnostic quality across all 9 Klygo detectors (`yolo`, `yolo11`, `yolo26`, `yolo-world`, `grounding-dino`, `grounding-dino-base`, `faster-rcnn`, `d-fine`, `locate-anything`) on real datasets (`coco128`, `voc2007`, `val2017`) using all 13 public functions of `klygo.metrics`. Saves standardized reports, JSON leaderboards, and 3 charts under `benchmarks/results/metrics/<gpu>_<dataset>_<YYYY_MM_DD>/`."
 ---
 
-# Klygo Metrics & Detection Accuracy Benchmark Skill
+# Klygo Metrics Benchmark Skill (`klygo-metrics-benchmark`)
 
-Use this skill when measuring **detection accuracy (`mAP@50`, `mAP@50-95`, Precision, Recall, F1)** with `klygo.metrics`, or **CPU vs CUDA IoU/matching throughput** of `klygo.metrics`.
+## 1. Goal & Scope
 
-## 1. Scope & Metrics
-- **Model Accuracy Evaluation on Real Datasets (`val2017`, `voc2007`, `coco128`)**:
-  - Load ground truth via `datasets.load(...)`, run `predictions.repredict(detector, ...)` (or `detector.predict(...)`), and evaluate with `metrics.evaluate(predictions, truth)` / `metrics.compose(...)`.
-  - Report `mAP@0.5`, `mAP@0.5:0.95`, `precision`, `recall`, `f1`, and per-class breakdown.
-- **Metrics Kernel Throughput & Numerical Precision** (`evaluate_release.py` metrics suite):
-  - CPU vs CUDA (`CuPy`) across `FP16`, `FP32`, `FP64`, `packed`/`unpacked`, and dense boxes up to `xlarge_5000_2000` and `batch_100f_10k`.
+Evaluate predicted bounding boxes and labels from all **9 Klygo detector models** against ground-truth dataset annotations (`coco128`, `voc2007`, `val2017`) using all **13 public functions of `klygo.metrics`** (without re-running CPU vs CUDA execution speed benchmarks, which are already covered in `performance/`):
 
-## 2. Standard Commands
+1. **Overall Detection & Localization Accuracy (`map_score` & `precision_recall`)**:
+   - Multi-class `mAP50_95`, `mAP50`, `mAP75`, `precision`, `recall`, `f1`, `mean_iou`.
+   - Class-agnostic localization `loc_mAP50_95`, `loc_mAP50` (evaluating pure box localization so `locate-anything` and all 8 class-aware models are compared on equal footing).
+2. **Multi-Scale Object Breakdown (`size_breakdown`)**:
+   - COCO scale tiers: `small_ap`, `medium_ap`, `large_ap`, `small_f1`, `medium_f1`, `large_f1`.
+3. **TIDE Error Categorization (`error_analysis`)**:
+   - False-positive & false-negative breakdown: `err_localization`, `err_classification`, `err_cls_loc`, `err_duplicate`, `err_background`, and `err_missed_gt`.
+4. **Confidence Calibration & Optimal Operating Thresholds (`calibration`, `threshold_sweep`, `iou_sweep`)**:
+   - `ece` (Expected Calibration Error), `optimal_threshold`, `optimal_f1`, and `f1_iou50` / `f1_iou75` / `f1_iou90`.
+5. **Per-Class, Per-Image & Confusion Matrix Diagnostics (`per_class`, `per_image`, `confusion_matrix`, `match_boxes`)**:
+   - `detected_classes` (`detected / active_gt_classes`), `cm_class_acc`, `per_image_mean_f1`, `matched_tp_boxes`, and full per-class AP/F1 breakdown.
 
-### A. Evaluate Model mAP + Kernel Latency Together
+---
+
+## 2. Standardized Output Directory Structure
+
+Every run saves the standardized file set under `benchmarks/results/metrics/<gpu>_<dataset>_<YYYY_MM_DD>/`:
+- `REPORT.md` — Full Markdown report with the 9-model accuracy leaderboard, scale/error/IoU breakdown table, and embedded charts.
+- `environment.json` — Hardware, OS, CPU/GPU, PyTorch/CUDA, and Python environment metadata.
+- `accuracy_leaderboard.json` — Ranked 9-model leaderboard (`mAP50_95`, `mAP50`, `mAP75`, `f1`, `precision`, `recall`, `mean_iou`, `loc_mAP50_95`, `loc_mAP50`, `optimal_threshold`, `optimal_f1`, `ece`, `detected_classes`).
+- `size_and_error_breakdown.json` — Per-model scale breakdown (`small`/`medium`/`large`), 6 error categories, IoU sweep points, and confusion matrix accuracy.
+- `per_class_summary.json` — Per-model, per-class AP/F1/IoU metrics from `metrics.per_class()`.
+- `summary.json` — Master JSON bundle.
+- `charts/metrics_map_leaderboard.png` — Grouped bar chart of `mAP@50`, `mAP@75`, `mAP@50-95`, and `Class-Agnostic Loc mAP@50-95`.
+- `charts/metrics_size_breakdown.png` — Grouped bar chart of `Small`, `Medium`, and `Large` object AP across models.
+- `charts/metrics_error_calibration.png` — Grouped bar chart of TIDE error counts (`Localization`, `Classification`, `Duplicate`, `Background`, `Missed GT`).
+
+---
+
+## 3. Canonical 3-Tier Commands (`coco128` / `voc2007` / `val2017`)
+
 ```bash
-PYTHONPATH=. python benchmarks/metrics/run_metrics_benchmark.py \
-  --output artifacts/benchmarks/metrics_eval \
-  --dataset-dir /path/to/yolo_dataset \
-  --model yolov8n.pt \
-  --large-scale \
-  --repeats 7 \
-  --zip artifacts/benchmarks/metrics_results.zip
+# Tier 1: COCO128 (128 images, 80 classes, all 9 models)
+python benchmarks/metrics/run_metrics_benchmark.py \
+  --dataset-dir /path/to/coco128 \
+  --output benchmarks/results/metrics/colab_l4_coco128_$(date +%Y_%m_%d) \
+  --zip artifacts/benchmarks/colab_l4_metrics_coco128_results.zip
+
+# Tier 2: Pascal VOC 2007 (500 images, 20 classes with automatic COCO->VOC synonym alignment, all 9 models)
+python benchmarks/metrics/run_metrics_benchmark.py \
+  --dataset-dir /path/to/voc2007_yolo \
+  --max-images 500 \
+  --output benchmarks/results/metrics/colab_l4_voc2007_$(date +%Y_%m_%d) \
+  --zip artifacts/benchmarks/colab_l4_metrics_voc2007_results.zip
+
+# Tier 3: COCO val2017 (500 images, 80 classes, all 9 models)
+python benchmarks/metrics/run_metrics_benchmark.py \
+  --dataset-dir /path/to/val2017_yolo \
+  --max-images 500 \
+  --output benchmarks/results/metrics/colab_l4_val2017_$(date +%Y_%m_%d) \
+  --zip artifacts/benchmarks/colab_l4_metrics_val2017_results.zip
 ```
 
-### B. Metrics Kernel CPU vs CUDA Speed & Precision Drift Only
-```bash
-PYTHONPATH=. python benchmarks/metrics/run_metrics_benchmark.py \
-  --output artifacts/benchmarks/metrics_eval \
-  --large-scale \
-  --repeats 7 \
-  --zip artifacts/benchmarks/metrics_results.zip
-```
+---
 
-## 3. Package `.zip`, Upload GitHub Release & Push Reports
-1. **Compress raw output** (never commit `.zip` or `artifacts/`):
-   ```python
-   from klygo import archive
-   archive.compress("artifacts/benchmarks/metrics_eval", "artifacts/benchmarks/metrics_<dataset>_results.zip", include_root=True, overwrite=True)
-   ```
-2. **Upload `.zip` to GitHub Release** (`gh release create "benchmark-metrics-<dataset>-$(date +%Y%m%d)-$(git rev-parse --short HEAD)" artifacts/benchmarks/metrics_<dataset>_results.zip --prerelease`, or browser fallback via `releases/new`).
-3. **Commit & push** `REPORT.md`, `charts/*.png`, executed `.ipynb`, and summary JSONs under `benchmarks/results/metrics/<dataset>_<YYYY_MM_DD>/`:
-   ```bash
-   git add benchmarks/results/metrics/
-   git add -f benchmarks/results/metrics/**/charts/*.png
-   git commit -m "Add metrics mAP & accuracy benchmark report (<dataset>, <YYYY-MM-DD>)"
-   git push origin HEAD
-   ```
+## 4. Git Rules for Benchmark Results
+
+Because `.gitignore` ignores `*.png` by default, always force-add chart images when committing metrics benchmark results:
+```bash
+git add benchmarks/results/metrics/
+git add -f benchmarks/results/metrics/**/charts/*.png
+```
