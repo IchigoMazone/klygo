@@ -1,0 +1,64 @@
+{
+    "pool_images": 1200,
+    "pool_boxes": 8577,
+    "defined_classes": 80,
+    "pool_active_classes": 80,
+    "rare_tail_classes": [
+        "airplane",
+        "baseball bat",
+        "baseball glove",
+        "bear",
+        "fire hydrant",
+        "frisbee",
+        "hair drier",
+        "hot dog",
+        "keyboard",
+        "microwave",
+        "mouse",
+        "oven",
+        "parking meter",
+        "refrigerator",
+        "scissors",
+        "skateboard",
+        "snowboard",
+        "stop sign",
+        "toaster",
+        "toothbrush"
+    ],
+    "pool_imbalance_ratio": 211.0,
+    "duplicate_groups": 0,
+    "duplicate_images": 0,
+    "clusters": 420,
+    "quality_summary": {
+        "brightness": {
+            "mean": 114.02275615234375,
+            "min": 23.6441015625,
+            "max": 225.9355078125
+        },
+        "contrast": {
+            "mean": 56.75994181469611,
+            "min": 4.607212071314751,
+            "max": 107.47068309362035
+        },
+        "sharpness": {
+            "mean": 2219.65543043912,
+            "min": 23.22433575286865,
+            "max": 13459.185567588805
+        },
+        "entropy": {
+            "mean": 7.281001907189687,
+            "min": 3.7017416954040527,
+            "max": 7.91424560546875
+        },
+        "noise": {
+            "mean": 9.496012803812821,
+            "min": 0.9591866731643677,
+            "max": 24.095842361450195
+        },
+        "exposure": {
+            "mean": 0.7922849798947573,
+            "min": 0.1854439526796341,
+            "max": 0.9998719692230225
+        }
+    }
+}

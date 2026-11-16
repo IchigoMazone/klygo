@@ -1,0 +1,49 @@
+{
+    "pool_images": 1000,
+    "pool_boxes": 3084,
+    "defined_classes": 20,
+    "pool_active_classes": 20,
+    "rare_tail_classes": [
+        "bus",
+        "diningtable",
+        "sheep",
+        "sofa",
+        "train"
+    ],
+    "pool_imbalance_ratio": 14.43,
+    "duplicate_groups": 0,
+    "duplicate_images": 0,
+    "clusters": 350,
+    "quality_summary": {
+        "brightness": {
+            "mean": 109.49442824218751,
+            "min": 15.6849609375,
+            "max": 234.9953125
+        },
+        "contrast": {
+            "mean": 56.59844791339793,
+            "min": 6.258046039649677,
+            "max": 111.48905761445697
+        },
+        "sharpness": {
+            "mean": 1976.7657335476595,
+            "min": 23.33155014038086,
+            "max": 11478.360413763428
+        },
+        "entropy": {
+            "mean": 7.221371987581253,
+            "min": 3.2253904342651367,
+            "max": 7.884674072265625
+        },
+        "noise": {
+            "mean": 8.979342405080795,
+            "min": 1.034941554069519,
+            "max": 24.080230712890625
+        },
+        "exposure": {
+            "mean": 0.776084597595036,
+            "min": 0.12301931530237198,
+            "max": 0.9999130368232727
+        }
+    }
+}
