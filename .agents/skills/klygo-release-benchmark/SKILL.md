@@ -178,7 +178,8 @@ colab_files.download("/content/klygo/artifacts/benchmarks/colab_l4_full_results.
 
 Once the benchmark finishes and the `.zip` is uploaded to GitHub Releases:
 1. Store the lightweight Markdown reports (`REPORT.md`, `STATISTICS.md` if generated), generated PNG charts (`charts/*.png`), executed notebooks (`.ipynb`), and summary JSONs under `benchmarks/results/` (never commit `.zip` files or `artifacts/`):
-   - `benchmarks/results/performance/<gpu>_<dataset>_<YYYY_MM_DD>/` — Full **performance/speed** suite (`evaluate_release.py`: 9-model 6-mode FPS, scaling, `metrics` CPU vs CUDA latency, `outputs_post`, `mining` speed, `datasets.load` / `media.load` / random-jump, 600s `stability.json`)
+   - `benchmarks/results/performance/<gpu>_<dataset>_<YYYY_MM_DD>/` — Full **GPU & core performance** suite (`evaluate_release.py`: 9-model 6-mode FPS, scaling, `metrics` CPU vs CUDA latency, `outputs_post`, `mining` speed, 600s `stability.json`)
+   - `benchmarks/results/cpu_loaders/<dataset>_<YYYY_MM_DD>/` — **CPU & I/O loaders** (`datasets.load`, `media.load`, strided/random-jump `MediaFrames` & `Detections`, `preprocessing.compose`, `--include-cpu-utils`)
    - `benchmarks/results/video/<gpu>_<YYYY_MM_DD>/` — **Video streaming** (`--profile video`: H.264 decode, TTFF, P50/P95/P99)
    - `benchmarks/results/metrics/<dataset>_<YYYY_MM_DD>/` — **Detection accuracy (`klygo.metrics`)**: `mAP@50`, `mAP@50-95`, Precision, Recall, F1
    - `benchmarks/results/mining/<dataset>_<YYYY_MM_DD>/` — **Curation training accuracy (`curation_accuracy_benchmark.py`)**: mAP comparison across `klygo.mining` selection strategies
