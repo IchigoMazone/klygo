@@ -31,23 +31,23 @@ Use this skill when measuring **CPU and disk I/O performance** (no GPU required 
 
 ### A. Quick CPU Loader Benchmark (`coco128`)
 ```bash
-PYTHONPATH=. python benchmarks/gpu_suite/evaluate_release.py \
+PYTHONPATH=. python benchmarks/cpu_loaders/run_cpu_benchmark.py \
   --output artifacts/benchmarks/cpu_coco128 \
   --dataset coco128 \
-  --loaders-only \
   --large-scale \
-  --repeats 7
+  --repeats 7 \
+  --zip artifacts/benchmarks/cpu_coco128_results.zip
 ```
 
 ### B. Full CPU Loader Benchmark on Custom / Industry Dataset (`val2017` / `voc2007`)
 ```bash
-PYTHONPATH=. python benchmarks/gpu_suite/evaluate_release.py \
+PYTHONPATH=. python benchmarks/cpu_loaders/run_cpu_benchmark.py \
   --output artifacts/benchmarks/cpu_dataset \
   --dataset-dir /path/to/yolo_dataset \
-  --loaders-only \
   --large-scale \
   --include-cpu-utils \
-  --repeats 7
+  --repeats 7 \
+  --zip artifacts/benchmarks/cpu_dataset_results.zip
 ```
 
 ## 3. Package `.zip`, Upload GitHub Release & Push Reports

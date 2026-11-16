@@ -16,27 +16,24 @@ Use this skill when measuring **detection accuracy (`mAP@50`, `mAP@50-95`, Preci
 
 ## 2. Standard Commands
 
-### A. Evaluate Model mAP on a Real YOLO Dataset
-```python
-from klygo import datasets, metrics, models
-
-truth = datasets.load("/path/to/yolo_dataset", format="yolo", verbose=False)
-detector = models.load("yolov8n.pt")
-preds = truth.copy()
-preds.repredict(detector, threshold=0.25, verbose=False)
-report = metrics.evaluate(preds, truth, verbose=False)
+### A. Evaluate Model mAP + Kernel Latency Together
+```bash
+PYTHONPATH=. python benchmarks/metrics/run_metrics_benchmark.py \
+  --output artifacts/benchmarks/metrics_eval \
+  --dataset-dir /path/to/yolo_dataset \
+  --model yolov8n.pt \
+  --large-scale \
+  --repeats 7 \
+  --zip artifacts/benchmarks/metrics_results.zip
 ```
 
-### B. Metrics Kernel CPU vs CUDA Speed & Precision Drift
+### B. Metrics Kernel CPU vs CUDA Speed & Precision Drift Only
 ```bash
-PYTHONPATH=. python -c "
-from benchmarks.gpu_suite.evaluate_release import collect_environment, benchmark_metrics
-from klygo import files, utils
-env = collect_environment()
-rows = benchmark_metrics(env, repeats=7, large_scale=True)
-files.save('artifacts/benchmarks/metrics_eval/metrics_benchmark.json', rows, overwrite=True)
-utils.tabulate(rows, title='klygo.metrics CPU vs CUDA')
-"
+PYTHONPATH=. python benchmarks/metrics/run_metrics_benchmark.py \
+  --output artifacts/benchmarks/metrics_eval \
+  --large-scale \
+  --repeats 7 \
+  --zip artifacts/benchmarks/metrics_results.zip
 ```
 
 ## 3. Package `.zip`, Upload GitHub Release & Push Reports
