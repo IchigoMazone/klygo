@@ -1,0 +1,66 @@
+[
+  {
+    "model": "yolo",
+    "dtype": "float32",
+    "returncode": 0,
+    "status": "passed",
+    "output_dir": "/content/klygo/artifacts/benchmarks/video/cars_240f_720p/inference/yolo_float32",
+    "error": ""
+  },
+  {
+    "model": "yolo",
+    "dtype": "float16",
+    "returncode": 0,
+    "status": "passed",
+    "output_dir": "/content/klygo/artifacts/benchmarks/video/cars_240f_720p/inference/yolo_float16",
+    "error": ""
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float32",
+    "returncode": 0,
+    "status": "passed",
+    "output_dir": "/content/klygo/artifacts/benchmarks/video/cars_240f_720p/inference/yolo11_float32",
+    "error": ""
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float16",
+    "returncode": 0,
+    "status": "passed",
+    "output_dir": "/content/klygo/artifacts/benchmarks/video/cars_240f_720p/inference/yolo11_float16",
+    "error": ""
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float32",
+    "returncode": 0,
+    "status": "passed",
+    "output_dir": "/content/klygo/artifacts/benchmarks/video/cars_240f_720p/inference/yolo26_float32",
+    "error": ""
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float16",
+    "returncode": 0,
+    "status": "passed",
+    "output_dir": "/content/klygo/artifacts/benchmarks/video/cars_240f_720p/inference/yolo26_float16",
+    "error": ""
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float32",
+    "returncode": 0,
+    "status": "passed",
+    "output_dir": "/content/klygo/artifacts/benchmarks/video/cars_240f_720p/inference/yolo-world_float32",
+    "error": ""
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float16",
+    "returncode": 0,
+    "status": "passed",
+    "output_dir": "/content/klygo/artifacts/benchmarks/video/cars_240f_720p/inference/yolo-world_float16",
+    "error": ""
+  }
+]
