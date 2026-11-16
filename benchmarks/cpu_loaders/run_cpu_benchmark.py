@@ -252,6 +252,7 @@ def main() -> None:
     parser.add_argument("--dataset-dir", default="", help="Optional path to a local YOLO dataset")
     parser.add_argument("--repeats", type=int, default=7)
     parser.add_argument("--large-scale", action="store_true")
+    parser.add_argument("--extended-only", action="store_true", help="Run only extended video/export/partition/archive/JSON and cpu-utils benchmarks")
     parser.add_argument("--include-cpu-utils", action="store_true")
     parser.add_argument("--zip", default="", help="Optional output .zip path")
     args = parser.parse_args()
@@ -266,28 +267,31 @@ def main() -> None:
     rows: list[dict[str, Any]] = []
     if real_root is not None:
         yaml_file = "data.yaml" if files.is_file(real_root / "data.yaml") else ""
-        load_stats = _measure(
-            lambda: datasets.load(real_root, images_dir=img_sub, labels_dir=lbl_sub, yaml_name=yaml_file or "data.yaml", verbose=False),
-            repeats=args.repeats,
-        )
-        truth_dets = load_stats["last_result"]
-        num_images = len(truth_dets)
         img_dir = real_root / img_sub
-        rows.append({"operation": f"datasets.load ({dataset_tag}, {num_images} imgs)", "median_ms": load_stats["median_ms"], "status": "passed"})
-
-        media_eager = _measure(lambda: media.load(img_dir, stream=False, verbose=False), repeats=args.repeats)
-        media_stream = _measure(lambda: list(media.load(img_dir, stream=True, verbose=False)), repeats=args.repeats)
-        rows.append({"operation": f"media.load_eager ({dataset_tag}, {num_images} imgs)", "median_ms": media_eager["median_ms"], "status": "passed"})
-        rows.append({"operation": f"media.load_stream ({dataset_tag}, {num_images} imgs)", "median_ms": media_stream["median_ms"], "status": "passed"})
-
         frames = media.load(img_dir, verbose=False)
-        preproc_pipe = preprocessing.compose(preprocessing.letterbox((640, 640)), preprocessing.autocontrast())
-        sample_n = min(32 if args.large_scale else 16, len(frames))
-        preproc_stats = _measure(lambda: [preproc_pipe(f) for f in frames[:sample_n]], repeats=args.repeats)
-        rows.append({"operation": f"preprocessing.compose ({dataset_tag}, {sample_n} imgs)", "median_ms": preproc_stats["median_ms"], "status": "passed"})
+        if args.extended_only:
+            truth_dets = datasets.load(real_root, images_dir=img_sub, labels_dir=lbl_sub, yaml_name=yaml_file or "data.yaml", verbose=False)
+        else:
+            load_stats = _measure(
+                lambda: datasets.load(real_root, images_dir=img_sub, labels_dir=lbl_sub, yaml_name=yaml_file or "data.yaml", verbose=False),
+                repeats=args.repeats,
+            )
+            truth_dets = load_stats["last_result"]
+            num_images = len(truth_dets)
+            rows.append({"operation": f"datasets.load ({dataset_tag}, {num_images} imgs)", "median_ms": load_stats["median_ms"], "status": "passed"})
 
-        if args.large_scale:
-            rows.extend(_benchmark_strided_image_access(real_root, img_sub, lbl_sub, yaml_file, repeats=args.repeats))
+            media_eager = _measure(lambda: media.load(img_dir, stream=False, verbose=False), repeats=args.repeats)
+            media_stream = _measure(lambda: list(media.load(img_dir, stream=True, verbose=False)), repeats=args.repeats)
+            rows.append({"operation": f"media.load_eager ({dataset_tag}, {num_images} imgs)", "median_ms": media_eager["median_ms"], "status": "passed"})
+            rows.append({"operation": f"media.load_stream ({dataset_tag}, {num_images} imgs)", "median_ms": media_stream["median_ms"], "status": "passed"})
+
+            preproc_pipe = preprocessing.compose(preprocessing.letterbox((640, 640)), preprocessing.autocontrast())
+            sample_n = min(32 if args.large_scale else 16, len(frames))
+            preproc_stats = _measure(lambda: [preproc_pipe(f) for f in frames[:sample_n]], repeats=args.repeats)
+            rows.append({"operation": f"preprocessing.compose ({dataset_tag}, {sample_n} imgs)", "median_ms": preproc_stats["median_ms"], "status": "passed"})
+
+            if args.large_scale:
+                rows.extend(_benchmark_strided_image_access(real_root, img_sub, lbl_sub, yaml_file, repeats=args.repeats))
         rows.extend(_benchmark_extended_cpu_io(truth_dets, frames, repeats=args.repeats, large_scale=args.large_scale))
 
         if args.include_cpu_utils:
