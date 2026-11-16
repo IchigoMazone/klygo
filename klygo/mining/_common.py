@@ -9,11 +9,14 @@ from __future__ import annotations
 from klygo.utils.progress import _iter_progress
 
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
+import os
 from typing import Any, Mapping, Optional, Sequence
 
 import cv2
 import numpy as np
+from PIL import Image
 
 from klygo import files, media, preprocessing, validators
 from klygo.outputs import Detections
@@ -125,6 +128,14 @@ def _normalize(values: Sequence[float]) -> list[float]:
     return [(float(value) - low) / (high - low) for value in values]
 
 
+def _pil_rgb(frame: Any) -> Image.Image:
+    """Return an RGB PIL image for a frame without redundant copying."""
+    source = getattr(frame, "_source", None)
+    if isinstance(source, Image.Image):
+        return source if source.mode == "RGB" else source.convert("RGB")
+    return _image(frame).to_pil(cache=False).convert("RGB")
+
+
 def _quality(data: Detections, verbose: bool = False) -> list[dict[str, float]]:
     """Compute six classical image-quality metrics for every frame in a dataset.
 
@@ -150,12 +161,16 @@ def _quality(data: Detections, verbose: bool = False) -> list[dict[str, float]]:
         "exposure": preprocessing.exposure_score(),
     }
 
-    rows: list[dict[str, float]] = []
-    for frame in _iter_progress(data, verbose, "Image quality"):
-        image = _image(frame).to_pil(cache=False)
-        rows.append({name: float(metric(image)) for name, metric in metrics.items()})
+    def _score_one(frame: Any) -> dict[str, float]:
+        image = _pil_rgb(frame)
+        return {name: float(metric(image)) for name, metric in metrics.items()}
 
-    return rows
+    if len(data) >= 16 and not verbose:
+        workers = min(8, os.cpu_count() or 4, len(data))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            return list(pool.map(_score_one, data))
+
+    return [_score_one(frame) for frame in _iter_progress(data, verbose, "Image quality")]
 
 
 def _save_report(report: "_Report", path: Any) -> Any:
@@ -324,10 +339,9 @@ def _feature_matrix(data: Detections, features: tuple[str, ...], verbose: bool =
     )
 
     labels = [data.names[key] for key in sorted(data.names)]
-    rows: list[np.ndarray] = []
 
-    for frame in _iter_progress(data, verbose, "Extracting features"):
-        pil_image = _image(frame).to_pil(cache=False).convert("RGB")
+    def _extract_one(frame: Any) -> np.ndarray:
+        pil_image = _pil_rgb(frame)
         image = np.asarray(pil_image)
         parts: list[np.ndarray] = []
 
@@ -384,7 +398,14 @@ def _feature_matrix(data: Detections, features: tuple[str, ...], verbose: bool =
             present = set(frame.labels)
             parts.append(np.asarray([label in present for label in labels], dtype=np.float32))
 
-        rows.append(np.concatenate(parts).astype(np.float32))
+        return np.concatenate(parts).astype(np.float32)
+
+    if len(data) >= 16 and not verbose:
+        workers = min(8, os.cpu_count() or 4, len(data))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            rows = list(pool.map(_extract_one, data))
+    else:
+        rows = [_extract_one(frame) for frame in _iter_progress(data, verbose, "Extracting features")]
 
     matrix = np.vstack(rows)
 
