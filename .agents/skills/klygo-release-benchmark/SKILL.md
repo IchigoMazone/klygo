@@ -7,7 +7,12 @@ description: Run and verify the full Klygo detection-evaluation benchmark suite 
 
 This skill defines the exact measurement protocol, required metrics, execution recipes, and **mandatory `.zip` artifact packaging** for Klygo GPU/CPU release benchmarks using `benchmarks/gpu_suite/`.
 
-> **Note:** For lightweight 5-model `examples/integration/multi_backend_benchmark.py` runs, see `klygo-multi-gpu-benchmark`. For CPU-only loader / I/O / random-jump benchmarks (no GPU required), see `klygo-cpu-benchmark`. Use **this** skill (`klygo-release-benchmark`) for GPU (`L4` / `T4` / CUDA) release benchmarking.
+> **Skill Map (No Overlap):**
+> - **This skill (`klygo-release-benchmark`)**: Full GPU release suite (`performance/`): 9-model 6-mode inference, scaling, `outputs`/`postprocessing` CUDA, 600s stability, `.zip` packaging & GitHub Release upload.
+> - **`klygo-cpu-benchmark`**: CPU-only & disk I/O (`cpu_loaders/`): `datasets.load`, `media.load`, random-jump `MediaFrames`/`Detections`, `preprocessing`.
+> - **`klygo-video-benchmark`**: End-to-end H.264 video streaming (`video/`): `--profile video`, TTFF, P50/P95/P99.
+> - **`klygo-metrics-benchmark`**: Model `mAP@50` / `mAP@50-95` accuracy & `klygo.metrics` CUDA throughput (`metrics/`).
+> - **`klygo-mining-benchmark`**: `klygo.mining` curation training accuracy (`YOLOv8n`) & mining ops speed (`mining/`).
 
 ---
 
