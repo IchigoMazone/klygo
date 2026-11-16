@@ -809,72 +809,72 @@
   "io_visual": [
     {
       "operation": "datasets.load (custom:/content/coco_val2017_yolo, 5000 imgs)",
-      "median_ms": 22444.743,
+      "median_ms": 7876.5593,
       "status": "passed"
     },
     {
       "operation": "media.load_eager (custom:/content/coco_val2017_yolo, 5000 imgs)",
-      "median_ms": 332.1143,
+      "median_ms": 327.6144,
       "status": "passed"
     },
     {
       "operation": "media.load_stream (custom:/content/coco_val2017_yolo, 5000 imgs)",
-      "median_ms": 341.2531,
+      "median_ms": 340.849,
       "status": "passed"
     },
     {
       "operation": "preprocessing.compose (custom:/content/coco_val2017_yolo, 32 imgs)",
-      "median_ms": 0.2423,
+      "median_ms": 0.2421,
       "status": "passed"
     },
     {
       "operation": "mining.stats_quality (custom:/content/coco_val2017_yolo, 5000 imgs)",
-      "median_ms": 81330.1329,
+      "median_ms": 70732.9255,
       "status": "passed"
     },
     {
       "operation": "mining.find_duplicates (custom:/content/coco_val2017_yolo, 5000 imgs)",
-      "median_ms": 111607.219,
+      "median_ms": 8538.6577,
       "status": "passed"
     },
     {
       "operation": "mining.cluster (custom:/content/coco_val2017_yolo, 5000 imgs, k=8)",
-      "median_ms": 85824.3582,
+      "median_ms": 72893.2024,
       "status": "passed"
     },
     {
       "operation": "datasets.load_scaled (5000 imgs)",
-      "median_ms": 22640.6916,
+      "median_ms": 7971.2405,
       "status": "passed"
     },
     {
       "operation": "media.load_indexed (5000 imgs)",
-      "median_ms": 192.3141,
+      "median_ms": 192.1304,
       "status": "passed"
     },
     {
       "operation": "media.strided_decode (stride=32, 156 imgs)",
-      "median_ms": 881.6672,
+      "median_ms": 773.5894,
       "status": "passed"
     },
     {
       "operation": "media.random_jump_numpy (64/5000 imgs)",
-      "median_ms": 293.4506,
+      "median_ms": 250.544,
       "status": "passed"
     },
     {
       "operation": "media.random_jump_pil (64/5000 imgs)",
-      "median_ms": 258.923,
+      "median_ms": 239.4857,
       "status": "passed"
     },
     {
       "operation": "detections.random_jump_index (64/5000)",
-      "median_ms": 0.0118,
+      "median_ms": 0.0116,
       "status": "passed"
     },
     {
       "operation": "detections.random_jump_image_read (64/5000)",
-      "median_ms": 38.6708,
+      "median_ms": 22.1482,
       "status": "passed"
     }
   ],

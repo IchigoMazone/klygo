@@ -809,37 +809,72 @@
   "io_visual": [
     {
       "operation": "datasets.load (coco128, 128 imgs)",
-      "median_ms": 391.7079,
+      "median_ms": 193.7215,
       "status": "passed"
     },
     {
       "operation": "media.load_eager (coco128, 128 imgs)",
-      "median_ms": 9.6336,
+      "median_ms": 9.6228,
       "status": "passed"
     },
     {
       "operation": "media.load_stream (coco128, 128 imgs)",
-      "median_ms": 9.9604,
+      "median_ms": 9.9958,
       "status": "passed"
     },
     {
       "operation": "preprocessing.compose (coco128, 32 imgs)",
-      "median_ms": 0.2369,
+      "median_ms": 0.2427,
       "status": "passed"
     },
     {
       "operation": "mining.stats_quality (coco128, 128 imgs)",
-      "median_ms": 1597.2728,
+      "median_ms": 1628.1751,
       "status": "passed"
     },
     {
       "operation": "mining.find_duplicates (coco128, 128 imgs)",
-      "median_ms": 529.9362,
+      "median_ms": 194.9579,
       "status": "passed"
     },
     {
       "operation": "mining.cluster (coco128, 128 imgs, k=8)",
-      "median_ms": 1661.5315,
+      "median_ms": 1665.4343,
+      "status": "passed"
+    },
+    {
+      "operation": "datasets.load_scaled (2048 imgs)",
+      "median_ms": 3035.3485,
+      "status": "passed"
+    },
+    {
+      "operation": "media.load_indexed (2048 imgs)",
+      "median_ms": 76.3453,
+      "status": "passed"
+    },
+    {
+      "operation": "media.strided_decode (stride=32, 64 imgs)",
+      "median_ms": 228.8407,
+      "status": "passed"
+    },
+    {
+      "operation": "media.random_jump_numpy (64/2048 imgs)",
+      "median_ms": 139.8209,
+      "status": "passed"
+    },
+    {
+      "operation": "media.random_jump_pil (64/2048 imgs)",
+      "median_ms": 129.5884,
+      "status": "passed"
+    },
+    {
+      "operation": "detections.random_jump_index (64/2048)",
+      "median_ms": 0.0118,
+      "status": "passed"
+    },
+    {
+      "operation": "detections.random_jump_image_read (64/2048)",
+      "median_ms": 22.6058,
       "status": "passed"
     }
   ],

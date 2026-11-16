@@ -95,20 +95,20 @@
 
 | operation | median_ms | status |
 | --- | --- | --- |
-| datasets.load (custom:/content/coco_val2017_yolo, 5000 imgs) | 22444.743 | passed |
-| media.load_eager (custom:/content/coco_val2017_yolo, 5000 imgs) | 332.1143 | passed |
-| media.load_stream (custom:/content/coco_val2017_yolo, 5000 imgs) | 341.2531 | passed |
-| preprocessing.compose (custom:/content/coco_val2017_yolo, 32 imgs) | 0.2423 | passed |
-| mining.stats_quality (custom:/content/coco_val2017_yolo, 5000 imgs) | 81330.1329 | passed |
-| mining.find_duplicates (custom:/content/coco_val2017_yolo, 5000 imgs) | 111607.219 | passed |
-| mining.cluster (custom:/content/coco_val2017_yolo, 5000 imgs, k=8) | 85824.3582 | passed |
-| datasets.load_scaled (5000 imgs) | 22640.6916 | passed |
-| media.load_indexed (5000 imgs) | 192.3141 | passed |
-| media.strided_decode (stride=32, 156 imgs) | 881.6672 | passed |
-| media.random_jump_numpy (64/5000 imgs) | 293.4506 | passed |
-| media.random_jump_pil (64/5000 imgs) | 258.923 | passed |
-| detections.random_jump_index (64/5000) | 0.0118 | passed |
-| detections.random_jump_image_read (64/5000) | 38.6708 | passed |
+| datasets.load (custom:/content/coco_val2017_yolo, 5000 imgs) | 7876.5593 | passed |
+| media.load_eager (custom:/content/coco_val2017_yolo, 5000 imgs) | 327.6144 | passed |
+| media.load_stream (custom:/content/coco_val2017_yolo, 5000 imgs) | 340.849 | passed |
+| preprocessing.compose (custom:/content/coco_val2017_yolo, 32 imgs) | 0.2421 | passed |
+| mining.stats_quality (custom:/content/coco_val2017_yolo, 5000 imgs) | 70732.9255 | passed |
+| mining.find_duplicates (custom:/content/coco_val2017_yolo, 5000 imgs) | 8538.6577 | passed |
+| mining.cluster (custom:/content/coco_val2017_yolo, 5000 imgs, k=8) | 72893.2024 | passed |
+| datasets.load_scaled (5000 imgs) | 7971.2405 | passed |
+| media.load_indexed (5000 imgs) | 192.1304 | passed |
+| media.strided_decode (stride=32, 156 imgs) | 773.5894 | passed |
+| media.random_jump_numpy (64/5000 imgs) | 250.544 | passed |
+| media.random_jump_pil (64/5000 imgs) | 239.4857 | passed |
+| detections.random_jump_index (64/5000) | 0.0116 | passed |
+| detections.random_jump_image_read (64/5000) | 22.1482 | passed |
 
 ## models.load Cold-Load Latency
 
@@ -504,22 +504,22 @@
 
 ## Charts
 
-### klygo.metrics CPU vs CUDA
+### metrics cpu vs cuda
 
-![klygo.metrics CPU vs CUDA](charts/metrics_cpu_vs_cuda.png)
+![metrics cpu vs cuda](charts/metrics_cpu_vs_cuda.png)
 
-### klygo.mining CPU vs CUDA
+### mining cpu vs cuda
 
-![klygo.mining CPU vs CUDA](charts/mining_cpu_vs_cuda.png)
+![mining cpu vs cuda](charts/mining_cpu_vs_cuda.png)
 
-### Model FPS by Execution Mode
+### model fps comparison
 
-![Model FPS by Execution Mode](charts/model_fps_comparison.png)
+![model fps comparison](charts/model_fps_comparison.png)
 
-### models.load Cold-Load Time
+### model load seconds
 
-![models.load Cold-Load Time](charts/model_load_seconds.png)
+![model load seconds](charts/model_load_seconds.png)
 
-### Batch / Packed Scaling FPS
+### scaling fps
 
-![Batch / Packed Scaling FPS](charts/scaling_fps.png)
+![scaling fps](charts/scaling_fps.png)

@@ -95,13 +95,20 @@
 
 | operation | median_ms | status |
 | --- | --- | --- |
-| datasets.load (coco128, 128 imgs) | 391.7079 | passed |
-| media.load_eager (coco128, 128 imgs) | 9.6336 | passed |
-| media.load_stream (coco128, 128 imgs) | 9.9604 | passed |
-| preprocessing.compose (coco128, 32 imgs) | 0.2369 | passed |
-| mining.stats_quality (coco128, 128 imgs) | 1597.2728 | passed |
-| mining.find_duplicates (coco128, 128 imgs) | 529.9362 | passed |
-| mining.cluster (coco128, 128 imgs, k=8) | 1661.5315 | passed |
+| datasets.load (coco128, 128 imgs) | 193.7215 | passed |
+| media.load_eager (coco128, 128 imgs) | 9.6228 | passed |
+| media.load_stream (coco128, 128 imgs) | 9.9958 | passed |
+| preprocessing.compose (coco128, 32 imgs) | 0.2427 | passed |
+| mining.stats_quality (coco128, 128 imgs) | 1628.1751 | passed |
+| mining.find_duplicates (coco128, 128 imgs) | 194.9579 | passed |
+| mining.cluster (coco128, 128 imgs, k=8) | 1665.4343 | passed |
+| datasets.load_scaled (2048 imgs) | 3035.3485 | passed |
+| media.load_indexed (2048 imgs) | 76.3453 | passed |
+| media.strided_decode (stride=32, 64 imgs) | 228.8407 | passed |
+| media.random_jump_numpy (64/2048 imgs) | 139.8209 | passed |
+| media.random_jump_pil (64/2048 imgs) | 129.5884 | passed |
+| detections.random_jump_index (64/2048) | 0.0118 | passed |
+| detections.random_jump_image_read (64/2048) | 22.6058 | passed |
 
 ## models.load Cold-Load Latency
 
@@ -509,22 +516,22 @@
 
 ## Charts
 
-### klygo.metrics CPU vs CUDA
+### metrics cpu vs cuda
 
-![klygo.metrics CPU vs CUDA](charts/metrics_cpu_vs_cuda.png)
+![metrics cpu vs cuda](charts/metrics_cpu_vs_cuda.png)
 
-### klygo.mining CPU vs CUDA
+### mining cpu vs cuda
 
-![klygo.mining CPU vs CUDA](charts/mining_cpu_vs_cuda.png)
+![mining cpu vs cuda](charts/mining_cpu_vs_cuda.png)
 
-### Model FPS by Execution Mode
+### model fps comparison
 
-![Model FPS by Execution Mode](charts/model_fps_comparison.png)
+![model fps comparison](charts/model_fps_comparison.png)
 
-### models.load Cold-Load Time
+### model load seconds
 
-![models.load Cold-Load Time](charts/model_load_seconds.png)
+![model load seconds](charts/model_load_seconds.png)
 
-### Batch / Packed Scaling FPS
+### scaling fps
 
-![Batch / Packed Scaling FPS](charts/scaling_fps.png)
+![scaling fps](charts/scaling_fps.png)
