@@ -1,6 +1,6 @@
 ---
 name: klygo-mining-benchmark
-description: Benchmark `klygo.mining` full-class dataset curation training accuracy (`benchmarks/mining/run_mining_benchmark.py`: training YOLOv8n across `full_pool`, `random`, `quality`, `rare_first`, `weighted`, `diversity`, `coverage`, `balance_select`, `balance_undersample`, and `dedup_weighted` on all classes of `coco128`, `voc2007`, or `val2017`). Saves standardized reports, JSON leaderboards, and charts under `benchmarks/results/mining/<gpu>_<dataset>_<YYYY_MM_DD>/`.
+description: "Benchmark `klygo.mining` full-class dataset curation training accuracy (`benchmarks/mining/run_mining_benchmark.py` training YOLOv8n across `full_pool`, `random`, `quality`, `rare_first`, `weighted`, `diversity`, `coverage`, `balance_select`, `balance_undersample`, and `dedup_weighted` on all classes of `coco128`, `voc2007`, or `val2017`). Saves standardized reports, JSON leaderboards, and charts under `benchmarks/results/mining/<gpu>_<dataset>_<YYYY_MM_DD>/`."
 ---
 
 # Klygo Mining Benchmark Skill (`klygo-mining-benchmark`)
