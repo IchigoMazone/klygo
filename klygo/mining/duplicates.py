@@ -7,7 +7,9 @@ images via perceptual Discrete Cosine Transform (DCT) pHash similarity.
 from __future__ import annotations
 
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
+import os
 from typing import Any
 
 import numpy as np
@@ -140,22 +142,43 @@ def find_duplicates(
     union = _UnionFind(len(data))
     exact_map: dict[str, list[int]] = defaultdict(list)
 
+    total = len(data)
+    workers = min(8, os.cpu_count() or 4, max(1, total))
+
     # 1. Exact pass: group identical source files using cryptographic hashes
     if exact:
-        for index, frame in enumerate(_iter_progress(data, verbose, "Exact image hashes")):
-            if frame.source_path is not None:
-                exact_map[files.hash(frame.source_path)].append(index)
+        if total >= 16 and not verbose:
+            def _hash_one(frame: Any) -> str | None:
+                return files.hash(frame.source_path) if frame.source_path is not None else None
+
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                for index, digest in enumerate(pool.map(_hash_one, data)):
+                    if digest is not None:
+                        exact_map[digest].append(index)
+        else:
+            for index, frame in enumerate(_iter_progress(data, verbose, "Exact image hashes")):
+                if frame.source_path is not None:
+                    exact_map[files.hash(frame.source_path)].append(index)
         for group in exact_map.values():
             for index in group[1:]:
                 union.union(group[0], index)
 
     # 2. Perceptual pass: compute 63-bit DCT pHash for each frame
-    computed = [_phash(frame) for frame in _iter_progress(data, verbose, "Perceptual image hashes")]
+    if total >= 16 and not verbose:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            computed = list(pool.map(_phash, data))
+    else:
+        computed = [_phash(frame) for frame in _iter_progress(data, verbose, "Perceptual image hashes")]
     similarities: dict[str, float] = {}
 
-    # Pairwise comparison across frames
-    for first in _iter_progress(range(len(computed)), verbose, "Comparing hashes", unit="row"):
-        for second in range(first + 1, len(computed)):
+    # Vectorized pairwise comparison across frames
+    if len(computed) >= 2:
+        bits = np.stack([item[1] for item in computed]).astype(np.float32)
+        n_bits = bits.shape[1]
+        matches = bits @ bits.T + (1.0 - bits) @ (1.0 - bits).T
+        min_matches = threshold * n_bits - 1e-4
+        first_idx, second_idx = np.where(np.triu(matches >= min_matches, k=1))
+        for first, second in zip(first_idx.tolist(), second_idx.tolist()):
             similarity = float(1.0 - np.mean(computed[first][1] != computed[second][1]))
             if similarity >= threshold:
                 union.union(first, second)

@@ -439,6 +439,12 @@ class LazyImage(Image.Image):
 
     def to_pil(self, cache: bool = False) -> Image.Image:
         """Materialize the pipeline as a PIL image; optionally cache its result."""
+        if not self._instructions and not self._preprocessing_ops:
+            loaded = self.load(cache=cache)
+            if isinstance(loaded, Image.Image):
+                return loaded.copy()
+            return Image.fromarray(cv.cvtColor(loaded, cv.COLOR_BGR2RGB))
+
         from klygo.preprocessing.core import _to_pil
 
         return _to_pil(self._execute_preprocessing(cache=cache))

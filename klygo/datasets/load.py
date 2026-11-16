@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from math import isfinite
+import os
 from os import PathLike
 from pathlib import Path
 from urllib.parse import unquote
@@ -214,36 +216,53 @@ def load(
         if any(len(relative_image.parts) != 1 for _, _, relative_image, _ in reference_pairs):
             raise ValueError("dataset must be flat; call datasets.unpartition() before datasets.load()")
 
+        def _load_one(index: int) -> list[tuple[str, Detection]]:
+            image_path, _, relative_image, _ = reference_pairs[index]
+            image = media.LazyImage(image_path, backend="pil").to_pil()
+            original_path = files.path(unquote(files.as_posix(relative_image)))
+            split = original_path.parts[0] if len(original_path.parts) > 1 else "raw"
+            rel_posix = files.as_posix(original_path)
+            resolved_split = split if split in {"train", "val", "test"} else "raw"
+            built: list[tuple[str, Detection]] = []
+            for key, _, _ in specs:
+                label_path = pair_sets[key][index][1]
+                class_map = class_maps[key]
+                boxes = _read_boxes(label_path, class_map, image)
+                built.append((
+                    key,
+                    Detection(
+                        boxes,
+                        source_id=rel_posix,
+                        frame_index=0,
+                        source_path=str(image_path),
+                        image_size=image.size,
+                        source=image,
+                        names=class_map,
+                        metadata={
+                            "dataset_source": str(source_path),
+                            "relative_path": rel_posix,
+                            "split": resolved_split,
+                            "ground_truth": True,
+                        },
+                    ),
+                ))
+            return built
+
         frames_by_key: dict[str, list[Detection]] = {key: [] for key, _, _ in specs}
-        with ProgressBar(total=len(reference_pairs), desc="Loading dataset", unit="image", verbose=verbose) as progress:
-            for index, (image_path, _, relative_image, _) in enumerate(reference_pairs):
-                image = media.load(image_path, verbose=False)[0].to_pil()
-                original_path = files.path(unquote(files.as_posix(relative_image)))
-                split = original_path.parts[0] if len(original_path.parts) > 1 else "raw"
-                rel_posix = files.as_posix(original_path)
-                resolved_split = split if split in {"train", "val", "test"} else "raw"
-                for key, _, _ in specs:
-                    label_path = pair_sets[key][index][1]
-                    class_map = class_maps[key]
-                    boxes = _read_boxes(label_path, class_map, image)
-                    frames_by_key[key].append(
-                        Detection(
-                            boxes,
-                            source_id=rel_posix,
-                            frame_index=0,
-                            source_path=str(image_path),
-                            image_size=image.size,
-                            source=image,
-                            names=class_map,
-                            metadata={
-                                "dataset_source": str(source_path),
-                                "relative_path": rel_posix,
-                                "split": resolved_split,
-                                "ground_truth": True,
-                            },
-                        )
-                    )
-                progress.update(1)
+        total_images = len(reference_pairs)
+        with ProgressBar(total=total_images, desc="Loading dataset", unit="image", verbose=verbose) as progress:
+            if total_images >= 16:
+                workers = min(8, os.cpu_count() or 4, total_images)
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    for built in pool.map(_load_one, range(total_images)):
+                        for key, det in built:
+                            frames_by_key[key].append(det)
+                        progress.update(1)
+            else:
+                for index in range(total_images):
+                    for key, det in _load_one(index):
+                        frames_by_key[key].append(det)
+                    progress.update(1)
 
     collections = {
         key: Detections(frames_by_key[key], metadata={"source_type": "images"}, names=class_maps[key])

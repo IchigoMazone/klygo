@@ -513,6 +513,9 @@ def _prepare_real_dataset(dataset: str, dataset_dir: str) -> tuple[Any | None, s
             return None, "images", "labels", f"synthetic (coco128 fallback: {exc})"
 
     if files.is_dir(coco128_root / "images" / "train2017"):
+        if not files.is_file(coco128_root / "data.yaml"):
+            coco_names = {i: f"cls_{i}" for i in range(80)}
+            files.save(coco128_root / "data.yaml", {"names": coco_names}, overwrite=True, verbose=False)
         return coco128_root, "images/train2017", "labels/train2017", "coco128"
     return None, "images", "labels", "synthetic"
 
@@ -900,6 +903,7 @@ def main() -> None:
     parser.add_argument("--dataset", choices=["auto", "coco128", "synthetic"], default="auto", help="Dataset source for loader & mining benchmarks")
     parser.add_argument("--dataset-dir", default="", help="Optional path to a local real YOLO dataset (e.g., coco-val2017)")
     parser.add_argument("--include-cpu-utils", action="store_true", help="Also time CPU-only media.info/save_images/visual/tabulate helpers")
+    parser.add_argument("--loaders-only", action="store_true", help="Run only loader/preprocessing/disk-mining benchmarks (skip metrics, outputs, models, scaling)")
     parser.add_argument("--zip", default="", help="Optional output .zip path to bundle the complete benchmark directory")
     args = parser.parse_args()
 
@@ -976,20 +980,24 @@ def main() -> None:
         utils.tabulate({k: v for k, v in env.items() if k not in ("git", "versions")}, title="Runtime")
         utils.tabulate(env["versions"], title="Versions")
 
-        metrics_rows = benchmark_metrics(env, repeats=args.repeats, large_scale=args.large_scale)
-        files.save(out_dir / "metrics_benchmark.json", metrics_rows, overwrite=True, verbose=False)
-        print("\n=== klygo.metrics Benchmark ===")
-        utils.tabulate(metrics_rows, title="Metrics (CPU vs CUDA, FP16/FP32/FP64)")
+        metrics_rows: list[dict[str, Any]] = []
+        group_rows: list[dict[str, Any]] = []
+        mining_rows: list[dict[str, Any]] = []
+        if not args.loaders_only:
+            metrics_rows = benchmark_metrics(env, repeats=args.repeats, large_scale=args.large_scale)
+            files.save(out_dir / "metrics_benchmark.json", metrics_rows, overwrite=True, verbose=False)
+            print("\n=== klygo.metrics Benchmark ===")
+            utils.tabulate(metrics_rows, title="Metrics (CPU vs CUDA, FP16/FP32/FP64)")
 
-        group_rows = benchmark_groups_and_postprocessing(env, repeats=args.repeats, large_scale=args.large_scale)
-        files.save(out_dir / "outputs_post_benchmark.json", group_rows, overwrite=True, verbose=False)
-        print("\n=== DetectionGroup / Postprocessing / Transfer ===")
-        utils.tabulate(group_rows, title="Outputs & Postprocessing")
+            group_rows = benchmark_groups_and_postprocessing(env, repeats=args.repeats, large_scale=args.large_scale)
+            files.save(out_dir / "outputs_post_benchmark.json", group_rows, overwrite=True, verbose=False)
+            print("\n=== DetectionGroup / Postprocessing / Transfer ===")
+            utils.tabulate(group_rows, title="Outputs & Postprocessing")
 
-        mining_rows = benchmark_mining(env, repeats=args.repeats, large_scale=args.large_scale)
-        files.save(out_dir / "mining_benchmark.json", mining_rows, overwrite=True, verbose=False)
-        print("\n=== klygo.mining (CPU vs CUDA) ===")
-        utils.tabulate(mining_rows, title="Mining (CPU vs CUDA)")
+            mining_rows = benchmark_mining(env, repeats=args.repeats, large_scale=args.large_scale)
+            files.save(out_dir / "mining_benchmark.json", mining_rows, overwrite=True, verbose=False)
+            print("\n=== klygo.mining (CPU vs CUDA) ===")
+            utils.tabulate(mining_rows, title="Mining (CPU vs CUDA)")
 
         dmv_rows, dataset_tag = benchmark_datasets_media_visual(
             repeats=args.repeats,
