@@ -53,5 +53,20 @@
     "operation": "detections.random_jump_image_read (64/5000)",
     "median_ms": 22.0376,
     "status": "passed"
+  },
+  {
+    "operation": "mining.stats_quality (custom:/content/coco_val2017_yolo, 5000 imgs)",
+    "median_ms": 22344.9408,
+    "status": "passed"
+  },
+  {
+    "operation": "mining.find_duplicates (custom:/content/coco_val2017_yolo, 5000 imgs)",
+    "median_ms": 8611.8675,
+    "status": "passed"
+  },
+  {
+    "operation": "mining.cluster (custom:/content/coco_val2017_yolo, 5000 imgs, k=8)",
+    "median_ms": 23105.5223,
+    "status": "passed"
   }
 ]

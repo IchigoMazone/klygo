@@ -174,20 +174,19 @@ colab_files.download("/content/klygo/artifacts/benchmarks/colab_l4_full_results.
    - Stage the `.zip` into `<Artifact Directory Path>/browser_sandbox/uploads/<filename>.zip`.
    - Use the `browser` subagent to open `https://github.com/<owner>/<repo>/releases/new`, create tag `$TAG` targeting the tested branch/commit, mark **Set as a pre-release**, attach `<filename>.zip`, and click **Publish release** (pausing only if GitHub login is not yet signed in).
 
-### F. Auto-Push Domain-Split Benchmark Reports to GitHub (After Completion)
+### F. Auto-Push Benchmark Reports to GitHub (After Completion)
 
 Once the benchmark finishes and the `.zip` is uploaded to GitHub Releases:
-1. Split and store the lightweight Markdown reports (`REPORT.md`, `STATISTICS.md` if generated), generated PNG charts (`charts/*.png`), executed notebooks (`.ipynb`), and summary JSONs under `benchmarks/results/` by domain (never commit `.zip` files or `artifacts/`):
-   - `benchmarks/results/gpu_inference/<gpu>_<YYYY_MM_DD>/` (9-model 6-mode inference, scaling, `outputs_post`, 600s `stability.json`)
-   - `benchmarks/results/video/<gpu>_<YYYY_MM_DD>/` (when `--profile video` is run)
-   - `benchmarks/results/metrics/<gpu>_<YYYY_MM_DD>/` (`metrics_benchmark.json` CPU vs CUDA & mAP evaluations)
-   - `benchmarks/results/mining/<scope>_<YYYY_MM_DD>/` (`mining_benchmark.json`, disk `mining`, or `curation_accuracy_benchmark.py` results)
-   - `benchmarks/results/cpu_loaders/<dataset>_<YYYY_MM_DD>/` (`datasets.load`, `media.load`, strided/random-jump reads, `preprocessing.compose`)
+1. Store the lightweight Markdown reports (`REPORT.md`, `STATISTICS.md` if generated), generated PNG charts (`charts/*.png`), executed notebooks (`.ipynb`), and summary JSONs under `benchmarks/results/` (never commit `.zip` files or `artifacts/`):
+   - `benchmarks/results/performance/<gpu>_<dataset>_<YYYY_MM_DD>/` — Full **performance/speed** suite (`evaluate_release.py`: 9-model 6-mode FPS, scaling, `metrics` CPU vs CUDA latency, `outputs_post`, `mining` speed, `datasets.load` / `media.load` / random-jump, 600s `stability.json`)
+   - `benchmarks/results/video/<gpu>_<YYYY_MM_DD>/` — **Video streaming** (`--profile video`: H.264 decode, TTFF, P50/P95/P99)
+   - `benchmarks/results/metrics/<dataset>_<YYYY_MM_DD>/` — **Detection accuracy (`klygo.metrics`)**: `mAP@50`, `mAP@50-95`, Precision, Recall, F1
+   - `benchmarks/results/mining/<dataset>_<YYYY_MM_DD>/` — **Curation training accuracy (`curation_accuracy_benchmark.py`)**: mAP comparison across `klygo.mining` selection strategies
 2. Commit and push `benchmarks/results/` (using `git add -f` for `charts/*.png` if `.gitignore` ignores `.png`) to the active branch:
    ```bash
    git add benchmarks/results/
    git add -f benchmarks/results/**/charts/*.png
-   git commit -m "Update <GPU> domain-split benchmark reports (<YYYY-MM-DD>)"
+   git commit -m "Update <GPU> benchmark reports (<YYYY-MM-DD>)"
    git push origin HEAD
    ```
 
