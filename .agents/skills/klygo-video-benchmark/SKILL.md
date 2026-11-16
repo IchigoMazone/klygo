@@ -7,25 +7,22 @@ description: Run end-to-end H.264 video streaming benchmarks for Klygo (`benchma
 
 Use this skill when measuring **end-to-end video decoding + streaming inference** (separate from predecoded `images` packs in `klygo-release-benchmark`).
 
-## 1. Scope & Metrics
-- **Models**: `yolo`, `yolo11`, `yolo26`, `yolo-world` (the 4 models with native upstream video stream engines).
-- **Modes**: `raw-non-stream`, `raw-stream`, `native-non-stream`, `native-stream`, `managed-non-stream`, `managed-stream` (at `batch=1`; larger batches mark `native-*` as `N/A`).
-- **Metrics**: End-to-end FPS (including H.264 decode), Time-To-First-Frame (`first_frame_ms`), delivery latency (`P50`, `P95`, `P99` ms), numeric parity vs `raw-non-stream`, and VRAM/RSS/NVML telemetry.
+## 1. Scope & 3-Tier Video Matrix
+- **Models**: `yolo`, `yolo11`, `yolo26`, `yolo-world` across `float32` and `float16`.
+- **3 Real Video Tiers (Intel IoT DevKit CC-BY-4.0)**:
+  1. `people_120f_432p` (`people-detection.mp4`, `768×432`, `120 frames`, `repeats=7`)
+  2. `cars_240f_720p` (`car-detection.mp4`, `1280×720` HD, `240 frames`, `repeats=5`)
+  3. `aisle_480f_1080p` (`store-aisle-detection.mp4`, `1920×1080` Full HD, `480 frames`, `repeats=3`)
+- **Modes**: `raw-non-stream`, `raw-stream`, `native-non-stream`, `native-stream`, `managed-non-stream`, `managed-stream`.
+- **Metrics**: End-to-end FPS (including H.264 decode), Time-To-First-Frame (`ttff_ms`), delivery latency (`p50_ms`, `p95_ms`, `p99_ms`), and numeric parity (`parity_pass`).
 
 ## 2. Standard Command
 ```bash
-for MODEL in yolo yolo11 yolo26 yolo-world; do
-  PYTHONPATH=. python benchmarks/gpu_suite/run.py \
-    --model "$MODEL" \
-    --profile video \
-    --video-frames 120 \
-    --batch 1 \
-    --repeats 7 \
-    --device cuda:0 \
-    --output "artifacts/benchmarks/video/${MODEL}"
-done
+PYTHONPATH=. python benchmarks/video/run_video_benchmark.py \
+  --tier all \
+  --output artifacts/benchmarks/video \
+  --zip artifacts/benchmarks/colab_l4_video_results.zip
 ```
-*(Pass `--source-video /path/to/video.mp4` to benchmark a real external video instead of the generated 1280x720 H.264 bus clip.)*
 
 ## 3. Package `.zip`, Upload GitHub Release & Push Reports
 1. **Compress raw output** (never commit `.zip` or `artifacts/`):
