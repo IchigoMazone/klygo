@@ -11,7 +11,7 @@ Convert Pascal VOC XML or COCO instances JSON object-detection annotations and s
 
 ### Parameters
 
-- `source`: Root directory or archive containing the source dataset.
+- `source`: Root directory containing the source dataset.
 - `target`: Output directory or `.zip` archive for the flat YOLO dataset.
 - `src_format`: Source annotation format (`'voc'` or `'coco'`). Default is `'voc'`.
 - `dst_format`: Destination format (`'yolo'`). Default is `'yolo'`.
@@ -55,3 +55,7 @@ datasets.convert(
 ```
 
 See [`examples/datasets/convert.py`](../../../examples/datasets/convert.py) and [`test/datasets/test_convert.py`](../../../test/datasets/test_convert.py).
+
+### Validation and return value
+
+Returns `None`. Source and destination paths must not overlap, including resolved symlinks. Missing source images, invalid dimensions, non-finite or invalid boxes, and unmapped classes raise errors before publishing output. Boxes crossing image boundaries are clipped; fully outside boxes are rejected. Crowd/difficult filtering remains controlled by the explicit options above.

@@ -79,7 +79,7 @@ class ConvertAnnotationTest(unittest.TestCase):
             include_difficult=False,
             classes=["cat", "dog"],
         )
-        self.assertEqual(out_path, target)
+        self.assertIsNone(out_path)
 
         # Verify image byte preservation
         out_img1 = files.join(target, "images", "000001.jpg")
@@ -277,7 +277,7 @@ class ConvertAnnotationTest(unittest.TestCase):
 
         zip_target = files.join(self.root, "dataset.zip")
         out = datasets.convert(source=voc_dir, target=zip_target, src_format="voc")
-        self.assertEqual(out, zip_target)
+        self.assertIsNone(out)
         self.assertTrue(files.is_file(zip_target))
 
         # Check with datasets.info

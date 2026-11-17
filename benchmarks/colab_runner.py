@@ -135,6 +135,7 @@ def main() -> None:
     parser.add_argument("--workdir", default="/content")
     parser.add_argument("--device", default="0")
     args = parser.parse_args()
+    metrics_device = f"cuda:{args.device}" if args.device.isdecimal() else args.device
 
     work = files.path(args.workdir)
     res_dir = files.join(work, "results")
@@ -151,6 +152,7 @@ def main() -> None:
     print("\n================== [1/2] RUNNING MINING BENCHMARK ==================")
     run_cmd([
         sys.executable, "benchmarks/mining/run_mining_benchmark.py",
+        "--device", args.device,
         "--dataset", "coco128",
         "--budget", "40",
         "--epochs", "15",
@@ -160,6 +162,7 @@ def main() -> None:
     ])
     run_cmd([
         sys.executable, "benchmarks/mining/run_mining_benchmark.py",
+        "--device", args.device,
         "--dataset-dir", str(voc_dir),
         "--max-pool", "1000",
         "--max-val", "300",
@@ -171,6 +174,7 @@ def main() -> None:
     ])
     run_cmd([
         sys.executable, "benchmarks/mining/run_mining_benchmark.py",
+        "--device", args.device,
         "--dataset-dir", str(val_dir),
         "--max-pool", "1200",
         "--max-val", "300",
@@ -185,17 +189,20 @@ def main() -> None:
     print("\n================== [2/2] RUNNING METRICS BENCHMARK ==================")
     run_cmd([
         sys.executable, "benchmarks/metrics/run_metrics_benchmark.py",
+        "--device", metrics_device,
         "--dataset", "coco128",
         "--output", str(files.join(metrics_dir, "coco128")),
     ])
     run_cmd([
         sys.executable, "benchmarks/metrics/run_metrics_benchmark.py",
+        "--device", metrics_device,
         "--dataset-dir", str(voc_dir),
         "--max-images", "500",
         "--output", str(files.join(metrics_dir, "voc2007")),
     ])
     run_cmd([
         sys.executable, "benchmarks/metrics/run_metrics_benchmark.py",
+        "--device", metrics_device,
         "--dataset-dir", str(val_dir),
         "--max-images", "500",
         "--output", str(files.join(metrics_dir, "val2017")),

@@ -5,12 +5,11 @@ with lazy imports so environments without `keras` / `keras_hub` remain unaffecte
 """
 
 import importlib
-import os
 from contextlib import nullcontext
 from typing import Any, List, Dict, Optional
 
 __all__ = [
-    "ensure_backend", "get_active_backend", "current_device", "current_dtype", "inference_context",
+    "get_active_backend", "current_device", "current_dtype", "inference_context",
     "is_accelerator_available", "synchronize", "clear_cache",
 ]
 
@@ -24,18 +23,6 @@ def _torch_runtime():
             "The Keras Torch engine requires PyTorch. "
             "Install it using 'pip install \"klygo[torch]\"'."
         ) from exc
-
-
-def ensure_backend() -> str:
-    """Inspect and return the active Keras computation backend without auto-selection.
-
-    Users should configure ``os.environ["KERAS_BACKEND"]`` before importing Keras
-    or loading a Keras model. Note that changing ``KERAS_BACKEND`` after Keras
-    initialization does not switch the active engine.
-    """
-    if "KERAS_BACKEND" in os.environ:
-        return os.environ["KERAS_BACKEND"]
-    return get_active_backend()
 
 
 def _require_keras():

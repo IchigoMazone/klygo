@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from math import isfinite
 from os import PathLike
 from pathlib import Path
 from typing import Any, Sequence
 import warnings
 import xml.etree.ElementTree as ET
 
-from klygo import archive, config, files, validators
+from klygo import config, files, validators
 from ._structure import IMAGE_EXTENSIONS, copy_entry
 from ._workspace import dataset_workspace, write_output
 
@@ -122,17 +123,17 @@ def _voc_to_yolo(
             if w_val > 0 and h_val > 0:
                 img_width, img_height = w_val, h_val
 
-    if img_width <= 0 or img_height <= 0:
+    if not all(isfinite(v) and v > 0 for v in (img_width, img_height)):
         raise ValueError(f"invalid image dimensions ({img_width}x{img_height}) in {xml_file}")
 
     lines: list[str] = []
     for obj in root.findall("object"):
         name_elem = obj.find("name")
         if name_elem is None or not name_elem.text:
-            continue
+            raise ValueError(f"missing object class in {xml_file}")
         cname = name_elem.text.strip()
         if cname not in name_to_id:
-            continue
+            raise ValueError(f"unknown object class {cname!r} in {xml_file}")
         cid = name_to_id[cname]
 
         difficult_elem = obj.find("difficult")
@@ -143,16 +144,21 @@ def _voc_to_yolo(
 
         bnd = obj.find("bndbox")
         if bnd is None:
-            continue
+            raise ValueError(f"missing bounding box in {xml_file}")
         xmin_e, ymin_e = bnd.find("xmin"), bnd.find("ymin")
         xmax_e, ymax_e = bnd.find("xmax"), bnd.find("ymax")
-        if None in (xmin_e, ymin_e, xmax_e, ymax_e):
-            continue
+        if any(value is None or value.text is None for value in (xmin_e, ymin_e, xmax_e, ymax_e)):
+            raise ValueError(f"incomplete bounding box in {xml_file}")
 
         xmin = float(xmin_e.text)
         ymin = float(ymin_e.text)
         xmax = float(xmax_e.text)
         ymax = float(ymax_e.text)
+
+        if not all(isfinite(v) for v in (xmin, ymin, xmax, ymax)):
+            raise ValueError(f"non-finite bounding box in {xml_file}")
+        if xmax <= xmin or ymax <= ymin:
+            raise ValueError(f"invalid bounding box in {xml_file}")
 
         if voc_1_based:
             xmin -= 1.0
@@ -166,7 +172,7 @@ def _voc_to_yolo(
         box_w = xmax - xmin
         box_h = ymax - ymin
         if box_w <= 0 or box_h <= 0:
-            continue
+            raise ValueError(f"bounding box lies outside image in {xml_file}")
 
         xc = ((xmin + xmax) / 2.0) / img_width
         yc = ((ymin + ymax) / 2.0) / img_height
@@ -199,16 +205,21 @@ def _convert_voc(
         if files.extension(path).lower() in IMAGE_EXTENSIONS
     ]
     image_by_stem: dict[str, Path] = {}
+    seen_stems: set[str] = set()
     for img_path in all_images:
         stem = files.stem(img_path)
-        if stem in image_by_stem:
+        if stem.lower() in seen_stems:
             raise ValueError(f"duplicate image stem in source: {stem}")
+        seen_stems.add(stem.lower())
         image_by_stem[stem] = img_path
 
     if image_ids is not None:
         target_stems = [str(item).strip() for item in image_ids if str(item).strip()]
     else:
         target_stems = sorted(image_by_stem.keys())
+
+    if len(target_stems) != len(set(target_stems)):
+        raise ValueError("image_ids must not contain duplicate identifiers")
 
     # If classes not provided, discover all unique class names across XMLs
     if classes is None:
@@ -223,8 +234,8 @@ def _convert_voc(
                     ne = obj.find("name")
                     if ne is not None and ne.text:
                         discovered_names.add(ne.text.strip())
-            except Exception:
-                pass
+            except ET.ParseError as error:
+                raise ValueError(f"malformed XML in {xml_path}: {error}") from error
         sorted_names = sorted(discovered_names)
         classes = {idx: name for idx, name in enumerate(sorted_names)}
 
@@ -244,7 +255,7 @@ def _convert_voc(
             if files.exists(cand):
                 img_path = cand
             else:
-                continue
+                raise FileNotFoundError(f"source image not found: {stem}")
 
         # Default dimensions from image file if needed
         img_w, img_h = 0.0, 0.0
@@ -303,13 +314,22 @@ def _convert_coco(
             if cname in name_to_id:
                 cat_to_yolo[cat["id"]] = name_to_id[cname]
 
+    _parse_classes(classes)
+    if len({cat["id"] for cat in sorted_categories}) != len(sorted_categories):
+        raise ValueError("duplicate COCO category IDs")
+
     # Map image IDs to image metadata
     raw_images = coco_data.get("images", [])
     img_map: dict[int, dict[str, Any]] = {im["id"]: im for im in raw_images}
 
+    if len(img_map) != len(raw_images):
+        raise ValueError("duplicate COCO image IDs")
+
     # Group annotations by image_id
     ann_by_img: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for ann in coco_data.get("annotations", []):
+        if ann.get("image_id") not in img_map:
+            raise ValueError(f"unknown COCO image ID: {ann.get('image_id')}")
         if ann.get("iscrowd") and not include_crowd:
             continue
         ann_by_img[ann["image_id"]].append(ann)
@@ -335,10 +355,12 @@ def _convert_coco(
     for im_info in selected_images:
         fname = im_info.get("file_name", "")
         if not fname:
-            continue
+            raise ValueError("COCO image must define file_name")
         src_path = files.join(images_dir, fname)
-        if not files.exists(src_path):
-            continue
+        if not files.is_within(src_path, images_dir):
+            raise ValueError(f"image path escapes images directory: {fname}")
+        if not files.is_file(src_path):
+            raise FileNotFoundError(f"source image not found: {src_path}")
 
         stem = files.stem(fname)
         if stem.lower() in seen_stems:
@@ -347,20 +369,24 @@ def _convert_coco(
 
         w = float(im_info.get("width", 0))
         h = float(im_info.get("height", 0))
-        if w <= 0 or h <= 0:
+        if not all(isfinite(v) and v > 0 for v in (w, h)):
             raise ValueError(f"invalid dimensions ({w}x{h}) for image {fname}")
 
         lines: list[str] = []
         for ann in ann_by_img.get(im_info["id"], []):
             cat_id = ann.get("category_id")
             if cat_id not in cat_to_yolo:
-                continue
+                raise ValueError(f"unknown or unmapped COCO category: {cat_id}")
             cid = cat_to_yolo[cat_id]
 
             bbox = ann.get("bbox", [])
-            if len(bbox) != 4:
-                continue
+            if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                raise ValueError(f"COCO bbox must contain four numbers for {fname}")
             x, y, bw_px, bh_px = [float(val) for val in bbox]
+            if not all(isfinite(v) for v in (x, y, bw_px, bh_px)):
+                raise ValueError(f"non-finite bounding box for {fname}")
+            if bw_px <= 0 or bh_px <= 0:
+                raise ValueError(f"invalid bounding box for {fname}")
 
             xmin = max(0.0, min(x, w))
             ymin = max(0.0, min(y, h))
@@ -370,7 +396,7 @@ def _convert_coco(
             box_w = xmax - xmin
             box_h = ymax - ymin
             if box_w <= 0 or box_h <= 0:
-                continue
+                raise ValueError(f"bounding box lies outside image: {fname}")
 
             xc = ((xmin + xmax) / 2.0) / w
             yc = ((ymin + ymax) / 2.0) / h
@@ -414,13 +440,13 @@ def convert(
     overwrite: bool = False,
     verbose: bool = False,
     **kwargs,
-) -> Path:
+) -> None:
     """Convert Pascal VOC XML or COCO instances JSON to a flat YOLO dataset.
 
     Parameters
     ----------
     source : str or os.PathLike[str], optional
-        Root directory or archive containing the source dataset.
+        Root directory containing the source dataset.
     target : str or os.PathLike[str]
         Destination directory or ``.zip`` archive for the flat YOLO dataset.
     src_format : {'voc', 'coco'}, default='voc'
@@ -451,8 +477,8 @@ def convert(
 
     Returns
     -------
-    pathlib.Path
-        Path to the published flat dataset directory or ``.zip`` archive.
+    None
+        Writes the flat dataset directory or ZIP archive without returning a path.
 
     Raises
     ------
@@ -476,6 +502,8 @@ def convert(
             "(VOC/COCO -> YOLO). For dataset layout flattening with directory trees, "
             "use datasets.flatten()."
         )
+    if kwargs:
+        raise TypeError(f"unexpected conversion options: {sorted(kwargs)}")
     if not target:
         raise ValueError("target destination must be specified")
 
@@ -487,9 +515,22 @@ def convert(
         raise ValueError(f"unsupported destination format: {dst_format!r}; supported: {sorted(_SUPPORTED_DST)}")
 
     validators.validate_type(overwrite, bool, "overwrite")
+    for name, value in (("include_difficult", include_difficult), ("include_crowd", include_crowd),
+                        ("voc_1_based", voc_1_based), ("verbose", verbose)):
+        validators.validate_type(value, bool, name)
     parsed_classes = _parse_classes(classes)
 
     images_dir, ann_path = _resolve_paths(source, images, annotations, src_fmt)
+    destination = files.resolve(target)
+    protected = [images_dir, ann_path]
+    if source is not None:
+        protected.append(files.path(source))
+    for input_path in protected:
+        resolved = files.resolve(input_path)
+        if files.is_within(resolved, destination) or files.is_within(destination, resolved):
+            raise ValueError("source and target paths must not overlap")
+    if files.exists(destination) and not overwrite:
+        raise FileExistsError(f"target already exists: {destination}")
 
     with dataset_workspace("convert") as workspace:
         if src_fmt == "voc":
@@ -520,9 +561,7 @@ def convert(
             "names": final_classes,
         }
         config.save(files.join(workspace, "data.yaml"), data_yaml, overwrite=True, verbose=False)
-        published = write_output(workspace, target, overwrite=overwrite, verbose=verbose)
-
-    return published
+        write_output(workspace, destination, overwrite=overwrite, verbose=verbose)
 
 
 __all__ = ["convert"]
