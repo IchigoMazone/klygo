@@ -1,4 +1,4 @@
-"""Split one dataset into class-based or ratio-based archives."""
+"""Split one dataset into class-based or ratio-based directories or ZIP archives."""
 
 from __future__ import annotations
 
@@ -21,11 +21,11 @@ from ._structure import (
 from ._workspace import dataset_workspace, open_dataset, write_output
 
 
-def _archive_name(group: list[str], index: int) -> str:
+def _default_name(group: list[str], index: int) -> str:
     if len(group) != 1:
-        return f"split_group_{index}.zip"
+        return f"split_group_{index}"
     safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", group[0]).strip("._") or f"class_{index}"
-    return f"split_{safe_name}.zip"
+    return f"split_{safe_name}"
 
 
 def _write_split_metadata(workspace: Path, names: list[str] | dict[int, str]) -> None:
@@ -54,10 +54,10 @@ def split(
     shuffle: bool = True,
     seed: int = 42,
 ) -> None:
-    """Split a YOLO dataset into multiple ZIP archives.
+    """Split a YOLO dataset into independent directories or ZIP archives.
 
-    Exactly one strategy is selected: ``by_class=True`` creates one archive
-    per class, ``class_groups`` creates one archive per named group, and
+    Exactly one strategy is selected: ``by_class=True`` creates one dataset
+    per class, ``class_groups`` creates one dataset per named group, and
     ``ratios`` creates parts using optional shuffling and seed.
 
     Parameters
@@ -65,17 +65,21 @@ def split(
     source : str or os.PathLike[str]
         Dataset directory or supported archive.
     output_dir : str or os.PathLike[str]
-        Directory receiving split archives.
+        Output directory or a path pattern with one '*' in its final name.
+        A plain directory uses default names (split_part_0, split_<class>, or
+        split_group_0). A '*' is replaced by the zero-based part index;
+        parts/* creates parts/0, and parts/batch_*.zip creates ZIP archives.
+        Without a .zip suffix, generated outputs are directories.
     format : str, default='yolo'
         Dataset format to split. Currently only ``'yolo'`` is supported.
     by_class : bool, default=False
-        Create one archive for every class.
+        Create one dataset for every class.
     class_groups : list[list[str]] or None, default=None
         Explicit class-name groups.
     ratios : tuple of float or None, default=None
         Two or more ratios whose sum is one.
     overwrite : bool, default=False
-        Replace existing output archives.
+        Replace existing output datasets.
     verbose : bool, default=True
         Display archive progress.
     shuffle : bool, default=True
@@ -86,13 +90,7 @@ def split(
     Returns
     -------
     None
-        Replace existing split archives.
-    verbose : bool, default=True
-        Display archive progress.
-
-    Returns
-    -------
-    None
+        Writes datasets to the selected output destinations.
 
     Raises
     ------
@@ -103,7 +101,7 @@ def split(
     FileNotFoundError
         If the source dataset or its images directory is missing.
     FileExistsError
-        If a split archive exists and ``overwrite`` is false.
+        If an output dataset exists and ``overwrite`` is false.
 
     Examples
     --------
@@ -135,19 +133,22 @@ def split(
             if unknown:
                 raise ValueError(f"Unknown classes in class_groups: {tuple(unknown)}")
 
-            archive_names: list[str] = []
+            output_names: list[str] = []
             used_names: set[str] = set()
             for index, group in enumerate(groups):
-                name = _archive_name(group, index)
+                name = (
+                    params.output_pattern.replace("*", str(index))
+                    if params.output_pattern else _default_name(group, index)
+                )
                 if name.casefold() in used_names:
-                    name = f"{files.stem(name)}_{index}.zip"
-                archive_names.append(name)
+                    name = f"{name}_{index}"
+                output_names.append(name)
                 used_names.add(name.casefold())
 
-            for index, (group, archive_name) in enumerate(zip(groups, archive_names)):
-                destination = files.join(params.output_dir, archive_name)
+            for index, (group, output_name) in enumerate(zip(groups, output_names)):
+                destination = files.join(params.output_dir, output_name)
                 if files.exists(destination) and not params.overwrite:
-                    raise FileExistsError(f"split file already exists: {destination}")
+                    raise FileExistsError(f"split output already exists: {destination}")
                 selected_ids = {old_id for old_id, name in class_map.items() if name in group}
                 id_map = {old_id: group.index(class_map[old_id]) for old_id in selected_ids}
 
@@ -187,9 +188,13 @@ def split(
                 end = len(shuffled) if index == len(params.ratios) - 1 else cursor + int(len(shuffled) * ratio)
                 selected = shuffled[cursor:end]
                 cursor = end
-                destination = files.join(params.output_dir, f"split_part_{index}.zip")
+                output_name = (
+                    params.output_pattern.replace("*", str(index))
+                    if params.output_pattern else f"split_part_{index}"
+                )
+                destination = files.join(params.output_dir, output_name)
                 if files.exists(destination) and not params.overwrite:
-                    raise FileExistsError(f"split file already exists: {destination}")
+                    raise FileExistsError(f"split output already exists: {destination}")
 
                 with dataset_workspace("split-ratio") as workspace:
                     for image_path, label_path, relative_image, _ in selected:

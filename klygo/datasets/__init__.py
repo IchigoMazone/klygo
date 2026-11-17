@@ -17,7 +17,7 @@ Public API (10 functions):
          6. flatten(...)              Flatten mapped custom sources into a flat YOLO dataset.
          7. convert(...)              Convert Pascal VOC or COCO annotations to a flat YOLO dataset.
          8. merge(...)                Combine datasets and reconcile class IDs.
-         9. split(...)                Create class-based or ratio-based ZIP archives.
+         9. split(...)                Create class-based or ratio-based directories or ZIP archives.
 
     Relabeling:
          10. remap_classes(...)       Rename classes or remap numeric IDs.

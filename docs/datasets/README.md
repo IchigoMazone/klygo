@@ -58,9 +58,9 @@ Local Tutorial Notebooks (`tutorials/datasets/`, 1-to-1 with `klygo/datasets/` s
 | **Partition directly into a portable `.zip` archive** | [`partition()`](api/partition.md) | `datasets.partition("raw", "split_ds.zip", (0.8, 0.2))` |
 | **Rebalance split ratios of an already partitioned dataset** | [`repartition()`](api/repartition.md) | `datasets.repartition("old_ds", "new_ds.zip", (0.7, 0.2, 0.1))` |
 | **Combine multiple datasets and unify class IDs** | [`merge()`](api/merge.md) | `datasets.merge(["ds1", "ds2.zip"], "merged.zip")` |
-| **Export one `.zip` archive per class** | [`split()`](api/split.md) | `datasets.split("dataset.zip", "by_class", by_class=True)` |
-| **Export `.zip` archives for custom class groups** | [`split()`](api/split.md) | `datasets.split("ds", "groups", class_groups=[["car", "bus"]])` |
-| **Split a dataset into multiple random ratio `.zip` parts** | [`split()`](api/split.md) | `datasets.split("ds", "shards", ratios=(0.5, 0.5))` |
+| **Create one dataset directory per class** | [`split()`](api/split.md) | `datasets.split("dataset.zip", "by_class", by_class=True)` |
+| **Create directories for custom class groups** | [`split()`](api/split.md) | `datasets.split("ds", "groups", class_groups=[["car", "bus"]])` |
+| **Split into ratio ZIP parts with a naming pattern** | [`split()`](api/split.md) | `datasets.split("ds", "shards/part_*.zip", ratios=(0.5, 0.5))` |
 | **Rename class labels or reassign numeric class IDs** | [`remap_classes()`](api/remap_classes.md) | `datasets.remap_classes("ds", "out", {"auto": "car", 1: 3})` |
 
 </details>
@@ -78,8 +78,8 @@ Local Tutorial Notebooks (`tutorials/datasets/`, 1-to-1 with `klygo/datasets/` s
 | [`partition(source, target, ratios, ...)`](api/partition.md) | `partition.py` | `Path` | Create deterministic `train`, `val`, and `test` partitions. | [`partition.py`](../../examples/datasets/partition.py) |
 | [`repartition(source, target, ratios, ...)`](api/repartition.md) | `repartition.py` | `Path` | Flatten existing splits and rebuild with new deterministic ratios. | [`repartition.py`](../../examples/datasets/repartition.py) |
 | [`unpartition(source, target, ...)`](api/unpartition.md) | `unpartition.py` | `Path` | Flatten `train`/`val`/`test` split folders into a single dataset root. | [`unpartition.py`](../../examples/datasets/unpartition.py) |
-| [`merge(sources, output_path, ...)`](api/merge.md) | `merge.py` | `Path` | Combine two or more datasets into a single `.zip` with unified class IDs. | [`merge.py`](../../examples/datasets/merge.py) |
-| [`split(source, output_dir, ...)`](api/split.md) | `split.py` | `list[Path]` | Split a dataset into multiple `.zip` archives by class, group, or ratio. | [`split.py`](../../examples/datasets/split.py) |
+| [`merge(sources, output_path, ...)`](api/merge.md) | `merge.py` | `None` | Combine datasets into a directory or ZIP with unified class IDs. | [`merge.py`](../../examples/datasets/merge.py) |
+| [`split(source, output_dir, ...)`](api/split.md) | `split.py` | `None` | Split into directories or ZIP archives with optional index patterns. | [`split.py`](../../examples/datasets/split.py) |
 | [`remap_classes(source, target, class_map, ...)`](api/remap_classes.md) | `remap_classes.py` | `Path` | Rename classes or remap numeric class IDs across `data.yaml` and labels. | [`remap_classes.py`](../../examples/datasets/remap_classes.py) |
 
 Multiple label sets loaded by `datasets.load` use the same `DetectionGroup`

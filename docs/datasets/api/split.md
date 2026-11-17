@@ -2,79 +2,86 @@
 
 ```python
 datasets.split(
-    source: str | os.PathLike[str],
-    output_dir: str | os.PathLike[str],
-    format: str = "yolo",
-    by_class: bool = False,
-    class_groups: list[list[str]] | None = None,
-    ratios: tuple[float, ...] | None = None,
-    overwrite: bool = False,
-    verbose: bool = True,
-) -> list[pathlib.Path]
+    source, output_dir, format="yolo", by_class=False,
+    class_groups=None, ratios=None, overwrite=False, verbose=True,
+    shuffle=True, seed=42,
+) -> None
 ```
 
-Split a YOLO dataset into multiple standalone `.zip` archives by individual class, explicit class groups, or deterministic image ratios.
+Split a YOLO dataset into independent dataset directories or ZIP archives.
+Exactly one strategy must be selected: `by_class`, `class_groups`, or `ratios`.
 
-## Contract
+## Output destinations
 
-Selects exactly one splitting strategy:
-1. `by_class=True`: creates one `.zip` archive per class (`split_<class>.zip`) containing only images and annotations matching that class, remapping the kept class ID to `0`.
-2. `class_groups=[...]`: creates one `.zip` archive per named group (`split_<class>.zip` for single-class groups or `split_group_<i>.zip` for multi-class groups), filtering annotations to the group and remapping class IDs to `0..len(group)-1`.
-3. `ratios=(...)`: shuffles all image/label pairs deterministically (seed `42`) and writes `split_part_<i>.zip` archives preserving the original class map (including sparse IDs).
+`output_dir` accepts a directory or a naming pattern. The parameter name is
+retained for existing keyword callers. A plain directory produces directories
+with default names. One `*` in the final path component is replaced by the
+zero-based split index; it is an output placeholder, not an input glob.
 
-## Parameters
+| Destination | Created datasets for ratio splitting |
+| --- | --- |
+| `parts` | `parts/split_part_0/`, `parts/split_part_1/` |
+| `parts/*` | `parts/0/`, `parts/1/` |
+| `parts/batch_*` | `parts/batch_0/`, `parts/batch_1/` |
+| `parts/*_data` | `parts/0_data/`, `parts/1_data/` |
+| `parts/*.zip` | `parts/0.zip`, `parts/1.zip` |
+| `parts/split_part_*.zip` | `parts/split_part_0.zip`, `parts/split_part_1.zip` |
 
-- `source`: `str | os.PathLike[str]` — input dataset directory or supported archive.
-- `output_dir`: `str | os.PathLike[str]` — directory where output `.zip` archives will be created.
-- `format`: `str`, default `"yolo"` — dataset format to split. Currently only `"yolo"` is supported.
-- `by_class`: `bool`, default `False` — create one archive per class defined in `data.yaml`.
-- `class_groups`: `list[list[str]] | None`, default `None` — explicit groups of class names for group-based archives.
-- `ratios`: `tuple[float, ...] | None`, default `None` — two or more positive floats summing to `1.0` for ratio-based archives.
-- `overwrite`: `bool`, default `False` — replace existing split archives in `output_dir`.
-- `verbose`: `bool`, default `True` — display archive creation progress.
+A generated name ending in `.zip` (case-insensitive) produces a ZIP; other names
+produce directories. `**`, multiple placeholders, and placeholders in parent
+directories are rejected. A name without `*` is always the receiving directory,
+not a custom per-part name.
 
-## Returns
+## Strategies and parameters
 
-`list[pathlib.Path]` of created `.zip` archives in deterministic order. (Class/group archives with zero matching images are omitted.)
+- `source`: YOLO dataset directory or supported archive.
+- `output_dir`: destination directory or output naming pattern described above.
+- `format`: currently only `"yolo"`.
+- `by_class=True`: retain only matching images and annotations for each class;
+  class IDs are remapped to zero. Default names are `split_<class>`.
+- `class_groups=[...]`: filter to each class group and remap its class IDs.
+  Single-class groups use `split_<class>`; multi-class groups use `split_group_<i>`.
+  Sanitized default-name collisions are disambiguated. Explicit patterns use
+  indices for both class strategies. Groups without matching images are omitted;
+  their indices are not reassigned.
+- `ratios=(...)`: two or more finite ratios between zero and one summing to one.
+  Original class names and IDs are preserved. Default names are `split_part_<i>`.
+- `shuffle=True`, `seed=42`: control reproducible ratio splitting.
+- `overwrite=False`: reject existing destinations; `True` replaces each output.
+- `verbose=True`: display archive progress.
 
-## Errors and edge cases
+Each output contains `images`, `labels` when annotations exist, and `data.yaml`.
+The function writes outputs and returns `None`; do not assign its result as a path.
+The source dataset is unchanged. To create train/val/test partitions within one
+dataset, use [`partition`](partition.md).
 
-- Raises `TypeError` if `format` is not a `str`.
-- Raises `ValueError` if `format` is unsupported, if zero or more than one split strategy (`by_class`, `class_groups`, `ratios`) is provided, if `class_groups` contains empty groups or unknown class names, or if `ratios` has fewer than 2 items or does not sum to `1.0`.
-- Raises `FileNotFoundError` if `source` or its `images` directory is missing.
-- Raises `FileExistsError` if a destination `.zip` archive already exists and `overwrite=False`.
+## Errors
 
-## AI usage guidance
-
-Use `datasets.split()` when you need separate, self-contained `.zip` dataset archives (e.g., per-class sub-datasets or sharded archives). To create `train`/`val`/`test` folders inside a single dataset, use [`datasets.partition()`](partition.md) instead.
-
-## Example
-
-See [`split.py`](../../../examples/datasets/split.py) for an executable example.
-
-## Tests
-
-See [`test_split.py`](../../../test/datasets/test_split.py) and [`test_api.py`](../../../test/datasets/test_api.py) for the executable behavioral contract.
+`TypeError` for unsupported argument types. `ValueError` for invalid strategies,
+ratios, class groups, format, or output placeholders. `FileNotFoundError` for
+missing sources; `FileExistsError` for existing destinations without overwrite.
 
 ## Complete executable example
 
 ```python
-"""Executable example for klygo.datasets.split."""
-
 from tempfile import TemporaryDirectory
 from PIL import Image
-from klygo import archive, config, datasets, files, media
+from klygo import datasets, files, media
 
 with TemporaryDirectory() as directory:
     root = files.path(directory)
     source = root / "source"
-    for idx in range(4):
-        media.save(source / "images" / f"img_{idx}.jpg", Image.new("RGB", (32, 24), "white"), verbose=False)
-        files.save(source / "labels" / f"img_{idx}.txt", [f"{idx % 2} 0.5 0.5 0.5 0.5"], overwrite=True, verbose=False)
-    config.save(source / "data.yaml", {"train": "images", "nc": 2, "names": ["apple", "banana"]}, overwrite=True, verbose=False)
+    for index in range(4):
+        media.save(source / "images" / f"img_{index}.jpg", Image.new("RGB", (32, 24)), verbose=False)
+        files.save(source / "labels" / f"img_{index}.txt", [f"{index % 2} 0.5 0.5 0.5 0.5"], verbose=False)
+    files.save(source / "data.yaml", {"names": ["helmet", "head"]}, verbose=False)
 
-    parts = datasets.split(source, root / "parts", ratios=(0.5, 0.5), verbose=False)
-    assert len(parts) == 2
-    assert all(archive.is_archive(path) for path in parts)
-    assert sum(datasets.info(path)["total_images"] for path in parts) == 4
+    datasets.split(source, root / "parts", ratios=(0.5, 0.5), verbose=False)
+    assert datasets.info(root / "parts" / "split_part_0")["total_images"] == 2
+    datasets.split(source, root / "archives" / "batch_*.zip", ratios=(0.5, 0.5), verbose=False)
+    assert datasets.info(root / "archives" / "batch_1.zip")["total_images"] == 2
 ```
+
+[Example](../../../examples/datasets/split.py) ·
+[Tests](../../../test/datasets/test_output_destinations.py) ·
+[Additional tests](../../../test/datasets/test_api.py) · [Module](../README.md)

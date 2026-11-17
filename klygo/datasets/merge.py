@@ -25,7 +25,7 @@ def merge(
     overwrite: bool = False,
     verbose: bool = True,
 ) -> None:
-    """Merge multiple YOLO datasets into one ZIP archive.
+    """Merge multiple YOLO datasets into one directory or ZIP archive.
 
     Class names are combined in first-seen order. Label IDs from each source
     are rewritten to the corresponding global IDs, and source prefixes prevent
@@ -36,11 +36,11 @@ def merge(
     sources : list[str or os.PathLike[str]]
         Two or more dataset directories or supported archives.
     output_path : str or os.PathLike[str]
-        Destination ``.zip`` archive.
+        Destination directory, or a ZIP archive when the path ends in .zip.
     format : str, default='yolo'
         Dataset format to merge. Currently only ``'yolo'`` is supported.
     overwrite : bool, default=False
-        Replace an existing archive.
+        Replace an existing output dataset.
     verbose : bool, default=True
         Display archive progress.
 
@@ -53,7 +53,7 @@ def merge(
     TypeError
         If ``format`` is not a string.
     ValueError
-        If ``format`` is not supported, the output is not ZIP, or a source has invalid metadata.
+        If the format or metadata is invalid, or source and output paths overlap.
     FileNotFoundError
         If a source does not exist.
     FileExistsError

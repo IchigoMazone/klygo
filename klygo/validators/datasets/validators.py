@@ -96,9 +96,8 @@ class Merge:
         for src in sources:
             if not files.exists(src):
                 raise FileNotFoundError(f"source does not exist: {src}")
-
-        if not str(output_path).lower().endswith(".zip"):
-            raise ValueError("output_path must end with '.zip'")
+            if files.is_within(output_path, src) or files.is_within(src, output_path):
+                raise ValueError("source and output dataset paths must not overlap")
 
         if files.exists(output_path) and not overwrite:
             raise FileExistsError(f"output_path already exists: {output_path}")
@@ -152,7 +151,14 @@ class Split:
                 raise ValueError("The sum of ratios must equal 1.0.")
 
         self.source = files.path(source)
-        self.output_dir = files.path(output_dir)
+        destination = files.path(output_dir)
+        if "*" in str(files.parent(destination)):
+            raise ValueError("the output index placeholder must be in the final path component")
+        name = files.name(destination)
+        if name.count("*") > 1:
+            raise ValueError("output_dir must contain at most one '*' index placeholder")
+        self.output_pattern = name if "*" in name else None
+        self.output_dir = files.parent(destination) if self.output_pattern else destination
         self.by_class = by_class
         self.class_groups = class_groups
         self.ratios = ratios

@@ -136,11 +136,11 @@ class TestDatasetsAPI(unittest.TestCase):
                 ratios=(0.5, 0.5),
                 verbose=False,
             ))
-            class_parts = files.find(root / "class-parts")
-            ratio_parts = files.find(root / "ratio-parts")
+            class_parts = files.list_entries(root / "class-parts")
+            ratio_parts = files.list_entries(root / "ratio-parts")
             self.assertEqual(len(class_parts), 2)
             self.assertEqual(len(ratio_parts), 2)
-            self.assertTrue(all(archive.is_archive(path) for path in class_parts + ratio_parts))
+            self.assertTrue(all(files.is_dir(path) for path in class_parts + ratio_parts))
 
     def test_flattening_keeps_distinct_nested_image_paths(self):
         with TemporaryDirectory() as directory:
@@ -156,8 +156,8 @@ class TestDatasetsAPI(unittest.TestCase):
             self.assertEqual(len(files.find(flat / "images", "*.jpg", recursive=True)), 6)
 
             datasets.split(source, root / "parts", by_class=True, verbose=False)
-            parts = files.find(root / "parts")
-            apple_part = next(path for path in parts if path.name == "split_apple.zip")
+            parts = files.list_entries(root / "parts")
+            apple_part = next(path for path in parts if path.name == "split_apple")
             self.assertEqual(datasets.info(apple_part)["total_images"], 4)
 
     def test_archive_metadata_is_portable_and_remap_rejects_id_collisions(self):
@@ -169,13 +169,13 @@ class TestDatasetsAPI(unittest.TestCase):
             datasets.unpartition(source, root / "flat.zip", verbose=False)
             datasets.merge([source, other], root / "merged.zip", verbose=False)
             datasets.remap_classes(source, root / "remapped.zip", {"apple": "fruit"}, verbose=False)
-            datasets.split(source, root / "parts", ratios=(0.5, 0.5), verbose=False)
+            datasets.split(source, root / "parts" / "split_part_*.zip", ratios=(0.5, 0.5), verbose=False)
             outputs = [
                 root / "partitioned.zip",
                 root / "flat.zip",
                 root / "merged.zip",
                 root / "remapped.zip",
-                *files.find(root / "parts"),
+                *files.list_entries(root / "parts"),
             ]
             for output in outputs:
                 with self.subTest(output=output), TemporaryDirectory() as extracted:
@@ -198,7 +198,7 @@ class TestDatasetsAPI(unittest.TestCase):
             )
             self.assertTrue(partitioned.exists())
             datasets.split(TextPath(source), TextPath(root / "parts"), ratios=(0.5, 0.5), verbose=False)
-            outputs = files.find(root / "parts")
+            outputs = files.list_entries(root / "parts")
             self.assertEqual(len(outputs), 2)
             for ratios in ((-0.2, 1.2), (float("nan"), 0.5)):
                 with self.subTest(ratios=ratios), self.assertRaises(ValueError):
@@ -225,12 +225,12 @@ class TestDatasetsAPI(unittest.TestCase):
             self.assertEqual(config.load(flat / "data.yaml", verbose=False).names, {0: "apple", 3: "banana"})
 
             datasets.split(source, root / "ratio", ratios=(0.5, 0.5), verbose=False)
-            ratio_parts = files.find(root / "ratio")
+            ratio_parts = files.list_entries(root / "ratio")
             self.assertEqual(datasets.info(ratio_parts[0])["nc"], 4)
             datasets.split(source, root / "class", by_class=True, verbose=False)
             banana_part = next(
-                path for path in files.find(root / "class")
-                if path.name == "split_banana.zip"
+                path for path in files.list_entries(root / "class")
+                if path.name == "split_banana"
             )
             self.assertEqual(datasets.info(banana_part)["total_images"], 2)
 
@@ -265,7 +265,7 @@ class TestDatasetsAPI(unittest.TestCase):
             self.assertTrue(flat.exists())
 
             datasets.split(source, root / "splits", format="yolo", ratios=(0.5, 0.5), verbose=False)
-            splits = files.find(root / "splits")
+            splits = files.list_entries(root / "splits")
             self.assertEqual(len(splits), 2)
 
             remapped = root / "remapped"
