@@ -27,22 +27,15 @@ def _torch_runtime():
 
 
 def ensure_backend() -> str:
-    """Configure `KERAS_BACKEND` automatically if not already set (priority: torch -> jax -> tensorflow)."""
-    if "KERAS_BACKEND" not in os.environ:
-        try:
-            import torch
-            os.environ["KERAS_BACKEND"] = "torch"
-        except ImportError:
-            try:
-                import jax
-                os.environ["KERAS_BACKEND"] = "jax"
-            except ImportError:
-                try:
-                    import tensorflow
-                    os.environ["KERAS_BACKEND"] = "tensorflow"
-                except ImportError:
-                    os.environ["KERAS_BACKEND"] = "torch"
-    return os.environ.get("KERAS_BACKEND", "torch")
+    """Inspect and return the active Keras computation backend without auto-selection.
+
+    Users should configure ``os.environ["KERAS_BACKEND"]`` before importing Keras
+    or loading a Keras model. Note that changing ``KERAS_BACKEND`` after Keras
+    initialization does not switch the active engine.
+    """
+    if "KERAS_BACKEND" in os.environ:
+        return os.environ["KERAS_BACKEND"]
+    return get_active_backend()
 
 
 def _require_keras():
@@ -58,7 +51,6 @@ def _require_keras():
 
 def get_active_backend() -> str:
     """Return the active Keras computation backend (`torch`, `jax`, or `tensorflow`)."""
-    ensure_backend()
     keras = _require_keras()
     return keras.backend.backend()
 

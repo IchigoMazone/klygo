@@ -7,7 +7,7 @@ from klygo import outputs
 from klygo.models import utils
 from klygo.models.detection.base import Detector
 from klygo.models._frameworks import keras as execution
-from klygo.models.runtime.keras import ensure_backend, _require_keras
+from klygo.models.runtime.keras import _require_keras
 
 __all__ = ["DFineDetect"]
 
@@ -68,7 +68,6 @@ class DFineDetect(Detector):
     """
     def __init__(self, metadata, **kwargs):
         super().__init__(metadata=metadata, backend="Keras", **kwargs)
-        ensure_backend()
         self._keras = _require_keras()
         try:
             import keras_hub

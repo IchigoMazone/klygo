@@ -51,12 +51,14 @@ def split(
     ratios: tuple[float, ...] | None = None,
     overwrite: bool = False,
     verbose: bool = True,
+    shuffle: bool = True,
+    seed: int = 42,
 ) -> None:
     """Split a YOLO dataset into multiple ZIP archives.
 
     Exactly one strategy is selected: ``by_class=True`` creates one archive
     per class, ``class_groups`` creates one archive per named group, and
-    ``ratios`` creates randomized parts using a deterministic seed.
+    ``ratios`` creates parts using optional shuffling and seed.
 
     Parameters
     ----------
@@ -73,6 +75,17 @@ def split(
     ratios : tuple of float or None, default=None
         Two or more ratios whose sum is one.
     overwrite : bool, default=False
+        Replace existing output archives.
+    verbose : bool, default=True
+        Display archive progress.
+    shuffle : bool, default=True
+        Whether to shuffle samples before ratio splitting.
+    seed : int, default=42
+        Random seed used when shuffling.
+
+    Returns
+    -------
+    None
         Replace existing split archives.
     verbose : bool, default=True
         Display archive progress.
@@ -98,7 +111,17 @@ def split(
     >>> datasets.split("dataset", "parts", ratios=(0.8, 0.2))
     """
     validate_dataset_format(format)
-    params = Split(source, output_dir, by_class, class_groups, ratios, overwrite, verbose)
+    params = Split(
+        source,
+        output_dir,
+        by_class,
+        class_groups,
+        ratios,
+        overwrite,
+        verbose,
+        shuffle=shuffle,
+        seed=seed,
+    )
     files.mkdir(params.output_dir)
 
     with open_dataset(params.source, verbose=False) as root:
@@ -157,7 +180,8 @@ def split(
                         )
         else:
             shuffled = list(pairs)
-            random.Random(42).shuffle(shuffled)
+            if params.shuffle:
+                random.Random(params.seed).shuffle(shuffled)
             cursor = 0
             for index, ratio in enumerate(params.ratios or ()):
                 end = len(shuffled) if index == len(params.ratios) - 1 else cursor + int(len(shuffled) * ratio)

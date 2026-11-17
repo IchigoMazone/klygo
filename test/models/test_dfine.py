@@ -44,7 +44,7 @@ class TestDFine(unittest.TestCase):
             device=lambda device:nullcontext(), ops=SimpleNamespace(convert_to_tensor=lambda x,dtype:np.asarray(x,dtype=dtype)),
             utils=SimpleNamespace(unpack_x_y_sample_weight=lambda x:(x,None,None)))
         hub=SimpleNamespace(models=SimpleNamespace(DFineObjectDetector=SimpleNamespace(from_preset=Mock(return_value=native))))
-        with patch.dict(sys.modules,{"keras_hub":hub}), patch("klygo.models.detection.dfine.ensure_backend"), patch("klygo.models.detection.dfine._require_keras",return_value=keras):
+        with patch.dict(sys.modules,{"keras_hub":hub}), patch("klygo.models.detection.dfine._require_keras",return_value=keras):
             result=models.load("dfine_nano_coco",device="cpu")
         return result,native
 

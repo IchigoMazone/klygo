@@ -7,6 +7,7 @@ from copy import deepcopy
 from hashlib import sha1
 import math
 from numbers import Integral
+import random
 import sys
 import uuid
 import weakref
@@ -1858,12 +1859,12 @@ class _PackedIdentities(Sequence[Identity]):
 
     def __getitem__(self, index: int | slice) -> Identity | list[Identity]:
         if isinstance(index, slice):
-            return [self.store.identity(position) for position in range(*index.indices(len(self)))]
-        return self.store.identity(index)
+            return [self.store.identity(self.store.logical_to_physical(position)) for position in range(*index.indices(len(self)))]
+        return self.store.identity(self.store.logical_to_physical(index))
 
     def __iter__(self) -> Iterator[Identity]:
         for position in range(len(self)):
-            yield self.store.identity(position)
+            yield self.store.identity(self.store.logical_to_physical(position))
 
 
 class _PackedDetectionStore:
@@ -1946,9 +1947,19 @@ class _PackedDetectionStore:
         self.overlay_labels: dict[int, set[str]] = {}
         self.cache: weakref.WeakValueDictionary[int, Detection] = weakref.WeakValueDictionary()
         self.overrides: dict[int, Detection] = {}
+        self.permutation: Optional[list[int]] = None
 
     def __len__(self) -> int:
         return len(self.frame_indices)
+
+    def logical_to_physical(self, position: int) -> int:
+        length = len(self)
+        idx = position + length if position < 0 else position
+        if idx < 0 or idx >= length:
+            raise IndexError("list index out of range")
+        if self.permutation is not None:
+            return self.permutation[idx]
+        return idx
 
     def identity(self, position: int) -> Identity:
         source_id = self.common_source_id if self.source_ids is None else self.source_ids[position]
@@ -2093,12 +2104,13 @@ class _PackedFrames:
 
     def __iter__(self) -> Iterator[Detection]:
         for index in range(len(self)):
-            yield self.owner._packed_store.frame(self.owner, index)
+            yield self[index]
 
     def __getitem__(self, index: int | slice) -> Detection | list[Detection]:
         if isinstance(index, slice):
-            return [self.owner._packed_store.frame(self.owner, i) for i in range(*index.indices(len(self)))]
-        return self.owner._packed_store.frame(self.owner, index)
+            return [self[i] for i in range(*index.indices(len(self)))]
+        pos = self.owner._packed_store.logical_to_physical(index)
+        return self.owner._packed_store.frame(self.owner, pos)
 
     def insert(self, index: int, frame: Detection) -> None:
         self.owner._materialize_packed()
@@ -2118,7 +2130,17 @@ class _PackedFrames:
 
     def index(self, frame: Detection) -> int:
         position = frame.__dict__.get("_packed_position")
-        if position is None or self[position] is not frame:
+        if position is None:
+            raise ValueError("frame is not in collection")
+        if self.owner._packed_store.permutation is not None:
+            try:
+                logical_idx = self.owner._packed_store.permutation.index(position)
+            except ValueError:
+                raise ValueError("frame is not in collection")
+            if self[logical_idx] is not frame:
+                raise ValueError("frame is not in collection")
+            return logical_idx
+        if self[position] is not frame:
             raise ValueError("frame is not in collection")
         return position
 
@@ -2217,13 +2239,14 @@ class Detections:
         if self._packed_store is None:
             return
         store = self._packed_store
-        frames = [store.frame(self, index) for index in range(len(store))]
+        frames = [store.frame(self, store.logical_to_physical(index)) for index in range(len(store))]
         self._packed_store = None
         self._frames = frames
         self._identity_map = {frame.identity: frame for frame in frames}
         for frame in frames:
             frame._owner = self
             frame.__dict__.pop("_packed_position", None)
+        self._baseline_identities = tuple(frame.identity for frame in frames)
         self._baseline_set = set(self._baseline_identities)
         self._synchronize_registry()
 
@@ -2665,6 +2688,42 @@ class Detections:
             self._materialize_packed()
             self._record("unpack", count=len(self))
         return self
+
+    def shuffle(self, seed: Optional[int] = None) -> None:
+        """Shuffle collection frames in place.
+
+        Parameters
+        ----------
+        seed : int or None, default=None
+            Random seed for reproducible permutation. If None, a random
+            permutation is applied using a local random generator.
+
+        Returns
+        -------
+        None
+            The collection is shuffled in place.
+
+        Raises
+        ------
+        TypeError
+            If the collection is an unmaterialized stream, or if seed is invalid.
+        """
+        self._require_materialized("shuffle()")
+        if seed is not None:
+            validators.validate_type(seed, int, "seed")
+        if len(self) <= 1:
+            return
+        rng = random.Random(seed)
+        if self._packed_store is not None:
+            if self._packed_store.permutation is None:
+                self._packed_store.permutation = list(range(len(self._packed_store)))
+            rng.shuffle(self._packed_store.permutation)
+            self._baseline_identities = tuple(self._packed_store.identities)
+        else:
+            rng.shuffle(self._frames)
+            self._identity_map = {frame.identity: frame for frame in self._frames}
+            self._baseline_identities = tuple(frame.identity for frame in self._frames)
+        self._record("shuffle", seed=seed)
 
     def get_frame(self, frame_index: int, *, source_id: Optional[str] = None) -> Detection:
         """Return a frame by stable source identity."""

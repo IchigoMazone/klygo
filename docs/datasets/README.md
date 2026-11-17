@@ -1,6 +1,6 @@
 # `klygo.datasets` Documentation
 
-`klygo.datasets` provides 9 focused APIs for converting, loading, inspecting, partitioning, flattening, merging, splitting, and relabeling YOLO-style detection datasets.
+`klygo.datasets` provides 10 focused APIs for loading, inspecting, partitioning, flattening, converting, merging, splitting, and relabeling YOLO-style detection datasets.
 
 Interactive Google Colab Tutorial:
 [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/datasets/Document_Datasets_Overview.ipynb)
@@ -9,6 +9,7 @@ Local Tutorial Notebooks (`tutorials/datasets/`, 1-to-1 with `klygo/datasets/` s
 - [`Document_Datasets_Overview.ipynb`](../../tutorials/datasets/Document_Datasets_Overview.ipynb)
 - [`Document_Datasets_Load.ipynb`](../../tutorials/datasets/Document_Datasets_Load.ipynb) (`klygo/datasets/load.py`)
 - [`Document_Datasets_Info.ipynb`](../../tutorials/datasets/Document_Datasets_Info.ipynb) (`klygo/datasets/info.py`)
+- [`Document_Datasets_Flatten.ipynb`](../../tutorials/datasets/Document_Datasets_Flatten.ipynb) (`klygo/datasets/flatten.py`)
 - [`Document_Datasets_Convert.ipynb`](../../tutorials/datasets/Document_Datasets_Convert.ipynb) (`klygo/datasets/convert.py`)
 - [`Document_Datasets_Partition.ipynb`](../../tutorials/datasets/Document_Datasets_Partition.ipynb) (`klygo/datasets/partition.py`)
 - [`Document_Datasets_Repartition.ipynb`](../../tutorials/datasets/Document_Datasets_Repartition.ipynb) (`klygo/datasets/repartition.py`)
@@ -51,7 +52,8 @@ Local Tutorial Notebooks (`tutorials/datasets/`, 1-to-1 with `klygo/datasets/` s
 | **Print dataset summary as a Rich table** | [`info()`](api/info.md) | `utils.tabulate(datasets.info("dataset.zip"))` |
 | **Flatten `train`/`val`/`test` splits into one folder** | [`unpartition()`](api/unpartition.md) | `flat = datasets.unpartition("dataset.zip", "flat_data")` |
 | **Load a flat dataset into `Detections` for viewing/cropping** | [`load()`](api/load.md) | `dets = datasets.load(flat, format="yolo")` |
-| **Normalize raw image and label trees into a flat dataset** | [`convert()`](api/convert.md) | `datasets.convert("raw", "flat", tree={"i": "*/images", "l": "*/labels"}, classes={0: "car"})` |
+| **Flatten mapped raw image and label trees into a flat dataset** | [`flatten()`](api/flatten.md) | `datasets.flatten("raw", "flat", tree={"i": "*/images", "l": "*/labels"}, classes={0: "car"})` |
+| **Convert Pascal VOC or COCO annotations to a flat dataset** | [`convert()`](api/convert.md) | `datasets.convert(source="voc_dir", target="flat", src_format="voc")` |
 | **Partition a raw dataset into `train`/`val`/`test`** | [`partition()`](api/partition.md) | `datasets.partition("raw", "split_ds", (0.8, 0.1, 0.1))` |
 | **Partition directly into a portable `.zip` archive** | [`partition()`](api/partition.md) | `datasets.partition("raw", "split_ds.zip", (0.8, 0.2))` |
 | **Rebalance split ratios of an already partitioned dataset** | [`repartition()`](api/repartition.md) | `datasets.repartition("old_ds", "new_ds.zip", (0.7, 0.2, 0.1))` |
@@ -65,13 +67,14 @@ Local Tutorial Notebooks (`tutorials/datasets/`, 1-to-1 with `klygo/datasets/` s
 
 ---
 
-## 3. Public APIs Reference (9 Functions across 9 Submodules)
+## 3. Public APIs Reference (10 Functions across 10 Submodules)
 
 | API | Submodule | Return Type | Description | Example |
 | :--- | :--- | :--- | :--- | :--- |
 | [`load(source, format='yolo', verbose=True)`](api/load.md) | `load.py` | `Detections` | Load all images and YOLO annotations from a flat dataset into memory. | [`load.py`](../../examples/datasets/load.py) |
 | [`info(source, format='yolo', verbose=False)`](api/info.md) | `info.py` | `dict[str, Any]` | Inspect class names, IDs, image/label counts, and split distribution. | [`info.py`](../../examples/datasets/info.py) |
-| [`convert(source, target, ...)`](api/convert.md) | `convert.py` | `Path` | Normalize mapped raw sources into a flat YOLO dataset. | [`convert.py`](../../examples/datasets/convert.py) |
+| [`flatten(source, target, ...)`](api/flatten.md) | `flatten.py` | `None` | Flatten mapped custom sources into a flat YOLO dataset. | [`flatten.py`](../../examples/datasets/flatten.py) |
+| [`convert(source, target, ...)`](api/convert.md) | `convert.py` | `Path` | Convert Pascal VOC or COCO annotations to a flat YOLO dataset. | [`convert.py`](../../examples/datasets/convert.py) |
 | [`partition(source, target, ratios, ...)`](api/partition.md) | `partition.py` | `Path` | Create deterministic `train`, `val`, and `test` partitions. | [`partition.py`](../../examples/datasets/partition.py) |
 | [`repartition(source, target, ratios, ...)`](api/repartition.md) | `repartition.py` | `Path` | Flatten existing splits and rebuild with new deterministic ratios. | [`repartition.py`](../../examples/datasets/repartition.py) |
 | [`unpartition(source, target, ...)`](api/unpartition.md) | `unpartition.py` | `Path` | Flatten `train`/`val`/`test` split folders into a single dataset root. | [`unpartition.py`](../../examples/datasets/unpartition.py) |

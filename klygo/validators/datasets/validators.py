@@ -13,6 +13,8 @@ class Partition:
         ratios: tuple[float, ...],
         overwrite: bool,
         verbose: bool,
+        shuffle: bool = True,
+        seed: int = 42,
     ) -> None:
 
         """Validate and normalize partition arguments."""
@@ -21,6 +23,8 @@ class Partition:
         validate_type(ratios, tuple, "ratios")
         validate_type(overwrite, bool, "overwrite")
         validate_type(verbose, bool, "verbose")
+        validate_type(shuffle, bool, "shuffle")
+        validate_type(seed, int, "seed")
 
         if not all(isinstance(x, float) for x in ratios):
             raise TypeError(
@@ -61,6 +65,8 @@ class Partition:
         self.ratios = ratios
         self.overwrite = overwrite
         self.verbose = verbose
+        self.shuffle = shuffle
+        self.seed = seed
 
 
 class Repartition(Partition):
@@ -113,6 +119,8 @@ class Split:
         ratios: tuple[float, ...] | None = None,
         overwrite: bool = False,
         verbose: bool = True,
+        shuffle: bool = True,
+        seed: int = 42,
     ) -> None:
         """Validate and normalize split arguments."""
         validate_type(source, (str, os.PathLike), "source")
@@ -120,6 +128,8 @@ class Split:
         validate_type(by_class, bool, "by_class")
         validate_type(overwrite, bool, "overwrite")
         validate_type(verbose, bool, "verbose")
+        validate_type(shuffle, bool, "shuffle")
+        validate_type(seed, int, "seed")
 
         if class_groups is not None:
             validate_type(class_groups, list, "class_groups")
@@ -148,6 +158,8 @@ class Split:
         self.ratios = ratios
         self.overwrite = overwrite
         self.verbose = verbose
+        self.shuffle = shuffle
+        self.seed = seed
 
         if not files.exists(self.source):
             raise FileNotFoundError(f"source does not exist: {self.source}")

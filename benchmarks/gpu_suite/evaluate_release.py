@@ -652,9 +652,9 @@ def benchmark_datasets_media_visual(
     with tempfile.TemporaryDirectory() as tmp:
         root = files.path(tmp)
         ds_dir = root / "ds"
-        (ds_dir / "images").mkdir(parents=True)
-        (ds_dir / "labels").mkdir(parents=True)
-        (ds_dir / "pseudo_labels").mkdir(parents=True)
+        files.mkdir(ds_dir / "images")
+        files.mkdir(ds_dir / "labels")
+        files.mkdir(ds_dir / "pseudo_labels")
         files.save(ds_dir / "data.yaml", {"names": {0: "person", 1: "car"}}, overwrite=True, verbose=False)
         files.save(ds_dir / "pseudo.yaml", {"names": {0: "person", 1: "car"}}, overwrite=True, verbose=False)
 

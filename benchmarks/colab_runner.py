@@ -14,15 +14,17 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import tarfile
-import urllib.request
-import xml.etree.ElementTree as ET
-import zipfile
+
+# Explicitly configure Keras backend before framework imports
+os.environ["KERAS_BACKEND"] = "torch"
+
+from klygo import archive, datasets, files
+
 
 VOC_CLASSES = [
     "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat",
     "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person",
-    "pottedplant", "sheep", "sofa", "train", "tvmonitor"
+    "pottedplant", "sheep", "sofa", "train", "tvmonitor",
 ]
 
 COCO80_NAMES = {
@@ -41,171 +43,86 @@ COCO80_NAMES = {
 }
 
 
-def _download_file(url: str, dest_path: Path) -> Path:
-    if dest_path.exists():
-        return dest_path
-    dest_path.parent.mkdir(parents=True, exist_ok=True)
-    print(f"Downloading {url} -> {dest_path}...")
-    urllib.request.urlretrieve(url, dest_path)
-    return dest_path
-
-
-def prepare_voc2007(target_dir: Path) -> Path:
+def prepare_voc2007(target_dir: str | Path) -> Path:
     """Download Pascal VOC 2007 and convert val split into flat YOLO format."""
-    if (target_dir / "data.yaml").exists() and (target_dir / "images").exists():
-        count = len(list((target_dir / "images").glob("*.jpg")))
+    target_path = files.path(target_dir)
+    img_dir = files.join(target_path, "images")
+    yaml_file = files.join(target_path, "data.yaml")
+    if files.exists(yaml_file) and files.exists(img_dir):
+        count = len(files.find(img_dir, "*.jpg"))
         if count >= 2000:
-            print(f"VOC2007 already prepared at {target_dir} ({count} images).")
-            return target_dir
+            print(f"VOC2007 already prepared at {target_path} ({count} images).")
+            return target_path
 
-    raw_dir = target_dir.parent / "voc_raw"
-    tar_path = raw_dir / "VOCtrainval_06-Nov-2007.tar"
-    url = "https://pjreddie.com/media/files/VOCtrainval_06-Nov-2007.tar"
-    _download_file(url, tar_path)
+    raw_dir = files.join(files.parent(target_path), "voc_raw")
+    files.mkdir(raw_dir)
+    tar_path = files.join(raw_dir, "VOCtrainval_06-Nov-2007.tar")
+    if not files.exists(tar_path):
+        print(f"Downloading VOCtrainval_06-Nov-2007.tar -> {raw_dir}...")
+        files.download("https://pjreddie.com/media/files/VOCtrainval_06-Nov-2007.tar", raw_dir, overwrite=False, verbose=False)
 
     print(f"Extracting {tar_path}...")
-    with tarfile.open(tar_path) as tar:
-        tar.extractall(raw_dir)
+    archive.extract(tar_path, raw_dir, overwrite=True, verbose=False)
 
-    voc_root = raw_dir / "VOCdevkit" / "VOC2007"
-    val_txt = voc_root / "ImageSets" / "Main" / "val.txt"
-    val_ids = [line.strip() for line in val_txt.read_text().splitlines() if line.strip()]
+    voc_root = files.join(raw_dir, "VOCdevkit", "VOC2007")
+    val_txt = files.join(voc_root, "ImageSets", "Main", "val.txt")
+    val_ids = [line.strip() for line in files.load(val_txt, as_lines=True, verbose=False) if line.strip()]
 
-    img_out = target_dir / "images"
-    lbl_out = target_dir / "labels"
-    img_out.mkdir(parents=True, exist_ok=True)
-    lbl_out.mkdir(parents=True, exist_ok=True)
-
-    cls_to_id = {name: idx for idx, name in enumerate(VOC_CLASSES)}
-
-    for img_id in val_ids:
-        src_img = voc_root / "JPEGImages" / f"{img_id}.jpg"
-        src_xml = voc_root / "Annotations" / f"{img_id}.xml"
-        if not src_img.exists() or not src_xml.exists():
-            continue
-
-        tree = ET.parse(src_xml)
-        root = tree.getroot()
-        size = root.find("size")
-        if size is None:
-            continue
-        w = float(size.find("width").text)
-        h = float(size.find("height").text)
-        if w <= 0 or h <= 0:
-            continue
-
-        lines = []
-        for obj in root.findall("object"):
-            cname = obj.find("name").text
-            if cname not in cls_to_id:
-                continue
-            cid = cls_to_id[cname]
-            bnd = obj.find("bndbox")
-            xmin = float(bnd.find("xmin").text)
-            ymin = float(bnd.find("ymin").text)
-            xmax = float(bnd.find("xmax").text)
-            ymax = float(bnd.find("ymax").text)
-
-            xc = ((xmin + xmax) / 2.0) / w
-            yc = ((ymin + ymax) / 2.0) / h
-            bw = (xmax - xmin) / w
-            bh = (ymax - ymin) / h
-            lines.append(f"{cid} {xc:.6f} {yc:.6f} {bw:.6f} {bh:.6f}")
-
-        import shutil
-        shutil.copy2(src_img, img_out / f"{img_id}.jpg")
-        (lbl_out / f"{img_id}.txt").write_text("\n".join(lines), encoding="utf-8")
-
-    data_yaml = {
-        "path": str(target_dir.resolve()),
-        "train": "images",
-        "val": "images",
-        "nc": len(VOC_CLASSES),
-        "names": {i: name for i, name in enumerate(VOC_CLASSES)},
-    }
-    import yaml
-    (target_dir / "data.yaml").write_text(yaml.dump(data_yaml), encoding="utf-8")
-    print(f"VOC2007 prepared at {target_dir} ({len(val_ids)} images).")
-    return target_dir
+    datasets.convert(
+        source=voc_root,
+        target=target_path,
+        src_format="voc",
+        classes=VOC_CLASSES,
+        image_ids=val_ids,
+        include_difficult=True,
+        overwrite=True,
+        verbose=False,
+    )
+    print(f"VOC2007 prepared at {target_path} ({len(val_ids)} images).")
+    return target_path
 
 
-def prepare_val2017(target_dir: Path) -> Path:
+def prepare_val2017(target_dir: str | Path) -> Path:
     """Download COCO val2017 and annotations and convert to flat YOLO format."""
-    if (target_dir / "data.yaml").exists() and (target_dir / "images").exists():
-        count = len(list((target_dir / "images").glob("*.jpg")))
+    target_path = files.path(target_dir)
+    img_dir = files.join(target_path, "images")
+    yaml_file = files.join(target_path, "data.yaml")
+    if files.exists(yaml_file) and files.exists(img_dir):
+        count = len(files.find(img_dir, "*.jpg"))
         if count >= 4500:
-            print(f"val2017 already prepared at {target_dir} ({count} images).")
-            return target_dir
+            print(f"val2017 already prepared at {target_path} ({count} images).")
+            return target_path
 
-    raw_dir = target_dir.parent / "coco_raw"
-    val_zip = raw_dir / "val2017.zip"
-    ann_zip = raw_dir / "annotations_trainval2017.zip"
+    raw_dir = files.join(files.parent(target_path), "coco_raw")
+    files.mkdir(raw_dir)
+    val_zip = files.join(raw_dir, "val2017.zip")
+    ann_zip = files.join(raw_dir, "annotations_trainval2017.zip")
 
-    _download_file("http://images.cocodataset.org/zips/val2017.zip", val_zip)
-    _download_file("http://images.cocodataset.org/annotations/annotations_trainval2017.zip", ann_zip)
+    if not files.exists(val_zip):
+        print(f"Downloading val2017.zip -> {raw_dir}...")
+        files.download("http://images.cocodataset.org/zips/val2017.zip", raw_dir, overwrite=False, verbose=False)
+    if not files.exists(ann_zip):
+        print(f"Downloading annotations_trainval2017.zip -> {raw_dir}...")
+        files.download("http://images.cocodataset.org/annotations/annotations_trainval2017.zip", raw_dir, overwrite=False, verbose=False)
 
     print("Extracting COCO val2017 zips...")
-    with zipfile.ZipFile(val_zip) as z:
-        z.extractall(raw_dir)
-    with zipfile.ZipFile(ann_zip) as z:
-        z.extractall(raw_dir)
+    archive.extract(val_zip, raw_dir, overwrite=True, verbose=False)
+    archive.extract(ann_zip, raw_dir, overwrite=True, verbose=False)
 
-    ann_json = raw_dir / "annotations" / "instances_val2017.json"
-    with open(ann_json, encoding="utf-8") as f:
-        coco_data = json.load(f)
+    ann_json = files.join(raw_dir, "annotations", "instances_val2017.json")
+    src_images_dir = files.join(raw_dir, "val2017")
 
-    # COCO category id to 0..79 index
-    cat_ids = sorted(c["id"] for c in coco_data["categories"])
-    cat_to_yolo = {cat_id: yolo_idx for yolo_idx, cat_id in enumerate(cat_ids)}
-
-    img_map = {im["id"]: im for im in coco_data["images"]}
-    ann_by_img: dict[int, list[Any]] = {}
-    for ann in coco_data["annotations"]:
-        if ann.get("iscrowd"):
-            continue
-        ann_by_img.setdefault(ann["image_id"], []).append(ann)
-
-    img_out = target_dir / "images"
-    lbl_out = target_dir / "labels"
-    img_out.mkdir(parents=True, exist_ok=True)
-    lbl_out.mkdir(parents=True, exist_ok=True)
-
-    import shutil
-    src_images_dir = raw_dir / "val2017"
-
-    for img_id, im_info in img_map.items():
-        fname = im_info["file_name"]
-        src_path = src_images_dir / fname
-        if not src_path.exists():
-            continue
-
-        w = float(im_info["width"])
-        h = float(im_info["height"])
-        lines = []
-        for ann in ann_by_img.get(img_id, []):
-            cid = cat_to_yolo[ann["category_id"]]
-            bx, by, bw, bh = ann["bbox"]
-            xc = (bx + bw / 2.0) / w
-            yc = (by + bh / 2.0) / h
-            rw = bw / w
-            rh = bh / h
-            lines.append(f"{cid} {xc:.6f} {yc:.6f} {rw:.6f} {rh:.6f}")
-
-        shutil.copy2(src_path, img_out / fname)
-        lbl_fname = Path(fname).with_suffix(".txt").name
-        (lbl_out / lbl_fname).write_text("\n".join(lines), encoding="utf-8")
-
-    data_yaml = {
-        "path": str(target_dir.resolve()),
-        "train": "images",
-        "val": "images",
-        "nc": len(COCO80_NAMES),
-        "names": COCO80_NAMES,
-    }
-    import yaml
-    (target_dir / "data.yaml").write_text(yaml.dump(data_yaml), encoding="utf-8")
-    print(f"val2017 prepared at {target_dir} ({len(img_map)} images).")
-    return target_dir
+    datasets.convert(
+        images=src_images_dir,
+        annotations=ann_json,
+        target=target_path,
+        src_format="coco",
+        include_crowd=False,
+        overwrite=True,
+        verbose=False,
+    )
+    print(f"val2017 prepared at {target_path}.")
+    return target_path
 
 
 def run_cmd(cmd: list[str]) -> None:
@@ -219,16 +136,16 @@ def main() -> None:
     parser.add_argument("--device", default="0")
     args = parser.parse_args()
 
-    work = Path(args.workdir)
-    res_dir = work / "results"
-    mining_dir = res_dir / "mining"
-    metrics_dir = res_dir / "metrics"
-    mining_dir.mkdir(parents=True, exist_ok=True)
-    metrics_dir.mkdir(parents=True, exist_ok=True)
+    work = files.path(args.workdir)
+    res_dir = files.join(work, "results")
+    mining_dir = files.join(res_dir, "mining")
+    metrics_dir = files.join(res_dir, "metrics")
+    files.mkdir(mining_dir)
+    files.mkdir(metrics_dir)
 
     # 1. Prepare VOC2007 and val2017
-    voc_dir = prepare_voc2007(work / "datasets" / "voc2007_yolo")
-    val_dir = prepare_val2017(work / "datasets" / "val2017_yolo")
+    voc_dir = prepare_voc2007(files.join(work, "datasets", "voc2007_yolo"))
+    val_dir = prepare_val2017(files.join(work, "datasets", "val2017_yolo"))
 
     # 2. Run Mining on 3 datasets
     print("\n================== [1/2] RUNNING MINING BENCHMARK ==================")
@@ -239,7 +156,7 @@ def main() -> None:
         "--epochs", "15",
         "--batch", "32",
         "--imgsz", "640",
-        "--output", str(mining_dir / "coco128"),
+        "--output", str(files.join(mining_dir, "coco128")),
     ])
     run_cmd([
         sys.executable, "benchmarks/mining/run_mining_benchmark.py",
@@ -250,7 +167,7 @@ def main() -> None:
         "--epochs", "12",
         "--batch", "32",
         "--imgsz", "640",
-        "--output", str(mining_dir / "voc2007"),
+        "--output", str(files.join(mining_dir, "voc2007")),
     ])
     run_cmd([
         sys.executable, "benchmarks/mining/run_mining_benchmark.py",
@@ -261,7 +178,7 @@ def main() -> None:
         "--epochs", "12",
         "--batch", "32",
         "--imgsz", "640",
-        "--output", str(mining_dir / "val2017"),
+        "--output", str(files.join(mining_dir, "val2017")),
     ])
 
     # 3. Run Metrics on 3 datasets
@@ -269,35 +186,35 @@ def main() -> None:
     run_cmd([
         sys.executable, "benchmarks/metrics/run_metrics_benchmark.py",
         "--dataset", "coco128",
-        "--output", str(metrics_dir / "coco128"),
+        "--output", str(files.join(metrics_dir, "coco128")),
     ])
     run_cmd([
         sys.executable, "benchmarks/metrics/run_metrics_benchmark.py",
         "--dataset-dir", str(voc_dir),
         "--max-images", "500",
-        "--output", str(metrics_dir / "voc2007"),
+        "--output", str(files.join(metrics_dir, "voc2007")),
     ])
     run_cmd([
         sys.executable, "benchmarks/metrics/run_metrics_benchmark.py",
         "--dataset-dir", str(val_dir),
         "--max-images", "500",
-        "--output", str(metrics_dir / "val2017"),
+        "--output", str(files.join(metrics_dir, "val2017")),
     ])
 
     # 4. Print Outputs for caller extraction
     outputs_to_print = [
-        ("MINING_COCO128", mining_dir / "coco128" / "summary.json"),
-        ("MINING_VOC2007", mining_dir / "voc2007" / "summary.json"),
-        ("MINING_VAL2017", mining_dir / "val2017" / "summary.json"),
-        ("METRICS_COCO128", metrics_dir / "coco128" / "summary.json"),
-        ("METRICS_VOC2007", metrics_dir / "voc2007" / "summary.json"),
-        ("METRICS_VAL2017", metrics_dir / "val2017" / "summary.json"),
+        ("MINING_COCO128", files.join(mining_dir, "coco128", "summary.json")),
+        ("MINING_VOC2007", files.join(mining_dir, "voc2007", "summary.json")),
+        ("MINING_VAL2017", files.join(mining_dir, "val2017", "summary.json")),
+        ("METRICS_COCO128", files.join(metrics_dir, "coco128", "summary.json")),
+        ("METRICS_VOC2007", files.join(metrics_dir, "voc2007", "summary.json")),
+        ("METRICS_VAL2017", files.join(metrics_dir, "val2017", "summary.json")),
     ]
 
     for tag, json_file in outputs_to_print:
         print(f"\n==={tag}_START===")
-        if json_file.exists():
-            data = json.loads(json_file.read_text(encoding="utf-8"))
+        if files.exists(json_file):
+            data = files.load(json_file, verbose=False)
             print(json.dumps(data, separators=(",", ":")))
         else:
             print(json.dumps({"error": f"File {json_file} does not exist"}))

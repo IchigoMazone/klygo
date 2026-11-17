@@ -370,12 +370,16 @@ def save(
                     for key, value in data.items():
                         stream.write(f"{key}={value}\n")
         elif suffix == ".xml":
-            if isinstance(data, dict) and len(data) == 1:
+            if isinstance(data, str):
+                with destination.open("w", encoding="utf-8") as stream:
+                    stream.write(data)
+            elif isinstance(data, dict) and len(data) == 1:
                 root_tag = next(iter(data))
                 root = _data_to_xml(root_tag, data[root_tag])
+                ET.ElementTree(root).write(destination, encoding="utf-8", xml_declaration=True)
             else:
                 root = _data_to_xml("root", data)
-            ET.ElementTree(root).write(destination, encoding="utf-8", xml_declaration=True)
+                ET.ElementTree(root).write(destination, encoding="utf-8", xml_declaration=True)
         else:
             with destination.open("wb") as stream:
                 pickle.dump(data, stream)

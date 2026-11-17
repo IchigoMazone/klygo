@@ -3,6 +3,7 @@ import importlib
 import math
 from numbers import Integral
 import os
+import random
 import threading
 import uuid
 import weakref
@@ -983,6 +984,37 @@ class MediaFrames(list):
             self._invalidate_index_cache()
             return
         list.reverse(self)
+
+    def shuffle(self, seed: Optional[int] = None) -> None:
+        """Shuffle frames in place.
+
+        Parameters
+        ----------
+        seed : int or None, default=None
+            Random seed for deterministic permutation. If None, a random
+            permutation is applied using a local random generator.
+
+        Returns
+        -------
+        None
+            The collection is shuffled in place.
+
+        Raises
+        ------
+        TypeError
+            If the collection is an unmaterialized stream, or if seed is invalid.
+        """
+        self._require_materialized("shuffle()")
+        if seed is not None:
+            validate_type(seed, int, "seed")
+        if len(self) <= 1:
+            return
+        rng = random.Random(seed)
+        if getattr(self, "is_indexed", False):
+            rng.shuffle(self._indexed_entries)
+            self._invalidate_index_cache()
+            return
+        rng.shuffle(self)
 
     def sort(self, *, key: Optional[Callable[[Any], Any]] = None, reverse: bool = False) -> None:
         """Sort frames in place using list-compatible semantics."""

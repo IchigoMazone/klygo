@@ -1,11 +1,10 @@
 """Optional Keras detection input conversion, inference and output packing."""
 
 from typing import Any, List, Dict, Optional
-from klygo.models.runtime.keras import ensure_backend, _require_keras
+from klygo.models.runtime.keras import _require_keras
 
 def cast_inputs(inputs: Any, dev: Any = None, dtype: Any = None) -> Any:
     """Convert image or NumPy inputs into Keras 3 tensors for the active compute backend."""
-    ensure_backend()
     keras = _require_keras()
     import numpy as np
     from klygo import media

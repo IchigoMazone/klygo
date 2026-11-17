@@ -49,7 +49,8 @@ wrapper that merely renames it. Do not add calls just to increase module coverag
 | --- | --- | --- |
 | Copy a file | `files.copy()` | A custom byte-copy loop |
 | Create a supported train/validation/test partition | `datasets.partition()` | Randomly select filenames and copy image/label pairs manually |
-| Normalize a supported dataset layout | `datasets.convert()` | A custom image/label parser and layout exporter |
+| Flatten a custom dataset layout | `datasets.flatten()` | A custom image/label parser and layout exporter |
+| Convert Pascal VOC or COCO annotations | `datasets.convert()` | Manual XML or JSON coordinate extraction |
 | Load and run a supported detector | `models.load()` and detector `predict()` | Rebuild backend input preparation, inference and `Detections` conversion |
 | Predict over an existing collection while preserving source identities | Copy the collection, then call `Detections.repredict()` | Manually loop over predictions and reconstruct frame identities |
 | Remove duplicate images | `mining.deduplicate()` | Recreate hashing, duplicate groups and retention rules |

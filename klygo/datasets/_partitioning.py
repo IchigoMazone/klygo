@@ -31,6 +31,7 @@ def execute_partition(
     *,
     overwrite: bool,
     verbose: bool,
+    shuffle: bool = True,
     seed: int = 42,
 ) -> Path:
     """Create a deterministic train/validation/test dataset."""
@@ -41,7 +42,8 @@ def execute_partition(
         images_dir = files.join(root, "images")
         labels_dir = files.join(root, "labels")
         pairs = scan_dataset_files(images_dir, labels_dir)
-        random.Random(seed).shuffle(pairs)
+        if shuffle:
+            random.Random(seed).shuffle(pairs)
 
         train_count = int(len(pairs) * train_ratio)
         validation_count = int(len(pairs) * validation_ratio)

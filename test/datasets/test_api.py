@@ -51,6 +51,7 @@ class TestDatasetsAPI(unittest.TestCase):
             "load",
             "info",
             "convert",
+            "flatten",
             "partition",
             "repartition",
             "unpartition",

@@ -16,6 +16,8 @@ def partition(
     format: str = "yolo",
     overwrite: bool = False,
     verbose: bool = True,
+    shuffle: bool = True,
+    seed: int = 42,
 ) -> None:
     """Partition a YOLO dataset reproducibly.
 
@@ -35,6 +37,10 @@ def partition(
         Replace an existing target.
     verbose : bool, default=True
         Display archive progress.
+    shuffle : bool, default=True
+        Whether to shuffle samples before assigning to partitions.
+    seed : int, default=42
+        Random seed used when shuffling.
 
     Returns
     -------
@@ -54,16 +60,18 @@ def partition(
     Examples
     --------
     >>> from klygo import datasets
-    >>> datasets.partition("dataset", "partitioned", (0.8, 0.1, 0.1))
+    >>> datasets.partition("dataset", "partitioned", (0.8, 0.1, 0.1), shuffle=True, seed=42)
     """
     validate_dataset_format(format)
-    params = Partition(source, target, ratios, overwrite, verbose)
+    params = Partition(source, target, ratios, overwrite, verbose, shuffle=shuffle, seed=seed)
     execute_partition(
         params.source,
         params.target,
         params.ratios,
         overwrite=params.overwrite,
         verbose=params.verbose,
+        shuffle=params.shuffle,
+        seed=params.seed,
     )
 
 

@@ -13,11 +13,11 @@ from pathlib import Path
 import sys
 from typing import Any
 
-ROOT = Path(__file__).resolve().parent.parent
+from klygo import archive, files, utils
+
+ROOT = files.parent(files.parent(files.resolve(__file__)))
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
-from klygo import archive, files, utils
 from benchmarks.mining.run_mining_benchmark import (
     _generate_mining_charts,
     _render_mining_report,

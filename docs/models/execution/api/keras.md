@@ -15,6 +15,18 @@ See [execution responsibilities and prediction sessions](../README.md),
 [Detector](../../api/Detector.md), and the
 [four-framework smoke workflow](../../../integration/native-execution-smoke.md).
 
+## Engine configuration
+
+Configure `os.environ["KERAS_BACKEND"]` (for example `"torch"`, `"jax"`, or `"tensorflow"`) before importing Keras or loading a Keras model:
+
+```python
+import os
+
+os.environ["KERAS_BACKEND"] = "torch"
+```
+
+Klygo does not probe Torch, JAX, and TensorFlow to select a compute engine automatically. Note that Keras 3 initializes its engine on first import; changing the `KERAS_BACKEND` environment variable after Keras has been imported does not switch the active backend.
+
 ## Built-in D-FINE Nano COCO
 
 ```python
