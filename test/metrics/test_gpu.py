@@ -57,7 +57,7 @@ class TestGPUMetrics(unittest.TestCase):
         for packed in (False, True):
             for dtype in (16, 32, 64):
                 pred, target = pair(packed=packed)
-                group = outputs.group(pred, target).astype(dtype)
+                group = outputs.DetectionGroup(pred, target).astype(dtype)
                 expected = metrics.evaluate(pred, target, self.evaluator)
                 group.cuda(0)
                 before = pred.to_dict(), target.to_dict()
@@ -80,7 +80,7 @@ class TestGPUMetrics(unittest.TestCase):
                      outputs.Detections([outputs.Detection([], source_id='x', image_size=(20,20))]))]
         for pred, target in fixtures:
             expected = metrics.evaluate(pred, target, self.evaluator)
-            outputs.group(pred, target).cuda(0)
+            outputs.DetectionGroup(pred, target).cuda(0)
             assert_nested(self, metrics.evaluate(pred, target, self.evaluator), expected)
 
     def test_dataset_group_load_cuda_metrics(self):
@@ -110,11 +110,11 @@ class TestGPUMetrics(unittest.TestCase):
         pred.cuda(0)
         with self.assertRaises(ValueError): metrics.evaluate(pred, target)
         self.assertEqual(target.device, 'cpu')
-        outputs.group(pred, target).cpu()
+        outputs.DetectionGroup(pred, target).cpu()
 
     def test_grouped_gpu_operations_and_array_ownership(self):
         pred, target = pair()
-        group = outputs.group(pred, target).cuda(0).astype(32).pack()
+        group = outputs.DetectionGroup(pred, target).cuda(0).astype(32).pack()
         self.assertIs(group.cuda(0), group)
         self.assertIsInstance(pred[1].to_arrays()['boxes'], cp.ndarray)
         arrays = pred[1].to_arrays()
@@ -131,7 +131,7 @@ class TestGPUMetrics(unittest.TestCase):
         for seed in range(5):
             pred, target = pair(seed)
             expected = metrics.evaluate(pred, target, self.evaluator)
-            outputs.group(pred, target).cuda(0)
+            outputs.DetectionGroup(pred, target).cuda(0)
             assert_nested(self, metrics.evaluate(pred, target, self.evaluator), expected)
 
 

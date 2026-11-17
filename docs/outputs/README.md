@@ -33,11 +33,11 @@ streams. Install optional CUDA storage with `pip install "klygo[gpu-outputs]"`.
 
 ## Same-source collection groups
 
-[group](api/group.md) and [DetectionGroup](api/DetectionGroup.md) retain independent
+[DetectionGroup](api/DetectionGroup.md) retain independent
 collections while applying shared operations:
 
 ```python
-collections = outputs.group(pred, target)
+collections = outputs.DetectionGroup(pred, target)
 collections.cuda(0).astype(32)
 report = metrics.evaluate(pred, target)
 collections.cpu()
@@ -45,10 +45,10 @@ collections.cpu()
 
 The group requires identical frame identities and corresponding image sizes;
 annotation sets and frame order may differ. The original collections remain
-usable individually. See the [group guide](../../tutorials/outputs/Document_Outputs_Group.ipynb).
+usable individually. See the [group guide](../../tutorials/outputs/Document_Outputs_Detection_Group.ipynb).
 
 Multiple label sets loaded by `datasets.load` use the same `DetectionGroup`
-returned by `outputs.group`. Two unnamed members use `pred` and `truth`;
+constructed directly with `outputs.DetectionGroup`. Two unnamed members use `pred` and `truth`;
 other counts use `set_1`, `set_2`, and so on, in input order. Pass a mapping
 for explicit names. The single-label-set load result remains `Detections`.
 

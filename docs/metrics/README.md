@@ -63,7 +63,7 @@ for row in report["per_image"]:
 All eleven metric operations accept same-device Detection pairs or same-device
 materialized Detections pairs. CPU uses NumPy; CUDA uses CuPy selected from the
 input device. Different devices raise ValueError without implicitly moving or
-mutating either input. Use outputs.group(pred, target).cuda(0) or .cpu() first.
+mutating either input. Use outputs.DetectionGroup(pred, target).cuda(0) or .cpu() first.
 Individual collection methods remain supported. Detection frames inherit the
 storage device of their owning collection.
 
@@ -81,7 +81,7 @@ not guarantee lower latency for small workloads: transfer, kernel-launch, and
 report-conversion overhead may dominate. No device argument or new execution
 mode is added to metrics.
 
-[Group API](../outputs/api/group.md) · [Real GPU parity tests](../../test/metrics/test_gpu.py)
+[Group API](../outputs/api/DetectionGroup.md) · [Real GPU parity tests](../../test/metrics/test_gpu.py)
 
 ## Optional progress
 

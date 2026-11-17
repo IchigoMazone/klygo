@@ -270,7 +270,7 @@ def load(
     }
     if not multi:
         return collections[specs[0][0]]
-    return outputs.group(collections) if isinstance(labels_dir, Mapping) else outputs.group(*collections.values())
+    return outputs.DetectionGroup(collections) if isinstance(labels_dir, Mapping) else outputs.DetectionGroup(*collections.values())
 
 
 __all__ = ["load"]

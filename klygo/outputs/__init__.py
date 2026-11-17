@@ -3,7 +3,7 @@
 Colab tutorial:
     https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/outputs/Document_Outputs_Overview.ipynb
 
-Public API (2 functions, 4 classes, 1 submodule):
+Public API (1 function, 4 classes, 1 submodule):
     Detection containers (`detect.py`):
         1. detect              Submodule containing core detection container types.
         2. Box                 Single bounding box with label, score, class_id, and metadata.
@@ -11,14 +11,13 @@ Public API (2 functions, 4 classes, 1 submodule):
         4. Detections          Multi-frame collection supporting streaming, packing, and export.
         5. build_detections(...) Pack normalized raw predictions into a Detections collection.
 
-    Aligned multi-collection group (`group.py`):
+    Aligned multi-collection group (`detection_group.py`):
         6. DetectionGroup      Coordinate shared operations across aligned Detections sets.
-        7. group(...)          Build a DetectionGroup from same-source Detections collections.
 """
 
 from . import detect
 from .detect import Box, Detection, Detections, build_detections
-from .group import DetectionGroup, group
+from .detection_group import DetectionGroup
 
 __all__ = [
     "detect",
@@ -27,5 +26,4 @@ __all__ = [
     "Detections",
     "build_detections",
     "DetectionGroup",
-    "group",
 ]

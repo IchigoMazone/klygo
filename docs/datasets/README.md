@@ -83,6 +83,6 @@ Local Tutorial Notebooks (`tutorials/datasets/`, 1-to-1 with `klygo/datasets/` s
 | [`remap_classes(source, target, class_map, ...)`](api/remap_classes.md) | `remap_classes.py` | `Path` | Rename classes or remap numeric class IDs across `data.yaml` and labels. | [`remap_classes.py`](../../examples/datasets/remap_classes.py) |
 
 Multiple label sets loaded by `datasets.load` use the same `DetectionGroup`
-returned by `outputs.group`. Two unnamed members use `pred` and `truth`;
+constructed directly with `outputs.DetectionGroup`. Two unnamed members use `pred` and `truth`;
 other counts use `set_1`, `set_2`, and so on, in input order. Pass a mapping
 for explicit names. The single-label-set load result remains `Detections`.

@@ -304,8 +304,8 @@ def benchmark_groups_and_postprocessing(
             p_work.cuda(0)
             g_work.cuda(0)
 
-        grp = outputs.group({"pred": p_work, "truth": g_work})
-        keep_stats = _measure(lambda: outputs.group({"pred": p_work.copy(), "truth": g_work.copy()}).keep(["cls_0", "cls_1"]), repeats=repeats, warmup=1, use_cuda=(dev == "cuda"))
+        grp = outputs.DetectionGroup({"pred": p_work, "truth": g_work})
+        keep_stats = _measure(lambda: outputs.DetectionGroup({"pred": p_work.copy(), "truth": g_work.copy()}).keep(["cls_0", "cls_1"]), repeats=repeats, warmup=1, use_cuda=(dev == "cuda"))
         nms_stats = _measure(
             lambda: p_work.copy().transform(
                 postprocessing.clip((640, 640)),

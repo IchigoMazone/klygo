@@ -25,7 +25,7 @@ The group validates matching frame identities and image sizes and supports
 `.cuda()`, `.cpu()`, `.astype()`, and shared label/storage operations directly.
 String or integer indexing selects an individual `Detections`; iteration yields
 collections. `keys()`, `values()`, and `items()` expose ordered member views.
-See [outputs.group](../../outputs/api/group.md).
+See [outputs.DetectionGroup](../../outputs/api/DetectionGroup.md).
 
 For a partitioned dataset (`train`/`val`/`test` folders), call [`datasets.unpartition()`](unpartition.md) first and pass the resulting flat directory or `.zip` archive to `datasets.load()`. The input dataset is never modified.
 

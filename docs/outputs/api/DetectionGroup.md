@@ -60,7 +60,7 @@ collections.astype(32).pack().unpack()
 print(pred.dtype, target.dtype)
 print(list(collections.keys()))  # ['pred', 'truth']
 print(metrics.precision_recall(collections["pred"], collections["truth"]))
-named = outputs.group({"model_a": pred, "ground_truth": target})
+named = outputs.DetectionGroup({"model_a": pred, "ground_truth": target})
 named.rename({"model_a": "pred", "ground_truth": "truth"})
 print(list(named.keys()))
 assert named["pred"] is pred

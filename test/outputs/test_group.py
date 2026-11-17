@@ -11,9 +11,14 @@ def collection(source="image", size=(100, 100), index=0, labels=("cat", "dog")):
 
 
 class TestDetectionGroup(unittest.TestCase):
+    def test_public_api_exposes_class_without_group_factory(self):
+        self.assertIn("DetectionGroup", outputs.__all__)
+        self.assertNotIn("group", outputs.__all__)
+        self.assertFalse(hasattr(outputs, "group"))
+
     def test_references_and_chaining_preserve_individual_apis(self):
         a, b = collection(), collection(labels=("cat",))
-        group = outputs.group(a, b)
+        group = outputs.DetectionGroup(a, b)
         self.assertIs(group[0], a)
         self.assertEqual(tuple(group), (a, b))
         self.assertEqual(group.members, (a, b))
@@ -26,7 +31,7 @@ class TestDetectionGroup(unittest.TestCase):
 
     def test_label_operations_apply_to_all_without_merging(self):
         a, b = collection(), collection()
-        group = outputs.group(a, b)
+        group = outputs.DetectionGroup(a, b)
         self.assertIs(group.keep((name for name in ("cat",))).relabel({"cat": "animal"}).compact(), group)
         self.assertEqual(a[0].labels, ["animal"])
         self.assertEqual(b[0].labels, ["animal"])
@@ -36,18 +41,18 @@ class TestDetectionGroup(unittest.TestCase):
     def test_source_size_identity_and_membership_validation(self):
         a = collection()
         for other in (collection(source="other"), collection(size=(200, 100)), collection(index=1)):
-            with self.assertRaises(ValueError): outputs.group(a, other)
-        with self.assertRaises(ValueError): outputs.group()
-        with self.assertRaises(ValueError): outputs.group(a, a)
-        with self.assertRaises(TypeError): outputs.group(a[0])
-        with self.assertRaises(ValueError): outputs.group(a, outputs.Detections([], stream=True))
-        self.assertEqual(len(outputs.group(a)), 1)
-        self.assertEqual(len(outputs.group(outputs.Detections(), outputs.Detections())), 2)
+            with self.assertRaises(ValueError): outputs.DetectionGroup(a, other)
+        with self.assertRaises(ValueError): outputs.DetectionGroup()
+        with self.assertRaises(ValueError): outputs.DetectionGroup(a, a)
+        with self.assertRaises(TypeError): outputs.DetectionGroup(a[0])
+        with self.assertRaises(ValueError): outputs.DetectionGroup(a, outputs.Detections([], stream=True))
+        self.assertEqual(len(outputs.DetectionGroup(a)), 1)
+        self.assertEqual(len(outputs.DetectionGroup(outputs.Detections(), outputs.Detections())), 2)
 
     def test_order_independent_sources_and_revalidation(self):
         a = outputs.Detections([collection(index=0)[0], collection(index=1)[0]])
         b = outputs.Detections([collection(index=1)[0], collection(index=0)[0]])
-        group = outputs.group(a, b)
+        group = outputs.DetectionGroup(a, b)
         group.astype(32)
         b.pop()
         with self.assertRaises(ValueError): group.astype(16)
@@ -55,12 +60,12 @@ class TestDetectionGroup(unittest.TestCase):
 
     def test_named_and_automatic_members(self):
         a, b, c = collection(), collection(), collection()
-        pair = outputs.group(a, b)
+        pair = outputs.DetectionGroup(a, b)
         self.assertEqual(list(pair.keys()), ["pred", "truth"])
         self.assertIs(pair["pred"], a)
         self.assertIs(pair["truth"], b)
         self.assertEqual(tuple(pair), (a, b))
-        many = outputs.group(a, b, c)
+        many = outputs.DetectionGroup(a, b, c)
         self.assertEqual(list(many.keys()), ["set_1", "set_2", "set_3"])
         self.assertIs(many["set_3"], c)
         named = outputs.DetectionGroup({"model_a": a, "ground_truth": b})
@@ -69,15 +74,15 @@ class TestDetectionGroup(unittest.TestCase):
         self.assertEqual(dict(named), {"model_a": a, "ground_truth": b})
         self.assertIs(named.astype(32)[0], a)
         with self.assertRaises(KeyError): named["missing"]
-        with self.assertRaises(ValueError): outputs.group({})
-        with self.assertRaises(ValueError): outputs.group({" ": a})
-        with self.assertRaises(TypeError): outputs.group({1: a})
-        with self.assertRaises(ValueError): outputs.group({"a": a, "b": a})
-        with self.assertRaises(ValueError): outputs.group({"a": a, "b": collection(source="other")})
+        with self.assertRaises(ValueError): outputs.DetectionGroup({})
+        with self.assertRaises(ValueError): outputs.DetectionGroup({" ": a})
+        with self.assertRaises(TypeError): outputs.DetectionGroup({1: a})
+        with self.assertRaises(ValueError): outputs.DetectionGroup({"a": a, "b": a})
+        with self.assertRaises(ValueError): outputs.DetectionGroup({"a": a, "b": collection(source="other")})
 
     def test_rename_preserves_members_order_annotations_and_chaining(self):
         a, b, c = collection(), collection(), collection()
-        group = outputs.group(a, b, c)
+        group = outputs.DetectionGroup(a, b, c)
         before = [member.to_dict() for member in group]
         self.assertIs(group.rename({"set_1": "pred", "set_2": "truth"}), group)
         self.assertEqual(list(group.keys()), ["pred", "truth", "set_3"])
@@ -91,7 +96,7 @@ class TestDetectionGroup(unittest.TestCase):
         self.assertIs(group.rename({}).rename({"truth": "truth"}), group)
 
     def test_rename_failures_leave_names_unchanged(self):
-        group = outputs.group(collection(), collection())
+        group = outputs.DetectionGroup(collection(), collection())
         before = dict(group.items())
         for mapping, error in (([("pred", "model")], TypeError),
                                ({1: "model"}, TypeError),

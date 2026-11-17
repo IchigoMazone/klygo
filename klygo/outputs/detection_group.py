@@ -3,7 +3,7 @@ from collections.abc import ItemsView, KeysView, Mapping, ValuesView
 from klygo import validators
 from .detect import Detections
 
-__all__ = ["DetectionGroup", "group"]
+__all__ = ["DetectionGroup"]
 
 
 class DetectionGroup:
@@ -171,31 +171,3 @@ class DetectionGroup:
     def unpack(self) -> "DetectionGroup":
         """Unpack annotation storage for every member."""
         return self._apply("unpack")
-
-
-def group(*collections: Detections | Mapping[str, Detections]) -> DetectionGroup:
-    """Group independent same-source collections without merging their contents.
-
-    Parameters
-    ----------
-    *collections : Detections or mapping of str to Detections
-        Distinct materialized collections with matching frame identities and
-        image sizes, or one mapping assigning names. Two positional members use
-        pred/truth; other counts use set_1, set_2, and so on, in input order.
-        Explicit mappings retain their names. Annotation sets may differ.
-
-    Returns
-    -------
-    DetectionGroup
-        Reference group supporting cuda, cpu, astype, label operations, and
-        pack/unpack. Individual collection APIs remain available.
-
-    Raises
-    ------
-    TypeError
-        A member is not Detections or a mapping key is not a string.
-    ValueError
-        The group is empty, repeats an object, contains a stream, or has
-        inconsistent frame identities or image sizes, or empty names.
-    """
-    return DetectionGroup(*collections)
