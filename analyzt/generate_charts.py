@@ -304,6 +304,78 @@ def chart_nms_microbenchmarks(out_dir):
     print(f"Generated: {save_path}")
 
 
+def chart_three_benchmark_runs(out_dir):
+    """Chart 7: Evolution across 3 official benchmark runs (T4 -> L4 Baseline -> L4 Optimized)."""
+    models = ["YOLOv8n", "YOLO11n", "YOLO-World v2", "RT-DETR", "Faster R-CNN", "Grounding DINO"]
+    run1_t4 = [55.33, 60.85, 53.75, 54.32, 28.21, 2.82]
+    run2_l4_base = [70.34, 61.31, 58.08, 58.45, 38.77, 4.81]
+    run3_l4_opt = [95.82, 84.19, 77.60, 76.51, 41.22, 4.85]
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    x = np.arange(len(models))
+    w = 0.26
+
+    r1 = ax.bar(x - w, run1_t4, w, label="Đợt 1: Colab T4 Complete", color="#FB8C00", edgecolor="black", linewidth=0.6, alpha=0.9)
+    r2 = ax.bar(x, run2_l4_base, w, label="Đợt 2: Colab L4 Baseline", color="#5C6BC0", edgecolor="black", linewidth=0.6, alpha=0.9)
+    r3 = ax.bar(x + w, run3_l4_opt, w, label="Đợt 3: Colab L4 Optimized (+Pipeline Boost)", color="#1E88E5", edgecolor="black", linewidth=0.6, alpha=0.95)
+
+    for i in range(len(models)):
+        # Annotate run 1
+        ax.annotate(f"{run1_t4[i]:.1f}", (x[i] - w, run1_t4[i] + 1.2), ha="center", fontsize=8, fontweight="bold")
+        # Annotate run 2
+        ax.annotate(f"{run2_l4_base[i]:.1f}", (x[i], run2_l4_base[i] + 1.2), ha="center", fontsize=8, fontweight="bold")
+        # Annotate run 3 with delta vs baseline
+        delta = ((run3_l4_opt[i] - run2_l4_base[i]) / run2_l4_base[i]) * 100
+        delta_str = f"\n(+{delta:.0f}%)" if delta >= 5 else ""
+        ax.annotate(f"{run3_l4_opt[i]:.1f}{delta_str}", (x[i] + w, run3_l4_opt[i] + 1.2),
+                    ha="center", fontsize=8, fontweight="bold", color="#0D47A1")
+
+    ax.set_title("So sánh thông lượng qua 3 đợt đo chuẩn: T4 -> L4 Baseline -> L4 Tối ưu (FPS)", pad=15)
+    ax.set_ylabel("Thông lượng (Khung hình / Giây - FPS)")
+    ax.set_xticks(x)
+    ax.set_xticklabels(models, fontweight="semibold")
+    ax.set_ylim(0, 118)
+    ax.legend(loc="upper right", framealpha=0.95)
+
+    save_path = os.path.join(out_dir, "07_three_benchmark_runs_evolution.png")
+    plt.savefig(save_path)
+    plt.close()
+    print(f"Generated: {save_path}")
+
+
+def chart_three_workloads(out_dir):
+    """Chart 8: Throughput across 3 real-world video workloads (Controlled vs People vs Cars)."""
+    models = ["YOLOv8n", "YOLO11n", "YOLO-World v2", "RT-DETR / D-FINE"]
+    controlled_fps = [97.47, 80.12, 72.45, 73.00]
+    people_fps = [102.43, 86.85, 75.68, 76.96]
+    cars_fps = [106.52, 88.31, 79.74, 79.58]
+
+    fig, ax = plt.subplots(figsize=(10.5, 5.8))
+    x = np.arange(len(models))
+    w = 0.26
+
+    r1 = ax.bar(x - w, controlled_fps, w, label="Tập 1: Controlled Video", color="#8E24AA", edgecolor="black", linewidth=0.6, alpha=0.9)
+    r2 = ax.bar(x, people_fps, w, label="Tập 2: People Tracking Video", color="#00897B", edgecolor="black", linewidth=0.6, alpha=0.9)
+    r3 = ax.bar(x + w, cars_fps, w, label="Tập 3: Cars / Traffic Video", color="#43A047", edgecolor="black", linewidth=0.6, alpha=0.95)
+
+    for i in range(len(models)):
+        ax.annotate(f"{controlled_fps[i]:.1f}", (x[i] - w, controlled_fps[i] + 1.2), ha="center", fontsize=8.5, fontweight="bold")
+        ax.annotate(f"{people_fps[i]:.1f}", (x[i], people_fps[i] + 1.2), ha="center", fontsize=8.5, fontweight="bold")
+        ax.annotate(f"{cars_fps[i]:.1f}", (x[i] + w, cars_fps[i] + 1.2), ha="center", fontsize=8.5, fontweight="bold", color="#1B5E20")
+
+    ax.set_title("So sánh thông lượng trên 3 tập video thực tế (NVIDIA L4 Managed Stream, FPS)", pad=15)
+    ax.set_ylabel("Thông lượng luồng video (FPS)")
+    ax.set_xticks(x)
+    ax.set_xticklabels(models, fontweight="semibold")
+    ax.set_ylim(0, 125)
+    ax.legend(loc="upper right", framealpha=0.95)
+
+    save_path = os.path.join(out_dir, "08_three_workloads_comparison.png")
+    plt.savefig(save_path)
+    plt.close()
+    print(f"Generated: {save_path}")
+
+
 def main():
     # Target directory: analyzt
     out_dir = "analyzt"
@@ -317,6 +389,8 @@ def main():
     chart_mining_curation(out_dir)
     chart_l4_vs_t4_scaling(out_dir)
     chart_nms_microbenchmarks(out_dir)
+    chart_three_benchmark_runs(out_dir)
+    chart_three_workloads(out_dir)
 
     # Also copy to benchmarks/analyzt for convenience
     import shutil

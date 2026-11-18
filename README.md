@@ -252,6 +252,10 @@ Klygo is rigorously benchmarked across 4 major deep learning backends (Ultralyti
 | :---: | :---: |
 | ![Throughput](analyzt/01_multi_backend_throughput.png) | ![Mining Curation](analyzt/04_mining_curation_accuracy.png) |
 
+| 3 Benchmark Runs (T4 -> L4 Baseline -> L4 Opt) | 3 Real-World Video Workloads (Controlled/People/Cars) |
+| :---: | :---: |
+| ![3 Runs Evolution](analyzt/07_three_benchmark_runs_evolution.png) | ![3 Video Workloads](analyzt/08_three_workloads_comparison.png) |
+
 👉 **For complete visualization charts, telemetry data, and hardware scaling comparisons, see the [Visual Benchmark Analysis Report](analyzt/README.md).**
 
 
