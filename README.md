@@ -60,51 +60,9 @@ Building modern Computer Vision applications typically involves juggling conflic
 
 Klygo is organized into four cooperative layers with shared foundational utilities:
 
-```mermaid
-flowchart TD
-    subgraph L1["1. Storage, Config & Datasets"]
-        direction LR
-        files["klygo.files"]
-        archive["klygo.archive"]
-        config["klygo.config"]
-        datasets["klygo.datasets"]
-        mining["klygo.mining"]
-    end
-
-    subgraph L2["2. Media & Preprocessing"]
-        direction LR
-        media["klygo.media"]
-        prep["klygo.preprocessing (trace)"]
-    end
-
-    subgraph L3["3. Multi-Backend AI Models"]
-        direction LR
-        yolo["Ultralytics YOLO"]
-        dino["Grounding DINO"]
-        rcnn["Torchvision Faster R-CNN"]
-        dfine["KerasHub RT-DETR / D-FINE"]
-    end
-
-    subgraph L4["4. Outputs, Postprocessing, Metrics & Visual"]
-        direction LR
-        outputs["klygo.outputs"]
-        post["klygo.postprocessing"]
-        metrics["klygo.metrics"]
-        visual["klygo.visual"]
-    end
-
-    subgraph Foundation["Shared Foundation"]
-        direction LR
-        utils["klygo.utils"]
-        validators["klygo.validators"]
-    end
-
-    L1 --> L2 --> L3 --> L4
-    Foundation -.-> L1
-    Foundation -.-> L2
-    Foundation -.-> L3
-    Foundation -.-> L4
-```
+<p align="center">
+  <img src="analyzt/klygo_architecture.png" alt="Klygo 2.1.1 System Architecture" width="100%">
+</p>
 
 ### Module Directory
 
@@ -297,42 +255,44 @@ archive.extract("backup.zip", output_dir="restored_dir", overwrite=True)
 
 ## Benchmark Visualizations & Performance Telemetry
 
-All performance metrics and charts are generated **100% dynamically from verified hardware telemetry** on **NVIDIA L4 24GB (Ada Lovelace)** and **NVIDIA T4 16GB** GPUs.
+All performance metrics and charts are generated **100% directly from verified scientific benchmark suites** across **NVIDIA L4 24GB (Ada Lovelace)** and **COCO val2017** (`val2017_yolo`, 5,000 images, 35k annotations) and **1080p H.264** video streams.
 
 ### Executive Summary
 
-| Category | Key Metric / Result | Reference Chart |
-| :--- | :--- | :--- |
-| **Multi-Backend Throughput** | Up to **95.8 FPS** (`YOLOv8n`) & **84.2 FPS** (`YOLO11n`) in full Managed Stream mode on NVIDIA L4 | [01_multi_backend_throughput.png](analyzt/01_multi_backend_throughput.png) |
-| **Zero-Loss Pipeline Efficiency** | Retains **95.9%–98.4%** of raw upstream throughput while providing automatic affine coordinate restoration and normalized detection schemas | [02_klygo_pipeline_overhead.png](analyzt/02_klygo_pipeline_overhead.png) |
-| **Streaming Latency (TTFF)** | **12.15 ms** Time-To-First-Frame on L4 GPU; **14.2% faster** first-frame delivery than upstream generators via prefetching | [03_first_frame_latency_ttff.png](analyzt/03_first_frame_latency_ttff.png) |
-| **Intelligent Dataset Curation** | `klygo.mining` achieves **40.06% mAP@50-95** (`rare_first_b`, 350 images), beating full raw dataset (**39.38% mAP**, 848 images) with 58.7% fewer images | [04_mining_curation_accuracy.png](analyzt/04_mining_curation_accuracy.png) |
-| **Hardware Acceleration** | NVIDIA L4 yields **+38.3% to +73.2%** throughput acceleration over NVIDIA T4 across detection backends | [05_gpu_acceleration_l4_vs_t4.png](analyzt/05_gpu_acceleration_l4_vs_t4.png) |
-| **Microbenchmark Acceleration** | CuPy GPU NMS delivers **4.3× speedup** over NumPy CPU at 2,000 candidate bounding boxes | [06_nms_gpu_speedup.png](analyzt/06_nms_gpu_speedup.png) |
-| **3-Round Progression** | Pipeline optimizations boost throughput by **+30.6%–37.3% FPS** from L4 Baseline to L4 Optimized | [07_three_benchmark_runs_evolution.png](analyzt/07_three_benchmark_runs_evolution.png) |
-| **Real Video Workloads** | Steady **75–106.5 FPS** maintained across 3 real video domains (`controlled`, `people`, `cars`) | [08_three_workloads_comparison.png](analyzt/08_three_workloads_comparison.png) |
-| **Mining Pareto Frontier** | `balance_median` reaches **39.46% mAP** with only **228 images** (73.1% dataset reduction) | [09_mining_pareto_accuracy_vs_data_size.png](analyzt/09_mining_pareto_accuracy_vs_data_size.png) |
-| **Latency vs Throughput Trajectory** | All 5 detector architectures cut latency in half (**10.4–24.3 ms**) and scale to peak FPS across 3 runs | [10_three_benchmark_runs_trajectory.png](analyzt/10_three_benchmark_runs_trajectory.png) |
+| Category | Key Metric / Result | Official Source | Reference Chart |
+| :--- | :--- | :--- | :--- |
+| **Model Throughput** | Up to **98.8 FPS** (`yolo`, float32/float16) & **84.2 FPS** (`yolo11`) across raw, native, and managed modes on NVIDIA L4 | [`performance/colab_l4_val2017`](benchmarks/results/performance/colab_l4_val2017_2026_11_15/REPORT.md) | [01_model_fps_throughput.png](analyzt/01_model_fps_throughput.png) |
+| **Batch & Worker Scaling** | Throughput scales up to **220+ FPS** with batch size 16 and multi-worker prefetch | [`performance/colab_l4_val2017`](benchmarks/results/performance/colab_l4_val2017_2026_11_15/REPORT.md) | [02_scaling_batch_workers.png](analyzt/02_scaling_batch_workers.png) |
+| **Model Cold-Load** | Lightweight YOLO weights load in **~0.10s**; large foundation models load in **2–4s** | [`performance/colab_l4_val2017`](benchmarks/results/performance/colab_l4_val2017_2026_11_15/REPORT.md) | [03_model_load_latency.png](analyzt/03_model_load_latency.png) |
+| **1080p Video Streaming** | Steady **65–90 FPS** sustained on full HD video across YOLO detectors | [`video/colab_l4_aisle_480f_1080p`](benchmarks/results/video/colab_l4_aisle_480f_1080p_2026_11_16/REPORT.md) | [04_video_stream_throughput.png](analyzt/04_video_stream_throughput.png) |
+| **Streaming Latency (TTFF)** | Klygo prefetch delivers first frame in **<100 ms**, eliminating multi-second raw decode blocks | [`video/colab_l4_aisle_480f_1080p`](benchmarks/results/video/colab_l4_aisle_480f_1080p_2026_11_16/REPORT.md) | [05_video_first_frame_latency_ttff.png](analyzt/05_video_first_frame_latency_ttff.png) |
+| **Multi-Model Accuracy** | Grounding DINO Base achieves **0.665 mAP@50**; YOLO26 achieves **0.510 mAP@50** on COCO val2017 | [`metrics/colab_l4_val2017`](benchmarks/results/metrics/colab_l4_val2017_2026_11_17/REPORT.md) | [06_detection_accuracy_map_leaderboard.png](analyzt/06_detection_accuracy_map_leaderboard.png) |
+| **Object Scale Breakdown** | Precision breakdown across Small (<32² px), Medium (32²–96² px), and Large (>96² px) targets | [`metrics/colab_l4_val2017`](benchmarks/results/metrics/colab_l4_val2017_2026_11_17/REPORT.md) | [07_object_scale_breakdown.png](analyzt/07_object_scale_breakdown.png) |
+| **Diagnostic Calibration** | Detailed quantification of localization error, classification error, and false negatives | [`metrics/colab_l4_val2017`](benchmarks/results/metrics/colab_l4_val2017_2026_11_17/REPORT.md) | [08_error_diagnostics_breakdown.png](analyzt/08_error_diagnostics_breakdown.png) |
+| **Curation Downstream mAP** | Curated subsets match full dataset training accuracy with 50%+ fewer frames | [`mining/colab_l4_val2017`](benchmarks/results/mining/colab_l4_val2017_2026_11_17/REPORT.md) | [09_mining_curation_downstream_map.png](analyzt/09_mining_curation_downstream_map.png) |
+| **Curation Precision & Recall** | Optimal operating points between precision-focused and recall-focused data pruning | [`mining/colab_l4_val2017`](benchmarks/results/mining/colab_l4_val2017_2026_11_17/REPORT.md) | [10_mining_f1_precision_recall.png](analyzt/10_mining_f1_precision_recall.png) |
+| **Coverage & Visual Diversity** | 100% rare-tail class retention with high visual cluster diversity | [`mining/colab_l4_val2017`](benchmarks/results/mining/colab_l4_val2017_2026_11_17/REPORT.md) | [11_mining_coverage_and_diversity.png](analyzt/11_mining_coverage_and_diversity.png) |
+| **GPU Acceleration (CUDA/CuPy)** | Vectorized CuPy operations deliver major speedups over CPU for metrics and box matching | [`performance/colab_l4_val2017`](benchmarks/results/performance/colab_l4_val2017_2026_11_15/REPORT.md) | [12_gpu_acceleration_metrics_cuda_vs_cpu.png](analyzt/12_gpu_acceleration_metrics_cuda_vs_cpu.png) |
 
 ---
 
 ### Visual Benchmark Gallery
 
-| Multi-Backend Throughput (NVIDIA L4) | Managed Pipeline Overhead & Efficiency |
+| Multi-Model Inference Throughput (FPS) | Batch & Multi-Worker Throughput Scaling |
 | :---: | :---: |
-| ![Throughput](analyzt/01_multi_backend_throughput.png) | ![Pipeline Overhead](analyzt/02_klygo_pipeline_overhead.png) |
+| ![Throughput](analyzt/01_model_fps_throughput.png) | ![Scaling](analyzt/02_scaling_batch_workers.png) |
 
-| Time-To-First-Frame (TTFF) Streaming Latency | Hardware Scaling: NVIDIA T4 vs NVIDIA L4 |
+| End-to-End 1080p Video Streaming FPS | Time-To-First-Frame (TTFF) Streaming Latency |
 | :---: | :---: |
-| ![TTFF Latency](analyzt/03_first_frame_latency_ttff.png) | ![T4 vs L4](analyzt/05_gpu_acceleration_l4_vs_t4.png) |
+| ![Video Streaming Throughput](analyzt/04_video_stream_throughput.png) | ![Video TTFF Latency](analyzt/05_video_first_frame_latency_ttff.png) |
 
-| Progression across 3 Benchmark Runs (T4 -> L4 Base -> L4 Opt) | Throughput across 3 Real Video Workloads (Controlled/People/Cars) |
+| Detection & Localization Accuracy Leaderboard | Object Scale Breakdown (Small / Medium / Large AP) |
 | :---: | :---: |
-| ![3 Benchmark Runs Evolution](analyzt/07_three_benchmark_runs_evolution.png) | ![3 Video Workloads](analyzt/08_three_workloads_comparison.png) |
+| ![Detection Accuracy Leaderboard](analyzt/06_detection_accuracy_map_leaderboard.png) | ![Object Scale Breakdown](analyzt/07_object_scale_breakdown.png) |
 
-| Mining Dataset Size vs. Accuracy Pareto Frontier | 3-Round Latency vs. Throughput Trajectory |
+| Mining Downstream Training Accuracy (mAP@50-95) | Mining Precision, Recall & F1 Trade-offs |
 | :---: | :---: |
-| ![Mining Pareto Frontier](analyzt/09_mining_pareto_accuracy_vs_data_size.png) | ![Optimization Trajectory](analyzt/10_three_benchmark_runs_trajectory.png) |
+| ![Mining Downstream Accuracy](analyzt/09_mining_curation_downstream_map.png) | ![Mining Precision Recall](analyzt/10_mining_f1_precision_recall.png) |
 
 👉 **For the complete scientific benchmark reports and reproduction scripts, see [Visual Benchmark Analysis Report](analyzt/README.md).**
 
