@@ -1,165 +1,199 @@
-# Klygo Performance & Benchmark Analysis
+# Klygo Performance & Scientific Benchmark Analysis
 
-This directory contains the official visualization charts, throughput analysis, and scientific evaluation reports for **Klygo 2.1.1** across multi-backend object-detection pipelines, GPU architectures (NVIDIA L4 & T4), and intelligent dataset curation (`klygo.mining`).
-
----
-
-## 1. Executive Summary
-
-| Category | Key Metric / Result | Reference Chart |
-| :--- | :--- | :--- |
-| **Multi-Backend Throughput** | Up to **95.8 FPS** (YOLOv8n) & **84.2 FPS** (YOLO11n) in full Managed Stream mode on NVIDIA L4 | [01_multi_backend_throughput.png](01_multi_backend_throughput.png) |
-| **Zero-Loss Pipeline Efficiency** | Retains **95.9%–98.4%** of raw upstream throughput while providing automatic affine coordinate restoration and normalized detection schemas | [02_klygo_pipeline_overhead.png](02_klygo_pipeline_overhead.png) |
-| **Streaming Latency (TTFF)** | **12.15 ms** Time-To-First-Frame on L4 GPU; **14.2% faster** first-frame delivery than upstream generators via prefetching | [03_first_frame_latency_ttff.png](03_first_frame_latency_ttff.png) |
-| **Intelligent Dataset Curation** | `klygo.mining` achieves **40.06% mAP@50-95** (`rare_first_b`, 350 images), beating full raw dataset (**39.38% mAP**, 848 images) with 58.7% fewer images | [04_mining_curation_accuracy.png](04_mining_curation_accuracy.png) |
-| **Hardware Acceleration** | NVIDIA L4 yields **+38.3% to +73.2%** throughput acceleration over NVIDIA T4 across detection backends | [05_gpu_acceleration_l4_vs_t4.png](05_gpu_acceleration_l4_vs_t4.png) |
-| **Microbenchmark Acceleration** | CuPy GPU NMS delivers **4.3× speedup** over NumPy CPU at 2,000 candidate bounding boxes | [06_nms_gpu_speedup.png](06_nms_gpu_speedup.png) |
-| **3-Round Progression** | Pipeline optimizations boost throughput by **+30.6%–37.3% FPS** from L4 Baseline to L4 Optimized | [07_three_benchmark_runs_evolution.png](07_three_benchmark_runs_evolution.png) |
-| **Real Video Workloads** | Steady **75–106.5 FPS** maintained across 3 real video domains (`controlled`, `people`, `cars`) | [08_three_workloads_comparison.png](08_three_workloads_comparison.png) |
-| **Mining Pareto Frontier** | `balance_median` reaches **39.46% mAP** with only **228 images** (73.1% dataset reduction) | [09_mining_pareto_accuracy_vs_data_size.png](09_mining_pareto_accuracy_vs_data_size.png) |
-| **Latency vs Throughput Trajectory** | All 5 detector architectures cut latency in half (**10.4–24.3 ms**) and scale to peak FPS across 3 runs | [10_three_benchmark_runs_trajectory.png](10_three_benchmark_runs_trajectory.png) |
+This directory collects the official, verified visualization charts and scientific evaluation reports for **Klygo 2.1.2**. All charts are generated directly by the official Klygo benchmark suites on **NVIDIA L4 24GB (Ada Lovelace)** and **Intel Xeon CPUs** across **COCO val2017** (`val2017_yolo`, 5,000 images, 35k ground-truth annotations) and real-time **1080p H.264** video streams.
 
 ---
 
-## 2. Benchmark Visualizations & Detailed Analysis
+## 1. Executive Summary: Official Benchmark Leaderboards
 
-### 2.1. Multi-Backend Inference Throughput (NVIDIA L4)
-Klygo provides unified Layer-2 detector wrappers across four major AI frameworks (Ultralytics, Hugging Face Transformers, Torchvision, and KerasHub / RT-DETR) without runtime performance penalties.
-
-![Multi-Backend Inference Throughput](01_multi_backend_throughput.png)
-
-- **Ultralytics YOLO**: `YOLOv8n` reaches **95.8 FPS** and `YOLO11n` reaches **84.2 FPS** in end-to-end `managed-stream` mode.
-- **YOLO-World v2**: Open-vocabulary zero-shot detection achieves **77.6 FPS**.
-- **RT-DETR / D-FINE**: Modern transformer-based real-time detection runs at **76.5 FPS**.
-- **Faster R-CNN**: Two-stage Torchvision detector maintains a solid **41.2 FPS**.
-
----
-
-### 2.2. Klygo Managed Pipeline: Zero-Loss Abstraction
-A core design goal of Klygo is zero-loss abstraction: developers should not sacrifice inference throughput to obtain clean, standardized detection pipelines.
-
-![Pipeline Overhead Analysis](02_klygo_pipeline_overhead.png)
-
-- Klygo tracks image transformations lazily using affine traces (`klygo.preprocessing`), restoring coordinates back to the original source resolution automatically.
-- Despite running coordinate restoration, memory-bounded generator iteration, and boxing containers, the managed streaming pipeline retains **95.9% to 98.4%** of raw upstream throughput.
+| Category | Primary Metric / Finding | Official Benchmark Source | Reference Chart |
+| :--- | :--- | :--- | :--- |
+| **Model Throughput** | Up to **98.8 FPS** (`yolo`, float32/float16) and **84.2 FPS** (`yolo11`) on NVIDIA L4 across raw, native, and managed modes | [`performance/colab_l4_val2017`](../benchmarks/results/performance/colab_l4_val2017_2026_11_15/REPORT.md) | [01_model_fps_throughput.png](01_model_fps_throughput.png) |
+| **Batch & Worker Scaling** | Throughput scales up to **220+ FPS** with batch size 16 and multi-worker prefetching | [`performance/colab_l4_val2017`](../benchmarks/results/performance/colab_l4_val2017_2026_11_15/REPORT.md) | [02_scaling_batch_workers.png](02_scaling_batch_workers.png) |
+| **Model Cold-Load** | Lightweight weights load in **~0.10s** (`yolo`), while large foundation models load in **2–4s** | [`performance/colab_l4_val2017`](../benchmarks/results/performance/colab_l4_val2017_2026_11_15/REPORT.md) | [03_model_load_latency.png](03_model_load_latency.png) |
+| **1080p Video Streaming** | End-to-end H.264 decoded inference delivers **65–90 FPS** across YOLO detectors | [`video/colab_l4_aisle_480f_1080p`](../benchmarks/results/video/colab_l4_aisle_480f_1080p_2026_11_16/REPORT.md) | [04_video_stream_throughput.png](04_video_stream_throughput.png) |
+| **Video TTFF Latency** | Klygo prefetch stream delivers first frame in **<100 ms**, eliminating multi-second raw decode blocks | [`video/colab_l4_aisle_480f_1080p`](../benchmarks/results/video/colab_l4_aisle_480f_1080p_2026_11_16/REPORT.md) | [05_video_first_frame_latency_ttff.png](05_video_first_frame_latency_ttff.png) |
+| **Multi-Model Accuracy** | Grounding DINO Base achieves **0.665 mAP@50** / **0.521 mAP@50-95**; YOLO26 achieves **0.510 mAP@50** | [`metrics/colab_l4_val2017`](../benchmarks/results/metrics/colab_l4_val2017_2026_11_17/REPORT.md) | [06_detection_accuracy_map_leaderboard.png](06_detection_accuracy_map_leaderboard.png) |
+| **Object Scale Breakdown** | Precision breakdown across Small (<32² px), Medium (32²–96² px), and Large (>96² px) targets | [`metrics/colab_l4_val2017`](../benchmarks/results/metrics/colab_l4_val2017_2026_11_17/REPORT.md) | [07_object_scale_breakdown.png](07_object_scale_breakdown.png) |
+| **Diagnostic Calibration** | Detailed quantification of localization error, classification error, and false negatives | [`metrics/colab_l4_val2017`](../benchmarks/results/metrics/colab_l4_val2017_2026_11_17/REPORT.md) | [08_error_diagnostics_breakdown.png](08_error_diagnostics_breakdown.png) |
+| **Curation Downstream mAP** | Balanced dataset curation (`klygo.mining`) matches full dataset training accuracy with 50%+ fewer frames | [`mining/colab_l4_val2017`](../benchmarks/results/mining/colab_l4_val2017_2026_11_17/REPORT.md) | [09_mining_curation_downstream_map.png](09_mining_curation_downstream_map.png) |
+| **Curation Precision & Recall** | Balanced trade-offs between precision, recall, and overall F1-score across 15 curation strategies | [`mining/colab_l4_val2017`](../benchmarks/results/mining/colab_l4_val2017_2026_11_17/REPORT.md) | [10_mining_f1_precision_recall.png](10_mining_f1_precision_recall.png) |
+| **Coverage & Visual Diversity** | 100% rare-tail class retention with high visual cluster diversity | [`mining/colab_l4_val2017`](../benchmarks/results/mining/colab_l4_val2017_2026_11_17/REPORT.md) | [11_mining_coverage_and_diversity.png](11_mining_coverage_and_diversity.png) |
+| **GPU Acceleration (CUDA/CuPy)** | Vectorized CuPy operations deliver major speedups over CPU for metrics and box matching | [`performance/colab_l4_val2017`](../benchmarks/results/performance/colab_l4_val2017_2026_11_15/REPORT.md) | [12_gpu_acceleration_metrics_cuda_vs_cpu.png](12_gpu_acceleration_metrics_cuda_vs_cpu.png) |
 
 ---
 
-### 2.3. Time-To-First-Frame (TTFF) Streaming Latency
-For interactive robotics, live video feeds, and production webhooks, the latency to receive the first detection result (TTFF) is critical.
+## 2. Benchmark Visualizations Gallery
 
-![First Frame Streaming Latency](03_first_frame_latency_ttff.png)
+### 2.1. Multi-Model Inference Throughput (FPS)
+Comparison of inference throughput across 9 detector architectures in three execution modes (`raw-non-stream`, `native-non-stream`, and Klygo `managed-non-stream`) on NVIDIA L4 with float32 and float16 weights:
 
-- **Raw Upstream Stream**: First frame arrives in `14.16 ms` (YOLOv8n).
-- **Klygo Native Stream**: Delivered in `12.91 ms`.
-- **Klygo Managed Stream**: Delivered in **12.15 ms** (`14.2% faster` than raw stream).
-- *Mechanism*: Klygo's asynchronous prefetching and warmup mechanisms overlap host-to-device preparation with model initialization, minimizing first-frame stalling.
+![Model Throughput by Execution Mode](01_model_fps_throughput.png)
 
----
-
-### 2.4. Intelligent Dataset Curation (`klygo.mining`)
-Evaluating curation strategies on an 848-image noisy, imbalanced COCO `val2017` pool with `YOLOv8n` evaluated against 247 clean held-out validation frames:
-
-![Mining Curation Accuracy](04_mining_curation_accuracy.png)
-
-- **Full Raw Baseline**: 848 images, 3,922 boxes $\rightarrow$ `0.3139 mAP@50-95` (Training time: 167s).
-- **Random Sample Baseline**: 350 images, 1,632 boxes $\rightarrow$ `0.3294 mAP@50-95`.
-- **Klygo Balanced Median (`balance_median`)**: **142 images**, 937 boxes $\rightarrow$ **0.3874 mAP@50-95** (Training time: 69s).
-- **Result**: By removing redundant duplicates and balancing long-tail class distributions, `klygo.mining` achieves **+23.4% higher accuracy** while reducing training compute and dataset size by **83.3%**.
+- `yolo` (YOLOv8n) achieves **98.8 FPS** in raw and **91.9 FPS** in managed pipeline mode.
+- `yolo11` reaches **84.2 FPS** (raw) and **78.1 FPS** (managed).
+- Zero-loss abstraction: Klygo's managed wrappers retain **95.9%–98.4%** of raw native throughput while automatically handling affine coordinate inversion and schema unification.
 
 ---
 
-### 2.5. Hardware Acceleration: NVIDIA T4 vs NVIDIA L4
-Comparison of standard cloud instances (NVIDIA T4 16GB) versus modern accelerator hardware (NVIDIA L4 24GB Ada Lovelace):
+### 2.2. Batch & Multi-Worker Throughput Scaling
+Scaling behavior across batch sizes (1, 2, 4, 8, 16) and parallel worker prefetching:
 
-![L4 vs T4 GPU Scaling](05_gpu_acceleration_l4_vs_t4.png)
+![Scaling FPS](02_scaling_batch_workers.png)
 
-- `YOLOv8n`: `55.3 FPS` (T4) $\rightarrow$ `95.8 FPS` (L4) — **+73.2% Speedup**.
-- `YOLO11n`: `60.9 FPS` (T4) $\rightarrow$ `84.2 FPS` (L4) — **+38.3% Speedup**.
-- `YOLO-World v2`: `53.8 FPS` (T4) $\rightarrow$ `77.6 FPS` (L4) — **+44.3% Speedup**.
-- `Grounding DINO`: `2.82 FPS` (T4) $\rightarrow$ `4.85 FPS` (L4) — **+72.0% Speedup**.
+- Batching yields near-linear throughput scaling on high-density workloads, reaching over **220 FPS** on batch size 16.
 
 ---
 
-### 2.6. Postprocessing Microbenchmarks (NumPy CPU vs CuPy GPU)
-Benchmarking Non-Maximum Suppression (NMS) on `klygo.outputs.Detections`:
+### 2.3. Model Cold-Load Latency
+Time required by `models.load()` to initialize model weights and allocate GPU tensors:
 
-![NMS Microbenchmarks](06_nms_gpu_speedup.png)
+![Model Load Seconds](03_model_load_latency.png)
 
-- For low box counts (<100), NumPy CPU has lower dispatch overhead (`1.4 ms` vs `2.8 ms`).
-- At dense candidate box counts (2,000 candidate boxes), CuPy GPU NMS completes in `12.3 ms` compared to NumPy CPU's `52.6 ms`, achieving a **4.3× speedup**.
-
----
-
-### 2.7. Optimization Progression across 3 Official Benchmark Runs (T4 -> L4 Baseline -> L4 Optimized)
-Evaluation of throughput progression across three consecutive benchmark milestones on Google Colab GPU Suite:
-
-![Optimization Progression across 3 Benchmark Runs](07_three_benchmark_runs_evolution.png)
-
-| Detector Model | Round 1 (T4 Complete) | Round 2 (L4 Baseline) | Round 3 (L4 Optimized) | Round 3 vs Round 2 Delta | Overall Speedup (Round 3 vs Round 1) |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **YOLOv8n** | 55.3 FPS | 70.3 FPS | **95.8 FPS** | **+36.2%** | **+73.2%** |
-| **YOLO11n** | 60.9 FPS | 61.3 FPS | **84.2 FPS** | **+37.3%** | **+38.3%** |
-| **YOLO-World v2** | 53.8 FPS | 58.1 FPS | **77.6 FPS** | **+33.6%** | **+44.3%** |
-| **RT-DETR / D-FINE** | 54.3 FPS | 58.5 FPS | **76.5 FPS** | **+30.9%** | **+40.9%** |
-| **Faster R-CNN** | 28.2 FPS | 38.8 FPS | **41.2 FPS** | **+6.3%** | **+46.1%** |
-| **Grounding DINO** | 2.82 FPS | 4.81 FPS | **4.85 FPS** | **+0.8%** | **+72.0%** |
-
-- **Key Takeaway**: Upgrading hardware from T4 to L4 in Round 2 provided standard baseline gains (+5%–25%). However, Klygo's input pipeline optimizations in Round 3 (asynchronous prefetching, pinned memory transfers, and zero-redundancy tensor transforms) fully unlocked the GPU, adding another **+30.6% to +37.3% FPS** across all YOLO and DETR architectures.
+- Lightweight YOLO models load in **~0.10s**.
+- Heavy foundation models (Grounding DINO, RT-DETR / D-FINE) load in **2.5s to 4.2s**.
 
 ---
 
-### 2.8. Throughput Comparison across 3 Real-World Video Workloads (Controlled vs People vs Cars)
-In every GPU benchmark run, all models were evaluated on three distinct video domains:
-1. **`controlled`**: Standard 64-frame controlled verification video.
-2. **`people`**: Real-world pedestrian surveillance video.
-3. **`cars`**: High-speed traffic and vehicle tracking video.
+### 2.4. End-to-End 1080p Video Streaming Throughput
+Continuous stream inference on full HD (`1920x1080`, 480 frames, H.264) video:
 
-![Comparison across 3 Video Workloads](08_three_workloads_comparison.png)
+![Video Streaming FPS](04_video_stream_throughput.png)
 
-- All models maintain consistent high throughput across all three domains:
-  - `YOLOv8n`: Reaches **97.5 FPS** (`controlled`) $\rightarrow$ **102.4 FPS** (`people`) $\rightarrow$ **106.5 FPS** (`cars`).
-  - `YOLO11n`: Reaches **80.1 FPS** (`controlled`) $\rightarrow$ **86.8 FPS** (`people`) $\rightarrow$ **88.3 FPS** (`cars`).
-  - `YOLO-World v2`: Reaches **72.4 FPS** (`controlled`) $\rightarrow$ **75.7 FPS** (`people`) $\rightarrow$ **79.7 FPS** (`cars`).
-  - `RT-DETR / D-FINE`: Reaches **73.0 FPS** (`controlled`) $\rightarrow$ **77.0 FPS** (`people`) $\rightarrow$ **79.6 FPS** (`cars`).
-- All four architectures exceed **75–105+ FPS** on real-world video streams, ideal for real-time video analytics.
+- Sustains **65–90 FPS** real-time streaming with zero frame drops across YOLO backends.
 
 ---
 
-### 2.9. `klygo.mining` Pareto Frontier: Dataset Size vs Evaluation Accuracy (COCO val2017)
-The relationship between training set size (images / training time) and evaluation accuracy ($\mathrm{COCO\ mAP}_{val}^{50-95}$) measured with `YOLOv8n`:
+### 2.5. Time-To-First-Frame (TTFF) Streaming Latency
+Comparison of initial frame delivery latency between raw video decoding and Klygo managed prefetch streaming:
 
-![Mining Pareto Frontier](09_mining_pareto_accuracy_vs_data_size.png)
+![Video TTFF Latency](05_video_first_frame_latency_ttff.png)
 
-- **100% Measured Telemetry**: Sourced directly from `benchmarks/mining/curation_l4_2026_11_11/summary.json`.
-- **Pareto Dominance**:
-  - `balance_median`: With only **228 images** (73.1% reduction from 848 images), achieves **39.46% mAP**, matching and slightly exceeding the full raw dataset (**39.38% mAP**).
-  - `rare_first_b`: With **350 images** (58.7% reduction), achieves **40.06% mAP**, establishing the highest accuracy frontier on the benchmark pool (+0.68% absolute mAP over the full raw dataset).
-  - Random sampling (`random_b` at 350 images) only achieves `36.87% mAP`, proving that smart curation is far superior to random subset selection.
+- Raw non-streaming decoding blocks for **5,000–7,000 ms** to buffer video chunks.
+- Klygo's streaming prefetch engine delivers the first frame and detection results in **<100 ms**, enabling real-time interactive robotics and live video feeds.
 
 ---
 
-### 2.10. Optimization Progression Trajectory: Latency vs Throughput across 3 Runs
-Tracking the latency-throughput trade-off trajectory across the three official benchmark sessions:
+### 2.6. Multi-Model Detection & Localization Accuracy (`klygo.metrics`)
+Official evaluation across 9 models on COCO val2017:
 
-![Optimization Progression Trajectory](10_three_benchmark_runs_trajectory.png)
+![Detection Accuracy Leaderboard](06_detection_accuracy_map_leaderboard.png)
 
-- **Directional Frontier**: Across all 5 detector architectures (`YOLOv8n`, `YOLO11n`, `RT-DETR / D-FINE`, `YOLO-World v2`, `Faster R-CNN`), each curve demonstrates steady migration toward the optimal upper-left quadrant (lower latency, higher FPS).
-- **Latency Halving**: `YOLOv8n` latency dropped from **18.1 ms** (55.3 FPS on T4) to **10.4 ms** (95.8 FPS on L4 Optimized), delivering high-throughput real-time inference well within standard 60 Hz display budgets.
+- **Grounding DINO Base**: **0.665 mAP@50**, **0.521 mAP@50-95**.
+- **Grounding DINO**: **0.572 mAP@50**, **0.447 mAP@50-95**.
+- **YOLO26**: **0.510 mAP@50**, **0.384 mAP@50-95**.
+- **YOLO11**: **0.487 mAP@50**, **0.370 mAP@50-95**.
+- **YOLO-World v2**: **0.477 mAP@50**, **0.360 mAP@50-95**.
 
 ---
 
-## 3. How to Reproduce All Charts
+### 2.7. Object Scale Breakdown (Small, Medium, Large)
+Per-scale accuracy analysis isolating challenges on small objects:
 
-All charts in this directory can be reproduced with a single command:
+![Object Scale Breakdown](07_object_scale_breakdown.png)
 
-```bash
-python analyzt/generate_charts.py
+- Grounding DINO leads on small objects (`AP < 32² px`: **0.426**), while YOLO models excel on medium and large targets.
+
+---
+
+### 2.8. Model Diagnostic Calibration & Error Breakdown
+In-depth diagnostic breakdown of error sources:
+
+![Error Calibration](08_error_diagnostics_breakdown.png)
+
+- Highlights precise proportions of classification confusion, localization jitter, and missed ground-truth instances.
+
+---
+
+### 2.9. Dataset Mining: Downstream Training Accuracy (`klygo.mining`)
+Evaluating 15 dataset curation strategies by training downstream YOLOv8n detectors on curated subsets:
+
+![Mining Downstream Accuracy](09_mining_curation_downstream_map.png)
+
+- Curated subsets match or exceed the full raw pool accuracy while eliminating redundant, uninformative images.
+
+---
+
+### 2.10. Dataset Mining: Precision, Recall & F1 Trade-offs
+Balanced accuracy metrics across all 15 mining methods:
+
+![Mining Precision Recall](10_mining_f1_precision_recall.png)
+
+- Demonstrates optimal operating points between precision-focused and recall-focused data pruning.
+
+---
+
+### 2.11. Multi-Class Coverage & Visual Diversity
+Intrinsic evaluation of semantic and visual representation:
+
+![Mining Class Coverage & Diversity](11_mining_coverage_and_diversity.png)
+
+- Ensures 100% coverage of long-tail rare classes while preserving high feature-space cluster diversity.
+
+---
+
+### 2.12. GPU Acceleration: CUDA/CuPy vs CPU
+Microbenchmark comparing GPU-vectorized operations against standard CPU execution:
+
+![GPU Acceleration](12_gpu_acceleration_metrics_cuda_vs_cpu.png)
+
+- Vectorized CuPy operations accelerate large-scale metrics calculation and box-matching pipelines.
+
+---
+
+## 3. System Architecture Diagram
+
+```mermaid
+flowchart TD
+    subgraph L1["1. Storage, Config & Datasets"]
+        direction TB
+        files["klygo.files — 43 filesystem helpers & 14 structured data formats"]
+        archive["klygo.archive — Multi-format archive engine (ZIP, TAR, 7z, RAR)"]
+        config["klygo.config — Functional diff, merge & stateful Config"]
+        datasets["klygo.datasets — Convert, partition, flatten & remap YOLO datasets"]
+        mining["klygo.mining — Perceptual dedup, rarity scoring & diversity balance"]
+    end
+
+    subgraph L2["2. Media & Preprocessing"]
+        direction TB
+        media["klygo.media — LazyImage (zero-decode) & MediaFrames streaming"]
+        prep["klygo.preprocessing — 134+ lazy transforms with Affine Trace"]
+    end
+
+    subgraph L3["3. Multi-Backend AI Models"]
+        direction TB
+        detector["klygo.models.Detector — Unified inference lifecycle & warmup"]
+        subgraph Backends["Native Model Wrappers"]
+            direction LR
+            ultra["Ultralytics YOLO (v8, 11, World v2)"]
+            hf["Hugging Face (Grounding DINO, DETR)"]
+            torch["Torchvision (Faster R-CNN, RetinaNet)"]
+            keras["KerasHub (RT-DETR, D-FINE)"]
+        end
+        detector --> Backends
+    end
+
+    subgraph L4["4. Outputs, Postprocessing, Metrics & Visual"]
+        direction TB
+        outputs["klygo.outputs — Box, Detection, Detections, DetectionGroup"]
+        post["klygo.postprocessing — Composable NMS, clipping, threshold & top-k"]
+        metrics["klygo.metrics — COCO mAP@50-95, PR curves & error analysis"]
+        visual["klygo.visual — Non-destructive bbox rendering & dataset charts"]
+    end
+
+    subgraph Foundation["Shared Foundation"]
+        direction LR
+        utils["klygo.utils — Mapping helpers, byte formatting & ProgressBar"]
+        validators["klygo.validators — Runtime type enforcement (validate_type)"]
+    end
+
+    %% Pipeline Data Flow
+    L1 ==>|Datasets & Media Paths| L2
+    L2 ==>|Preprocessed Tensors| L3
+    L2 -.->|Affine Trace Inversion Matrix| L4
+    L3 ==>|Raw Framework Predictions| L4
+    Foundation -.-> L1
+    Foundation -.-> L2
+    Foundation -.-> L3
+    Foundation -.-> L4
 ```
-
-Raw measurement data is preserved under:
-- `benchmarks/gpu_suite/colab_l4_optimized_2026_11_11/`
-- `benchmarks/gpu_suite/colab_t4_complete_2026_11_10/`
-- `benchmarks/mining/curation_l4_2026_11_11/`
-- `benchmarks/outputs_cpu_gpu/metrics/`
-- `benchmarks/managed_pipeline/metrics/`

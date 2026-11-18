@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "klygo"
-version = "2.1.1"
+version = "2.1.2"
 description = "Unified high-performance Python toolkit for file operations, archives, configuration, dataset management, and zero-shot object detection pipelines."
 readme = "README.md"
 license = "MIT"
@@ -98,9 +98,11 @@ rarfile = [
 
 [project.urls]
 Homepage = "https://github.com/IchigoMazone/klygo"
+Source = "https://github.com/IchigoMazone/klygo"
 Repository = "https://github.com/IchigoMazone/klygo"
 Documentation = "https://github.com/IchigoMazone/klygo/tree/main/docs"
 Issues = "https://github.com/IchigoMazone/klygo/issues"
+Changelog = "https://github.com/IchigoMazone/klygo/releases"
 
 [tool.setuptools.packages.find]
 where = ["."]

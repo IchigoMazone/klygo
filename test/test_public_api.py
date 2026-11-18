@@ -6,7 +6,7 @@ from klygo import archive, config, datasets, files, media, models, outputs, post
 
 class TestPublicApi(unittest.TestCase):
     def test_public_modules(self):
-        self.assertEqual(klygo.__version__, "2.1.1")
+        self.assertEqual(klygo.__version__, "2.1.2")
         for module in (archive, config, datasets, files, media, models, outputs, postprocessing, preprocessing, visual):
             self.assertIsNotNone(module)
 
