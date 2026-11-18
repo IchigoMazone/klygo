@@ -76,7 +76,7 @@ with TemporaryDirectory() as directory:
 
     tar_path = root / "dataset.tar.gz"
     archive.compress(source, tar_path, compresslevel=9, verbose=False)
-    assert archive.test(tar_path)
+    assert archive.is_valid(tar_path)
 
     print(zip_path, contents_only, tar_path)
 ```

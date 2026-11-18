@@ -15,3 +15,13 @@ selected.save(
 )
 print(frame.device, frame.dtype)
 print(selected.to_dict())
+
+other = outputs.Detection(
+    [outputs.Box((12, 12, 42, 37), label="item", score=0.8)],
+    source_id=frame.source_id, frame_index=frame.frame_index,
+    image_size=frame.image_size,
+)
+frame.combine(other, method="weighted", iou=0.5)
+print("Combined boxes:", frame.boxes)
+
+print("Source image size:", frame.image.size)

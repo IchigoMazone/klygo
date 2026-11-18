@@ -30,9 +30,9 @@ class TestSplit(unittest.TestCase):
                 overwrite=True,
                 verbose=False
             )
-            class_zip = os.path.join(temp_dir, "split_apple.zip")
+            class_zip = os.path.join(temp_dir, "split_apple")
             assert os.path.exists(class_zip)
-            assert len(list_files(class_zip)) > 0
+            assert os.path.isdir(os.path.join(class_zip, "images"))
 
             # 2. Split by ratios
             split(
@@ -42,8 +42,8 @@ class TestSplit(unittest.TestCase):
                 overwrite=True,
                 verbose=False
             )
-            part0 = os.path.join(temp_dir, "split_part_0.zip")
-            part1 = os.path.join(temp_dir, "split_part_1.zip")
+            part0 = os.path.join(temp_dir, "split_part_0")
+            part1 = os.path.join(temp_dir, "split_part_1")
             assert os.path.exists(part0)
             assert os.path.exists(part1)
 

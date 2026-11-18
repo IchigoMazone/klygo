@@ -1,0 +1,32 @@
+[
+    {
+        "device": "cpu",
+        "frames": 100,
+        "group_keep_ms": 20.5281,
+        "post_pipeline_ms": 295.692,
+        "combine_ms": 224.7276,
+        "pack_ms": 9.9714,
+        "astype_fp16_ms": 9.2596,
+        "status": "passed"
+    },
+    {
+        "device": "cuda",
+        "frames": 100,
+        "group_keep_ms": 540.5621,
+        "post_pipeline_ms": 617.1292,
+        "combine_ms": 2184.3507,
+        "pack_ms": 303.8437,
+        "astype_fp16_ms": 319.7882,
+        "status": "passed"
+    },
+    {
+        "device": "transfer",
+        "frames": 100,
+        "group_keep_ms": 27.2702,
+        "post_pipeline_ms": 51.883,
+        "combine_ms": 0.0,
+        "pack_ms": 0.0,
+        "astype_fp16_ms": 0.0,
+        "status": "passed"
+    }
+]

@@ -1,0 +1,962 @@
+[
+  {
+    "model": "yolo",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 98.98,
+    "p50_ms": 9.53,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "raw-stream",
+    "status": "ok",
+    "fps_median": 100.09,
+    "p50_ms": 10.07,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 89.44,
+    "p50_ms": 10.82,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "native-stream",
+    "status": "ok",
+    "fps_median": 91.23,
+    "p50_ms": 11.04,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 91.85,
+    "p50_ms": 10.91,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 89.87,
+    "p50_ms": 10.49,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 98.41,
+    "p50_ms": 9.87,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "raw-stream",
+    "status": "ok",
+    "fps_median": 98.03,
+    "p50_ms": 9.86,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 85.75,
+    "p50_ms": 11.11,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "native-stream",
+    "status": "ok",
+    "fps_median": 88.34,
+    "p50_ms": 10.98,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 88.4,
+    "p50_ms": 11.02,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 89.16,
+    "p50_ms": 11.12,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 84.15,
+    "p50_ms": 11.55,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "raw-stream",
+    "status": "ok",
+    "fps_median": 82.1,
+    "p50_ms": 11.71,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 74.83,
+    "p50_ms": 13.2,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "native-stream",
+    "status": "ok",
+    "fps_median": 77.4,
+    "p50_ms": 12.85,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 77.9,
+    "p50_ms": 12.65,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 77.61,
+    "p50_ms": 12.63,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 82.71,
+    "p50_ms": 12.26,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "raw-stream",
+    "status": "ok",
+    "fps_median": 81.98,
+    "p50_ms": 12.07,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 73.38,
+    "p50_ms": 13.62,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "native-stream",
+    "status": "ok",
+    "fps_median": 72.5,
+    "p50_ms": 14.39,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 72.99,
+    "p50_ms": 13.62,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 74.14,
+    "p50_ms": 13.76,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 75.15,
+    "p50_ms": 12.61,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "raw-stream",
+    "status": "ok",
+    "fps_median": 75.99,
+    "p50_ms": 13.08,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 69.16,
+    "p50_ms": 14.95,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "native-stream",
+    "status": "ok",
+    "fps_median": 69.8,
+    "p50_ms": 14.23,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 70.71,
+    "p50_ms": 13.9,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 71.08,
+    "p50_ms": 13.73,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 70.24,
+    "p50_ms": 13.49,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "raw-stream",
+    "status": "ok",
+    "fps_median": 70.95,
+    "p50_ms": 13.84,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 62.8,
+    "p50_ms": 15.69,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "native-stream",
+    "status": "ok",
+    "fps_median": 64.11,
+    "p50_ms": 15.01,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 64.42,
+    "p50_ms": 15.34,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 65.99,
+    "p50_ms": 15.57,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 75.92,
+    "p50_ms": 12.94,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "raw-stream",
+    "status": "ok",
+    "fps_median": 75.89,
+    "p50_ms": 12.71,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 69.18,
+    "p50_ms": 14.25,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "native-stream",
+    "status": "ok",
+    "fps_median": 69.37,
+    "p50_ms": 14.52,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 70.69,
+    "p50_ms": 14.31,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 69.93,
+    "p50_ms": 14.12,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 74.12,
+    "p50_ms": 12.89,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "raw-stream",
+    "status": "ok",
+    "fps_median": 74.98,
+    "p50_ms": 13.04,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 68.83,
+    "p50_ms": 14.58,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "native-stream",
+    "status": "ok",
+    "fps_median": 67.25,
+    "p50_ms": 14.43,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 68.72,
+    "p50_ms": 14.1,
+    "parity_pass": true
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 69.35,
+    "p50_ms": 15.14,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "raw-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "native-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 5.64,
+    "p50_ms": 177.46,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 5.56,
+    "p50_ms": 179.77,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 5.54,
+    "p50_ms": 180.81,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 5.57,
+    "p50_ms": 179.0,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "raw-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "native-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 7.95,
+    "p50_ms": 125.9,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 7.83,
+    "p50_ms": 128.53,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 7.77,
+    "p50_ms": 128.62,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 7.83,
+    "p50_ms": 128.17,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "raw-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "native-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 4.35,
+    "p50_ms": 230.21,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 4.3,
+    "p50_ms": 228.44,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 4.31,
+    "p50_ms": 231.95,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 4.3,
+    "p50_ms": 229.05,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "raw-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "native-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 7.27,
+    "p50_ms": 136.71,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 7.17,
+    "p50_ms": 139.0,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 7.13,
+    "p50_ms": 139.78,
+    "parity_pass": true
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 7.14,
+    "p50_ms": 139.38,
+    "parity_pass": true
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "raw-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "native-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 42.25,
+    "p50_ms": 23.46,
+    "parity_pass": true
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 40.64,
+    "p50_ms": 24.78,
+    "parity_pass": true
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 39.33,
+    "p50_ms": 25.6,
+    "parity_pass": true
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 39.18,
+    "p50_ms": 25.36,
+    "parity_pass": true
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "raw-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "native-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 45.31,
+    "p50_ms": 22.57,
+    "parity_pass": true
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 42.84,
+    "p50_ms": 23.38,
+    "parity_pass": true
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 41.63,
+    "p50_ms": 23.89,
+    "parity_pass": true
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 41.27,
+    "p50_ms": 24.05,
+    "parity_pass": true
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float32",
+    "actual_dtype": "float32",
+    "mode": "raw-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float32",
+    "actual_dtype": "float32",
+    "mode": "native-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float32",
+    "actual_dtype": "float32",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 2.64,
+    "p50_ms": 380.33,
+    "parity_pass": true
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float32",
+    "actual_dtype": "float32",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 2.63,
+    "p50_ms": 379.14,
+    "parity_pass": true
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float32",
+    "actual_dtype": "float32",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 2.65,
+    "p50_ms": 386.34,
+    "parity_pass": true
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float32",
+    "actual_dtype": "float32",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 2.64,
+    "p50_ms": 380.9,
+    "parity_pass": true
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float16",
+    "actual_dtype": "float16",
+    "mode": "raw-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float16",
+    "actual_dtype": "float16",
+    "mode": "native-stream",
+    "status": "N/A",
+    "fps_median": null,
+    "p50_ms": null,
+    "parity_pass": null
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float16",
+    "actual_dtype": "float16",
+    "mode": "raw-non-stream",
+    "status": "ok",
+    "fps_median": 2.55,
+    "p50_ms": 389.69,
+    "parity_pass": true
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float16",
+    "actual_dtype": "float16",
+    "mode": "native-non-stream",
+    "status": "ok",
+    "fps_median": 2.55,
+    "p50_ms": 397.55,
+    "parity_pass": true
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float16",
+    "actual_dtype": "float16",
+    "mode": "managed-non-stream",
+    "status": "ok",
+    "fps_median": 2.55,
+    "p50_ms": 391.55,
+    "parity_pass": true
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float16",
+    "actual_dtype": "float16",
+    "mode": "managed-stream",
+    "status": "ok",
+    "fps_median": 2.55,
+    "p50_ms": 391.34,
+    "parity_pass": true
+  }
+]

@@ -26,7 +26,7 @@ class TestArchitecture(unittest.TestCase):
         self.assertEqual(len(combined), len(config.__all__))
 
     def test_public_exports_are_unique_and_available(self):
-        self.assertEqual(len(config.__all__), 21)
+        self.assertEqual(len(config.__all__), 19)
         self.assertEqual(len(config.__all__), len(set(config.__all__)))
         for name in config.__all__:
             with self.subTest(name=name):

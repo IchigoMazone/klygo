@@ -147,10 +147,6 @@ class TestMediaUnified(unittest.TestCase):
         self.assertEqual(len(filtered), 4)
         self.assertIsInstance(filtered, media.MediaFrames)
 
-        # filter (alias)
-        filtered2 = loaded.filter(lambda f: "02" not in str(f.path))
-        self.assertEqual(len(filtered2), 4)
-
         # where_quality on materialized frames
         quality_filtered = loaded.where_quality(min_brightness=0.3)
         self.assertIsInstance(quality_filtered, media.MediaFrames)
@@ -184,17 +180,20 @@ class TestMediaUnified(unittest.TestCase):
 
         # save_video from materialized
         out_vid1 = self.tmp_path / "from_frames.mp4"
-        saved1 = loaded.save_video(out_vid1, fps=15)
+        saved1 = out_vid1
+        loaded.save_video(saved1, fps=15)
         self.assertTrue(files.exists(saved1))
 
         # save_video from stream
         out_vid2 = self.tmp_path / "from_stream.mp4"
-        saved2 = streamed.save_video(out_vid2, fps=15)
+        saved2 = out_vid2
+        streamed.save_video(saved2, fps=15)
         self.assertTrue(files.exists(saved2))
 
         # save_images from stream
         out_imgs = self.tmp_path / "stream_out_imgs"
-        saved_imgs = streamed.save_images(out_imgs, prefix="st_")
+        streamed.save_images(out_imgs, prefix="st_")
+        saved_imgs = files.find(out_imgs, recursive=False)
         self.assertTrue(files.exists(out_imgs))
         self.assertEqual(len(saved_imgs), 5)
 

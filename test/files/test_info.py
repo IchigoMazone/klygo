@@ -22,7 +22,7 @@ class TestInfo(unittest.TestCase):
             self.assertTrue(result["is_file"])
             self.assertNotIn("hash", result)
 
-    def test_info_skips_content_reads_and_verbose_prints_table(self):
+    def test_info_skips_content_reads_and_returns_metadata(self):
         with TemporaryDirectory() as directory:
             source = Path(directory) / "data.bin"
             source.write_bytes(b"content")
@@ -30,17 +30,8 @@ class TestInfo(unittest.TestCase):
                 quiet_output = io.StringIO()
                 with redirect_stdout(quiet_output):
                     metadata = files.info(source)
-                output = io.StringIO()
-                with redirect_stdout(output):
-                    displayed = files.info(source, verbose=True)
-            self.assertEqual(metadata, displayed)
             self.assertEqual(quiet_output.getvalue(), "")
             self.assertEqual(metadata["size"], 7)
-            self.assertIn("File information", output.getvalue())
-            self.assertIn("data.bin", output.getvalue())
-            self.assertIn("size", output.getvalue())
-            with self.assertRaises(TypeError):
-                files.info(source, verbose=0)
 
     def test_directory_metadata(self):
         with TemporaryDirectory() as directory:

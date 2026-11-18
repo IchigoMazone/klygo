@@ -28,9 +28,6 @@ class YOLODetect(Detector):
 
     @contextmanager
     def _prediction_session(self, options):
-        # Predictor reuse belongs to this wrapper, not the generic task engine.
-        with self._prediction_lock:
-            execution.optimize_model(self.model)
         yield self.forward
 
     def format_results(self, raw_outputs):

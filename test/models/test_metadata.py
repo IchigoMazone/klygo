@@ -543,7 +543,7 @@ class TestModelMetadata(unittest.TestCase):
             self.assertNotIn("default", manager.to_dict())
             self.assertEqual(manager.to_dict()["post"]["threshold"], 0.6)
 
-            loaded = Config(path).read(verbose=False)
+            loaded = Config(path).load(verbose=False)
             self.assertEqual(loaded.model.device, "cuda")
             self.assertEqual(loaded.post.threshold, 0.6)
 
@@ -569,10 +569,10 @@ class TestModelMetadata(unittest.TestCase):
             )
 
             with TemporaryDirectory() as directory:
-                output_path = detector.export(files.join(directory, "detector.json"))
+                output_path = files.join(directory, "detector.json")
+                self.assertIsNone(detector.export(output_path))
                 exported = files.load(output_path, verbose=False)
 
-                self.assertEqual(output_path, files.path(directory) / "detector.json")
                 self.assertEqual(exported["model_id"], "yolo11n.pt")
                 self.assertEqual(
                     exported["class"],
@@ -587,10 +587,7 @@ class TestModelMetadata(unittest.TestCase):
                 self.assertEqual(restored.metadata.post.threshold, 0.55)
                 with self.assertRaises(FileExistsError):
                     detector.export(output_path)
-                self.assertEqual(
-                    detector.export(output_path, overwrite=True),
-                    output_path,
-                )
+                self.assertIsNone(detector.export(output_path, overwrite=True))
 
                 with self.assertRaisesRegex(ValueError, "requires a .json file"):
                     detector.export(files.join(directory, "detector.yaml"))
@@ -605,9 +602,9 @@ class TestModelMetadata(unittest.TestCase):
                 device="cpu",
                 threshold=0.6,
             )
-            exported = files.load(result, verbose=False)
+            self.assertIsNone(result)
+            exported = files.load(output_path, verbose=False)
 
-            self.assertEqual(result, files.path(output_path))
             self.assertEqual(exported["model_id"], "yolo11n.pt")
             self.assertEqual(exported["class"], "klygo.models.detection.YOLODetect")
             self.assertEqual(exported["model"]["device"], "cpu")
@@ -618,7 +615,7 @@ class TestModelMetadata(unittest.TestCase):
                 "_resolve_class",
                 return_value=RecordingDetector,
             ):
-                restored = models.load(result)
+                restored = models.load(output_path)
             self.assertIsInstance(restored, RecordingDetector)
             self.assertEqual(restored.model_id, "yolo11n.pt")
 

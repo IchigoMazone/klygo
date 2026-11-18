@@ -148,7 +148,7 @@ class RarBackend(ArchiveBackend):
                 results.append(name)
         return results
 
-    def get_info(self, archive_path: Path) -> Dict[str, Any]:
+    def info(self, archive_path: Path) -> Dict[str, Any]:
         """Normalize RAR sizes, counts, encryption state, and archive comment."""
         rarfile = self._check_rarfile()
         with rarfile.RarFile(archive_path, mode="r") as rf:
@@ -175,7 +175,7 @@ class RarBackend(ArchiveBackend):
                 "smallest_file": None,
             }
 
-    def test(self, archive_path: Path, raise_exception: bool = False) -> bool:
+    def is_valid(self, archive_path: Path, raise_exception: bool = False) -> bool:
         """Run ``rarfile`` integrity testing and optionally raise on failure."""
         rarfile = self._check_rarfile()
         try:

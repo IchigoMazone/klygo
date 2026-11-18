@@ -115,7 +115,6 @@ Implemented in `transforms.py`.
 | [`warp`](api/warp.md) | [Run](../../examples/preprocessing/warp.py) |
 | [`tile`](api/tile.md) | [Run](../../examples/preprocessing/tile.py) |
 | [`auto_orient`](api/auto_orient.md) | [Run](../../examples/preprocessing/auto_orient.py) |
-| [`exif_transpose`](api/exif_transpose.md) | [Run](../../examples/preprocessing/exif_transpose.py) |
 | [`strip_exif`](api/strip_exif.md) | [Run](../../examples/preprocessing/strip_exif.py) |
 | [`convert_color`](api/convert_color.md) | [Run](../../examples/preprocessing/convert_color.py) |
 | [`grayscale`](api/grayscale.md) | [Run](../../examples/preprocessing/grayscale.py) |

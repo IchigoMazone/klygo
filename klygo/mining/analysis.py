@@ -14,6 +14,8 @@ from typing import Any, Mapping, Optional
 import numpy as np
 
 from klygo.outputs import Detections
+from klygo import validators
+from klygo.utils.progress import _iter_progress
 
 from ._common import _Report, _normalize, _quality, _require
 
@@ -152,6 +154,7 @@ def stats(
     *,
     quality: bool = True,
     cooccurrence: bool = True,
+    verbose: bool = False,
 ) -> MiningStats:
     """Summarize an object-detection dataset at the image and annotation level.
 
@@ -168,6 +171,9 @@ def stats(
         noise, exposure). Requires reading image pixels.
     cooccurrence : bool, default=True
         Whether to compute the pairwise class co-occurrence frequency matrix.
+
+    verbose : bool, default=False
+        Display throttled progress for processing stages; disabled by default.
 
     Returns
     -------
@@ -191,9 +197,10 @@ def stats(
     >>> from klygo import datasets, mining
     >>> data = datasets.load("artifacts/datasets/flat_data", format="yolo", verbose=False)
     >>> summary = mining.stats(data)
-    >>> summary.show()
+    >>> utils.tabulate(summary.to_dict())
     >>> print(summary.imbalance_ratio)
     """
+    validators.validate_type(verbose, bool, "verbose")
     _require(data)
 
     image_counts: Counter[str] = Counter()
@@ -204,7 +211,7 @@ def stats(
     multilabel = 0
 
     # 1. Aggregate annotations, class frequencies, and relative box areas
-    for frame in data:
+    for frame in _iter_progress(data, verbose, "Annotation statistics"):
         labels = list(frame.labels)
         unique = sorted(set(labels))
 
@@ -228,7 +235,7 @@ def stats(
     positives = [value for value in image_counts.values() if value]
 
     # 2. Compute visual image quality distribution
-    quality_rows = _quality(data) if quality else []
+    quality_rows = _quality(data, verbose=verbose) if quality else []
     quality_summary = {
         key: {
             "mean": float(np.mean(values)),
@@ -269,6 +276,7 @@ def score(
     data: Detections,
     *,
     weights: Optional[Mapping[str, float]] = None,
+    verbose: bool = False,
 ) -> MiningScores:
     """Calculate normalized information and quality scores for every image.
 
@@ -286,6 +294,9 @@ def score(
         Relative weighting for each component. Supported keys are `'quality'`,
         `'rarity'`, `'coverage'`, and `'boxes'`.
         Default: `{'quality': 0.4, 'rarity': 0.3, 'coverage': 0.2, 'boxes': 0.1}`.
+
+    verbose : bool, default=False
+        Display throttled progress for processing stages; disabled by default.
 
     Returns
     -------
@@ -305,9 +316,10 @@ def score(
     >>> from klygo import datasets, mining
     >>> data = datasets.load("artifacts/datasets/flat_data", format="yolo", verbose=False)
     >>> scores = mining.score(data, weights={"quality": 0.6, "rarity": 0.4})
-    >>> scores.show()
+    >>> utils.tabulate(scores.to_dict())
     >>> print("Best score:", max(scores.values))
     """
+    validators.validate_type(verbose, bool, "verbose")
     _require(data)
 
     active = dict(weights or {"quality": 0.4, "rarity": 0.3, "coverage": 0.2, "boxes": 0.1})
@@ -320,7 +332,7 @@ def score(
     image_counts = Counter(label for frame in data for label in set(frame.labels))
 
     # 2. Extract and normalize visual quality components
-    quality_rows = _quality(data) if active.get("quality", 0) else [{} for _ in data]
+    quality_rows = _quality(data, verbose=verbose) if active.get("quality", 0) else [{} for _ in data]
     sharp = _normalize([row.get("sharpness", 0.0) for row in quality_rows])
     contrast = _normalize([row.get("contrast", 0.0) for row in quality_rows])
     entropy = _normalize([row.get("entropy", 0.0) for row in quality_rows])
@@ -329,7 +341,7 @@ def score(
 
     # 3. Assemble per-frame component breakdowns
     details: list[dict[str, float]] = []
-    for index, frame in enumerate(data):
+    for index, frame in enumerate(_iter_progress(data, verbose, "Scoring images")):
         labels = set(frame.labels)
         rarity = float(np.mean([1.0 / image_counts[label] for label in labels])) if labels else 0.0
         quality_value = (
@@ -372,6 +384,7 @@ def compare(
     after: Detections,
     *,
     quality: bool = False,
+    verbose: bool = False,
 ) -> MiningComparison:
     """Compare image, box, class, and imbalance deltas between two dataset states.
 
@@ -383,6 +396,9 @@ def compare(
         Modified dataset resulting from selection, deduplication, or balancing.
     quality : bool, default=False
         Whether to re-compute visual image quality metrics for both datasets.
+
+    verbose : bool, default=False
+        Display throttled progress for processing stages; disabled by default.
 
     Returns
     -------
@@ -401,11 +417,12 @@ def compare(
     >>> raw = datasets.load("artifacts/datasets/raw", format="yolo", verbose=False)
     >>> curated = mining.select(raw, method="weighted", limit=100)
     >>> comparison = mining.compare(raw, curated)
-    >>> comparison.show()
+    >>> utils.tabulate(comparison.to_dict())
     >>> print("Removed images:", comparison.changes["images"])
     """
-    first = stats(before, quality=quality)
-    second = stats(after, quality=quality)
+    validators.validate_type(verbose, bool, "verbose")
+    first = stats(before, quality=quality, verbose=verbose)
+    second = stats(after, quality=quality, verbose=verbose)
 
     changes = {
         "images": float(second.images - first.images),

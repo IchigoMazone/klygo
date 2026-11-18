@@ -64,7 +64,6 @@ report = detector.benchmark(
     threshold=0.8,
     iterations=2,
     warmup=1,
-    verbose=False,
 )
 print("Benchmark configuration:", report["predict_config"])
 print("Configuration after benchmark:", detector.predict_config)

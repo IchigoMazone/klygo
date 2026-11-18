@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 from PIL import Image
 
-from klygo.datasets import get_dataset_info, info
+from klygo.datasets import info
 from klygo.archive import compress, extract
 from klygo import config, files, media
 
@@ -28,16 +28,13 @@ def _create_sample_dataset(root: Path) -> Path:
 
 
 class TestInfo(unittest.TestCase):
-    def test_alias(self):
-        self.assertIs(get_dataset_info, info)
-
     def test_info_valid_zip(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             ds_dir = Path(tmpdir) / "source_ds"
             _create_sample_dataset(ds_dir)
             zip_path = Path(tmpdir) / "sample.zip"
             compress(ds_dir, zip_path, verbose=False)
-            res = get_dataset_info(zip_path, verbose=False)
+            res = info(zip_path)
             self.assertEqual(res["nc"], 1)
             self.assertEqual(res["classes"], ["apple"])
             self.assertEqual(res["total_images"], 4)
@@ -50,7 +47,7 @@ class TestInfo(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             ds_dir = Path(tmpdir) / "source_ds"
             _create_sample_dataset(ds_dir)
-            res = get_dataset_info(ds_dir, verbose=False)
+            res = info(ds_dir)
             self.assertEqual(res["nc"], 1)
             self.assertEqual(res["classes"], ["apple"])
             self.assertEqual(res["total_images"], 4)
@@ -59,20 +56,20 @@ class TestInfo(unittest.TestCase):
             self.assertIn("raw", res["splits"])
 
     def test_info_nonexistent(self):
-        print("Testing get_dataset_info on a non-existent source...")
+        print("Testing info on a non-existent source...")
         try:
-            get_dataset_info("non_existent_file_or_dir")
+            info("non_existent_file_or_dir")
             assert False, "Should raise FileNotFoundError"
         except FileNotFoundError as e:
             assert "Source not found" in str(e)
 
     def test_info_missing_images(self):
-        print("Testing get_dataset_info on a folder without images/ directory...")
+        print("Testing info on a folder without images/ directory...")
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
             (tmpdir / "data.yaml").write_text("names:\n  - apple\n", encoding="utf-8")
             try:
-                get_dataset_info(tmpdir)
+                info(tmpdir)
                 assert False, "Should raise FileNotFoundError"
             except FileNotFoundError as e:
                 assert "images directory not found" in str(e)

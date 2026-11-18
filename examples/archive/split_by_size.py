@@ -11,6 +11,8 @@ from examples.archive._support import make_archive, make_source, member_ending
 with TemporaryDirectory() as directory:
     root = files.path(directory)
     packed = make_archive(root)
-    parts = archive.split_by_size(packed, 0.00001, root / "parts", verbose=False)
+    parts_dir = root / "parts"
+    archive.split_by_size(packed, 0.00001, parts_dir, verbose=False)
+    parts = files.find(parts_dir)
     assert parts and all(files.is_file(part) for part in parts)
     print(parts)

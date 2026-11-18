@@ -48,6 +48,32 @@ class MiningOperationsTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    def test_verbose_is_optional_and_preserves_all_results(self) -> None:
+        from contextlib import redirect_stderr
+        from unittest.mock import patch
+        calls = [
+            (mining.stats, {}), (mining.score, {}),
+            (mining.find_duplicates, {}), (mining.deduplicate, {"keep": "first"}),
+            (mining.cluster, {"features": ("histogram",), "clusters": 2}),
+            (mining.select, {"method": "quality", "limit": 2}),
+            (mining.select, {"method": "diversity", "limit": 2}),
+            (mining.balance, {}),
+        ]
+        for operation, options in calls:
+            with self.subTest(operation=operation.__name__, options=options):
+                with patch("klygo.utils.progress.tqdm") as bars:
+                    expected = operation(self.data, **options).to_dict()
+                    bars.assert_not_called()
+                with redirect_stderr(StringIO()) as output:
+                    actual = operation(self.data, verbose=True, **options).to_dict()
+                self.assertEqual(actual, expected)
+                self.assertTrue(output.getvalue())
+                with self.assertRaises(TypeError):
+                    operation(self.data, verbose="yes", **options)
+        with redirect_stderr(StringIO()):
+            actual = mining.compare(self.data, self.data, quality=True, verbose=True)
+        self.assertEqual(actual.to_dict(), mining.compare(self.data, self.data, quality=True).to_dict())
+
     def test_stats_and_score_do_not_mutate_input(self) -> None:
         before = self.data.copy()
         summary = mining.stats(self.data)
@@ -58,11 +84,10 @@ class MiningOperationsTest(unittest.TestCase):
         self.assertTrue(all(0 <= value <= 1 for value in scored.values))
         self.assertEqual([frame.labels for frame in self.data], [frame.labels for frame in before])
 
-    def test_report_show_and_save(self) -> None:
+    def test_report_to_dict_and_save(self) -> None:
         summary = mining.stats(self.data, quality=False)
-        stream = StringIO()
-        summary.show(Console(file=stream, force_terminal=False, width=120))
-        self.assertIn("MiningStats", stream.getvalue())
+        self.assertEqual(summary.to_dict()["images"], 6)
+        self.assertFalse(hasattr(summary, "show"))
         for suffix in ("json", "csv", "md"):
             path = files.path(self.temporary.name) / f"report.{suffix}"
             summary.save(path)

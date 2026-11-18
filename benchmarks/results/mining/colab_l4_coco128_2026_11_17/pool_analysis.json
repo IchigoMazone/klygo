@@ -1,0 +1,61 @@
+{
+    "pool_images": 103,
+    "pool_boxes": 740,
+    "defined_classes": 71,
+    "pool_active_classes": 71,
+    "rare_tail_classes": [
+        "banana",
+        "bear",
+        "cake",
+        "horse",
+        "hot dog",
+        "laptop",
+        "microwave",
+        "mouse",
+        "pizza",
+        "sandwich",
+        "scissors",
+        "skis",
+        "stop sign",
+        "toilet",
+        "toothbrush",
+        "vase",
+        "zebra"
+    ],
+    "pool_imbalance_ratio": 48.0,
+    "duplicate_groups": 0,
+    "duplicate_images": 0,
+    "clusters": 40,
+    "quality_summary": {
+        "brightness": {
+            "mean": 113.49032691140778,
+            "min": 25.0693359375,
+            "max": 199.79203125
+        },
+        "contrast": {
+            "mean": 56.18293515883594,
+            "min": 15.904465676823946,
+            "max": 101.70486329940178
+        },
+        "sharpness": {
+            "mean": 2238.810346657407,
+            "min": 187.95236083984375,
+            "max": 10121.859503607177
+        },
+        "entropy": {
+            "mean": 7.31313157776027,
+            "min": 4.970987319946289,
+            "max": 7.928201198577881
+        },
+        "noise": {
+            "mean": 9.416874853152674,
+            "min": 2.921260356903076,
+            "max": 20.09361457824707
+        },
+        "exposure": {
+            "mean": 0.7995829394141447,
+            "min": 0.19662225246429443,
+            "max": 0.9966287016868591
+        }
+    }
+}

@@ -86,3 +86,57 @@ class TestPartition(unittest.TestCase):
             assert False, "Should raise ValidationError/FileNotFoundError for non-existent source"
         except (ValidationError, FileNotFoundError):
             pass
+
+    def test_partition_shuffle_and_seed_controls(self):
+        with tempfile.TemporaryDirectory() as td:
+            out_canonical = os.path.join(td, "canonical")
+            partition(
+                source="test/data.zip",
+                target=out_canonical,
+                ratios=(0.5, 0.5, 0.0),
+                shuffle=False,
+                overwrite=True,
+                verbose=False,
+            )
+            canonical_train = sorted(os.listdir(os.path.join(out_canonical, "images", "train")))
+
+            # With shuffle=True and seed=42
+            out_seeded1 = os.path.join(td, "seeded1")
+            partition(
+                source="test/data.zip",
+                target=out_seeded1,
+                ratios=(0.5, 0.5, 0.0),
+                shuffle=True,
+                seed=42,
+                overwrite=True,
+                verbose=False,
+            )
+            seeded1_train = sorted(os.listdir(os.path.join(out_seeded1, "images", "train")))
+
+            # Same seed produces same partition
+            out_seeded2 = os.path.join(td, "seeded2")
+            partition(
+                source="test/data.zip",
+                target=out_seeded2,
+                ratios=(0.5, 0.5, 0.0),
+                shuffle=True,
+                seed=42,
+                overwrite=True,
+                verbose=False,
+            )
+            seeded2_train = sorted(os.listdir(os.path.join(out_seeded2, "images", "train")))
+            self.assertEqual(seeded1_train, seeded2_train)
+
+            # Different seed produces different partition
+            out_seeded3 = os.path.join(td, "seeded3")
+            partition(
+                source="test/data.zip",
+                target=out_seeded3,
+                ratios=(0.5, 0.5, 0.0),
+                shuffle=True,
+                seed=999,
+                overwrite=True,
+                verbose=False,
+            )
+            seeded3_train = sorted(os.listdir(os.path.join(out_seeded3, "images", "train")))
+            self.assertNotEqual(seeded1_train, seeded3_train)

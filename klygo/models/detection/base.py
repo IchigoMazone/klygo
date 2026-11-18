@@ -29,6 +29,28 @@ from klygo import validators
 __all__ = ["Detector"]
 
 _UNSET = object()
+_CACHED_MODULES: Optional[tuple[Any, Any, Any, Any]] = None
+
+
+def _runtime_modules():
+    """Cache lazy top-level modules used during detection packing."""
+    global _CACHED_MODULES
+    if _CACHED_MODULES is None:
+        import numpy as np
+        from klygo import media, outputs, preprocessing
+        _CACHED_MODULES = (np, media, outputs, preprocessing)
+    return _CACHED_MODULES
+
+
+def _clone_flat(value: Any) -> Any:
+    """Fast copy for metadata mappings containing nested containers of scalars."""
+    if isinstance(value, dict):
+        return {k: _clone_flat(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_clone_flat(v) for v in value]
+    if isinstance(value, (str, int, float, bool, type(None))):
+        return value
+    return utils.clone_value(value)
 _LOADING_OPTIONS = {
     "token", "use_auth_token", "trust_remote_code", "cache_dir", "revision",
     "local_files_only", "low_cpu_mem_usage", "device_map", "torch_dtype", "dtype",
@@ -741,7 +763,7 @@ class Detector(BaseModel):
     def warmup(self) -> None:
         """Warm up with current settings without remembering temporary changes."""
         dummy_img = PIL.Image.new("RGB", (640, 640), color=(100, 100, 100))
-        self.benchmark(dummy_img, iterations=1, warmup=0, verbose=False)
+        self.benchmark(dummy_img, iterations=1, warmup=0)
 
     def clear_cache(self) -> None:
         """Release unused backend memory blocks."""
@@ -753,13 +775,11 @@ class Detector(BaseModel):
         prompt: Any = _UNSET,
         iterations: int = 20,
         warmup: int = 5,
-        verbose: bool = True,
         **kwargs,
     ) -> Dict[str, Any]:
         """Measure prepared-input pipeline latency without persisting overrides."""
         validators.validate_count(iterations, "iterations")
         validators.validate_count(warmup, "warmup", minimum=0)
-        validators.validate_type(verbose, bool, "verbose")
         if any(key in kwargs for key in ("stream", "batch", "workers", "prefetch", "vid_stride", "max_frames")):
             raise ValueError("benchmark accepts inference options, not stream or sampling controls")
 
@@ -803,36 +823,29 @@ class Detector(BaseModel):
                 "throughput_unit": "images/second",
                 "predict_config": self._config_snapshot(metadata, prompts),
             }
-            if verbose:
-                from rich.console import Console
-                from rich.table import Table
-                table = Table(title=f"Model Benchmark: {self.model_id}")
-                table.add_column("Metric", style="cyan")
-                table.add_column("Value", style="green")
-                for key, value in report.items():
-                    table.add_row(key, str(value))
-                Console().print(table)
             return report
 
-    def help(self) -> None:
-        """Display standardized usage guide and parameters for the model."""
-        from rich.console import Console
-        from rich.table import Table
-
-        table = Table(title=f"Model Help & Usage: {self.model_id}")
-        table.add_column("Command / Method", style="cyan", no_wrap=True)
-        table.add_column("Description", style="green")
-        table.add_row("predict(source, prompt, ...)", "Perform detection on images, videos, directories, or streams.")
-        table.add_row("benchmark(iterations=20, warmup=5)", "Evaluate inference latency (ms) and throughput (FPS).")
-        table.add_row("info()", "Print architecture, backend, state, and active settings in a table.")
-
+    def help(self) -> Dict[str, Any]:
+        """Return standardized usage guide and custom parameters for the model."""
+        guide: Dict[str, Any] = {
+            "model_id": self.model_id,
+            "methods": {
+                "predict(source, prompt, ...)": "Perform detection on images, videos, directories, or streams.",
+                "benchmark(iterations=20, warmup=5)": "Evaluate inference latency (ms) and throughput (FPS).",
+                "info()": "Return architecture, backend, state, and active settings as a dictionary.",
+            },
+        }
         settings_dict = self.settings
-        has_params = any(bool(v) for v in settings_dict.values()) if isinstance(settings_dict, dict) else False
-        if has_params:
-            param_lines = [f"{k}={v} (group: {g})" for g, val in settings_dict.items() if isinstance(val, dict) for k, v in val.items()]
-            if param_lines:
-                table.add_row("Custom Parameters", "\n".join(param_lines))
-        Console().print(table)
+        if isinstance(settings_dict, dict):
+            custom = {
+                f"{g}.{k}": v
+                for g, val in settings_dict.items()
+                if isinstance(val, dict)
+                for k, v in val.items()
+            }
+            if custom:
+                guide["custom_parameters"] = custom
+        return guide
 
     # =========================================================================
     # 3. BACKEND EXECUTION DELEGATES
@@ -877,8 +890,6 @@ class Detector(BaseModel):
         Subclasses may override this private hook and yield an inference callable.
         The default requires only ``forward`` and allocates no session state.
         """
-        with self._prediction_lock:
-            _compat._optimize_model(self.backend, self.model)
         yield self.forward
 
     def _infer_batch(self, images: List[Any], prompt: Any, metadata: Dict[str, Any],
@@ -915,31 +926,31 @@ class Detector(BaseModel):
             for index, (result, image) in enumerate(zip(raw, images)):
                 validators.validate_type(result, (dict, Detection), "forward result")
                 frame = self._pack_detection(result, image, offset + index * frame_step, lat_ms, fps_val)
-                config = dict(base_post)
-                config.update(frame.metadata)
-                config.update({
-                    "prompt": prompt,
-                    "predict_config": pred_snapshot,
-                    "model_id": self.model_id,
-                    "backend": self.backend,
-                    "source_path": frame.source_path,
-                    "frame_index": frame.frame_index,
-                    "image_frame_index": frame.frame_index,
-                })
-                frame.metadata = utils.clone_value(config)
+                config = _clone_flat(base_post)
+                if frame.metadata:
+                    config.update(_clone_flat(frame.metadata))
+                config["prompt"] = _clone_flat(prompt)
+                config["predict_config"] = _clone_flat(pred_snapshot)
+                config["model_id"] = self.model_id
+                config["backend"] = self.backend
+                config["source_path"] = frame.source_path
+                config["frame_index"] = frame.frame_index
+                config["image_frame_index"] = frame.frame_index
+                frame.metadata = config
                 frames.append(frame)
             return frames
 
     def _pack_detection(self, det: Any, image: Any, frame_index: int, lat_ms: float, fps_val: float) -> Detection:
         """Normalise one raw result (dict or Detection) into a fully-populated Detection."""
-        import numpy as np
-        from klygo import media, outputs, preprocessing
-        img_path = str(image.path) if isinstance(image, media.LazyImage) else getattr(image, "path", getattr(image, "filename", None))
-        final_image = image if isinstance(image, media.LazyImage) else (media.LazyImage(img_path) if img_path is not None else image)
+        np, media, outputs, preprocessing = _runtime_modules()
+        is_lazy = isinstance(image, media.LazyImage)
+        img_path = str(image.path) if is_lazy else getattr(image, "path", getattr(image, "filename", None))
+        final_image = image if is_lazy else (media.LazyImage(img_path) if img_path is not None else image)
         actual_idx = getattr(final_image, "frame_index", None)
         actual_idx = int(frame_index if actual_idx is None else actual_idx)
 
-        trace = preprocessing.get_trace(image)
+        raw_trace = getattr(image, "_preprocessing_trace", None)
+        trace = preprocessing.get_trace(image) if raw_trace is not None else ()
         original_size = getattr(image, "_preprocessing_original_size", None)
         if trace and original_size is not None and getattr(image, "path", None) is not None:
             final_image = media.LazyImage(image.path, frame_index=getattr(image, "frame_index", None))

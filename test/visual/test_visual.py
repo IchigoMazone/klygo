@@ -46,6 +46,25 @@ class TestVisual(unittest.TestCase):
                 visual.show_image(image, title="preview", width=40)
         shown.assert_called_once_with(title="preview")
 
+    def test_show_image_height_and_mutual_exclusion_with_lazy_image(self):
+        image = Image.new("RGB", (20, 10))
+        with patch("matplotlib.pyplot.imshow") as imshow, patch("matplotlib.pyplot.show"):
+            visual.show_image(image, title="by-h", height=20, backend="matplotlib")
+            self.assertEqual(imshow.call_args.args[0].size, (40, 20))
+        with self.assertRaises(ValueError):
+            visual.show_image(image, width=40, height=20)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = files.path(directory) / "sample.png"
+            image.save(path)
+            from klygo import media
+            frames = media.load(path, verbose=False)
+            with patch("matplotlib.pyplot.imshow") as imshow, patch("matplotlib.pyplot.show"):
+                frames[0].show(title="lazy", height=20, backend="matplotlib")
+                self.assertEqual(imshow.call_args.args[0].size, (40, 20))
+            with self.assertRaises(ValueError):
+                frames[0].show(width=40, height=20)
+
     def test_plot_dataset_stats_counts_label_rows(self):
         with tempfile.TemporaryDirectory() as directory:
             root = files.path(directory)

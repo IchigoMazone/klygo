@@ -14,7 +14,7 @@ class TestConvert(unittest.TestCase):
             source, target = root / "data.json", root / "data.yaml"
             files.save(source, {"items": [1, 2]}, verbose=False)
             result = files.convert(source, target, verbose=False)
-            self.assertEqual(result, target)
+            self.assertIsNone(result)
             self.assertEqual(files.load(target, verbose=False), {"items": [1, 2]})
 
 

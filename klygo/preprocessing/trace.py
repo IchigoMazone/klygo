@@ -62,8 +62,8 @@ def processed_size(image: Any) -> Tuple[int, int]:
     return tuple(image.size)
 
 
-def clear_trace(image: Any) -> Any:
-    """Return or update clear trace using preprocessing geometry history.
+def clear_trace(image: Any) -> None:
+    """Clear preprocessing geometry history stored on an image.
 
     Parameters
     ----------
@@ -72,12 +72,20 @@ def clear_trace(image: Any) -> Any:
 
     Returns
     -------
-    object
-        Restored coordinates, trace information, or updated image.
+    None
+
+    Raises
+    ------
+    TypeError
+        If ``image`` is ``None``.
     """
-    image._preprocessing_trace = []
-    image._preprocessing_original_size = None
-    return image
+    if image is None:
+        raise TypeError("image must not be None")
+    try:
+        image._preprocessing_trace = []
+        image._preprocessing_original_size = None
+    except AttributeError:
+        pass
 
 
 def _restore_point(point: Sequence[float], item: Dict[str, Any]) -> Tuple[float, float]:

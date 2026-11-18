@@ -424,8 +424,8 @@ def walk(path: PathInput = ".") -> Generator[Tuple[str, List[str], List[str]], N
     return os.walk(os.path.expanduser(value))
 
 
-def mkdir(path: PathInput, parents: bool = True, exist_ok: bool = True) -> Path:
-    """Create a directory and return its path.
+def mkdir(path: PathInput, parents: bool = True, exist_ok: bool = True) -> None:
+    """Create a directory.
 
     Parameters
     ----------
@@ -438,8 +438,7 @@ def mkdir(path: PathInput, parents: bool = True, exist_ok: bool = True) -> Path:
 
     Returns
     -------
-    pathlib.Path
-        The created directory.
+    None
 
     Raises
     ------
@@ -453,11 +452,10 @@ def mkdir(path: PathInput, parents: bool = True, exist_ok: bool = True) -> Path:
     Examples
     --------
     >>> from klygo import files
-    >>> output = files.mkdir("runs/detect")
+    >>> files.mkdir("runs/detect")
     """
     candidate = _to_path(path)
     candidate.mkdir(parents=parents, exist_ok=exist_ok)
-    return candidate
 
 
 def remove(path: PathInput, recursive: bool = True, missing_ok: bool = True) -> None:
@@ -508,7 +506,7 @@ def remove(path: PathInput, recursive: bool = True, missing_ok: bool = True) -> 
         candidate.rmdir()
 
 
-def copy(source: PathInput, target: PathInput, overwrite: bool = False) -> Path:
+def copy(source: PathInput, target: PathInput, overwrite: bool = False) -> None:
     """Copy a file or directory.
 
     File metadata is preserved. The source is copied to a sibling staging path
@@ -525,8 +523,7 @@ def copy(source: PathInput, target: PathInput, overwrite: bool = False) -> Path:
 
     Returns
     -------
-    pathlib.Path
-        Destination of the copied entry.
+    None
 
     Raises
     ------
@@ -544,7 +541,7 @@ def copy(source: PathInput, target: PathInput, overwrite: bool = False) -> Path:
     Examples
     --------
     >>> from klygo import files
-    >>> backup = files.copy("config.yaml", "backup/config.yaml")
+    >>> files.copy("config.yaml", "backup/config.yaml")
     """
     source_path = _to_path(source)
     target_path = _to_path(target)
@@ -573,10 +570,9 @@ def copy(source: PathInput, target: PathInput, overwrite: bool = False) -> Path:
     finally:
         if published or not _entry_exists(staging / "previous"):
             shutil.rmtree(staging)
-    return target_path
 
 
-def move(source: PathInput, target: PathInput, overwrite: bool = False) -> Path:
+def move(source: PathInput, target: PathInput, overwrite: bool = False) -> None:
     """Move a file or directory.
 
     The destination is prepared before the source is removed. A failed copy or
@@ -593,8 +589,7 @@ def move(source: PathInput, target: PathInput, overwrite: bool = False) -> Path:
 
     Returns
     -------
-    pathlib.Path
-        Destination of the moved entry.
+    None
 
     Raises
     ------
@@ -613,7 +608,7 @@ def move(source: PathInput, target: PathInput, overwrite: bool = False) -> Path:
     Examples
     --------
     >>> from klygo import files
-    >>> result = files.move("draft.json", "output/result.json")
+    >>> files.move("draft.json", "output/result.json")
     """
     source_path = _to_path(source)
     target_path = _to_path(target)
@@ -621,10 +616,9 @@ def move(source: PathInput, target: PathInput, overwrite: bool = False) -> Path:
     _validate_transfer(source_path, target_path)
     copy(source_path, target_path, overwrite=overwrite)
     remove(source_path, missing_ok=False)
-    return target_path
 
 
-def rename(path: PathInput, new_name_or_path: PathInput, overwrite: bool = False) -> Path:
+def rename(path: PathInput, new_name_or_path: PathInput, overwrite: bool = False) -> None:
     """Rename a filesystem entry or move it to an explicit path.
 
     A single path component is interpreted relative to the source parent; a multi-part value is treated as an explicit destination.
@@ -640,8 +634,7 @@ def rename(path: PathInput, new_name_or_path: PathInput, overwrite: bool = False
 
     Returns
     -------
-    pathlib.Path
-        New path of the renamed entry.
+    None
 
     Raises
     ------
@@ -659,7 +652,7 @@ def rename(path: PathInput, new_name_or_path: PathInput, overwrite: bool = False
     Examples
     --------
     >>> from klygo import files
-    >>> result = files.rename("draft.txt", "final.txt")
+    >>> files.rename("draft.txt", "final.txt")
     """
     source_path = _to_path(path)
     validate_type(overwrite, bool, "overwrite")
@@ -693,7 +686,7 @@ def rename(path: PathInput, new_name_or_path: PathInput, overwrite: bool = False
             except BaseException:
                 target_path.rmdir()
                 raise
-        return target_path
+        return
     staging = _to_path(
         tempfile.mkdtemp(prefix=f".{name(target_path)}.", dir=parent(target_path)),
         expand_user=False,
@@ -718,7 +711,6 @@ def rename(path: PathInput, new_name_or_path: PathInput, overwrite: bool = False
     finally:
         if published or not _entry_exists(backup):
             shutil.rmtree(staging)
-    return target_path
 
 
 __all__ = [

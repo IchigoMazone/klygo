@@ -228,7 +228,7 @@ class ArchiveFile:
             overwrite=overwrite,
         )
 
-    def get_info(self) -> Dict[str, Any]:
+    def info(self) -> Dict[str, Any]:
         """Return archive metadata and compression statistics.
 
         Parameters
@@ -249,11 +249,11 @@ class ArchiveFile:
         Examples
         --------
         >>> opened = ArchiveFile("dataset.zip")
-        >>> info = opened.get_info()
+        >>> info = opened.info()
         """
-        return self.backend.get_info(self.archive_path)
+        return self.backend.info(self.archive_path)
 
-    def test(self, raise_exception: bool = False) -> bool:
+    def is_valid(self, raise_exception: bool = False) -> bool:
         """Run the backend integrity check.
 
         Parameters
@@ -275,9 +275,9 @@ class ArchiveFile:
         Examples
         --------
         >>> opened = ArchiveFile("dataset.zip")
-        >>> valid = opened.test()
+        >>> valid = opened.is_valid()
         """
-        return self.backend.test(self.archive_path, raise_exception=raise_exception)
+        return self.backend.is_valid(self.archive_path, raise_exception=raise_exception)
 
     def __enter__(self) -> "ArchiveFile":
         return self

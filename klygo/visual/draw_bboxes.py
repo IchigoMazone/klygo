@@ -155,6 +155,13 @@ def draw_bboxes(
     -------
     PIL.Image.Image or numpy.ndarray
         Annotated copy in the same representation as ``image``.
+
+    Raises
+    ------
+    TypeError
+        If ``image`` is not a PIL Image or NumPy array.
+    ValueError
+        If ``image`` has an unsupported channel layout or mismatched label/score lengths.
     """
     class_ids = None
 

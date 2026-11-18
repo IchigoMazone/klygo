@@ -23,6 +23,7 @@ ALL_MODULES = [
     "media",
     "mining",
     "models",
+    "metrics",
     "outputs",
     "postprocessing",
     "preprocessing",

@@ -85,7 +85,7 @@ See [native execution and compatibility](execution/README.md) for the optional p
 | **Export a registry entry without loading weights** | [`models.export()`](api/export.md) | `path = models.export("ultralytics/yolo11n.pt", "artifacts/yolo.json")` |
 | **Save using the backend** | [Native model persistence](api/Detector.md#native-model-persistence) | `detector.model.save("model.pt")` for Ultralytics |
 | **Set or inspect the default backend environment** | [`set_backend()`](api/set_backend.md) / [`get_backend()`](api/get_backend.md) | `models.set_backend("Keras", engine="torch")` |
-| **Silence noisy framework logs and warnings** | [`suppress_warnings()`](api/suppress_warnings.md) / [`suppress_ai_warnings()`](api/suppress_ai_warnings.md) | `with models.suppress_warnings(): ...` |
+| **Silence noisy framework logs and warnings** | [`suppress_warnings()`](api/suppress_warnings.md) | `with models.suppress_warnings(): ...` |
 
 </details>
 
@@ -137,7 +137,6 @@ See [native execution and compatibility](execution/README.md) for the optional p
 | [`utils`](api/utils.md) | Submodule namespace with metadata normalization, parameter resolution, image/stream resolution, and warning helpers. | [Run](../../examples/models/utils.py) |
 | [`errors`](api/errors.md) | Submodule namespace defining `ModelFrameworkError`, `InvalidStateError`, `InvalidConfigError`, `InvalidDeviceError`, and `InvalidDtypeError`. | [Run](../../examples/models/errors.py) |
 | [`suppress_warnings(func=None)`](api/suppress_warnings.md) | Context manager and decorator that silences Python and AI library warnings within a scoped block. | [Run](../../examples/models/suppress_warnings.py) |
-| [`suppress_ai_warnings()`](api/suppress_ai_warnings.md) | Configure quiet logging and environment flags for Hugging Face, Torch, and Accelerate without importing them. | [Run](../../examples/models/suppress_ai_warnings.py) |
 
 </details>
 
@@ -386,3 +385,7 @@ detector = models.load(configured)
 </details>
 
 For a complete, real-image benchmark running **Ultralytics YOLOv8**, **Ultralytics YOLO-World**, **Torchvision Faster R-CNN**, and **KerasHub RT-DETR (D-FINE)** side by side on COCO15, see [`examples/integration/multi_backend_workflow.py`](../../examples/integration/multi_backend_workflow.py) and the [integration workflows guide](../integration/README.md).
+
+Built-in KerasHub detection is available as `models.load("dfine_nano_coco")`.
+See the [Keras execution guide](execution/api/keras.md) for engine selection, native crop
+geometry, thresholds, and the runnable D-FINE example.

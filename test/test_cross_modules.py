@@ -36,7 +36,7 @@ class TestCrossModules(unittest.TestCase):
 
         # OOP Config usage
         cfg_obj = Config(cfg_file)
-        cfg_obj.read()
+        cfg_obj.load()
         assert cfg_obj.get("app.port") == 8000
         cfg_obj.set("app.port", 9000)
         config.save(cfg_file, cfg_obj.to_dict(), overwrite=True)
@@ -49,7 +49,7 @@ class TestCrossModules(unittest.TestCase):
 
         media_imgs = media.load(img_file, backend="pil")
         assert len(media_imgs) == 1
-        media_info = media.probe(img_file)
+        media_info = media.info(img_file)
         assert media_info["width"] == 30
 
         media.save(self.tmp_path / "saved_sample.png", media_imgs[0], overwrite=True)
@@ -59,7 +59,7 @@ class TestCrossModules(unittest.TestCase):
         zip_file = self.tmp_path / "bundle.zip"
         archive.compress(data_dir, zip_file, overwrite=True)
         assert files.exists(zip_file)
-        assert archive.test(zip_file)
+        assert archive.is_valid(zip_file)
 
         extracted_dir = self.tmp_path / "extracted"
         archive.extract(zip_file, output_dir=extracted_dir, overwrite=True)
@@ -77,7 +77,7 @@ class TestCrossModules(unittest.TestCase):
         assert loaded_cfg.app.port == 9000
 
         assert files.exists(extracted_img)
-        loaded_img_info = media.probe(extracted_img)
+        loaded_img_info = media.info(extracted_img)
         assert loaded_img_info["width"] == 30
 
         print("5. Testing no function/name collisions between top-level klygo modules...")

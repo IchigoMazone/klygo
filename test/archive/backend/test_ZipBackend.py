@@ -21,8 +21,8 @@ class TestZipBackend(unittest.TestCase):
             backend.compress(source, packed, method="deflated", verbose=False)
             self.assertEqual(backend.list_files(packed), ["Report.TXT"])
             self.assertEqual(backend.search(packed, "*.txt", case_sensitive=False), ["Report.TXT"])
-            self.assertEqual(backend.get_info(packed)["format"], "zip")
-            self.assertTrue(backend.test(packed))
+            self.assertEqual(backend.info(packed)["format"], "zip")
+            self.assertTrue(backend.is_valid(packed))
 
             backend.extract_file(packed, "Report.TXT", output)
             self.assertEqual(files.load(output / "Report.TXT", verbose=False), "zip content")

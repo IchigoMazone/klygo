@@ -13,7 +13,6 @@ from ._workspace import open_dataset
 def info(
     source: str | PathLike[str],
     format: str = "yolo",
-    verbose: bool = False,
 ) -> dict[str, Any]:
     """Return structural statistics for a YOLO dataset.
 
@@ -23,8 +22,6 @@ def info(
         Dataset directory or supported archive.
     format : str, default='yolo'
         Dataset format to inspect. Currently only ``'yolo'`` is supported.
-    verbose : bool, default=False
-        Print the dataset statistics as a Rich table while returning the dictionary.
 
     Returns
     -------
@@ -61,7 +58,7 @@ def info(
             split_counts[split] = split_counts.get(split, 0) + 1
 
         total_labels = sum(label is not None for _, label, _, _ in pairs)
-        result = {
+        return {
             "classes": list(class_map.values()),
             "class_ids": list(class_map),
             "nc": max(class_map, default=-1) + 1,
@@ -71,26 +68,5 @@ def info(
             "splits": split_counts,
         }
 
-        if verbose:
-            from rich.console import Console
-            from rich.table import Table
 
-            source_name = files.name(source)
-            table = Table(title=f"Dataset Information: {source_name}")
-            table.add_column("Property", style="cyan", no_wrap=True)
-            table.add_column("Value", style="green")
-            table.add_row("Classes", ", ".join(result["classes"]) if result["classes"] else "(None)")
-            table.add_row("Class Count", str(result["nc"]))
-            table.add_row("Total Images", str(result["total_images"]))
-            table.add_row("Total Labels", str(result["total_labels"]))
-            table.add_row("Unlabeled Images", str(result["unlabeled_images"]))
-            for split_name, count in result["splits"].items():
-                table.add_row(f"Split ({split_name})", str(count))
-            Console().print(table)
-
-        return result
-
-
-get_dataset_info = info
-
-__all__ = ["info", "get_dataset_info"]
+__all__ = ["info"]

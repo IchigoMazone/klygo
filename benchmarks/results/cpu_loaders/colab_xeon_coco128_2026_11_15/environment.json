@@ -1,0 +1,7 @@
+{
+  "os": "Linux-6.6.159+-x86_64-with-glibc2.39",
+  "python": "3.13.16",
+  "cpu": "Intel(R) Xeon(R) CPU @ 2.20GHz (x86_64)",
+  "cpu_count": 12,
+  "dataset": "coco128"
+}

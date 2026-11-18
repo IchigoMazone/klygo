@@ -13,6 +13,18 @@ Read [references/authoring-standard.md](references/authoring-standard.md) before
 editing a module. Run `scripts/audit_public_api.py` after the module artifacts
 exist.
 
+## High-level API first
+
+Apply root `AGENTS.md` Rule 0 and `docs/API_LEVELS.md` to every recommended call,
+example and notebook. A module's exported functions/classes and documented public
+methods are its high-level API, including `files`. Before adding a helper or
+wrapper, inspect whether the module owning the task already covers it. Reuse
+that API directly; compose existing APIs for workflows and custom-build only a
+verified gap. Do not maximize API count or show hand-built implementations as the
+default example of a supported task. Keep explicitly requested custom adapters,
+internal tests and raw-reference benchmarks clearly scoped. Implementation of
+an API itself may need primitives and must not delegate recursively to itself.
+
 ## Workflow
 
 1. Inspect repository instructions, `klygo/<module>/__init__.py`, every exported
@@ -48,6 +60,9 @@ exist.
    imports such as `from klygo import archive, files` and dogfood Klygo's own APIs
    (`files.path()`, `files.save()`, `files.load()`, `files.mkdir()`, etc.) instead
    of importing `pathlib.Path` or calling raw `Path` I/O methods directly.
+   Show the direct public call first; label advanced custom code with the exact
+   unsupported requirement it supplies. Do not add a new convenience wrapper for
+   a function that already covers the example.
    **Pure documentation boundary**: The `docs/` tree must strictly contain `.md`
    markdown files and documentation directories. Never add test scripts (such as
    `test_documentation.py`) or Python runtime artifacts (`__pycache__`) into `docs/`.

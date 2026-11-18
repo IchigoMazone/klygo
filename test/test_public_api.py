@@ -12,7 +12,7 @@ class TestPublicApi(unittest.TestCase):
 
     def test_model_and_media_exports(self):
         for function in (models.load, models.configure, models.details, models.flags,
-                         media.probe, media.load, preprocessing.compose,
+                         media.info, media.load, preprocessing.compose,
                          postprocessing.compose, datasets.load):
             self.assertTrue(callable(function))
 

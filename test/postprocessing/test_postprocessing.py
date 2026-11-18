@@ -37,15 +37,6 @@ class TestPostprocessing(unittest.TestCase):
         frame2.transform(post.threshold(0.85))
         self.assertEqual(frame2.uids, [0])
 
-    def test_select_accepts_scalar_selectors(self):
-        frame = result()[0]
-        frame.transform(post.select(labels="cat"))
-        self.assertEqual(frame.labels, ["cat", "cat"])
-
-        frame = result()[0]
-        frame.transform(post.select(labels="cat", class_ids=0, uids=0))
-        self.assertEqual(frame.uids, [0])
-
     def test_invalid_numeric_arguments_fail_before_mutation(self):
         checks = (
             lambda frame: frame.transform(post.threshold(float("nan"))),

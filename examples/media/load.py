@@ -12,7 +12,8 @@ from klygo import media, files
 with tempfile.TemporaryDirectory() as temporary:
     root = files.path(temporary)
     image = Image.new("RGB", (32, 24), "red")
-    source = media.save(root / "source.png", image)
+    source = root / "source.png"
+    media.save(source, image)
     frames = media.load(source)
     indexed = media.load(source, indexed=True)
     print(len(frames), frames[0].size)

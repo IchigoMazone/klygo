@@ -13,7 +13,7 @@ from box import Box
 
 from klygo import files
 
-__all__ = ["suppress_warnings", "suppress_ai_warnings"]
+__all__ = ["suppress_warnings"]
 
 
 def clone_value(value: Any) -> Any:
@@ -64,7 +64,7 @@ class _SizedStream:
 
 import functools
 
-def suppress_warnings(func=None):
+def suppress_warnings(func=None) -> Any:
     """Suppress Python warnings as a context manager or decorator."""
     class SuppressContext:
         def __enter__(self):

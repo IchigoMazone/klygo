@@ -70,6 +70,11 @@ def flags(*groups: str, **permissions: bool) -> Box:
     override and ``False`` for groups locked after configuration. Positional
     names remain supported and are equivalent to setting every group to
     ``True``. The two forms cannot be mixed.
+
+    Raises
+    ------
+    TypeError
+        If positional groups and keyword permissions are mixed, or a group name/permission is invalid.
     """
     if groups and permissions:
         raise TypeError("flags accepts either positional groups or keyword permissions, not both")
@@ -104,6 +109,13 @@ def metadata(
     intentionally not accepted here. The result always contains ``flags``,
     ``priority``, ``details``, and ``class``; omitted optional components and
     the loader-owned class field are ``None``.
+
+    Raises
+    ------
+    TypeError
+        If ``flags``, ``priority``, or ``details`` has an invalid type.
+    ValueError
+        If ``details`` is missing required fields (``name``, ``task``, ``backend``, ``library``).
     """
     normalized_flags = utils.normalize_flags(flags)
     normalized_details = None

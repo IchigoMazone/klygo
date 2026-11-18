@@ -1,87 +1,173 @@
-# Multi-GPU & Heterogeneous Accelerator Benchmarking Guide for Klygo
+# Release benchmark setup and interpretation
 
-This reference guide provides operational instructions, hardware architecture considerations, and performance tuning strategies for benchmarking Klygo across diverse GPUs and accelerators.
+## Environment preflight
 
----
+Read `pyproject.toml` for the dependency extras required by each selected model.
+Use the same Klygo checkout in each interpreter. Capture exact installed versions
+instead of assuming the historical L4 package set is appropriate for a new GPU.
+Install a PyTorch build compatible with the device/driver and a compatible CuPy
+package for CUDA utility workloads. Avoid installing multiple CuPy variants.
+Set the Keras backend before importing Keras when running D-FINE.
 
-## 1. Supported Accelerators & Architecture Profiles
+Check the runtime before a GPU run:
 
-| Accelerator Family | Typical VRAM | Compute Capabilities | Recommended Models | Batch & Stream Tuning |
-| :--- | :---: | :---: | :--- | :--- |
-| **NVIDIA RTX 4090 / 3090** | 24 GB | Ada / Ampere (FP16, BF16, TF32) | All 5 architectures (including full batch Grounding DINO) | `batch=4` to `16`, `stream=True` for high-FPS RTSP |
-| **NVIDIA A100 / H100 (Cloud/Cluster)** | 40–80 GB | Ampere / Hopper | All 5 architectures in full resolution (640–1280px) | `batch=16` to `64`, multi-card parallel evaluation |
-| **NVIDIA T4 / V100 (Google Colab)** | 16 GB | Turing / Volta (FP16 Tensor Cores) | YOLOv8, YOLO-World, Faster R-CNN, D-FINE Nano | `batch=1` to `4`, `stream=True` |
-| **NVIDIA Quadro / Mobile GPUs** | 4–6 GB | Maxwell / Pascal (Limited VRAM) | YOLOv8n, Faster R-CNN MobileNetV3, D-FINE Nano | `batch=1`, `imgsz=320`, `stream=True` to prevent OOM |
-| **Apple Silicon (M1/M2/M3/M4 Max)** | Unified (16–128 GB) | MPS (Metal Performance Shaders) | YOLOv8, YOLO-World, Faster R-CNN | PyTorch MPS engine, `device="mps"` |
-| **CPU Fallback (x86_64 / ARM64)** | Host RAM | AVX-512 / NEON | Lightweight models (YOLOv8n, D-FINE Nano) | `batch=1`, `workers=4`, `native=False` |
-
----
-
-## 2. Multi-GPU Device Addressing in Klygo
-
-### 2.1. Addressing Single and Multiple Devices
-Klygo's unified benchmark tool detects and addresses devices through standard PyTorch strings:
-- `--device auto`: Automatically queries `torch.cuda.is_available()`. Selects `cuda:0` if available, falls back to `mps`, then `cpu`.
-- `--device all-gpus`: Iterates over every detected GPU index (`cuda:0`, `cuda:1`, ..., `cuda:N-1`), runs the full benchmark matrix on each card independently, and compiles a side-by-side comparison scorecard.
-- `--device cuda:0`: Targets primary GPU index 0.
-- `--device cuda:1`: Targets secondary GPU index 1.
-- `--device cpu`: Forces CPU execution across all model architectures.
-
-### 2.2. Setting Active GPU via Environment
-To isolate a specific GPU before running python:
 ```bash
-# Expose only GPU 1 to CUDA
-export CUDA_VISIBLE_DEVICES=1
-python examples/integration/multi_backend_benchmark.py --device cuda:0
-```
-On Windows PowerShell:
-```powershell
-$env:CUDA_VISIBLE_DEVICES="1"
-python examples/integration/multi_backend_benchmark.py --device cuda:0
+python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.version.cuda)"
+python -c "import cupy; print(cupy.__version__, cupy.cuda.runtime.getDeviceCount())"
 ```
 
----
+Use a separate environment for Locate Anything when its Transformers requirement
+conflicts with the main environment. The current extra specifies
+`transformers==4.57.1`; inspect the current dependency definition before setup.
+Install Klygo and the Locate Anything extra there, then verify:
 
-## 3. Managing Model Lifecycles Across GPUs
-
-### 3.1. Releasing Models Between Runs
-When switching models or devices in the same process:
-1. Close any active prediction streams.
-2. Synchronize the active GPU:
-   ```python
-   torch.cuda.synchronize(device_str)
-   ```
-3. Release the detector and any benchmark runners that retain it. PyTorch frees tensors when their references are released.
-
-### 3.2. Preventing Out-Of-Memory (OOM) and System Freezing
-- Grounding DINO tiny and large Transformer models require substantial CPU/GPU memory. On constrained hardware (CPU or 4 GB GPUs like Quadro M1200):
-  - Downsize test video clips to 8–10 frames and resolution to 320×240.
-  - Keep `batch=1` and ensure explicit `gc.collect()` and `torch.cuda.empty_cache()` run between modes.
-- Always use streaming (`Managed Stream` or `Native Stream`) when evaluating videos exceeding 50 frames to ensure Python garbage collection reclaims frame memory immediately ($O(1)$ memory consumption).
-
-### 3.3. Isolated Run Directory Architecture
-Every benchmark run stores artifacts under a dedicated timestamped directory:
-```text
-artifacts/benchmarks/run_<YYYYMMDD_HHMMSS>/
-├── benchmark_metrics.json   # Full raw JSON metrics across devices and modes
-└── benchmark_report.md      # Formatted Markdown report with comparative tables
-```
-
----
-
-## 4. Multi-GPU Execution Recipes
-
-### Recipe 1: Quick Verification on Active GPU
 ```bash
-python examples/integration/multi_backend_benchmark.py --device auto --models yolo,faster-rcnn --repeats 1 --max-frames 5
+/path/to/locate/bin/python -c "import cv2, klygo, torch, transformers; print(transformers.__version__, torch.cuda.is_available())"
 ```
 
-### Recipe 2: Comprehensive All-GPU Evaluation
+Pass that executable to `--locate-python`; this affects Locate Anything subprocesses
+only. Use `--locate-isolated` to force the managed environment instead. Known
+dependency failures automatically fall back to a managed venv; the main and
+supplied environments are never modified. Remote-code execution still requires the separate `--allow-remote-code` flag.
+Do not assume the isolated interpreter inherits packages from the main interpreter.
+
+## Select a physical GPU
+
+The orchestrator's utility code detects visible CUDA capabilities, and several
+utility paths use device 0. Isolate one physical GPU per fresh process rather than
+assuming `--device cuda:1` retargets all utility sections.
+
 ```bash
-python examples/integration/multi_backend_benchmark.py --device all-gpus --models all --modes all --repeats 3 --max-frames 10 --output artifacts/benchmark/multi_gpu_report.json --markdown artifacts/benchmark/multi_gpu_report.md
+CUDA_VISIBLE_DEVICES=1 python .agents/skills/klygo-multi-gpu-benchmark/scripts/run_benchmark.py \
+  --device cuda:0 --dataset synthetic --repeats 1 \
+  --output artifacts/benchmarks/physical_gpu1_smoke
 ```
 
-### Recipe 3: High-Resolution Precision Comparison
+On PowerShell, set `$env:CUDA_VISIBLE_DEVICES="1"` before the command. The visible
+physical GPU is addressed as logical `cuda:0`. Repeat with a different visible GPU
+and a fresh output directory for each device. Keep comparisons sequential unless
+resource isolation has been verified. The release launcher does not implement an
+`all-gpus` option or a merged multi-GPU report.
+
+Use the CPU synthetic smoke profile from `SKILL.md` when CUDA is unavailable.
+For a CPU-only run on a GPU machine, hide CUDA devices with
+`CUDA_VISIBLE_DEVICES=""`; `--device cpu` controls model subprocesses, not
+utility auto-detection.
+Start with batch 1 on low-memory GPUs. Use the lower-level engine for explicit
+model-specific image size, iteration, batch, or video control; those flags are
+not forwarded by the release orchestrator:
+
 ```bash
-python examples/integration/multi_backend_benchmark.py --device cuda:0 --models yolo,yolo-world,d-fine --imgsz 640 --repeats 3 --max-frames 20
+PYTHONPATH=. python benchmarks/gpu_suite/run.py \
+  --model yolo --device cuda:0 --dtype float32 \
+  --imgsz 320 --batch 1 --workers 1 --prefetch 1 \
+  --iterations 2 --repeats 1 \
+  --output artifacts/benchmarks/low_memory_yolo
 ```
+
+Consult `benchmarks/gpu_suite/README.md` before using the video profile. Do not
+promise constant memory use merely because a call uses streaming; inspect what
+the benchmark retains. Treat allocation failures as failed measurements and
+record any changes of precision, batch, image size, or workload used on reruns.
+
+## Dataset and workload boundaries
+
+`--dataset-dir` takes precedence over `--dataset`. Supply a prepared YOLO tree
+with matching image/label stems and `data.yaml`; a flat `images/`, `labels/` tree
+is supported. The runner also recognizes `images/train2017`, `labels/train2017`.
+Flatten/repartition other layouts with dataset APIs before benchmarking.
+
+- `--dataset synthetic`: no external dataset download; useful for validation.
+- `--dataset coco128`: request COCO128 explicitly; download failures must surface.
+- `--dataset auto`: may fall back to synthetic; inspect `dataset_source` before
+  describing a result as a real-data run.
+- `--dataset-dir /content/coco_val2017_yolo`: use local real data for loader,
+  quality, duplicate, clustering, and indexed/strided/random access workloads.
+- `--large-scale`: expand synthetic metrics/groups/mining and access workloads;
+  it is not a request to run every model across the supplied real dataset.
+
+`--include-cpu-utils` currently takes effect only on the synthetic dataset
+branch. With real data the runner returns before optional media.info, save_images,
+visual, and tabulate tests; cover these with a separate synthetic CPU run.
+
+The loader benchmark's eager/stream/indexed rows can include lazy containers;
+compare actual decoding rows separately. Record cache state and measurement order
+when comparing random access. `detections.random_jump_index` times metadata/index
+access, while `detections.random_jump_image_read` includes image reads.
+
+## Check output completeness
+
+Always retain:
+
+| Output | Purpose |
+| --- | --- |
+| `environment.json` | Hardware capabilities, package versions, dataset source, Git state |
+| `metrics_benchmark.json` | Precision/device/size workloads and numerical drift |
+| `outputs_post_benchmark.json` | Group operations, postprocessing, combine, packing, transfers |
+| `mining_benchmark.json` | Synthetic annotation-based mining workloads |
+| `datasets_media_visual_benchmark.json` | Real/synthetic loaders, disk mining, access, optional CPU helpers |
+| `summary.json`, `REPORT.md` | Aggregated results and readable report |
+
+When inference is enabled, retain `model_runs.json`, `model_modes.json`,
+`model_loads.json`, and `inference/<model>_<dtype>/`. When scaling is enabled,
+retain `scaling_runs.json` and `scaling/<configuration>/`. Retain generated charts
+and a complete ZIP when requested. Chart availability depends on plotting support;
+check actual files rather than assuming all five charts exist.
+
+Inspect subprocess failures, per-case statuses, parity flags, actual dtype,
+missing models, and missing repetitions. Report unsupported upstream stream modes
+as `N/A`, not failures or successful zero-FPS cases. Scaling failure rows can
+contain zero FPS placeholders; exclude them from numeric rankings and show the
+failure separately. Do not use a successful orchestrator exit as the only gate.
+
+`parity` compares implementations on the benchmark fixture; it is not a model
+accuracy score. For CUDA timing, retain the canonical runner's synchronization
+and warmup logic. Avoid additional synchronization or verbose output in timed
+regions. CPU versus CUDA speed depends on work granularity and transfer overhead;
+do not assume CUDA wins for small frames or many small operations.
+
+## Historical L4 baseline
+
+Use `benchmarks/gpu_suite/colab_l4_val2017_2026_11_15/` as historical evidence,
+not a template to copy result values. Its real-data section records 5,000 COCO
+images; inference has an independent fixture/iteration protocol. Its environment
+records a dirty checkout, and both Locate Anything precisions failed due to
+missing `cv2`. Do not describe that run as nine fully passing models.
+Re-run failed cases after fixing the environment in a new directory and retain
+both the original failure and the rerun provenance.
+
+## Current synthetic mining protocol
+
+The annotation-only mining fixture has no source images. Use explicit scoring
+weights `rarity=0.5`, `coverage=0.3`, `boxes=0.2`; its weighted-selection measurement
+includes recomputing these scores. Record `score_weights` and
+`select_includes_scoring` in each mining row. Keep image-quality scoring in the
+separate disk-backed section. This makes the current fixture runnable without
+source pixels; do not compare its scoring/selection timings directly with old
+rows whose scoring protocol is unrecorded.
+
+
+## Locate repair and mandatory aggregation gate
+
+For the full release recipe use `--require-locate-results --locate-isolated` and
+supply `--allow-remote-code` when authorized. The managed environment lives outside
+the report directory and reuses system site packages; local pinned overrides
+provide the required Transformers version. `--locate-auto-fix` is enabled by
+default, with two known-dependency retries per precision. It checks OpenCV and
+other imports, installs the current repository Locate extra, and can install
+headless OpenCV for missing `cv2`/libGL errors. It preserves all attempts and does
+not automatically alter the benchmark precision, input size or work count.
+
+Unknown errors remain explicit failures for the executing agent to investigate.
+After correcting the cause, `--locate-only --output <existing-run>` restores the
+original precision/device/repeat contract and merges Locate measurements with
+existing utility, model, and scaling records. It requires `run_config.json` and an
+unchanged inference engine hash. Use the same hardware/software protocol; old
+summary-only published runs need a fresh, provenance-complete run.
+
+`completion.json` is the machine-readable gate. If any requested Locate precision
+has missing/partial output, failed parity, incorrect actual dtype/device, missing
+mode records or repeat measurements, retain the partial summary and exit with an
+error before generating final charts/report/ZIP. The two unsupported upstream
+stream modes remain N/A. Archive previous final charts/reports during repair;
+never display a stale final artifact as the current completed result.

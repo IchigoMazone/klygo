@@ -1,7 +1,7 @@
 """Inspect the ClusterResult result type."""
 
 from examples.mining._sample import sample_data
-from klygo import mining
+from klygo import mining, utils
 
 result = mining.cluster(sample_data(), clusters=2)
-result.show()
+utils.tabulate(result.to_dict())

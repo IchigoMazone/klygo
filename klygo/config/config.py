@@ -31,7 +31,7 @@ from .mapping import update as update_values
 class Config:
     """Manage one configuration file through a stateful object interface.
 
-    Construction stores a path but performs no I/O until :meth:`read` or
+    Construction stores a path but performs no I/O until :meth:`load` or
     :meth:`export_file` needs data. Function-oriented users can use the
     matching APIs directly from :mod:`klygo.config`.
 
@@ -54,7 +54,7 @@ class Config:
     --------
     >>> from klygo import Config
     >>> settings = Config("settings.yaml")
-    >>> data = settings.read(verbose=False)
+    >>> data = settings.load(verbose=False)
     >>> data.model.name
     'yolo'
     """
@@ -81,7 +81,7 @@ class Config:
         """
         return self._params.config_path
 
-    def read(self, verbose: bool = True) -> Box:
+    def load(self, verbose: bool = True) -> Box:
         """Load the source file and replace the complete in-memory state.
 
         Parameters
@@ -106,12 +106,11 @@ class Config:
         See Also
         --------
         klygo.config.load
-        export_file
 
         Examples
         --------
         >>> manager = Config("settings.yaml")
-        >>> settings = manager.read(verbose=False)
+        >>> settings = manager.load(verbose=False)
         """
         self._box = load(self.config_path, verbose=verbose)
         self._cfg = self._box.to_dict()
@@ -138,7 +137,7 @@ class Config:
 
         Notes
         -----
-        Before :meth:`read`, this returns an empty dictionary.
+        Before :meth:`load`, this returns an empty dictionary.
 
         Examples
         --------
@@ -211,7 +210,12 @@ class Config:
         """
         return get_value(self._cfg, key_path, default=default)
 
-    def set(self, key_path: str, value: Any) -> Box:
+    def _set_state(self, box: Box) -> None:
+        """Store updated Box and dict state."""
+        self._box = box
+        self._cfg = box.to_dict()
+
+    def set(self, key_path: str, value: Any) -> None:
         """Assign a nested value and replace the current in-memory state.
 
         Missing intermediate dictionaries are created. This operation updates
@@ -226,8 +230,7 @@ class Config:
 
         Returns
         -------
-        box.Box
-            Complete updated in-memory configuration.
+        None
 
         Raises
         ------
@@ -237,12 +240,9 @@ class Config:
         Examples
         --------
         >>> manager = Config("settings.yaml")
-        >>> manager.set("model.batch", 32).model.batch
-        32
+        >>> manager.set("model.batch", 32)
         """
-        self._box = set_value(self._cfg, key_path, value)
-        self._cfg = self._box.to_dict()
-        return self._box
+        self._set_state(set_value(self._cfg, key_path, value))
 
     def has(self, key_path: str) -> bool:
         """Return whether a nested path exists in current state.
@@ -303,7 +303,7 @@ class Config:
             self._box = Box(self._cfg)
         return removed
 
-    def merge(self, *configs: Mapping[str, Any] | Box, deep: bool = True) -> Box:
+    def merge(self, *configs: Mapping[str, Any] | Box, deep: bool = True) -> None:
         """Merge configurations into current state from left to right.
 
         Parameters
@@ -315,8 +315,7 @@ class Config:
 
         Returns
         -------
-        box.Box
-            Complete merged in-memory configuration.
+        None
 
         Raises
         ------
@@ -331,43 +330,9 @@ class Config:
         Examples
         --------
         >>> manager = Config("settings.yaml")
-        >>> manager.merge({"model": {"batch": 16}}, {"seed": 7}).seed
-        7
+        >>> manager.merge({"model": {"batch": 16}}, {"seed": 7})
         """
-        self._box = merge_values(self._cfg, *configs, deep=deep)
-        self._cfg = self._box.to_dict()
-        return self._box
-
-    def update(self, updates: Mapping[str, Any] | Box, deep: bool = True) -> Box:
-        """Apply one mapping to current state without mutating that mapping.
-
-        Parameters
-        ----------
-        updates : mapping or box.Box
-            Values to apply.
-        deep : bool, default=True
-            Recursively combine nested mappings; false replaces top-level
-            values in full.
-
-        Returns
-        -------
-        box.Box
-            Complete updated in-memory configuration.
-
-        Raises
-        ------
-        TypeError
-            If ``updates`` is not mapping-like or ``deep`` is not boolean.
-
-        Examples
-        --------
-        >>> manager = Config("settings.yaml")
-        >>> manager.update({"model": {"epochs": 10}}).model.epochs
-        10
-        """
-        self._box = update_values(self._cfg, updates, deep=deep)
-        self._cfg = self._box.to_dict()
-        return self._box
+        self._set_state(merge_values(self._cfg, *configs, deep=deep))
 
     @classmethod
     def create_default(
@@ -385,7 +350,7 @@ class Config:
         mapping exactly, which is suitable for the flat structure produced by
         :func:`klygo.models.metadata` and :func:`klygo.models.configure`.
         The returned manager is already populated in both modes; calling
-        :meth:`read` again is optional.
+        :meth:`load` again is optional.
 
         Parameters
         ----------
@@ -448,85 +413,6 @@ class Config:
         manager._box = Box(created.to_dict())
         manager._cfg = manager._box.to_dict()
         return manager
-
-    def export_file(
-        self,
-        name: str,
-        suffix: str | None = None,
-        output_dir: str | Path | None = None,
-        overwrite: bool = False,
-        verbose: bool = True,
-        ext: str | None = None,
-    ) -> Path:
-        """Export current state under a new filename and format.
-
-        ``ext`` is retained as a compatibility alias for ``suffix``. When no
-        output directory is supplied, ``default.root`` is used when available,
-        otherwise the current directory is selected.
-
-        Parameters
-        ----------
-        name : str
-            Output filename with or without its destination extension.
-        suffix : str or None
-            Output extension; defaults to ``.json``.
-        output_dir : str, pathlib.Path, or None
-            Explicit destination directory. If omitted, current state may
-            supply ``default.root``.
-        overwrite : bool, default=False
-            Replace an existing output file.
-        verbose : bool, default=True
-            Enable the output progress indicator.
-        ext : str or None
-            Backward-compatible alias taking precedence over ``suffix``.
-
-        Returns
-        -------
-        pathlib.Path
-            Exported configuration path.
-
-        Raises
-        ------
-        ValueError
-            If the selected suffix is empty or unsupported.
-        FileExistsError
-            If the destination exists and overwrite is disabled.
-        FileNotFoundError
-            If state is empty and the bound source file cannot be loaded.
-
-        See Also
-        --------
-        read
-        klygo.config.export
-
-        Examples
-        --------
-        >>> manager = Config("settings.yaml")
-        >>> manager.read(verbose=False)
-        >>> manager.export_file("resolved", ".toml", overwrite=True)
-        """
-        actual_suffix = ext or suffix or ".json"
-        if not isinstance(actual_suffix, str) or not actual_suffix:
-            raise ValueError("suffix must be a non-empty string")
-        if not actual_suffix.startswith("."):
-            actual_suffix = f".{actual_suffix}"
-        clean_name = name[:-len(actual_suffix)] if name.lower().endswith(actual_suffix.lower()) else name
-        params = ExportFile(
-            name=clean_name,
-            suffix=actual_suffix,
-            output_dir=output_dir if output_dir is not None else ".",
-            overwrite=overwrite,
-            verbose=verbose,
-        )
-        if output_dir is not None:
-            destination_dir = files.path(output_dir)
-        elif isinstance(self._cfg.get("default"), dict) and "root" in self._cfg["default"]:
-            destination_dir = files.path(self._cfg["default"]["root"])
-        else:
-            destination_dir = files.path(".")
-        destination = files.join(destination_dir, f"{params.name}{params.suffix}")
-        data = self._cfg or load(self.config_path, verbose=False)
-        return export(data, destination, overwrite=params.overwrite, verbose=params.verbose)
 
 
 __all__ = ["Config"]

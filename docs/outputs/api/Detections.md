@@ -17,12 +17,16 @@ source = media.load("video.mp4", stream=True)
 stream = model.predict(source)
 stream.transform(postprocessing.compose(postprocessing.threshold(0.4), postprocessing.nms(0.5)))
 for frame in stream:
-    frame.show()
+    print(len(frame))
 
 results = model.predict("images/", stream=False)
+results.keep(["person", "car"])
 results.drop("unknown")
 dataset_dir = results.export("artifacts/predictions", format="yolo")
 print(dataset_dir)  # contains images/, labels/, and data.yaml
+
+# Pseudo-labeling export: defaults to pseudo_labels/ and pseudo.yaml without copying images
+labels_dir = results.export("artifacts/dataset", format="yolo", image=False)
 
 packed_results = model.predict("images/", packed=True)
 print(packed_results.is_packed, packed_results.total_objects)
@@ -59,7 +63,7 @@ The collection owns the shared class registry. Frame CRUD and direct mutations o
 
 The collection maintains an internal label-to-frame index. Collection-wide `drop()` and `relabel()` therefore visit only frames containing a requested label and automatically batch registry synchronization. Callers use the normal methods directly; batching remains an implementation detail.
 
-Class IDs remain stable and deleted IDs are not reused during normal editing. Call `compact()` explicitly to rewrite active IDs to `0..n-1`. Compaction updates the shared registries lazily instead of visiting every box, so its cost depends on the number of classes and frames rather than the total annotation count. Box UIDs and frame identities remain unchanged. YOLO export performs its own temporary compact mapping, writes source pixels to `images/` with matching annotation stems in `labels/`, returns the dataset directory, and never mutates the collection.
+Class IDs remain stable and deleted IDs are not reused during normal editing. Call `compact()` explicitly to rewrite active IDs to `0..n-1`. Compaction updates the shared registries lazily instead of visiting every box, so its cost depends on the number of classes and frames rather than the total annotation count. Box UIDs and frame identities remain unchanged. YOLO export performs its own temporary compact mapping, writes source pixels to `images_dir` (default `"images"` when `image=True`; pass `image=False` for pseudo-labeling to emit only `labels_dir` and `yaml_name`) with matching annotation stems in `labels_dir` (defaults to `"labels"` when `image=True` or `"pseudo_labels"` when `image=False`) and class names in `yaml_name` (defaults to `"data.yaml"` when `image=True` or `"pseudo.yaml"` when `image=False`), returns the dataset directory, and never mutates the collection.
 
 Use `copy()` to create an independent working result before in-place filtering. Frames, boxes, registries, and metadata are copied deeply, while lazy source-image handles are shared so image pixels are not duplicated in memory.
 
@@ -83,7 +87,7 @@ results.compact()
 dataset_dir = results.export("artifacts/predictions", format="yolo")
 ```
 
-`merge()` raises on any duplicate `(source_id, frame_index)` identity. Batch operations validate before committing. `filter()`, `drop()`, `relabel()`, `compact()`, and `clear()` return the same collection for in-place chaining:
+`merge()` raises on any duplicate `(source_id, frame_index)` identity. Batch operations validate before committing. `where()`, `drop()`, `relabel()`, `compact()`, and `clear()` return the same collection for in-place chaining:
 
 ```python
 results.drop("bg").relabel({"car": "vehicle"}).compact()
@@ -115,3 +119,29 @@ JSON serialization, and YOLO export stage only the current frame on CPU and do n
 change the collection's storage profile. Float16 storage uses float32 intermediates
 for sorting, NMS, and area calculations to support older CUDA devices and reduce
 geometry error.
+
+## Combining collections
+
+```python
+results.combine(other_results, method="weighted", iou=0.5)
+```
+
+Frames are paired by `(source_id, frame_index)`. Shared frames must have equal
+`image_size`; every shared size is checked before changing any boxes or history.
+Matching frames use `Detection.combine`. Frames unique to the left are retained;
+frames unique to the right are cloned and appended. Both inputs must be
+materialized; regular and packed collections are supported. Returns the mutated
+left collection, leaving the right collection unchanged.
+
+## Sized exports
+
+`save_images(..., size=(640, 640))` and `save_video(..., size=(640, 640))`
+return None. Size is (width, height), preserves aspect ratio, and adds centered
+gray letterbox padding. Omit size to preserve existing dimensions. Video frames
+must have equal dimensions without size. Annotated Detection frames are rendered
+before resizing so pixels, box outlines, and captions scale together; annotations
+and source pixels are not changed. Exports consume frames sequentially.
+
+### Combine progress
+
+`results.combine(other_results, method="union", iou=0.5, verbose=False)` accepts a keyword-only progress flag. Set `verbose=True` to display sequential frame-combination and other-frame scanning stages. Single-frame `Detection.combine()` is unchanged.

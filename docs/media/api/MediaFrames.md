@@ -67,3 +67,12 @@ with tempfile.TemporaryDirectory() as temporary:
     assert indexed[0].size == (32, 24)
     assert len(list(streamed)) == 1
 ```
+
+## Sized exports
+
+`save_images(..., size=(640, 640))` and `save_video(..., size=(640, 640))`
+return None. Size is (width, height), preserves aspect ratio, and adds centered
+gray letterbox padding. Omit size to preserve existing dimensions. Video frames
+must have equal dimensions without size. Annotated Detection frames are rendered
+before resizing so pixels, box outlines, and captions scale together; annotations
+and source pixels are not changed. Exports consume frames sequentially.

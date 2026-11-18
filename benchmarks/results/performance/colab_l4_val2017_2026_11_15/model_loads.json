@@ -1,0 +1,128 @@
+[
+  {
+    "model": "yolo",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 0.3018,
+    "device": ""
+  },
+  {
+    "model": "yolo",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 0.0995,
+    "device": ""
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 0.5606,
+    "device": ""
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 0.1108,
+    "device": ""
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 0.5857,
+    "device": ""
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 0.1297,
+    "device": ""
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 13.5221,
+    "device": ""
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 5.8114,
+    "device": ""
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 19.4896,
+    "device": ""
+  },
+  {
+    "model": "grounding-dino",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 7.6252,
+    "device": ""
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 18.3062,
+    "device": ""
+  },
+  {
+    "model": "grounding-dino-base",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 7.8215,
+    "device": ""
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 2.1422,
+    "device": ""
+  },
+  {
+    "model": "faster-rcnn",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 1.727,
+    "device": ""
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float32",
+    "actual_dtype": "float32",
+    "load_seconds": 22.4662,
+    "device": ""
+  },
+  {
+    "model": "d-fine",
+    "dtype": "float16",
+    "actual_dtype": "float16",
+    "load_seconds": 16.023,
+    "device": ""
+  },
+  {
+    "model": "locate-anything",
+    "dtype": "float16",
+    "actual_dtype": "",
+    "load_seconds": null,
+    "device": ""
+  },
+  {
+    "model": "locate-anything",
+    "dtype": "float32",
+    "actual_dtype": "",
+    "load_seconds": null,
+    "device": ""
+  }
+]

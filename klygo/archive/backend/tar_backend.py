@@ -274,7 +274,7 @@ class TarBackend(ArchiveBackend):
                 results.append(name)
         return results
 
-    def get_info(self, archive_path: Path) -> Dict[str, Any]:
+    def info(self, archive_path: Path) -> Dict[str, Any]:
         """Return normalized TAR member counts, sizes, ratio, and extrema."""
         mode = _get_tar_mode(self.format_name, write=False)
         with tarfile.open(archive_path, mode=mode) as tar:
@@ -307,7 +307,7 @@ class TarBackend(ArchiveBackend):
                 "smallest_file": smallest,
             }
 
-    def test(self, archive_path: Path, raise_exception: bool = False) -> bool:
+    def is_valid(self, archive_path: Path, raise_exception: bool = False) -> bool:
         """Read the complete TAR member stream and report structural validity."""
         mode = _get_tar_mode(self.format_name, write=False)
         try:

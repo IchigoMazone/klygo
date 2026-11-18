@@ -18,7 +18,7 @@ class TestRecompress(unittest.TestCase):
             source = make_archive(root)
             target = root / "compact.zip"
             archive.recompress(source, target, compresslevel=9, verbose=False)
-            self.assertTrue(archive.test(target))
+            self.assertTrue(archive.is_valid(target))
             self.assertEqual(
                 set(archive.list_files(target)),
                 set(archive.list_files(source)),

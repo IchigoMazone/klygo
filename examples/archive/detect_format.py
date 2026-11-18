@@ -15,6 +15,7 @@ assert archive.detect_format("dataset.tbz2") == "tar.bz2"
 with TemporaryDirectory() as directory:
     root = files.path(directory)
     packed = make_archive(root)
-    renamed = files.move(packed, root / "archive.bin")
+    renamed = root / "archive.bin"
+    files.move(packed, renamed)
     assert archive.detect_format(renamed) == "zip"
     print("magic-byte detection:", renamed)

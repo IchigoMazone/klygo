@@ -6,10 +6,12 @@ import klygo.files as files
 
 def make_source(root, name: str = "source"):
     base = files.path(root)
-    source = files.mkdir(base / name)
+    source = base / name
+    files.mkdir(source)
     files.save(source / "alpha.txt", "alpha", verbose=False)
     files.save(source / "beta.log", "beta", verbose=False)
-    nested = files.mkdir(source / "nested")
+    nested = source / "nested"
+    files.mkdir(nested)
     files.save(nested / "data.json", {"value": 42}, verbose=False)
     return source
 

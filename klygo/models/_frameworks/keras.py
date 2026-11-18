@@ -1,11 +1,10 @@
 """Optional Keras detection input conversion, inference and output packing."""
 
 from typing import Any, List, Dict, Optional
-from klygo.models.runtime.keras import ensure_backend, _require_keras
+from klygo.models.runtime.keras import _require_keras
 
 def cast_inputs(inputs: Any, dev: Any = None, dtype: Any = None) -> Any:
     """Convert image or NumPy inputs into Keras 3 tensors for the active compute backend."""
-    ensure_backend()
     keras = _require_keras()
     import numpy as np
     from klygo import media
@@ -51,39 +50,33 @@ def run_inference(model: Any, inputs: Any, **model_kwargs) -> Any:
 
     # 1. KerasHub ObjectDetector with preprocessor + decode_predictions
     if hasattr(model, "decode_predictions") and callable(model.decode_predictions):
-        try:
-            keras = _require_keras()
-            preprocessor = getattr(model, "preprocessor", None)
-            if callable(preprocessor):
-                img_conv = getattr(preprocessor, "image_converter", None)
-                target_size = getattr(img_conv, "image_size", None) if img_conv is not None else None
-                prep_inputs = (
-                    keras.ops.image.resize(inputs, target_size)
-                    if target_size is not None and hasattr(keras.ops, "image")
-                    else inputs
-                )
-                prep = preprocessor(prep_inputs)
-            else:
-                prep = inputs
-            raw_preds = model(prep, training=False, **model_kwargs)
-            decoded = model.decode_predictions(raw_preds, inputs)
-            if isinstance(decoded, dict) and bbox_fmt:
-                decoded = dict(decoded)
-                decoded["_bounding_box_format"] = str(bbox_fmt)
-            return decoded
-        except Exception:
-            pass
+        keras = _require_keras()
+        preprocessor = getattr(model, "preprocessor", None)
+        if callable(preprocessor):
+            img_conv = getattr(preprocessor, "image_converter", None)
+            target_size = getattr(img_conv, "image_size", None) if img_conv is not None else None
+            prep_inputs = (
+                keras.ops.image.resize(inputs, target_size)
+                if target_size is not None and hasattr(keras.ops, "image")
+                else inputs
+            )
+            prep = preprocessor(prep_inputs)
+        else:
+            prep = inputs
+        raw_preds = model(prep, training=False, **model_kwargs)
+        decoded = model.decode_predictions(raw_preds, inputs)
+        if isinstance(decoded, dict) and bbox_fmt:
+            decoded = dict(decoded)
+            decoded["_bounding_box_format"] = str(bbox_fmt)
+        return decoded
 
     # 2. Standard Keras model.predict
     if hasattr(model, "predict") and callable(model.predict):
-        try:
-            out = model.predict(inputs, verbose=0, **model_kwargs)
-            if isinstance(out, dict) and bbox_fmt:
-                out = dict(out)
-                out["_bounding_box_format"] = str(bbox_fmt)
-            return out
-        except (TypeError, ImportError):
-            pass
+        out = model.predict(inputs, verbose=0, **model_kwargs)
+        if isinstance(out, dict) and bbox_fmt:
+            out = dict(out)
+            out["_bounding_box_format"] = str(bbox_fmt)
+        return out
 
     # 3. Direct callable
     if callable(model):

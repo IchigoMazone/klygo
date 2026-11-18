@@ -126,15 +126,13 @@ def search(
     )
 
 
-def get_info(archive_path: Union[str, Path], *, verbose: bool = False) -> Dict[str, Any]:
+def info(archive_path: Union[str, Path]) -> Dict[str, Any]:
     """Return detailed archive metadata and compression statistics.
 
     Parameters
     ----------
     archive_path : str or pathlib.Path
         Archive to inspect or modify.
-    verbose : bool, default=False
-        Print the metadata as a Rich table while returning the dictionary.
 
     Returns
     -------
@@ -153,26 +151,15 @@ def get_info(archive_path: Union[str, Path], *, verbose: bool = False) -> Dict[s
 
     Examples
     --------
-    >>> import klygo.archive as archive
-    >>> metadata = archive.get_info("dataset.zip")
+    >>> from klygo import archive, utils
+    >>> metadata = archive.info("dataset.zip")
+    >>> utils.tabulate(metadata, title="Archive Information")
     """
     path, backend = resolve_backend(archive_path)
-    info = backend.get_info(path)
-    if verbose:
-        from rich.console import Console
-        from rich.table import Table
-
-        table = Table(title=f"Archive Information: {files.name(path)}")
-        table.add_column("Property", style="cyan", no_wrap=True)
-        table.add_column("Value", style="green")
-        for key, val in info.items():
-            label = str(key).replace("_", " ").title()
-            table.add_row(label, str(val))
-        Console().print(table)
-    return info
+    return backend.info(path)
 
 
-def test(archive_path: Union[str, Path], raise_exception: bool = False) -> bool:
+def is_valid(archive_path: Union[str, Path], raise_exception: bool = False) -> bool:
     """Test archive integrity.
 
     Corruption normally returns ``False``; ``raise_exception=True`` converts backend failures into ``ValueError``.
@@ -201,14 +188,14 @@ def test(archive_path: Union[str, Path], raise_exception: bool = False) -> bool:
     Examples
     --------
     >>> import klygo.archive as archive
-    >>> archive.test("dataset.zip")
+    >>> archive.is_valid("dataset.zip")
     True
     """
     path, backend = resolve_backend(archive_path)
-    return backend.test(path, raise_exception=raise_exception)
+    return backend.is_valid(path, raise_exception=raise_exception)
 
 
-def verify(archive_path: Union[str, Path], *, verbose: bool = False) -> Dict[str, Any]:
+def verify(archive_path: Union[str, Path]) -> Dict[str, Any]:
     """Build a high-level archive verification report.
 
     The report combines integrity status with format, member count, size, and encryption metadata.
@@ -217,8 +204,6 @@ def verify(archive_path: Union[str, Path], *, verbose: bool = False) -> Dict[str
     ----------
     archive_path : str or pathlib.Path
         Archive to inspect or modify.
-    verbose : bool, default=False
-        Print the verification report as a Rich table while returning the dictionary.
 
     Returns
     -------
@@ -235,19 +220,19 @@ def verify(archive_path: Union[str, Path], *, verbose: bool = False) -> Dict[str
     See Also
     --------
     test
-    get_info
+    info
 
     Examples
     --------
-    >>> import klygo.archive as archive
+    >>> from klygo import archive
     >>> archive.verify("dataset.zip")["valid"]
     True
     """
     path, backend = resolve_backend(archive_path)
-    is_valid = backend.test(path, raise_exception=False)
-    info = backend.get_info(path)
+    is_valid = backend.is_valid(path, raise_exception=False)
+    info = backend.info(path)
 
-    result = {
+    return {
         "valid": is_valid,
         "format": info.get("format"),
         "file_count": info.get("file_count", 0),
@@ -255,18 +240,6 @@ def verify(archive_path: Union[str, Path], *, verbose: bool = False) -> Dict[str
         "human_archive_size": info.get("human_archive_size", ""),
         "encrypted": info.get("encrypted", False),
     }
-    if verbose:
-        from rich.console import Console
-        from rich.table import Table
-
-        table = Table(title=f"Archive Verification: {files.name(path)}")
-        table.add_column("Property", style="cyan", no_wrap=True)
-        table.add_column("Value", style="green" if is_valid else "red")
-        for key, val in result.items():
-            label = str(key).replace("_", " ").title()
-            table.add_row(label, str(val))
-        Console().print(table)
-    return result
 
 
 def compare(archive1: Union[str, Path], archive2: Union[str, Path]) -> Dict[str, List[str]]:
@@ -321,8 +294,8 @@ __all__ = [
     "list_files",
     "iter_files",
     "search",
-    "get_info",
-    "test",
+    "info",
+    "is_valid",
     "verify",
     "compare",
     "detect_format",

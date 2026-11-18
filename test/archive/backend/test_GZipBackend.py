@@ -22,7 +22,7 @@ class TestGZipBackend(unittest.TestCase):
             self.assertEqual(backend.search(packed, "PAY*", case_sensitive=False), ["payload"])
             backend.extract_file(packed, "payload", output)
             self.assertEqual((output / "payload").read_bytes(), b"payload")
-            self.assertTrue(backend.test(packed))
+            self.assertTrue(backend.is_valid(packed))
 
     def test_directories_and_filters_are_rejected(self):
         with TemporaryDirectory() as directory:

@@ -1,38 +1,61 @@
 # `datasets.convert`
 
 ```python
-convert(source, target, format="yolo", tree=None, classes=None, on_conflict="error", overwrite=False)
+convert(source=None, target="", *, src_format="voc", dst_format="yolo", images=None, annotations=None, classes=None, image_ids=None, include_difficult=True, include_crowd=False, voc_1_based=False, overwrite=False, verbose=False)
 ```
 
-Convert one or more mapped image and label directory trees into a flat YOLO dataset containing `images/`, `labels/`, and `data.yaml`. The first `tree` value selects image directories, the second selects matching label directories, and an optional third value selects exactly one YAML metadata file. Key names do not affect their roles.
+Convert Pascal VOC XML or COCO instances JSON object-detection annotations and source images to a flat YOLO detection dataset containing `images/`, `labels/`, and `data.yaml`.
 
-Image and label pattern lists are paired by position. Glob matches are sorted before corresponding directories are paired, preventing annotations with the same stem in different batches from being mixed.
+> [!NOTE]
+> For dataset layout flattening with directory trees, use [`datasets.flatten()`](flatten.md). Passing `tree` to `datasets.convert()` raises a `TypeError` explaining the migration.
 
-`on_conflict` applies to complete image-label samples:
+### Parameters
 
-- `error` raises before output is published.
-- `rename` keeps both samples with a synchronized numeric suffix.
-- `skip` keeps the first sample.
-- `overwrite` keeps the last sample.
+- `source`: Root directory containing the source dataset.
+- `target`: Output directory or `.zip` archive for the flat YOLO dataset.
+- `src_format`: Source annotation format (`'voc'` or `'coco'`). Default is `'voc'`.
+- `dst_format`: Destination format (`'yolo'`). Default is `'yolo'`.
+- `images`: Optional explicit path to directory containing source images.
+- `annotations`: Optional explicit path to directory of VOC XML files or path to COCO JSON file.
+- `classes`: Optional list or dictionary mapping integer IDs to class names. If omitted, discovered automatically from source annotations.
+- `image_ids`: Optional sequence of image stems or identifiers to convert.
+- `include_difficult`: Whether to retain objects marked difficult in Pascal VOC (default `True`).
+- `include_crowd`: Whether to retain annotations marked `iscrowd=1` in COCO (default `False`).
+- `voc_1_based`: Whether source VOC coordinates are 1-based (default `False`).
+- `overwrite`: Whether to replace an existing target (default `False`).
+- `verbose`: Whether to display progress (default `False`).
+
+### Behavior
+
+1. **Image Byte Preservation**: Original image files are copied directly without re-encoding or compression artifacts.
+2. **Negative Samples**: Images without annotations are preserved with empty `.txt` label files, retaining the negative background population.
+3. **Bounding Box Normalization**: VOC pixel coordinates `[xmin, ymin, xmax, ymax]` and COCO pixel coordinates `[x, y, w, h]` are converted to normalized YOLO format `[class_id, x_center, y_center, width, height]` with values in `[0.0, 1.0]`.
+4. **Sparse Category Remapping**: COCO sparse category IDs are mapped to contiguous `0..N-1` class indices.
+
+### Example
 
 ```python
 from klygo import datasets
 
-flat = datasets.convert(
-    "raw_dataset",
-    "flat_dataset",
-    tree={
-        "pictures": "batch_*/images",
-        "annotations": "batch_*/labels",
-    },
-    classes={0: "apple", 1: "banana"},
-    on_conflict="rename",
+# Convert Pascal VOC annotations
+datasets.convert(
+    source="voc2007_raw",
+    target="voc2007_yolo",
+    src_format="voc",
+    classes=["dog", "cat", "car"],
 )
-datasets.partition(flat, "partitioned", (0.8, 0.1, 0.1))
+
+# Convert COCO annotations
+datasets.convert(
+    images="coco_raw/val2017",
+    annotations="coco_raw/annotations/instances_val2017.json",
+    target="val2017_yolo",
+    src_format="coco",
+)
 ```
 
-The conversion is staged and atomically published. `overwrite` controls a pre-existing target; it is independent from conflicts among inputs. Images without labels are retained as negative samples. Orphan labels are ignored with a warning.
-
-Raises `ValueError` for invalid tree structure, overlapping source and target paths, ambiguous glob groups, conflicting metadata, non-contiguous classes, unknown label IDs, or sample conflicts. Raises `FileExistsError` when the target exists without `overwrite=True`.
-
 See [`examples/datasets/convert.py`](../../../examples/datasets/convert.py) and [`test/datasets/test_convert.py`](../../../test/datasets/test_convert.py).
+
+### Validation and return value
+
+Returns `None`. Source and destination paths must not overlap, including resolved symlinks. Missing source images, invalid dimensions, non-finite or invalid boxes, and unmapped classes raise errors before publishing output. Boxes crossing image boundaries are clipped; fully outside boxes are rejected. Crowd/difficult filtering remains controlled by the explicit options above.

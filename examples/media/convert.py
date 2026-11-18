@@ -11,6 +11,8 @@ from klygo import media, files
 with tempfile.TemporaryDirectory() as temporary:
     root = files.path(temporary)
     image = Image.new("RGB", (32, 24), "red")
-    source = media.save(root / "source.png", image)
-    target = media.convert(source, root / "converted.jpg")
-    print(media.probe(target)["format"])
+    source = root / "source.png"
+    media.save(source, image)
+    target = root / "converted.jpg"
+    media.convert(source, target)
+    print(media.info(target)["format"])

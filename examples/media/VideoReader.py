@@ -10,7 +10,8 @@ from PIL import Image
 from klygo import media, files
 with tempfile.TemporaryDirectory() as temporary:
     root = files.path(temporary)
-    video = media.save_video(root / "clip.mp4", [Image.new("RGB", (32, 24), "red")], fps=5)
+    video = root / "clip.mp4"
+    media.save_video(video, [Image.new("RGB", (32, 24), "red")], fps=5)
     reader = media.VideoReader(video)
     try:
         print(reader.read_frame(0).shape)

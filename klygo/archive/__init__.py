@@ -14,7 +14,7 @@ Public API (21 functions, 1 class):
           5. list_files(...)           Return all stored member names.
           6. iter_files(...)           Yield stored member names lazily.
           7. search(...)               Find members by glob or regular expression.
-          8. get_info(...)             Report format, size, and member metadata.
+          8. info(...)             Report format, size, and member metadata.
           9. test(...)                 Check archive integrity.
          10. verify(...)               Build a detailed validation report.
          11. compare(...)              Compare member names in two archives.
@@ -43,12 +43,12 @@ from .io import compress, extract, extract_file, extract_matching
 from .metadata import (
     compare,
     detect_format,
-    get_info,
+    info,
     is_archive,
     iter_files,
     list_files,
     search,
-    test,
+    is_valid,
     verify,
 )
 from .operations import (
@@ -70,8 +70,8 @@ __all__ = [
     "list_files",
     "iter_files",
     "search",
-    "get_info",
-    "test",
+    "info",
+    "is_valid",
     "verify",
     "compare",
     "detect_format",

@@ -1,0 +1,31 @@
+{
+    "os": "Linux-6.6.159+-x86_64-with-glibc2.39",
+    "python": "3.13.16",
+    "cpu": "x86_64",
+    "cpu_count": 12,
+    "klygo_path": "/content/klygo/klygo",
+    "git": {
+        "branch": "detection-evaluation",
+        "commit": "c9f23990f8df8b737c4a7cea2670ad66ba4de4bb",
+        "dirty": "yes"
+    },
+    "gpu": "NVIDIA L4",
+    "gpu_uuid": "06f5ff16-4ac3-7e17-5242-ed4b0bbad075",
+    "vram_mb": 22563.1,
+    "is_nvidia_l4": true,
+    "torch_cuda": true,
+    "cupy_cuda": true,
+    "cuda_runtime": "13.0",
+    "versions": {
+        "torch": "2.14.1+cu130",
+        "torchvision": "0.29.1+cu130",
+        "ultralytics": "8.4.215",
+        "transformers": "4.57.1",
+        "keras": "3.13.2",
+        "keras_hub": "0.26.0",
+        "numpy": "2.4.6",
+        "cupy": "14.2.0",
+        "pillow": "11.3.0",
+        "opencv": "5.0.0.93"
+    }
+}

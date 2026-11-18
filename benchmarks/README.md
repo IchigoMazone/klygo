@@ -1,99 +1,92 @@
-# Klygo Official Benchmark Suite
+# Klygo benchmark suite
 
-This directory contains the official multi-backend benchmark harness, telemetry datasets, and analytical evaluation reports for the **Klygo** framework across multi-core CPUs and NVIDIA CUDA GPUs.
+Use the release suite in [gpu_suite](gpu_suite/README.md) for current performance
+and correctness evaluation. It covers metrics, mining, outputs/postprocessing,
+dataset/media operations, optional model inference and scaling, and combined
+reports and charts.
 
----
+## Current entry points
 
-## 1. Directory Structure & Organization
+| Entry point | Purpose |
+| --- | --- |
+| `gpu_suite/evaluate_release.py` | Comprehensive release orchestration and aggregation |
+| `gpu_suite/run.py` | Per-model six-mode inference and explicit image/video configuration |
+| `gpu_suite/locate_runtime.py` | Isolated Locate Anything execution and result validation |
+| [Repository skill](../.agents/skills/klygo-multi-gpu-benchmark/SKILL.md) | Run profiles, dependency repair, recovery, and evidence requirements |
 
-```text
-benchmarks/
-├── README.md                          # Master Benchmark Suite documentation & navigation
-├── runner.py                          # Master multi-backend benchmark CLI orchestrator
-├── data/                              # Shared benchmark datasets (images, video clips, annotations)
-│   └── .gitkeep
-├── analyzt/                           # Benchmark visualization charts, throughput reports & executive analysis
-│   ├── README.md                      # Official visual report with embedded high-DPI charts
-│   └── generate_charts.py             # Reproducible chart generation script
-├── outputs_cpu_gpu/                   # NumPy/CuPy Detections microbenchmarks
-│   ├── README.md                      # Methodology, tables, and conclusions
-│   └── metrics/                       # Raw NMS and storage-operation measurements
-├── mining/                            # Image-level mining CPU/GPU parity benchmark
-├── round_1/                           # Round 1: Pipeline Smoke Test (Historical Baseline)
-│   ├── README.md                      # Round 1 summary & methodology retrospective
-│   ├── metrics/
-│   │   ├── benchmark_metrics.json     # Raw JSON measurements (Round 1)
-│   │   └── benchmark_tables.md        # Summary tables of FPS, Latency, TTFF, RAM, VRAM
-│   └── evaluations/
-│       ├── summary_evaluation.md      # Multi-backend cross-tier evaluation
-│       ├── cpu_evaluation.md          # CPU latency & memory observations
-│       └── gpu_evaluation.md          # GPU acceleration & VRAM observations
-└── round_2/                           # Round 2: Rigorous Multi-Process Benchmark Harness
-    ├── README.md                      # Round 2 scientific standards & execution plan
-    ├── metrics/                       # Target directory for Round 2 raw JSON & tabular metrics
-    └── evaluations/                   # Target directory for Round 2 analytical reports & scorecards
-```
+The skill's launcher calls `evaluate_release.py` directly. Keep one canonical
+release implementation. The superseded Round 1/2 runners and reports have been
+removed from the current tree; their history remains available in Git.
 
----
+### CPU validation without external downloads
 
-## 2. Benchmark Iterations
-
-| Iteration | Status | Primary Purpose & Methodology | Reference |
-| :--- | :--- | :--- | :--- |
-| **Visual Benchmark Analysis** | Published | Six high-resolution publication charts, throughput matrices, streaming latency analysis, and dataset curation evaluation for Klygo 2.1.1. | [`benchmarks/analyzt/README.md`](analyzt/README.md) |
-| **Round 1** | Completed | Initial API pipeline smoke test verifying end-to-end execution of all 6 modes across backends. Identified 9 core methodology limitations (model load in raw timer, lack of warmup, small 4-frame dataset, memory tracking asymmetry). | [`benchmarks/round_1/README.md`](round_1/README.md) |
-| **Round 2** | Architecture Ready | Rigorous multi-process benchmark with subprocess isolation, symmetric warmup, memory delta tracking, 30–60 real frames, 5 repeats, detection parity verification, and full 5-model coverage. | [`benchmarks/round_2/README.md`](round_2/README.md) |
-| **Outputs CPU/GPU** | Completed | Focused NumPy/CuPy benchmark for NMS, device transfers, precision conversion, and threshold operations on `Detections`. | [`benchmarks/outputs_cpu_gpu/README.md`](outputs_cpu_gpu/README.md) |
-| **Mining CPU/GPU** | Reproducible | NumPy/CuPy parity and latency for statistics, scoring, selection, balancing, quality, duplicate search, and clustering. | [`benchmarks/mining/README.md`](mining/README.md) |
-| **Colab T4 six-mode suite** | Recorded | Nine model variants, 25 configurations, 124 supported cases; saved FPS/parity summaries and complete ten-minute stability telemetry. Matrix raw timing bundle unavailable in saved output. | [Recorded report](gpu_suite/colab_t4_2026_11_10/README.md) |
-| **Colab T4 complete suite** | Recorded | 33 configurations, 172 supported cases, 1,204 measured passes (`controlled` + `people` + `cars`), verified raw ZIP archives at `cffb476`/`f83352d`. | [Recorded report](gpu_suite/colab_t4_complete_2026_11_10/README.md) |
-| **Colab L4 complete suite** | Recorded | Baseline at `8b87298` on Colab Pro NVIDIA L4: 33 configurations, 172 supported cases, 1,204 measured passes, 600s stability PASS, 100% parity PASS. | [Recorded report](gpu_suite/colab_l4_complete_2026_11_11/README.md) |
-| **Colab L4 optimized suite** | Recorded | Post-optimization rerun at `7729cb7` on same NVIDIA L4: 33 configs, 172 cases, 1,204 passes, `+30.6%–68.7%` YOLO managed image FPS, `23.6–53.0 ms` native-stream TTFF, 100% parity PASS. | [Recorded report](gpu_suite/colab_l4_optimized_2026_11_11/README.md) |
-| **Mining Curation Accuracy (COCO `val2017`)** | Recorded | Real-data `YOLOv8n` detection benchmark on Colab L4 at `1fb5020`: 11 curation strategies × 2 seeds on an 848-image noisy long-tail COCO pool evaluated against 247 clean held-out frames (`balance_median` `0.3874` vs `full_raw` `0.3139` `mAP@50-95`). | [Recorded report](mining/curation_l4_2026_11_11/README.md) |
-
----
-
-## 3. Execution Modes Evaluated
-
-Every integrated detection model is evaluated across up to 6 execution modes:
-
-```text
-                         ┌── Raw Non-stream (Upstream predict(stream=False))
-        ┌─ 1. Raw ───────┤
-        │                └── Raw Stream (Upstream predict(stream=True))
-        │
-        │                ┌── Klygo Native Non-stream (native=True, stream=False)
-Modes ──┼─ 2. Native ────┤
-        │                └── Klygo Native Stream (native=True, model_stream=True)
-        │
-        │                ┌── Klygo Managed Non-stream (native=False, stream=False)
-        └─ 3. Managed ───┤
-                         └── Klygo Managed Stream (native=False, stream=True)
-```
-
-1. **Raw Non-stream**: Direct upstream library call (`ultralytics.YOLO.predict(stream=False)`, etc.). Accumulates all results in RAM before returning.
-2. **Raw Stream**: Upstream library streaming generator (`ultralytics.YOLO.predict(stream=True)`). Yields results frame-by-frame.
-3. **Klygo Native Non-stream**: `detector.predict(..., native=True)` bypasses Klygo's media and preprocessing pipeline while returning standardized `outputs.Detections`.
-4. **Klygo Native Stream**: `detector.predict(..., native=True, model_stream=True)` delegates stream generation directly to the upstream model engine.
-5. **Klygo Managed Non-stream**: Full Klygo pipeline (`media.MediaFrames` + `preprocessing.compose`), tracking affine transformation traces for automatic bounding box restoration.
-6. **Klygo Managed Stream**: Generator yielding standardized `outputs.Detection` frame-by-frame with bounded memory footprint and automated coordinate restoration.
-
----
-
-## 4. Running Benchmarks
+Run from the repository root with a fresh output directory:
 
 ```bash
-# Run standard benchmark suite
-python benchmarks/runner.py
-
-# Run on specific hardware target
-python benchmarks/runner.py --device cpu
-python benchmarks/runner.py --device cuda:0
-
-# Run specific model backends
-python benchmarks/runner.py --models yolov8,yolo-world,grounding-dino
+CUDA_VISIBLE_DEVICES="" python .agents/skills/klygo-multi-gpu-benchmark/scripts/run_benchmark.py \
+  --device cpu --dataset synthetic --repeats 1 --include-cpu-utils \
+  --output artifacts/benchmarks/cpu_smoke
 ```
 
-## Optional raw evidence downloads
+On PowerShell, set `$env:CUDA_VISIBLE_DEVICES=""` before the Python command.
+This is a validation profile, not a published GPU performance result.
 
-Benchmark ZIP archives are hosted separately in GitHub Releases. See [downloads and checksums](DOWNLOADS.md). Scripts, tables and aggregate results remain here.
+### Inspect options
+
+```bash
+python .agents/skills/klygo-multi-gpu-benchmark/scripts/run_benchmark.py --help
+```
+
+For full GPU release commands, prepared YOLO datasets, precision and scaling,
+follow [the repository skill](../.agents/skills/klygo-multi-gpu-benchmark/SKILL.md).
+Use `--require-locate-results` for a full release. Requested Locate measurements
+must pass before combined charts/report/ZIP are produced. Failed runs retain
+partial results and logs; `--locate-only` repairs that section without rerunning
+other models when the saved configuration and environment match.
+
+`--dataset-dir` controls real-data loading, mining, and access tests. Model
+inference has an independent fixture and iteration protocol. Do not describe a
+5,000-image dataset report as 5,000-image inference per model without evidence.
+
+## Specialized benchmarks
+
+| Directory | Purpose |
+| --- | --- |
+| [analyzt](analyzt/README.md) | Official visualization charts, Pareto frontier curves, and comparative telemetry reports |
+| [outputs_cpu_gpu](outputs_cpu_gpu/README.md) | Focused NumPy/CuPy NMS, storage, precision and device-transfer measurements |
+| [mining](mining/README.md) | Mining parity/latency and curation accuracy against held-out ground truth |
+| [managed_pipeline](managed_pipeline/README.md) | Preparation costs and before/after managed-pipeline optimization evidence |
+
+These answer narrower questions than the release suite and remain useful.
+Curation accuracy measures selection quality, rather than inference throughput.
+
+## Recorded evidence
+
+Keep historical hardware and optimization results distinct from current release
+validation. Compare runs only when source, inputs, precision, device, timing and
+repeat protocols match.
+
+| Report | Scope |
+| --- | --- |
+| [L4 COCO val2017, 2026-11-15](gpu_suite/colab_l4_val2017_2026_11_15/REPORT.md) | Real-data loader/mining/access report on 5,000 images; both Locate precisions failed due to missing `cv2` |
+| [L4 evaluation, 2026-11-15](gpu_suite/colab_l4_2026_11_15/REPORT.md) | Earlier release evaluation; retain its own recorded environment and dataset scope |
+| [T4 six-mode report](gpu_suite/colab_t4_2026_11_10/README.md) | Earlier inference/parity summaries and stability telemetry |
+| [T4 complete suite](gpu_suite/colab_t4_complete_2026_11_10/README.md) | Controlled, people and cars workloads with separately downloadable raw evidence |
+| [L4 complete suite](gpu_suite/colab_l4_complete_2026_11_11/README.md) | Baseline inference, parity and stability evidence |
+| [L4 optimized suite](gpu_suite/colab_l4_optimized_2026_11_11/README.md) | Optimization comparison against the L4 baseline |
+| [Mining curation accuracy](mining/curation_l4_2026_11_11/README.md) | Real-data strategy evaluation on noisy/long-tail COCO inputs and clean held-out frames |
+
+The historical val2017 report is incomplete for Locate. Keep it as recorded
+evidence until a fresh, provenance-complete full release succeeds; do not relabel
+its failed cases as passing or fabricate raw configuration for old summary files.
+
+## Runtime outputs and optional downloads
+
+Write new runs under `artifacts/benchmarks/`. Preserve raw JSON, environment and
+run configuration, logs, generated reports/charts, and the optional ZIP. Publish
+selected evidence only when requested. Keep downloaded weights, generated inputs,
+managed environments and runtime artifacts outside source commits.
+
+Original ZIP evidence is hosted in GitHub Releases. See [downloads and
+checksums](DOWNLOADS.md). Retain the release manifest and checksums with the
+recorded reports so the original evidence can still be verified.

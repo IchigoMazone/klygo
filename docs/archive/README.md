@@ -50,8 +50,8 @@ and [`context.py` (`Document_Archive_Context.ipynb`)](../../tutorials/archive/Do
 | **List stored member names** | [`list_files()`](api/list_files.md) | `files = archive.list_files("data.zip")` |
 | **Iterate members lazily (Zero-RAM for big archives)** | [`iter_files()`](api/iter_files.md) | `for name in archive.iter_files("huge.tar.gz"): ...` |
 | **Search member names by glob or regex** | [`search()`](api/search.md) | `archive.search("data.zip", r"images/.*\.png", regex=True)` |
-| **Inspect archive metadata & compression ratio** | [`get_info()`](api/get_info.md) | `info = archive.get_info("data.zip")` |
-| **Test archive integrity** | [`test()`](api/test.md) | `is_ok = archive.test("data.zip")` |
+| **Inspect archive metadata & compression ratio** | [`info()`](api/info.md) | `info = archive.info("data.zip")` |
+| **Test archive integrity** | [`is_valid()`](api/is_valid.md) | `is_ok = archive.is_valid("data.zip")` |
 | **Generate full verification report** | [`verify()`](api/verify.md) | `report = archive.verify("data.zip")` |
 | **Compare member names between two archives** | [`compare()`](api/compare.md) | `diff = archive.compare("v1.zip", "v2.zip")` |
 | **Detect archive format from path or magic bytes** | [`detect_format()`](api/detect_format.md) | `fmt = archive.detect_format("dataset.tar.gz")  # 'tar.gz'` |
@@ -87,8 +87,8 @@ and [`context.py` (`Document_Archive_Context.ipynb`)](../../tutorials/archive/Do
 - [`list_files(archive_path)`](api/list_files.md): Return all stored member names as a list.
 - [`iter_files(archive_path)`](api/iter_files.md): Lazily yield stored member names without loading the whole list.
 - [`search(archive_path, pattern, ...)`](api/search.md): Search stored member names via glob or regular expression.
-- [`get_info(archive_path)`](api/get_info.md): Comprehensive metadata dictionary (file count, sizes, ratio, encrypted).
-- [`test(archive_path, ...)`](api/test.md): Verify archive integrity check.
+- [`info(archive_path)`](api/info.md): Comprehensive metadata dictionary (file count, sizes, ratio, encrypted).
+- [`test(archive_path, ...)`](api/is_valid.md): Verify archive integrity check.
 - [`verify(archive_path)`](api/verify.md): High-level verification summary report.
 - [`compare(archive1, archive2)`](api/compare.md): Compare member sets between two archives.
 - [`detect_format(path)`](api/detect_format.md): Detect canonical format from extension and file magic bytes.

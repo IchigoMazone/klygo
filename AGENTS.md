@@ -40,10 +40,56 @@ Klygo is a modular, composable Python toolkit (`Python >= 3.10`) organized into 
 
 ## 2. Golden Rules for AI Agents
 
+### Rule 0: High-Level First — Use the Owning Module's Public API
+
+This is the default for proposed code, answers, application workflows, examples,
+documentation, notebooks, and their generators. Apply it before cross-module
+dogfooding. See [API levels and selection](docs/API_LEVELS.md).
+
+- **High-level API** means the supported public surface of a module: its exported
+  functions/classes and documented public object methods. `files.copy()` is a
+  high-level API of `files`, just as `datasets.partition()` is one of `datasets`.
+- **Low-level implementation** means assembling underlying operations to recreate
+  a capability already exposed by the module responsible for that capability.
+  It can use only public Klygo calls and still be the wrong default: manually
+  splitting image/label files with `files` recreates `datasets.partition()`.
+- A high-level API may internally compose other modules' high-level APIs. Reuse
+  that surface from application code instead of copying its implementation.
+  Internal/private APIs are a separate concept, not a synonym for low-level code.
+
+Before proposing a helper, wrapper, subclass, loop, parser, converter, metric, or
+export routine: identify the user's goal and owning module, inspect the current
+`__all__`, public object methods, implementation/signature, and relevant example.
+Then follow this order:
+
+1. If an existing public API covers the requested semantics, call it directly.
+2. If several steps are needed, compose the existing public APIs. Do not recreate
+   the steps they already perform, or maximize the number of APIs called.
+3. If a verified gap remains, implement only that gap and retain existing APIs for
+   everything else. Briefly explain the missing capability and custom boundary.
+4. Use a fully custom implementation only for an explicit custom/low-level request
+   or when no suitable public API exists. Do not invent an API or assume a gap
+   from an unfamiliar name or an old example; read the current implementation.
+
+Examples: use `models.load()` and the detector's public `predict()` instead of
+rebuilding supported inference; `mining.deduplicate()` instead of manually
+hashing/grouping/removing images; `metrics.evaluate()` or the appropriate direct
+metric instead of rewriting IoU matching and TP/FP/FN aggregation;
+`Detections.export()` instead of manually writing a supported detection dataset.
+Do not wrap a single existing API under a new helper name without a real reuse
+or contract boundary. Show the direct supported call first in ordinary examples.
+
+Library implementation, unsupported backend adapters, focused internal tests,
+and explicitly requested raw-reference benchmarks may use underlying operations
+where necessary for their purpose. Keep those operations inside that boundary.
+An API being implemented is not an alternative to its own implementation; avoid
+recursive delegation. These exceptions do not justify rebuilding an existing
+workflow in a user-facing example.
+
 ### Rule 1: Always Import Public Package Facades
 Import modules from top-level `klygo`:
 ```python
-from klygo import archive, config, datasets, files, media, mining, models, outputs, postprocessing, preprocessing, utils, validators, visual
+from klygo import archive, config, datasets, files, media, metrics, mining, models, outputs, postprocessing, preprocessing, utils, validators, visual
 ```
 Never import private internal helpers (`_helper`) in user-facing examples, tutorials, or workflows.
 
@@ -87,7 +133,25 @@ Inside Klygo modules, examples (`examples/`), tutorials (`tutorials/`), and inte
 2. **Layer 2 (`models.Detector` in `klygo/models/detection/base.py`)**: Implements `predict(source, prompt=None, stream=False, **kwargs)`, automatic coordinate restoration from `klygo.preprocessing` traces, `warmup()`, `benchmark()`, with native wrapper inference and shared accelerator lifecycle helpers in `klygo.models.runtime`.
 3. **Layer 3 (Concrete Wrappers & Custom Subclasses)**: Implement `forward(self, images: list[PIL.Image.Image], prompt=None) -> list[Detection]`.
 
-### 3.2. Standard 4-Step Pattern for Subclassing `models.Detector`
+### 3.2. Custom Adapters Only When Needed
+
+For ordinary inference, inspect `models.load()` and the existing adapters first,
+then call the loaded detector's `predict()`. Do not subclass a detector merely to
+wrap an already supported architecture or to demonstrate module integration.
+Use the pattern below only for an explicit custom-model request or a verified
+missing adapter, keeping preprocessing, evaluation and export on existing public
+APIs outside the unsupported backend boundary.
+
+**Mandatory custom-detector contract:** When implementing a custom object detector
+inside Klygo, the class **must inherit `models.Detector`** (directly or through an
+existing Detector subclass) and **must implement `forward(images, prompt=None, ...)`**
+for the custom backend behavior. Inheriting only `BaseModel` is not sufficient for
+a custom detector. Call the inherited detector `predict()` or `Detections.repredict(detector, ...)`
+from workflow code; do not replace the framework's inference orchestration with a
+standalone custom `predict()` loop. This requirement applies when customization
+is needed, not to ordinary use of a supported detector.
+
+### Standard 4-Step Pattern for Subclassing `models.Detector`
 
 When integrating any model from **Ultralytics**, **Hugging Face**, **Torchvision**, or **Keras 3 / KerasHub**:
 
@@ -151,40 +215,35 @@ detector = models.load(configured)
 
 ---
 
-## 4. End-to-End Pipeline Chaining Pattern
+## 4. End-to-End Workflow Through Public APIs
 
-When writing an end-to-end Computer Vision workflow in Klygo, chain the public modules in this order:
+Compose only the stages the task needs. For a materialized flat YOLO dataset and
+a supported detector with matching class semantics, use the existing public
+orchestration instead of reconstructing prediction identities or label writers:
 
 ```python
-from klygo import datasets, files, media, models, outputs, postprocessing, preprocessing, visual
+from klygo import datasets, metrics, models
 
-# 1. Inspect and load dataset ground truth
-info = datasets.info("artifacts/integration/coco15", verbose=False)
-samples = datasets.load("artifacts/integration/coco15", format="yolo", verbose=False)
+truth = datasets.load("artifacts/datasets/flat_yolo", format="yolo", verbose=False)
+detector = models.load("yolov8n.pt")
 
-# 2. Load lazy image and apply coordinate-tracked preprocessing
-lazy_img = media.load(samples[0]["image_path"], verbose=False)
-transform = preprocessing.compose(
-    preprocessing.letterbox((640, 640)),
-    preprocessing.autocontrast(),
-)
-processed_img = transform(lazy_img)
+# repredict updates its collection and returns None; preserve ground truth.
+predictions = truth.copy()
+predictions.repredict(detector, threshold=0.35, verbose=False)
 
-# 3. Run detector prediction (automatically restores boxes via preprocessing trace)
-detections = detector.predict(processed_img, threshold=0.35)
-
-# 4. Apply backend-neutral postprocessing pipeline (NMS, clipping, top-k)
-pipeline = postprocessing.compose(
-    postprocessing.clip(),
-    postprocessing.nms(iou=0.5),
-    postprocessing.top(20),
-)
-cleaned = pipeline(detections)
-
-# 5. Match against ground truth with postprocessing.box_iou and render visual preview
-annotated = visual.draw_bboxes(lazy_img, cleaned[0])
-media.save(annotated, "artifacts/integration/preview/result.jpg", overwrite=True, verbose=False)
+# repredict preserves source identities for the existing metrics API.
+report = metrics.evaluate(predictions, truth, verbose=False)
+predictions.export("artifacts/integration/predictions", overwrite=True)
+predictions.save_images("artifacts/integration/previews", overwrite=True)
 ```
+
+Use `detector.predict(source, ...)` for ordinary image/video inference.
+Use `Detections.repredict()` when replacing predictions in an existing collection
+while retaining its source identities. `datasets.load()` returns `Detections`,
+not dictionaries with an `image_path` key. Verify input/output contracts rather
+than copying an older example. Add preprocessing, postprocessing, selection or
+visualization only when the requested task needs those stages; retain their
+existing public APIs instead of building custom loops.
 
 ---
 

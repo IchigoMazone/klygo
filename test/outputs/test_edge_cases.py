@@ -98,7 +98,7 @@ class TestDetectionEdgeCases(unittest.TestCase):
             detection.extend([candidate, object()])
         self.assertEqual(detection.to_dict(), before)
         with self.assertRaises(RuntimeError):
-            detection.filter(
+            detection.where(
                 lambda box: setattr(box, "score", .1) or (_ for _ in ()).throw(RuntimeError())
             )
         self.assertEqual(detection.to_dict(), before)
@@ -135,7 +135,7 @@ class TestDetectionsEdgeCases(unittest.TestCase):
             item.drop("car")
             raise RuntimeError()
         with self.assertRaises(RuntimeError):
-            results.filter(fail_after_mutation)
+            results.where(fail_after_mutation)
         self.assertEqual(results.to_dict(), before)
         with self.assertRaises(ValueError):
             results.merge(results)
@@ -163,7 +163,7 @@ class TestDetectionsEdgeCases(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             path = files.join(root, "empty")
             exported = outputs.Detections().export(path)
-            self.assertEqual(exported, files.path(path))
+            self.assertIsNone(exported)
             self.assertEqual(files.load(files.join(path, "data.yaml"), verbose=False), {"names": {}})
             self.assertEqual(files.find(files.join(path, "images"), pattern="*.jpg"), [])
             self.assertEqual(files.find(files.join(path, "labels"), pattern="*.txt"), [])

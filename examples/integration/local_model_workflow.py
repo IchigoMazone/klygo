@@ -63,7 +63,7 @@ class RealLocalDetector(Detector):
         all_detections: list[Detection] = []
         for img in images:
             preds = self.base_detector.predict(img, prompt=prompts, verbose=False)[0]
-            filtered = preds.filter(
+            filtered = preds.where(
                 lambda box: box.score >= self.confidence and box.label in self.target_classes
             )
             all_detections.append(filtered)
@@ -83,7 +83,7 @@ def evaluate_local_detector(
     files.mkdir(preview_dir, parents=True, exist_ok=True)
 
     # 1. Inspect dataset structure with datasets.info
-    info = datasets.info(dataset_path, format="yolo", verbose=False)
+    info = datasets.info(dataset_path, format="yolo")
 
     # 2. Load ground-truth annotations with datasets.load
     gt_detections = datasets.load(dataset_path, format="yolo", verbose=False)

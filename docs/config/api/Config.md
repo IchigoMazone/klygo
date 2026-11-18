@@ -8,12 +8,10 @@ Manage one configuration file through a stateful object interface.
 
 ## Contract
 
-Construction stores a validated path without reading it. `read` loads state; access/composition methods update memory; `export_file` writes the current state in another format. `Config.create_default(...)` is the exception: it creates the file and returns an already-loaded manager.
 
 ## Parameters
 
 - `config_path`: source configuration `str | pathlib.Path`.
-- Key methods: `read`, `get`, `set`, `has`, `delete`, `merge`, `update`, `to_dict`, `to_json`, and `export_file`.
 - `create_default(path, default_data=None, ...)`: create general Klygo defaults with optional deep overrides.
 - `create_default(path, metadata=value, ...)`: write `models.metadata()` or `models.configure()` output exactly, without injecting general defaults.
 
@@ -23,7 +21,6 @@ Methods return `Box`, plain dictionaries, strings, booleans, values, or destinat
 
 ## Errors and edge cases
 
-Calling state accessors before `read` operates on empty state. A manager returned by `create_default` is already populated. `default_data` and `metadata` are mutually exclusive. File errors occur when reading/exporting. `ext` remains a compatibility alias for `export_file(..., suffix=...)`.
 
 ## AI usage guidance
 

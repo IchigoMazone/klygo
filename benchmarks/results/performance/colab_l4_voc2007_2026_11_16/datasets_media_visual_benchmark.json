@@ -1,0 +1,122 @@
+[
+  {
+    "operation": "datasets.load (custom:voc2007_val_yolo, 2510 imgs)",
+    "median_ms": 3136.556,
+    "status": "passed"
+  },
+  {
+    "operation": "media.load_eager (custom:voc2007_val_yolo, 2510 imgs)",
+    "median_ms": 158.6343,
+    "status": "passed"
+  },
+  {
+    "operation": "media.load_stream (custom:voc2007_val_yolo, 2510 imgs)",
+    "median_ms": 163.0562,
+    "status": "passed"
+  },
+  {
+    "operation": "preprocessing.compose (custom:voc2007_val_yolo, 32 imgs)",
+    "median_ms": 0.2425,
+    "status": "passed"
+  },
+  {
+    "operation": "datasets.load_scaled (2510 imgs)",
+    "median_ms": 3065.082,
+    "status": "passed"
+  },
+  {
+    "operation": "media.load_indexed (2510 imgs)",
+    "median_ms": 93.2839,
+    "status": "passed"
+  },
+  {
+    "operation": "media.strided_decode (stride=32, 78 imgs)",
+    "median_ms": 274.3223,
+    "status": "passed"
+  },
+  {
+    "operation": "media.random_jump_array (64/2510 imgs)",
+    "median_ms": 137.3797,
+    "status": "passed"
+  },
+  {
+    "operation": "media.random_jump_pil (64/2510 imgs)",
+    "median_ms": 129.1266,
+    "status": "passed"
+  },
+  {
+    "operation": "detections.random_jump_index (64/2510)",
+    "median_ms": 0.0117,
+    "status": "passed"
+  },
+  {
+    "operation": "detections.random_jump_image_read (64/2510)",
+    "median_ms": 13.9708,
+    "status": "passed"
+  },
+  {
+    "operation": "media.video_load_indexed (120 frames)",
+    "median_ms": 4.4342,
+    "status": "passed"
+  },
+  {
+    "operation": "media.video_random_jump_array (32/120)",
+    "median_ms": 976.1081,
+    "status": "passed"
+  },
+  {
+    "operation": "media.video_random_jump_pil (32/120)",
+    "median_ms": 986.9421,
+    "status": "passed"
+  },
+  {
+    "operation": "detections.export_yolo (500 imgs)",
+    "median_ms": 852.789,
+    "status": "passed"
+  },
+  {
+    "operation": "datasets.partition_yolo (500 imgs)",
+    "median_ms": 889.7731,
+    "status": "passed"
+  },
+  {
+    "operation": "archive.compress_zip (500 imgs)",
+    "median_ms": 654.4041,
+    "status": "passed"
+  },
+  {
+    "operation": "archive.extract_zip (500 imgs)",
+    "median_ms": 302.2808,
+    "status": "passed"
+  },
+  {
+    "operation": "files.save_json (2510 frames)",
+    "median_ms": 230.7103,
+    "status": "passed"
+  },
+  {
+    "operation": "files.load_json (2510 frames)",
+    "median_ms": 46.1741,
+    "status": "passed"
+  },
+  {
+    "operation": "media.info",
+    "median_ms": 0.1125,
+    "status": "passed"
+  },
+  {
+    "operation": "media.save_images_letterbox",
+    "median_ms": 50.5194,
+    "status": "passed"
+  },
+  {
+    "operation": "visual.compare_images",
+    "median_ms": 91.2456,
+    "status": "passed"
+  },
+  {
+    "operation": "utils.tabulate",
+    "median_ms": 7.5743,
+    "status": "passed"
+  }
+]

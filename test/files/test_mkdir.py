@@ -11,9 +11,9 @@ class TestMkdir(unittest.TestCase):
     def test_parents_and_existing_directory(self):
         with TemporaryDirectory() as directory:
             target = Path(directory) / "a" / "b"
-            self.assertEqual(files.mkdir(target), target)
+            self.assertIsNone(files.mkdir(target))
             self.assertTrue(target.is_dir())
-            self.assertEqual(files.mkdir(target), target)
+            self.assertIsNone(files.mkdir(target))
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ class TestPublicImports(unittest.TestCase):
         assert callable(files.load)
         assert callable(config.load)
         assert callable(media.load)
-        assert callable(media.probe)
+        assert callable(media.info)
         assert callable(models.load)
         assert callable(postprocessing.compose)
         assert callable(postprocessing.nms)

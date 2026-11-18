@@ -4,7 +4,7 @@
 
 ```python
 result = mining.cluster(data, clusters=20)
-result.show()
+utils.tabulate(result.to_dict())
 ```
 
 See [`examples/mining/ClusterResult.py`](../../../examples/mining/ClusterResult.py) and [`test/mining/test_operations.py`](../../../test/mining/test_operations.py).

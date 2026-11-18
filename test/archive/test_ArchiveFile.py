@@ -19,7 +19,7 @@ class TestArchiveFile(unittest.TestCase):
             opened = archive.ArchiveFile(packed)
             self.assertEqual(opened.list_files(), archive.list_files(packed))
             self.assertEqual(opened.search("*.txt"), archive.search(packed, "*.txt"))
-            self.assertTrue(opened.test())
+            self.assertTrue(opened.is_valid())
             output = root / "output"
             opened.extract(output, verbose=False)
             self.assertTrue(files.find(output))

@@ -8,7 +8,6 @@ Build a fresh default Klygo configuration with optional deep overrides.
 
 ## Contract
 
-Every call deep-copies built-in defaults. Overrides use the same recursive semantics as `config.update` and never modify global state.
 
 ## Parameters
 

@@ -1,0 +1,50 @@
+[
+  {
+    "model": "yolo",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 0.6308
+  },
+  {
+    "model": "yolo",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 0.1045
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 0.5667
+  },
+  {
+    "model": "yolo11",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 0.1151
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 0.2816
+  },
+  {
+    "model": "yolo26",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 0.1309
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float32",
+    "actual_dtype": "torch.float32",
+    "load_seconds": 11.2994
+  },
+  {
+    "model": "yolo-world",
+    "dtype": "float16",
+    "actual_dtype": "torch.float16",
+    "load_seconds": 5.9754
+  }
+]

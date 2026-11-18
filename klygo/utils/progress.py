@@ -142,3 +142,22 @@ def create_progress_bar(
 
 
 __all__ = ["ProgressBar", "create_progress_bar"]
+
+
+def _iter_progress(items, verbose=False, desc="Processing", *, total=None, unit="frame"):
+    """Iterate with throttled progress, closing on completion or failure."""
+    from klygo import validators
+    validators.validate_type(verbose, bool, "verbose")
+    if not verbose:
+        return iter(items)
+
+    def iterate():
+        count = total if total is not None else len(items)
+        with ProgressBar(count, desc, unit=unit, verbose=True) as progress:
+            progress.bar.mininterval = 0.2
+            if count == 0:
+                progress.bar.total = 0
+            for item in items:
+                yield item
+                progress.update()
+    return iterate()

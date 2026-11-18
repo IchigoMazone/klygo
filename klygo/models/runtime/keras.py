@@ -5,12 +5,11 @@ with lazy imports so environments without `keras` / `keras_hub` remain unaffecte
 """
 
 import importlib
-import os
 from contextlib import nullcontext
 from typing import Any, List, Dict, Optional
 
 __all__ = [
-    "ensure_backend", "get_active_backend", "current_device", "current_dtype", "inference_context",
+    "get_active_backend", "current_device", "current_dtype", "inference_context",
     "is_accelerator_available", "synchronize", "clear_cache",
 ]
 
@@ -26,25 +25,6 @@ def _torch_runtime():
         ) from exc
 
 
-def ensure_backend() -> str:
-    """Configure `KERAS_BACKEND` automatically if not already set (priority: torch -> jax -> tensorflow)."""
-    if "KERAS_BACKEND" not in os.environ:
-        try:
-            import torch
-            os.environ["KERAS_BACKEND"] = "torch"
-        except ImportError:
-            try:
-                import jax
-                os.environ["KERAS_BACKEND"] = "jax"
-            except ImportError:
-                try:
-                    import tensorflow
-                    os.environ["KERAS_BACKEND"] = "tensorflow"
-                except ImportError:
-                    os.environ["KERAS_BACKEND"] = "torch"
-    return os.environ.get("KERAS_BACKEND", "torch")
-
-
 def _require_keras():
     """Import Keras with an actionable message for an omitted model extra."""
     try:
@@ -58,7 +38,6 @@ def _require_keras():
 
 def get_active_backend() -> str:
     """Return the active Keras computation backend (`torch`, `jax`, or `tensorflow`)."""
-    ensure_backend()
     keras = _require_keras()
     return keras.backend.backend()
 
@@ -74,6 +53,10 @@ def current_device(model: Any) -> Any:
                     return next(model.parameters()).device
                 except Exception:
                     pass
+            for variable in getattr(model, "weights", ()):
+                value = getattr(variable, "value", None)
+                if isinstance(value, torch.Tensor):
+                    return value.device
             return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         except Exception:
             return "cpu"

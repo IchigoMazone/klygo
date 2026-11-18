@@ -337,17 +337,6 @@ def auto_orient() -> Operation:
     return _operation("auto_orient", "pil", True)
 
 
-def exif_transpose() -> Operation:
-    """Build a exif transpose image preprocessing operation.
-
-    Returns
-    -------
-    Operation
-        A reusable image transform; execution is deferred for lazy images.
-    """
-    return auto_orient()
-
-
 def strip_exif() -> Operation:
     """Build a strip exif image preprocessing operation.
 
@@ -2102,7 +2091,7 @@ def execute_builtin(value: Any, operation: Operation, trace: List[Dict[str, Any]
 __all__ = [
     "crop", "center_crop", "resize", "thumbnail", "contain", "cover", "fit",
     "letterbox", "pad", "flip", "rotate", "transpose", "affine", "perspective",
-    "warp", "tile", "auto_orient", "exif_transpose", "strip_exif", "convert_color",
+    "warp", "tile", "auto_orient", "strip_exif", "convert_color",
     "grayscale", "rgb", "bgr", "rgba", "add_alpha", "remove_alpha",
     "select_channels", "swap_channels", "brightness", "contrast", "saturation", "hue",
     "gamma", "temperature", "tint", "white_balance", "autocontrast", "equalize",

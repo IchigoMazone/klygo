@@ -300,7 +300,7 @@ def materialize_benchmark_datasets(
             verbose=False,
         )
 
-    datasets.convert(
+    datasets.flatten(
         val_stage,
         val_dir,
         format="yolo",
@@ -367,7 +367,7 @@ def materialize_benchmark_datasets(
 
         files.save(dst_lbl, _format_yolo_lines(rec["boxes"]), overwrite=True, verbose=False)
 
-    datasets.convert(
+    datasets.flatten(
         pool_stage,
         pool_dir,
         format="yolo",

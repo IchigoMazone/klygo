@@ -27,7 +27,6 @@ Input, parsing, unsupported-format, and overwrite errors propagate without being
 
 ## AI usage guidance
 
-Use `config.convert` for path-to-path conversion; use `config.export` when the source may already be an in-memory mapping.
 
 ## Example
 

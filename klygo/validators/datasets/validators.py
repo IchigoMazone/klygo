@@ -13,6 +13,8 @@ class Partition:
         ratios: tuple[float, ...],
         overwrite: bool,
         verbose: bool,
+        shuffle: bool = True,
+        seed: int = 42,
     ) -> None:
 
         """Validate and normalize partition arguments."""
@@ -21,6 +23,8 @@ class Partition:
         validate_type(ratios, tuple, "ratios")
         validate_type(overwrite, bool, "overwrite")
         validate_type(verbose, bool, "verbose")
+        validate_type(shuffle, bool, "shuffle")
+        validate_type(seed, int, "seed")
 
         if not all(isinstance(x, float) for x in ratios):
             raise TypeError(
@@ -61,6 +65,8 @@ class Partition:
         self.ratios = ratios
         self.overwrite = overwrite
         self.verbose = verbose
+        self.shuffle = shuffle
+        self.seed = seed
 
 
 class Repartition(Partition):
@@ -90,9 +96,8 @@ class Merge:
         for src in sources:
             if not files.exists(src):
                 raise FileNotFoundError(f"source does not exist: {src}")
-
-        if not str(output_path).lower().endswith(".zip"):
-            raise ValueError("output_path must end with '.zip'")
+            if files.is_within(output_path, src) or files.is_within(src, output_path):
+                raise ValueError("source and output dataset paths must not overlap")
 
         if files.exists(output_path) and not overwrite:
             raise FileExistsError(f"output_path already exists: {output_path}")
@@ -113,6 +118,8 @@ class Split:
         ratios: tuple[float, ...] | None = None,
         overwrite: bool = False,
         verbose: bool = True,
+        shuffle: bool = True,
+        seed: int = 42,
     ) -> None:
         """Validate and normalize split arguments."""
         validate_type(source, (str, os.PathLike), "source")
@@ -120,6 +127,8 @@ class Split:
         validate_type(by_class, bool, "by_class")
         validate_type(overwrite, bool, "overwrite")
         validate_type(verbose, bool, "verbose")
+        validate_type(shuffle, bool, "shuffle")
+        validate_type(seed, int, "seed")
 
         if class_groups is not None:
             validate_type(class_groups, list, "class_groups")
@@ -142,12 +151,21 @@ class Split:
                 raise ValueError("The sum of ratios must equal 1.0.")
 
         self.source = files.path(source)
-        self.output_dir = files.path(output_dir)
+        destination = files.path(output_dir)
+        if "*" in str(files.parent(destination)):
+            raise ValueError("the output index placeholder must be in the final path component")
+        name = files.name(destination)
+        if name.count("*") > 1:
+            raise ValueError("output_dir must contain at most one '*' index placeholder")
+        self.output_pattern = name if "*" in name else None
+        self.output_dir = files.parent(destination) if self.output_pattern else destination
         self.by_class = by_class
         self.class_groups = class_groups
         self.ratios = ratios
         self.overwrite = overwrite
         self.verbose = verbose
+        self.shuffle = shuffle
+        self.seed = seed
 
         if not files.exists(self.source):
             raise FileNotFoundError(f"source does not exist: {self.source}")

@@ -54,10 +54,10 @@ with tempfile.TemporaryDirectory() as temporary:
     # Convert PNG to JPEG and WebP
     jpg_target = media.convert(source, root / "converted.jpg")
     webp_target = media.convert(source, root / "converted.webp")
-    assert media.probe(jpg_target)["format"] == "JPEG"
-    assert media.probe(webp_target)["format"] == "WEBP"
+    assert media.info(jpg_target)["format"] == "JPEG"
+    assert media.info(webp_target)["format"] == "WEBP"
 
     # Re-convert with overwrite=True
     media.convert(source, jpg_target, overwrite=True)
-    print(media.probe(jpg_target)["format"], media.probe(webp_target)["size"])
+    print(media.info(jpg_target)["format"], media.info(webp_target)["size"])
 ```

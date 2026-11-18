@@ -7,7 +7,8 @@ with TemporaryDirectory() as directory:
     root = files.path(directory)
     source = root / "source.txt"
     files.save(source, "klygo", verbose=False)
-    moved = files.move(source, root / "output" / "result.txt")
+    moved = root / "output" / "result.txt"
+    files.move(source, moved)
     print(moved, files.exists(source))
 
 
@@ -15,7 +16,9 @@ with TemporaryDirectory() as directory:
 # Moving directories preserves their contents.
 with TemporaryDirectory() as directory:
     root = files.path(directory)
-    source = files.mkdir(root / "before")
+    source = root / "before"
+    files.mkdir(source)
     files.save(source / "data.txt", "ready", verbose=False)
-    target = files.move(source, root / "after")
+    target = root / "after"
+    files.move(source, target)
     assert files.is_file(target / "data.txt") and not files.exists(source)
