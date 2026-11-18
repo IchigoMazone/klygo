@@ -60,9 +60,51 @@ Building modern Computer Vision applications typically involves juggling conflic
 
 Klygo is organized into four cooperative layers with shared foundational utilities:
 
-<p align="center">
-  <img src="analyzt/klygo_architecture.png" alt="Klygo 2.1.1 System Architecture" width="100%">
-</p>
+```mermaid
+flowchart TD
+    subgraph L1["1. Storage, Config & Datasets"]
+        direction LR
+        files["klygo.files"]
+        archive["klygo.archive"]
+        config["klygo.config"]
+        datasets["klygo.datasets"]
+        mining["klygo.mining"]
+    end
+
+    subgraph L2["2. Media & Preprocessing"]
+        direction LR
+        media["klygo.media"]
+        prep["klygo.preprocessing (trace)"]
+    end
+
+    subgraph L3["3. Multi-Backend AI Models"]
+        direction LR
+        yolo["Ultralytics YOLO"]
+        dino["Grounding DINO"]
+        rcnn["Torchvision Faster R-CNN"]
+        dfine["KerasHub RT-DETR / D-FINE"]
+    end
+
+    subgraph L4["4. Outputs, Postprocessing, Metrics & Visual"]
+        direction LR
+        outputs["klygo.outputs"]
+        post["klygo.postprocessing"]
+        metrics["klygo.metrics"]
+        visual["klygo.visual"]
+    end
+
+    subgraph Foundation["Shared Foundation"]
+        direction LR
+        utils["klygo.utils"]
+        validators["klygo.validators"]
+    end
+
+    L1 --> L2 --> L3 --> L4
+    Foundation -.-> L1
+    Foundation -.-> L2
+    Foundation -.-> L3
+    Foundation -.-> L4
+```
 
 ### Module Directory
 
