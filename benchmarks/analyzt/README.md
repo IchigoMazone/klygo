@@ -1,6 +1,6 @@
 # Klygo Performance & Scientific Benchmark Analysis
 
-This directory collects the official, verified visualization charts and scientific evaluation reports for **Klygo 2.1.1**. All charts are generated directly by the official Klygo benchmark suites on **NVIDIA L4 24GB (Ada Lovelace)** and **Intel Xeon CPUs** across **COCO val2017** (`val2017_yolo`, 5,000 images, 35k ground-truth annotations) and real-time **1080p H.264** video streams.
+This directory collects the official, verified visualization charts and scientific evaluation reports for **Klygo 2.1.2**. All charts are generated directly by the official Klygo benchmark suites on **NVIDIA L4 24GB (Ada Lovelace)** and **Intel Xeon CPUs** across **COCO val2017** (`val2017_yolo`, 5,000 images, 35k ground-truth annotations) and real-time **1080p H.264** video streams.
 
 ---
 

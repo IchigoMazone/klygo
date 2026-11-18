@@ -34,7 +34,7 @@ from . import validators
 from . import visual
 from .config import Config
 
-__version__ = "2.1.1"
+__version__ = "2.1.2"
 __author__ = "IchigoMazone"
 
 _LAZY_MODULES = {"models"}
