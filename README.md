@@ -60,9 +60,60 @@ Building modern Computer Vision applications typically involves juggling conflic
 
 Klygo is organized into four cooperative layers with shared foundational utilities:
 
-<p align="center">
-  <img src="analyzt/klygo_architecture.png" alt="Klygo 2.1.1 System Architecture" width="100%">
-</p>
+```mermaid
+flowchart TD
+    subgraph L1["1. Storage, Config & Datasets"]
+        direction TB
+        files["klygo.files — 43 filesystem helpers & 14 structured data formats"]
+        archive["klygo.archive — Multi-format archive engine (ZIP, TAR, 7z, RAR)"]
+        config["klygo.config — Functional diff, merge & stateful Config"]
+        datasets["klygo.datasets — Convert, partition, flatten & remap YOLO datasets"]
+        mining["klygo.mining — Perceptual dedup, rarity scoring & diversity balance"]
+    end
+
+    subgraph L2["2. Media & Preprocessing"]
+        direction TB
+        media["klygo.media — LazyImage (zero-decode) & MediaFrames streaming"]
+        prep["klygo.preprocessing — 134+ lazy transforms with Affine Trace"]
+    end
+
+    subgraph L3["3. Multi-Backend AI Models"]
+        direction TB
+        detector["klygo.models.Detector — Unified inference lifecycle & warmup"]
+        subgraph Backends["Native Model Wrappers"]
+            direction LR
+            ultra["Ultralytics YOLO (v8, 11, World v2)"]
+            hf["Hugging Face (Grounding DINO, DETR)"]
+            torch["Torchvision (Faster R-CNN, RetinaNet)"]
+            keras["KerasHub (RT-DETR, D-FINE)"]
+        end
+        detector --> Backends
+    end
+
+    subgraph L4["4. Outputs, Postprocessing, Metrics & Visual"]
+        direction TB
+        outputs["klygo.outputs — Box, Detection, Detections, DetectionGroup"]
+        post["klygo.postprocessing — Composable NMS, clipping, threshold & top-k"]
+        metrics["klygo.metrics — COCO mAP@50-95, PR curves & error analysis"]
+        visual["klygo.visual — Non-destructive bbox rendering & dataset charts"]
+    end
+
+    subgraph Foundation["Shared Foundation"]
+        direction LR
+        utils["klygo.utils — Mapping helpers, byte formatting & ProgressBar"]
+        validators["klygo.validators — Runtime type enforcement (validate_type)"]
+    end
+
+    %% Pipeline Data Flow
+    L1 ==>|Datasets & Media Paths| L2
+    L2 ==>|Preprocessed Tensors| L3
+    L2 -.->|Affine Trace Inversion Matrix| L4
+    L3 ==>|Raw Framework Predictions| L4
+    Foundation -.-> L1
+    Foundation -.-> L2
+    Foundation -.-> L3
+    Foundation -.-> L4
+```
 
 ### Module Directory
 
