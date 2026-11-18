@@ -122,6 +122,24 @@ Trong mỗi đợt benchmark GPU, mỗi mô hình đều được đo kiểm th�
 
 ---
 
+### 2.9. Đường cong đánh đổi Pareto: Độ trễ (Latency) vs Độ chính xác ($COCO\ mAP_{val}^{50-95}$)
+Đường cong Pareto Frontier kinh điển thể hiện tương quan giữa **độ trễ suy luận (ms/img)** và **độ chính xác phát hiện vật thể (COCO mAP)**:
+
+#### A. Chuẩn so sánh toàn cầu họ mô hình YOLO (TensorRT FP16)
+![YOLO Pareto Frontier Speed vs Accuracy](09_yolo_pareto_speed_vs_accuracy.png)
+
+- Đồ thị tái hiện và cập nhật đường cong Pareto chuẩn mực của các thế hệ YOLO (`YOLO26`, `YOLO11`, `YOLOv10`, `YOLOv9`, `YOLOv8`, `YOLOv7`, `YOLOv5`, `PP-YOLOE+`, `DAMO-YOLO`, `RTMDet`).
+- Thế hệ **`YOLO26`** tạo nên đường biên tối ưu Pareto cao nhất (`40.9` đến `57.5 mAP` tại độ trễ từ `1.6 ms` đến `11.6 ms`).
+
+#### B. Đường cong Pareto đo kiểm thực tế trong Klygo Pipeline (NVIDIA L4)
+![Klygo Multi-Backend Pareto](10_klygo_integrated_detectors_pareto_l4.png)
+
+- Khác với benchmark isolated tensor thô, biểu đồ này đo đạc **độ trễ end-to-end thực tế** khi nạp ảnh, giải mã frame, chuyển tensor, phục hồi tọa độ affine và đóng gói `Detections` qua Klygo Managed Stream:
+  - `YOLO26` và `D-FINE` chiếm lĩnh vị trí dẫn đầu về tỷ lệ mAP / độ trễ.
+  - Các mô hình họ Nano/Small (`26n`, `11n`, `8n`, `DF-N`) hoàn tất toàn bộ pipeline chỉ trong **10.4–13.1 ms**, tương đương tốc độ trên **75–95 FPS** trên GPU tầm trung L4.
+
+---
+
 ## 3. How to Reproduce All Charts
 
 All charts in this directory can be reproduced with a single command:
