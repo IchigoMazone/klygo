@@ -38,7 +38,10 @@ class ConversionValidationTest(unittest.TestCase):
 
     def test_symlink_overlap_preserves_source(self):
         alias = self.root / 'alias'
-        alias.symlink_to(self.source, target_is_directory=True)
+        try:
+            alias.symlink_to(self.source, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("Creating symlinks is unavailable on this host")
         with self.assertRaisesRegex(ValueError, 'overlap'):
             self.convert(alias, overwrite=True)
         self.assertTrue(files.is_file(self.annotation))

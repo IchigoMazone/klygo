@@ -148,23 +148,24 @@ pip install klygo
 
 # Using uv
 uv add klygo
+uv pip install klygo
 ```
 
 ### Optional Backend Extras
 
 Install only the frameworks and capabilities your project needs:
 
-| Target Capability | pip Install Command | uv Install Command |
-| :--- | :--- | :--- |
-| **Ultralytics** (`YOLOv8`, `YOLO11`, `YOLO-World`) | `pip install "klygo[ultralytics]"` | `uv add "klygo[ultralytics]"` |
-| **Hugging Face** (`Grounding DINO`, `Transformers`) | `pip install "klygo[transformers]"` | `uv add "klygo[transformers]"` |
-| **Torchvision** (`Faster R-CNN`, `RetinaNet`) | `pip install "klygo[torchvision]"` | `uv add "klygo[torchvision]"` |
-| **KerasHub** (`RT-DETR`, `D-FINE` on PyTorch) | `pip install "klygo[keras-hub,torch]"` | `uv add "klygo[keras-hub,torch]"` |
-| **All Detection Backends** | `pip install "klygo[models]"` | `uv add "klygo[models]"` |
-| **PyTorch Core Runtime Only** | `pip install "klygo[torch]"` | `uv add "klygo[torch]"` |
-| **CuPy CUDA GPU Acceleration (NMS / Outputs)**| `pip install "klygo[gpu-outputs]"` | `uv add "klygo[gpu-outputs]"` |
-| **7z Archive Support** | `pip install "klygo[py7zr]"` | `uv add "klygo[py7zr]"` |
-| **RAR Archive Support** | `pip install "klygo[rarfile]"` | `uv add "klygo[rarfile]"` |
+| Target Capability | pip Install Command | uv add Command | uv pip install Command |
+| :--- | :--- | :--- | :--- |
+| **Ultralytics** (`YOLOv8`, `YOLO11`, `YOLO-World`) | `pip install "klygo[ultralytics]"` | `uv add "klygo[ultralytics]"` | `uv pip install "klygo[ultralytics]"` |
+| **Hugging Face** (`Grounding DINO`, `Transformers`) | `pip install "klygo[transformers]"` | `uv add "klygo[transformers]"` | `uv pip install "klygo[transformers]"` |
+| **Torchvision** (`Faster R-CNN`, `RetinaNet`) | `pip install "klygo[torchvision]"` | `uv add "klygo[torchvision]"` | `uv pip install "klygo[torchvision]"` |
+| **KerasHub** (`RT-DETR`, `D-FINE` on PyTorch) | `pip install "klygo[keras-hub]"` | `uv add "klygo[keras-hub]"` | `uv pip install "klygo[keras-hub]"` |
+| **All Detection Backends** | `pip install "klygo[models]"` | `uv add "klygo[models]"` | `uv pip install "klygo[models]"` |
+| **PyTorch Core Runtime Only** | `pip install "klygo[torch]"` | `uv add "klygo[torch]"` | `uv pip install "klygo[torch]"` |
+| **CuPy CUDA GPU Acceleration (NMS / Outputs)**| `pip install "klygo[gpu-outputs]"` | `uv add "klygo[gpu-outputs]"` | `uv pip install "klygo[gpu-outputs]"` |
+| **7z Archive Support** | `pip install "klygo[py7zr]"` | `uv add "klygo[py7zr]"` | `uv pip install "klygo[py7zr]"` |
+| **RAR Archive Support** | `pip install "klygo[rarfile]"` | `uv add "klygo[rarfile]"` | `uv pip install "klygo[rarfile]"` |
 
 ---
 

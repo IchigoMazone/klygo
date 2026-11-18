@@ -1,4 +1,3 @@
-from torchvision.transforms.functional import pil_to_tensor
 """Comprehensive 4-backend object detection workflow evaluating real local models against ground-truth COCO15.
 
 Exercises all 4 standard Klygo backends:
@@ -18,6 +17,7 @@ import time
 from typing import Any, Dict, List, Tuple
 
 import torch
+from torchvision.transforms.functional import pil_to_tensor
 from rich.console import Console
 from rich.table import Table
 
