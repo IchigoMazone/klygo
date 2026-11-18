@@ -12,6 +12,9 @@ benchmarks/
 ├── runner.py                          # Master multi-backend benchmark CLI orchestrator
 ├── data/                              # Shared benchmark datasets (images, video clips, annotations)
 │   └── .gitkeep
+├── analyzt/                           # Benchmark visualization charts, throughput reports & executive analysis
+│   ├── README.md                      # Official visual report with embedded high-DPI charts
+│   └── generate_charts.py             # Reproducible chart generation script
 ├── outputs_cpu_gpu/                   # NumPy/CuPy Detections microbenchmarks
 │   ├── README.md                      # Methodology, tables, and conclusions
 │   └── metrics/                       # Raw NMS and storage-operation measurements
@@ -37,6 +40,7 @@ benchmarks/
 
 | Iteration | Status | Primary Purpose & Methodology | Reference |
 | :--- | :--- | :--- | :--- |
+| **Visual Benchmark Analysis** | Published | Six high-resolution publication charts, throughput matrices, streaming latency analysis, and dataset curation evaluation for Klygo 2.1.1. | [`benchmarks/analyzt/README.md`](analyzt/README.md) |
 | **Round 1** | Completed | Initial API pipeline smoke test verifying end-to-end execution of all 6 modes across backends. Identified 9 core methodology limitations (model load in raw timer, lack of warmup, small 4-frame dataset, memory tracking asymmetry). | [`benchmarks/round_1/README.md`](round_1/README.md) |
 | **Round 2** | Architecture Ready | Rigorous multi-process benchmark with subprocess isolation, symmetric warmup, memory delta tracking, 30–60 real frames, 5 repeats, detection parity verification, and full 5-model coverage. | [`benchmarks/round_2/README.md`](round_2/README.md) |
 | **Outputs CPU/GPU** | Completed | Focused NumPy/CuPy benchmark for NMS, device transfers, precision conversion, and threshold operations on `Detections`. | [`benchmarks/outputs_cpu_gpu/README.md`](outputs_cpu_gpu/README.md) |

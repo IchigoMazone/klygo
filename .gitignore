@@ -50,6 +50,8 @@ temp_*/
 !tutorials/integration/*.ipynb
 *.jpg
 *.png
+!analyzt/*.png
+!benchmarks/analyzt/*.png
 *.mp4
 *.pt
 *.bak

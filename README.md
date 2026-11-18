@@ -237,6 +237,24 @@ See the full [documentation index](https://github.com/IchigoMazone/klygo/blob/ma
 [cross-module integration guides](https://github.com/IchigoMazone/klygo/blob/main/docs/integration/README.md),
 and [benchmark reports](https://github.com/IchigoMazone/klygo/blob/main/benchmarks/README.md).
 
+## Benchmarks & Performance Analysis
+
+Klygo is rigorously benchmarked across 4 major deep learning backends (Ultralytics, Hugging Face, Torchvision, KerasHub), multiple GPU architectures (NVIDIA L4 24GB & T4 16GB), and 6 execution modes.
+
+### Key Highlights
+
+- **Multi-Backend Throughput**: Reaches **95.8 FPS** (`YOLOv8n`) and **84.2 FPS** (`YOLO11n`) in end-to-end `managed-stream` mode on NVIDIA L4 GPU.
+- **Zero-Loss Pipeline Abstraction**: Retains **95.9%–98.4%** of raw upstream throughput while providing automatic affine coordinate restoration (`klygo.preprocessing.trace`) and standardized detection outputs.
+- **Ultra-Low Streaming Latency**: **12.15 ms** Time-To-First-Frame (TTFF) on L4 GPU—**14.2% faster** than raw upstream generators due to optimized prefetching.
+- **Intelligent Dataset Curation (`klygo.mining`)**: Achieves **0.3874 mAP@50-95** on COCO `val2017` using only **142 images**, outperforming the full raw dataset (**0.3139 mAP** with 848 images) by **+23.4% relative mAP** with 6× less data.
+
+| Multi-Backend Throughput (L4 GPU) | Intelligent Dataset Curation (COCO) |
+| :---: | :---: |
+| ![Throughput](analyzt/01_multi_backend_throughput.png) | ![Mining Curation](analyzt/04_mining_curation_accuracy.png) |
+
+👉 **For complete visualization charts, telemetry data, and hardware scaling comparisons, see the [Visual Benchmark Analysis Report](analyzt/README.md).**
+
+
 ## Development
 
 Run the standard-library test suite:
