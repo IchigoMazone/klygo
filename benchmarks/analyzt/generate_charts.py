@@ -108,30 +108,50 @@ def chart_multi_backend_throughput(out_dir):
 
 def chart_pipeline_overhead(out_dir):
     """Chart 2: Managed Stream Efficiency vs Raw Upstream Stream (Overhead Analysis)."""
-    models = ["YOLOv8n", "YOLO11n", "YOLO-World v2", "RT-DETR / D-FINE"]
-    raw_fps = [99.9, 88.1, 78.8, 78.8]
-    managed_fps = [95.8, 84.2, 77.6, 76.5]
+    with open("benchmarks/gpu_suite/colab_l4_optimized_2026_11_11/controlled/raw_statistics.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    models_map = [
+        ("yolo", "YOLOv8n"),
+        ("yolo11", "YOLO11n"),
+        ("yolo-world", "YOLO-World v2"),
+        ("yolo26", "RT-DETR / D-FINE"),
+    ]
+    models_keys = [k for k, _ in models_map]
+    display_names = [name for _, name in models_map]
+
+    raw_fps_map = {}
+    managed_fps_map = {}
+    for r in data["rows"]:
+        if r["profile"] == "images" and r["batch"] == 1 and r["model"] in models_keys and "fps" in r:
+            if r["mode"] == "raw-stream":
+                raw_fps_map[r["model"]] = r["fps"]["median"]
+            elif r["mode"] == "managed-stream":
+                managed_fps_map[r["model"]] = r["fps"]["median"]
+
+    raw_fps = [raw_fps_map[k] for k in models_keys]
+    managed_fps = [managed_fps_map[k] for k in models_keys]
     efficiency = [(m / r) * 100 for m, r in zip(managed_fps, raw_fps)]
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5.5), gridspec_kw={"width_ratios": [1.4, 1]})
 
     # Subplot 1: Direct FPS comparison
-    x = np.arange(len(models))
+    x = np.arange(len(display_names))
     w = 0.35
     ax1.bar(x - w/2, raw_fps, w, label="Raw Upstream Stream", color=COLORS["raw"], edgecolor="black", linewidth=0.6)
     ax1.bar(x + w/2, managed_fps, w, label="Klygo Managed Stream", color=COLORS["managed"], edgecolor="black", linewidth=0.6)
-    for i in range(len(models)):
-        ax1.annotate(f"{raw_fps[i]}", (x[i] - w/2, raw_fps[i] + 1.5), ha="center", fontsize=9, fontweight="bold")
-        ax1.annotate(f"{managed_fps[i]}", (x[i] + w/2, managed_fps[i] + 1.5), ha="center", fontsize=9, fontweight="bold")
+    for i in range(len(display_names)):
+        ax1.annotate(f"{raw_fps[i]:.1f}", (x[i] - w/2, raw_fps[i] + 1.5), ha="center", fontsize=9, fontweight="bold")
+        ax1.annotate(f"{managed_fps[i]:.1f}", (x[i] + w/2, managed_fps[i] + 1.5), ha="center", fontsize=9, fontweight="bold")
     ax1.set_ylabel("Throughput (FPS)")
     ax1.set_title("Stream Throughput Comparison (L4 GPU)")
     ax1.set_xticks(x)
-    ax1.set_xticklabels(models, fontweight="semibold")
+    ax1.set_xticklabels(display_names, fontweight="semibold")
     ax1.set_ylim(0, 115)
     ax1.legend(loc="upper right")
 
     # Subplot 2: Retained Efficiency Percentage
-    bars = ax2.bar(models, efficiency, color=COLORS["accent_green"], edgecolor="black", linewidth=0.6, width=0.55, alpha=0.9)
+    bars = ax2.bar(display_names, efficiency, color=COLORS["accent_green"], edgecolor="black", linewidth=0.6, width=0.55, alpha=0.9)
     ax2.axhline(100, color="gray", linestyle="--", alpha=0.7)
     for bar in bars:
         h = bar.get_height()
@@ -140,8 +160,8 @@ def chart_pipeline_overhead(out_dir):
     ax2.set_ylabel("Retained Throughput (%)")
     ax2.set_title("Managed Pipeline Efficiency (% of Raw)")
     ax2.set_ylim(80, 108)
-    ax2.set_xticks(range(len(models)))
-    ax2.set_xticklabels(models, rotation=15, ha="right", fontweight="semibold")
+    ax2.set_xticks(range(len(display_names)))
+    ax2.set_xticklabels(display_names, rotation=15, ha="right", fontweight="semibold")
 
     plt.suptitle("Klygo Managed Pipeline: Zero-Loss Abstraction with Full Coordinate Trace", y=1.02)
     save_path = os.path.join(out_dir, "02_klygo_pipeline_overhead.png")
@@ -152,13 +172,40 @@ def chart_pipeline_overhead(out_dir):
 
 def chart_ttff_latency(out_dir):
     """Chart 3: Time-To-First-Frame (TTFF) streaming latency comparison."""
-    models = ["YOLOv8n", "YOLO11n", "YOLO-World v2", "RT-DETR"]
-    raw_ttff = [14.16, 15.52, 16.91, 16.79]
-    native_stream_ttff = [12.91, 14.47, 15.51, 15.86]
-    managed_stream_ttff = [12.15, 13.70, 14.68, 14.85]
+    import statistics
+    with open("benchmarks/gpu_suite/colab_l4_optimized_2026_11_11/controlled/raw_statistics.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    models_map = [
+        ("yolo", "YOLOv8n"),
+        ("yolo11", "YOLO11n"),
+        ("yolo-world", "YOLO-World v2"),
+        ("yolo26", "RT-DETR / D-FINE"),
+    ]
+    models_keys = [k for k, _ in models_map]
+    display_names = [name for _, name in models_map]
+
+    raw_ttff_map = {}
+    native_ttff_map = {}
+    managed_ttff_map = {}
+
+    for r in data["rows"]:
+        if r["profile"] == "images" and r["batch"] == 1 and r["model"] in models_keys:
+            if "first_host_frame_ms" in r and r["first_host_frame_ms"]:
+                val = statistics.median(r["first_host_frame_ms"])
+                if r["mode"] == "raw-stream":
+                    raw_ttff_map[r["model"]] = val
+                elif r["mode"] == "native-stream":
+                    native_ttff_map[r["model"]] = val
+                elif r["mode"] == "managed-stream":
+                    managed_ttff_map[r["model"]] = val
+
+    raw_ttff = [raw_ttff_map[k] for k in models_keys]
+    native_stream_ttff = [native_ttff_map[k] for k in models_keys]
+    managed_stream_ttff = [managed_ttff_map[k] for k in models_keys]
 
     fig, ax = plt.subplots(figsize=(10, 5.5))
-    x = np.arange(len(models))
+    x = np.arange(len(display_names))
     w = 0.25
 
     r1 = ax.bar(x - w, raw_ttff, w, label="Raw Upstream Stream", color=COLORS["raw"], edgecolor="black", linewidth=0.6)
@@ -172,7 +219,7 @@ def chart_ttff_latency(out_dir):
     ax.set_title("Time-To-First-Frame (TTFF) Streaming Latency (NVIDIA L4, ms - Lower is Better)", pad=15)
     ax.set_ylabel("Host-Visible Latency (Milliseconds)")
     ax.set_xticks(x)
-    ax.set_xticklabels(models, fontweight="semibold")
+    ax.set_xticklabels(display_names, fontweight="semibold")
     ax.set_ylim(0, 22)
     ax.legend(loc="upper left")
 
@@ -245,19 +292,39 @@ def chart_mining_curation(out_dir):
 
 def chart_l4_vs_t4_scaling(out_dir):
     """Chart 5: GPU Acceleration Comparison: NVIDIA T4 vs NVIDIA L4."""
-    models = ["YOLOv8n", "YOLO11n", "YOLO-World v2", "RT-DETR", "Faster R-CNN", "Grounding DINO"]
-    t4_fps = [55.33, 60.85, 53.75, 54.32, 28.21, 2.82]
-    l4_fps = [95.82, 84.19, 77.60, 76.51, 41.22, 4.85]
+    with open("benchmarks/gpu_suite/colab_t4_complete_2026_11_10/controlled/raw_statistics.json", "r", encoding="utf-8") as f:
+        t4_data = json.load(f)
+    with open("benchmarks/gpu_suite/colab_l4_optimized_2026_11_11/controlled/raw_statistics.json", "r", encoding="utf-8") as f:
+        l4_data = json.load(f)
+
+    models_map = [
+        ("yolo", "YOLOv8n"),
+        ("yolo11", "YOLO11n"),
+        ("yolo-world", "YOLO-World v2"),
+        ("yolo26", "RT-DETR / D-FINE"),
+        ("faster-rcnn", "Faster R-CNN"),
+        ("grounding-dino", "Grounding DINO"),
+    ]
+    models_keys = [k for k, _ in models_map]
+    display_names = [name for _, name in models_map]
+
+    t4_fps_map = {r["model"]: r["fps"]["median"] for r in t4_data["rows"]
+                  if r["mode"] == "managed-stream" and r["profile"] == "images" and r["batch"] == 1 and r["model"] in models_keys and "fps" in r}
+    l4_fps_map = {r["model"]: r["fps"]["median"] for r in l4_data["rows"]
+                  if r["mode"] == "managed-stream" and r["profile"] == "images" and r["batch"] == 1 and r["model"] in models_keys and "fps" in r}
+
+    t4_fps = [t4_fps_map[k] for k in models_keys]
+    l4_fps = [l4_fps_map[k] for k in models_keys]
     speedup = [(l / t) for l, t in zip(l4_fps, t4_fps)]
 
     fig, ax = plt.subplots(figsize=(11, 5.8))
-    x = np.arange(len(models))
+    x = np.arange(len(display_names))
     w = 0.35
 
     ax.bar(x - w/2, t4_fps, w, label="NVIDIA T4 (Colab Standard)", color=COLORS["t4"], edgecolor="black", linewidth=0.6)
     ax.bar(x + w/2, l4_fps, w, label="NVIDIA L4 (Colab Pro)", color=COLORS["l4"], edgecolor="black", linewidth=0.6)
 
-    for i in range(len(models)):
+    for i in range(len(display_names)):
         ax.annotate(f"{t4_fps[i]:.1f}", (x[i] - w/2, t4_fps[i] + 1.2), ha="center", fontsize=8.5, fontweight="bold")
         ax.annotate(f"{l4_fps[i]:.1f}\n(+{(speedup[i]-1)*100:.0f}%)", (x[i] + w/2, l4_fps[i] + 1.2),
                     ha="center", fontsize=8.5, fontweight="bold", color="#0D47A1")
@@ -265,7 +332,7 @@ def chart_l4_vs_t4_scaling(out_dir):
     ax.set_title("NVIDIA T4 vs NVIDIA L4 Managed Stream Throughput (FPS)", pad=15)
     ax.set_ylabel("Throughput (Frames Per Second)")
     ax.set_xticks(x)
-    ax.set_xticklabels(models, fontweight="semibold")
+    ax.set_xticklabels(display_names, fontweight="semibold")
     ax.set_ylim(0, 115)
     ax.legend(loc="upper right")
 
@@ -277,18 +344,22 @@ def chart_l4_vs_t4_scaling(out_dir):
 
 def chart_nms_microbenchmarks(out_dir):
     """Chart 6: NMS Microbenchmark Scaling (NumPy CPU vs CuPy GPU)."""
-    boxes = ["100", "500", "1,000", "2,000"]
-    numpy_ms = [1.419, 8.900, 20.655, 52.648]
-    cupy_ms = [2.851, 3.954, 6.086, 12.280]
+    with open("benchmarks/outputs_cpu_gpu/metrics/nms.json", "r", encoding="utf-8") as f:
+        nms_data = json.load(f)
+
+    boxes_keys = ["100", "500", "1000", "2000"]
+    display_boxes = ["100", "500", "1,000", "2,000"]
+    numpy_ms = [nms_data["non_overlap"][b]["numpy_ms"] for b in boxes_keys]
+    cupy_ms = [nms_data["non_overlap"][b]["cupy_ms"] for b in boxes_keys]
 
     fig, ax = plt.subplots(figsize=(9, 5.5))
-    x = np.arange(len(boxes))
+    x = np.arange(len(display_boxes))
     w = 0.35
 
     b1 = ax.bar(x - w/2, numpy_ms, w, label="NumPy (CPU Single-Core)", color="#78909C", edgecolor="black", linewidth=0.6)
     b2 = ax.bar(x + w/2, cupy_ms, w, label="CuPy (GPU CUDA Accelerated)", color=COLORS["accent_green"], edgecolor="black", linewidth=0.6)
 
-    for i in range(len(boxes)):
+    for i in range(len(display_boxes)):
         ax.annotate(f"{numpy_ms[i]:.1f}ms", (x[i] - w/2, numpy_ms[i] + 1.0), ha="center", fontsize=9, fontweight="bold")
         speedup = numpy_ms[i] / cupy_ms[i]
         label = f"{cupy_ms[i]:.1f}ms" + (f"\n({speedup:.1f}x)" if speedup > 1.0 else "")
@@ -298,7 +369,7 @@ def chart_nms_microbenchmarks(out_dir):
     ax.set_xlabel("Candidate Bounding Boxes")
     ax.set_ylabel("Execution Latency (Milliseconds - Lower is Better)")
     ax.set_xticks(x)
-    ax.set_xticklabels(boxes, fontweight="semibold")
+    ax.set_xticklabels(display_boxes, fontweight="semibold")
     ax.set_ylim(0, 62)
     ax.legend(loc="upper left")
 
@@ -310,34 +381,55 @@ def chart_nms_microbenchmarks(out_dir):
 
 def chart_three_benchmark_runs(out_dir):
     """Chart 7: Evolution across 3 official benchmark runs (T4 -> L4 Baseline -> L4 Optimized)."""
-    models = ["YOLOv8n", "YOLO11n", "YOLO-World v2", "RT-DETR", "Faster R-CNN", "Grounding DINO"]
-    run1_t4 = [55.33, 60.85, 53.75, 54.32, 28.21, 2.82]
-    run2_l4_base = [70.34, 61.31, 58.08, 58.45, 38.77, 4.81]
-    run3_l4_opt = [95.82, 84.19, 77.60, 76.51, 41.22, 4.85]
+    with open("benchmarks/gpu_suite/colab_t4_complete_2026_11_10/controlled/raw_statistics.json", "r", encoding="utf-8") as f:
+        t4_data = json.load(f)
+    with open("benchmarks/gpu_suite/colab_l4_complete_2026_11_11/controlled/raw_statistics.json", "r", encoding="utf-8") as f:
+        l4_base_data = json.load(f)
+    with open("benchmarks/gpu_suite/colab_l4_optimized_2026_11_11/controlled/raw_statistics.json", "r", encoding="utf-8") as f:
+        l4_opt_data = json.load(f)
+
+    models_map = [
+        ("yolo", "YOLOv8n"),
+        ("yolo11", "YOLO11n"),
+        ("yolo-world", "YOLO-World v2"),
+        ("yolo26", "RT-DETR / D-FINE"),
+        ("faster-rcnn", "Faster R-CNN"),
+        ("grounding-dino", "Grounding DINO"),
+    ]
+    models_keys = [k for k, _ in models_map]
+    display_names = [name for _, name in models_map]
+
+    r1_map = {r["model"]: r["fps"]["median"] for r in t4_data["rows"]
+              if r["mode"] == "managed-stream" and r["profile"] == "images" and r["batch"] == 1 and r["model"] in models_keys and "fps" in r}
+    r2_map = {r["model"]: r["fps"]["median"] for r in l4_base_data["rows"]
+              if r["mode"] == "managed-stream" and r["profile"] == "images" and r["batch"] == 1 and r["model"] in models_keys and "fps" in r}
+    r3_map = {r["model"]: r["fps"]["median"] for r in l4_opt_data["rows"]
+              if r["mode"] == "managed-stream" and r["profile"] == "images" and r["batch"] == 1 and r["model"] in models_keys and "fps" in r}
+
+    run1_t4 = [r1_map[k] for k in models_keys]
+    run2_l4_base = [r2_map[k] for k in models_keys]
+    run3_l4_opt = [r3_map[k] for k in models_keys]
 
     fig, ax = plt.subplots(figsize=(12, 6))
-    x = np.arange(len(models))
+    x = np.arange(len(display_names))
     w = 0.26
 
-    r1 = ax.bar(x - w, run1_t4, w, label="Đợt 1: Colab T4 Complete", color="#FB8C00", edgecolor="black", linewidth=0.6, alpha=0.9)
-    r2 = ax.bar(x, run2_l4_base, w, label="Đợt 2: Colab L4 Baseline", color="#5C6BC0", edgecolor="black", linewidth=0.6, alpha=0.9)
-    r3 = ax.bar(x + w, run3_l4_opt, w, label="Đợt 3: Colab L4 Optimized (+Pipeline Boost)", color="#1E88E5", edgecolor="black", linewidth=0.6, alpha=0.95)
+    r1 = ax.bar(x - w, run1_t4, w, label="Round 1: Colab T4 Complete", color="#FB8C00", edgecolor="black", linewidth=0.6, alpha=0.9)
+    r2 = ax.bar(x, run2_l4_base, w, label="Round 2: Colab L4 Baseline", color="#5C6BC0", edgecolor="black", linewidth=0.6, alpha=0.9)
+    r3 = ax.bar(x + w, run3_l4_opt, w, label="Round 3: Colab L4 Optimized (+Pipeline Boost)", color="#1E88E5", edgecolor="black", linewidth=0.6, alpha=0.95)
 
-    for i in range(len(models)):
-        # Annotate run 1
+    for i in range(len(display_names)):
         ax.annotate(f"{run1_t4[i]:.1f}", (x[i] - w, run1_t4[i] + 1.2), ha="center", fontsize=8, fontweight="bold")
-        # Annotate run 2
         ax.annotate(f"{run2_l4_base[i]:.1f}", (x[i], run2_l4_base[i] + 1.2), ha="center", fontsize=8, fontweight="bold")
-        # Annotate run 3 with delta vs baseline
         delta = ((run3_l4_opt[i] - run2_l4_base[i]) / run2_l4_base[i]) * 100
         delta_str = f"\n(+{delta:.0f}%)" if delta >= 5 else ""
         ax.annotate(f"{run3_l4_opt[i]:.1f}{delta_str}", (x[i] + w, run3_l4_opt[i] + 1.2),
                     ha="center", fontsize=8, fontweight="bold", color="#0D47A1")
 
-    ax.set_title("So sánh thông lượng qua 3 đợt đo chuẩn: T4 -> L4 Baseline -> L4 Tối ưu (FPS)", pad=15)
-    ax.set_ylabel("Thông lượng (Khung hình / Giây - FPS)")
+    ax.set_title("Progression across 3 Benchmark Runs: T4 -> L4 Baseline -> L4 Optimized (FPS)", pad=15)
+    ax.set_ylabel("Throughput (Frames Per Second - FPS)")
     ax.set_xticks(x)
-    ax.set_xticklabels(models, fontweight="semibold")
+    ax.set_xticklabels(display_names, fontweight="semibold")
     ax.set_ylim(0, 118)
     ax.legend(loc="upper right", framealpha=0.95)
 
@@ -349,28 +441,50 @@ def chart_three_benchmark_runs(out_dir):
 
 def chart_three_workloads(out_dir):
     """Chart 8: Throughput across 3 real-world video workloads (Controlled vs People vs Cars)."""
-    models = ["YOLOv8n", "YOLO11n", "YOLO-World v2", "RT-DETR / D-FINE"]
-    controlled_fps = [97.47, 80.12, 72.45, 73.00]
-    people_fps = [102.43, 86.85, 75.68, 76.96]
-    cars_fps = [106.52, 88.31, 79.74, 79.58]
+    with open("benchmarks/gpu_suite/colab_l4_optimized_2026_11_11/controlled/raw_statistics.json", "r", encoding="utf-8") as f:
+        ctrl_data = json.load(f)
+    with open("benchmarks/gpu_suite/colab_l4_optimized_2026_11_11/people/raw_statistics.json", "r", encoding="utf-8") as f:
+        people_data = json.load(f)
+    with open("benchmarks/gpu_suite/colab_l4_optimized_2026_11_11/cars/raw_statistics.json", "r", encoding="utf-8") as f:
+        cars_data = json.load(f)
+
+    models_map = [
+        ("yolo", "YOLOv8n"),
+        ("yolo11", "YOLO11n"),
+        ("yolo-world", "YOLO-World v2"),
+        ("yolo26", "RT-DETR / D-FINE"),
+    ]
+    models_keys = [k for k, _ in models_map]
+    display_names = [name for _, name in models_map]
+
+    ctrl_fps_map = {r["model"]: r["fps"]["median"] for r in ctrl_data["rows"]
+                    if r["mode"] == "managed-stream" and r["profile"] == "video" and r["batch"] == 1 and r["model"] in models_keys and "fps" in r}
+    people_fps_map = {r["model"]: r["fps"]["median"] for r in people_data["rows"]
+                      if r["mode"] == "managed-stream" and r["profile"] == "video" and r["batch"] == 1 and r["model"] in models_keys and "fps" in r}
+    cars_fps_map = {r["model"]: r["fps"]["median"] for r in cars_data["rows"]
+                    if r["mode"] == "managed-stream" and r["profile"] == "video" and r["batch"] == 1 and r["model"] in models_keys and "fps" in r}
+
+    controlled_fps = [ctrl_fps_map[k] for k in models_keys]
+    people_fps = [people_fps_map[k] for k in models_keys]
+    cars_fps = [cars_fps_map[k] for k in models_keys]
 
     fig, ax = plt.subplots(figsize=(10.5, 5.8))
-    x = np.arange(len(models))
+    x = np.arange(len(display_names))
     w = 0.26
 
-    r1 = ax.bar(x - w, controlled_fps, w, label="Tập 1: Controlled Video", color="#8E24AA", edgecolor="black", linewidth=0.6, alpha=0.9)
-    r2 = ax.bar(x, people_fps, w, label="Tập 2: People Tracking Video", color="#00897B", edgecolor="black", linewidth=0.6, alpha=0.9)
-    r3 = ax.bar(x + w, cars_fps, w, label="Tập 3: Cars / Traffic Video", color="#43A047", edgecolor="black", linewidth=0.6, alpha=0.95)
+    r1 = ax.bar(x - w, controlled_fps, w, label="Domain 1: Controlled Video", color="#8E24AA", edgecolor="black", linewidth=0.6, alpha=0.9)
+    r2 = ax.bar(x, people_fps, w, label="Domain 2: People Tracking Video", color="#00897B", edgecolor="black", linewidth=0.6, alpha=0.9)
+    r3 = ax.bar(x + w, cars_fps, w, label="Domain 3: Cars / Traffic Video", color="#43A047", edgecolor="black", linewidth=0.6, alpha=0.95)
 
-    for i in range(len(models)):
+    for i in range(len(display_names)):
         ax.annotate(f"{controlled_fps[i]:.1f}", (x[i] - w, controlled_fps[i] + 1.2), ha="center", fontsize=8.5, fontweight="bold")
         ax.annotate(f"{people_fps[i]:.1f}", (x[i], people_fps[i] + 1.2), ha="center", fontsize=8.5, fontweight="bold")
         ax.annotate(f"{cars_fps[i]:.1f}", (x[i] + w, cars_fps[i] + 1.2), ha="center", fontsize=8.5, fontweight="bold", color="#1B5E20")
 
-    ax.set_title("So sánh thông lượng trên 3 tập video thực tế (NVIDIA L4 Managed Stream, FPS)", pad=15)
-    ax.set_ylabel("Thông lượng luồng video (FPS)")
+    ax.set_title("Throughput across 3 Real-World Video Workloads (NVIDIA L4 Managed Stream, FPS)", pad=15)
+    ax.set_ylabel("Stream Throughput (Frames Per Second - FPS)")
     ax.set_xticks(x)
-    ax.set_xticklabels(models, fontweight="semibold")
+    ax.set_xticklabels(display_names, fontweight="semibold")
     ax.set_ylim(0, 125)
     ax.legend(loc="upper right", framealpha=0.95)
 
