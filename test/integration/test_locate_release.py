@@ -65,7 +65,8 @@ class TestLocateRelease(unittest.TestCase):
             commands = [c.args[0] for c in calls.call_args_list]
             installs = [cmd for cmd in commands if 'pip' in cmd]
             self.assertEqual(len(installs), 2)
-            self.assertTrue(all(cmd[0] == str(Path(root) / 'env/bin/python') for cmd in installs))
+            expected_python = str(Path(root) / ('env/Scripts/python.exe' if sys.platform == 'win32' else 'env/bin/python'))
+            self.assertTrue(all(cmd[0] == expected_python for cmd in installs))
             self.assertTrue(any('opencv-python-headless>=4.10' in cmd for cmd in installs))
             self.assertNotEqual(runtime.python, sys.executable)
 

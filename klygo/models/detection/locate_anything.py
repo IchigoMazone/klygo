@@ -72,24 +72,17 @@ def _extract_bounding_boxes(answer: Any, width: int, height: int) -> List[List[f
 
     boxes = []
     for match in matches:
-        try:
-            x1, y1, x2, y2 = map(int, match.groups())
-            x1, x2 = min(x1, x2), max(x1, x2)
-            y1, y2 = min(y1, y2), max(y1, y2)
-            x1 = max(0, min(1000, x1))
-            x2 = max(0, min(1000, x2))
-            y1 = max(0, min(1000, y1))
-            y2 = max(0, min(1000, y2))
-            if x2 <= x1 or y2 <= y1:
-                continue
-            boxes.append([
-                x1 * width / 1000.0,
-                y1 * height / 1000.0,
-                x2 * width / 1000.0,
-                y2 * height / 1000.0,
-            ])
-        except Exception:
-            continue
+        x1, y1, x2, y2 = map(int, match.groups())
+        if not (0 <= x1 <= 1000 and 0 <= y1 <= 1000 and 0 <= x2 <= 1000 and 0 <= y2 <= 1000):
+            raise ValueError("Locate Anything coordinates must be within [0, 1000]")
+        if x2 <= x1 or y2 <= y1:
+            raise ValueError("Locate Anything coordinates must satisfy x1 < x2 and y1 < y2")
+        boxes.append([
+            x1 * width / 1000.0,
+            y1 * height / 1000.0,
+            x2 * width / 1000.0,
+            y2 * height / 1000.0,
+        ])
     return boxes
 
 

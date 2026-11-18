@@ -1,4 +1,3 @@
-from torchvision.transforms.functional import pil_to_tensor
 """Run real pretrained detection through all four framework families.
 
 This is a correctness smoke run, not a labeled accuracy or GPU FPS benchmark.
@@ -13,6 +12,8 @@ import os
 import subprocess
 import sys
 import time
+
+from torchvision.transforms.functional import pil_to_tensor
 
 os.environ.setdefault("KERAS_BACKEND", "torch")
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
