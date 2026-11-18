@@ -55,3 +55,10 @@ for explicit names. The single-label-set load result remains `Detections`.
 Rename member keys together with `sets.rename({"set_1": "pred", "set_2": "truth"})`.
 The method returns the same group and preserves member order and data; invalid
 or colliding names fail before any names change. `relabel` changes class labels.
+
+
+Display matching annotations from a group with `collections.show(0)` or select
+members by name/index with `collections.show(5, members=(0, 1))`. The image index
+uses the first selected member's order; the other frame is matched by identity,
+so independent shuffling is supported. Titles use member names. The method
+returns `None` and delegates rendering to `visual.compare_images()`.

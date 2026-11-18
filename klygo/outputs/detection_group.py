@@ -19,7 +19,9 @@ class DetectionGroup:
 
     Notes
     -----
-    Operations modify the original members and return this group for chaining.
+    Shared storage and label operations modify the original members and return
+    this group for chaining. show() displays an identity-aligned pair and
+    returns None without changing annotations or member order.
     Source alignment is rechecked before each operation. Members are processed
     sequentially; a backend failure can leave earlier members already converted.
     Streaming members and duplicate object references are rejected.
@@ -73,6 +75,83 @@ class DetectionGroup:
     def items(self) -> ItemsView[str, Detections]:
         """Return name/collection pairs in insertion order."""
         return self._named.items()
+
+    def show(
+        self,
+        index: int = 0,
+        *,
+        members: tuple[int | str, int | str] | list[int | str] = (0, 1),
+        titles: tuple[str, str] | list[str] | None = None,
+        show_labels: bool = True,
+        show_scores: bool = True,
+        backend: str = "auto",
+    ) -> None:
+        """Display two annotation sets for the same image side by side.
+
+        Parameters
+        ----------
+        index : int, default=0
+            Image position in the first selected member. Negative positions
+            follow normal Python indexing.
+        members : tuple or list of two int or str, default=(0, 1)
+            Distinct members selected by position or name. The second image
+            is looked up by identity, so independent shuffling is supported.
+        titles : tuple or list of two str, optional
+            Panel captions. Defaults to the current selected member names.
+        show_labels, show_scores : bool, default=True
+            Include class names and confidence scores on bounding boxes.
+        backend : str, default='auto'
+            Display backend forwarded to visual.compare_images().
+
+        Returns
+        -------
+        None
+            Displays one comparison without changing annotations or order.
+
+        Raises
+        ------
+        TypeError
+            The image index or member selectors have unsupported types.
+        IndexError
+            An image or member position is out of range.
+        KeyError
+            A selected member name does not exist.
+        ValueError
+            The selection does not contain two distinct members, group
+            sources no longer align, or display options are invalid.
+        RuntimeError
+            Source pixels are unavailable for a selected image.
+        """
+        from klygo import visual
+
+        validators.validate_type(index, int, "index")
+        if isinstance(index, bool):
+            raise TypeError("index must be an integer, not bool")
+        validators.validate_type(members, (tuple, list), "members")
+        if len(members) != 2:
+            raise ValueError("members must contain exactly two selectors")
+        names = tuple(self._named)
+        selected_names = []
+        selected = []
+        for selector in members:
+            validators.validate_type(selector, (int, str), "member selector")
+            if isinstance(selector, bool):
+                raise TypeError("member selectors must be integers or strings, not bool")
+            member = self[selector]
+            selected.append(member)
+            selected_names.append(selector if isinstance(selector, str) else names[selector])
+        if selected[0] is selected[1]:
+            raise ValueError("members must select two distinct collections")
+        self._validate()
+        first = selected[0][index]
+        second = selected[1].get_frame(first.frame_index, source_id=first.source_id)
+        visual.compare_images(
+            first, second,
+            titles=tuple(selected_names) if titles is None else titles,
+            show_labels=show_labels,
+            show_scores=show_scores,
+            backend=backend,
+        )
 
     def rename(self, mapping: Mapping[str, str]) -> "DetectionGroup":
         """Rename members together while preserving their order and references.

@@ -90,3 +90,40 @@ Validation finishes before names change. A non-mapping or non-string name raises
 source misalignment raise `ValueError`. Failures leave names unchanged. Member
 order, references, annotations, and devices are preserved. Use `relabel(mapping)`
 to change class labels inside all members.
+
+
+## Show matching images
+
+`show(index=0, *, members=(0, 1), titles=None, show_labels=True,
+show_scores=True, backend="auto") -> None`
+
+Displays one side-by-side comparison through `visual.compare_images()`.
+`index` is an image position in the first selected member, not a member index.
+The second frame is found by the same `(source_id, frame_index)` identity,
+so independently shuffled collections are supported without reordering them.
+Negative image and member indices follow Python indexing.
+
+`members` accepts two distinct member names or positions (a tuple or list),
+including mixed selectors. It defaults to the first two members. Groups with
+more members can select any pair. Panel titles default to the current member
+names, including renamed keys; `titles` can override them. `show_labels`,
+`show_scores`, and `backend` are forwarded to the visual API.
+
+```python
+collections.show(0, backend="matplotlib")
+collections.show(0, members=("truth", "pred"), backend="matplotlib")
+# For a three-member group, compare the first and third members:
+# collections.show(5, members=(0, 2), backend="matplotlib")
+```
+
+The method returns `None` and preserves annotations, storage, and member order.
+Resolving pixels may cache source images. Group alignment is revalidated before
+rendering. Invalid selector types raise `TypeError`; missing names raise
+`KeyError`; out-of-range image/member positions (including empty datasets or a
+missing second member) raise `IndexError`. Selecting the same member twice or
+misaligned source collections raises `ValueError`. Source-image and display
+errors propagate from the visual API. This method displays exactly two panels;
+it does not evaluate metrics or merge boxes.
+
+[Preview tests](../../../test/outputs/test_group_show.py) ·
+[Visual API](../../visual/api/compare_images.md)
