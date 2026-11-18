@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  Klygo bridges the divide between raw AI model inference and production Computer Vision engineering. Organized into <strong>4 cooperative layers across 13 public modules</strong>, Klygo provides standardized detection schemas, automatic affine coordinate restoration, zero-loss streaming pipelines, intelligent dataset curation, and seamless interoperability across <strong>Ultralytics, Hugging Face Transformers, Torchvision, and KerasHub</strong>.
+  Klygo bridges the divide between raw AI model inference and production Computer Vision engineering. Organized into <strong>4 cooperative layers across 14 public modules</strong>, Klygo provides standardized detection schemas, automatic affine coordinate restoration, zero-loss streaming pipelines, intelligent dataset curation, standardized metric evaluation, and seamless interoperability across <strong>Ultralytics, Hugging Face Transformers, Torchvision, and KerasHub</strong>.
 </p>
 
 ---
@@ -21,7 +21,7 @@
 ## Table of Contents
 
 - [Why Klygo?](#why-klygo)
-- [Architecture & 13 Public Modules](#architecture--13-public-modules)
+- [Architecture & 14 Public Modules](#architecture--14-public-modules)
 - [Installation](#installation)
   - [Core Package](#core-package)
   - [Optional Backend Extras](#optional-backend-extras)
@@ -51,11 +51,12 @@ Building modern Computer Vision applications typically involves juggling conflic
 2. **Zero-Loss Streaming Abstraction**: Retains **95.9% to 98.4%** of raw upstream throughput while providing memory-bounded streaming, asynchronous prefetching, and standardized result schemas.
 3. **Automatic Coordinate Restoration (`trace`)**: Image transformations in `klygo.preprocessing` automatically record affine coordinate transforms. When a model predicts bounding boxes on letterboxed or cropped images, Klygo restores the boxes back to the original source image coordinate space automatically.
 4. **Intelligent Dataset Mining (`klygo.mining`)**: Active dataset curation, perceptual deduplication, visual diversity sampling, and class balancing. On COCO `val2017`, `klygo.mining` achieves **+23.4% higher mAP** while reducing dataset size and training time by **83.3%**.
-5. **Strict Dogfooding & Standard Foundations**: Built-in 14-format structured data I/O (`klygo.files`), 5 archive formats (`klygo.archive`), functional configuration diffs (`klygo.config`), and non-destructive two-pass box rendering (`klygo.visual`).
+5. **Comprehensive Metrics & Diagnostic Quality (`klygo.metrics`)**: 13 public evaluation metrics (COCO mAP@50-95, PR curves, confusion matrix, error analysis, IoU/score sweeps) operating across all detection backends without external framework dependencies.
+6. **Strict Dogfooding & Standard Foundations**: Built-in 14-format structured data I/O (`klygo.files`), 5 archive formats (`klygo.archive`), functional configuration diffs (`klygo.config`), and non-destructive two-pass box rendering (`klygo.visual`).
 
 ---
 
-## Architecture & 13 Public Modules
+## Architecture & 14 Public Modules
 
 Klygo is designed as four cooperative layers:
 
@@ -67,7 +68,7 @@ Klygo is designed as four cooperative layers:
 ├────────────────────────────────────────────────────────────────────────┤
 │  2. Media & Preprocessing                                              │
 │     klygo.media (LazyImage, MediaFrames, streaming video frames)       │
-│     klygo.preprocessing (135+ lazy transforms with affine trace)       │
+│     klygo.preprocessing (134+ lazy transforms with affine trace)       │
 ├────────────────────────────────────────────────────────────────────────┤
 │  3. Multi-Backend AI Models                                            │
 │     klygo.models (BaseModel -> Detector -> native framework wrappers)   │
@@ -76,9 +77,10 @@ Klygo is designed as four cooperative layers:
 │     ├── Torchvision (Faster R-CNN, RetinaNet, FCOS, SSD)               │
 │     └── Keras 3 / KerasHub (RT-DETR, D-FINE on PyTorch/JAX/TF)        │
 ├────────────────────────────────────────────────────────────────────────┤
-│  4. Outputs, Postprocessing & Visual                                   │
-│     klygo.outputs (Box, Crops, Detection, Detections container)        │
+│  4. Outputs, Postprocessing, Metrics & Visual                          │
+│     klygo.outputs (Box, Crops, Detection, Detections, DetectionGroup)  │
 │     klygo.postprocessing (Composable NMS, clipping, threshold, top-k)  │
+│     klygo.metrics (COCO mAP@50-95, PR curves, confusion matrix, error) │
 │     klygo.visual (Non-destructive bbox rendering, dataset charts)      │
 ├────────────────────────────────────────────────────────────────────────┤
 │  Shared Foundation: klygo.utils  •  klygo.validators                   │
@@ -92,15 +94,16 @@ Klygo is designed as four cooperative layers:
 | **Storage & I/O** | `files` | `from klygo import files` | 43 filesystem helpers, checksums, downloads, and 14 structured data formats | [Guide](docs/files/README.md) |
 | **Storage & I/O** | `archive` | `from klygo import archive` | Create, inspect, extract, search, convert, split, and merge ZIP, TAR, 7z, RAR | [Guide](docs/archive/README.md) |
 | **Config** | `config` | `from klygo import config, Config` | Immutable functional configuration (`load`, `get`, `set`, `merge`, `diff`) & stateful `Config` | [Guide](docs/config/README.md) |
-| **Datasets** | `datasets` | `from klygo import datasets` | Convert, load, inspect, partition, merge, split, and relabel YOLO datasets | [Guide](docs/datasets/README.md) |
+| **Datasets** | `datasets` | `from klygo import datasets` | Convert, load, inspect, partition, merge, split, flatten, and relabel YOLO datasets | [Guide](docs/datasets/README.md) |
 | **Mining** | `mining` | `from klygo import mining` | Audit distributions, perceptual deduplication, rarity scoring, diversity clustering | [Guide](docs/mining/README.md) |
 | **Media** | `media` | `from klygo import media` | Lazy image loading (`LazyImage`), streaming video frames (`MediaFrames`), PIL/NumPy I/O | [Guide](docs/media/README.md) |
-| **Preprocessing** | `preprocessing` | `from klygo import preprocessing as p` | 135+ image transforms with affine coordinate tracking (`trace`) | [Guide](docs/preprocessing/README.md) |
+| **Preprocessing** | `preprocessing` | `from klygo import preprocessing as p` | 134+ image transforms with affine coordinate tracking (`trace`) | [Guide](docs/preprocessing/README.md) |
 | **Models** | `models` | `from klygo import models` | Backend-neutral `Detector` lifecycle, schema builder, warmup, and multi-backend loading | [Guide](docs/models/README.md) |
-| **Outputs** | `outputs` | `from klygo import outputs` | Standardized detection representations (`Box`, `Crops`, `Detection`, `Detections`) | [Guide](docs/outputs/README.md) |
+| **Outputs** | `outputs` | `from klygo import outputs` | Standardized detection representations (`Box`, `Crops`, `Detection`, `Detections`, `DetectionGroup`) | [Guide](docs/outputs/README.md) |
 | **Postprocessing**| `postprocessing` | `from klygo import postprocessing as post`| Composable box transformations (`nms`, `threshold`, `clip`, `box_iou`, `top`) | [Guide](docs/postprocessing/README.md) |
-| **Visual** | `visual` | `from klygo import visual` | Non-destructive two-pass box rendering (`draw_bboxes`) and dataset statistics plots | [Guide](docs/visual/README.md) |
-| **Foundation** | `utils` | `from klygo import utils` | Mapping utilities (`exclude_keys`, `invert`), byte formatting, and `ProgressBar` | [Guide](docs/utils/README.md) |
+| **Metrics** | `metrics` | `from klygo import metrics` | 13 object-detection evaluation tools (COCO mAP, PR curves, confusion matrix, error analysis) | [Guide](docs/metrics/README.md) |
+| **Visual** | `visual` | `from klygo import visual` | Non-destructive two-pass box rendering (`draw_bboxes`), image comparison, and dataset charts | [Guide](docs/visual/README.md) |
+| **Foundation** | `utils` | `from klygo import utils` | Mapping utilities (`exclude_keys`, `invert`), byte formatting, tabulate, and `ProgressBar` | [Guide](docs/utils/README.md) |
 | **Foundation** | `validators` | `from klygo import validators` | Standardized runtime argument type verification | [Guide](docs/validators/README.md) |
 
 ---
@@ -318,7 +321,7 @@ All performance metrics and charts are generated **100% dynamically from verifie
 
 ## Documentation & Tutorials
 
-Each of Klygo's 13 public modules features dedicated reference documentation, runnable examples, and interactive Google Colab tutorial notebooks:
+Each of Klygo's 14 public modules features dedicated reference documentation, runnable examples, and interactive Google Colab tutorial notebooks:
 
 | Module | Reference Documentation | Runnable Examples | Tutorial Notebooks |
 | :--- | :--- | :--- | :--- |
@@ -332,6 +335,7 @@ Each of Klygo's 13 public modules features dedicated reference documentation, ru
 | `klygo.models` | [`docs/models/README.md`](docs/models/README.md) | `examples/models/` | [`tutorials/models/`](tutorials/models/) |
 | `klygo.outputs` | [`docs/outputs/README.md`](docs/outputs/README.md) | `examples/outputs/` | [`tutorials/outputs/`](tutorials/outputs/) |
 | `klygo.postprocessing` | [`docs/postprocessing/README.md`](docs/postprocessing/README.md) | `examples/postprocessing/` | [`tutorials/postprocessing/`](tutorials/postprocessing/) |
+| `klygo.metrics` | [`docs/metrics/README.md`](docs/metrics/README.md) | `examples/metrics/` | [`tutorials/metrics/`](tutorials/metrics/) |
 | `klygo.visual` | [`docs/visual/README.md`](docs/visual/README.md) | `examples/visual/` | [`tutorials/visual/`](tutorials/visual/) |
 | `klygo.utils` | [`docs/utils/README.md`](docs/utils/README.md) | `examples/utils/` | [`tutorials/utils/`](tutorials/utils/) |
 | `klygo.validators` | [`docs/validators/README.md`](docs/validators/README.md) | `examples/validators/` | [`tutorials/validators/`](tutorials/validators/) |
@@ -350,7 +354,7 @@ python -m unittest discover -s test -t . -p "test*.py"
 
 ### Auditing Public APIs, Documentation, and Tutorials
 
-Validate API signatures, NumPy docstrings, runnable examples, cross-module dogfooding, and tutorial notebook contracts across all 13 modules:
+Validate API signatures, NumPy docstrings, runnable examples, cross-module dogfooding, and tutorial notebook contracts across all 14 modules:
 
 ```bash
 python .agents/skills/klygo-module-guides/scripts/audit_public_api.py --all
