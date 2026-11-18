@@ -38,10 +38,10 @@ class ReadOnlyBackend(ArchiveBackend):
     ) -> List[str]:
         return [name for name in self.list_files(archive_path) if pattern in name]
 
-    def get_info(self, archive_path: Path) -> Dict[str, Any]:
+    def info(self, archive_path: Path) -> Dict[str, Any]:
         return {"format": self.format_name}
 
-    def test(self, archive_path: Path, raise_exception: bool = False) -> bool:
+    def is_valid(self, archive_path: Path, raise_exception: bool = False) -> bool:
         return True
 
 
@@ -49,7 +49,7 @@ class TestArchiveBackend(unittest.TestCase):
     def test_abstract_contract_names_are_stable(self):
         self.assertEqual(
             ArchiveBackend.__abstractmethods__,
-            {"extract", "extract_file", "list_files", "iter_files", "search", "get_info", "test"},
+            {"extract", "extract_file", "list_files", "iter_files", "search", "info", "is_valid"},
         )
 
     def test_default_mutation_methods_raise_consistent_errors(self):

@@ -28,3 +28,7 @@ diverse.export("artifacts/mining/dataset", format="yolo")
 - [`MiningStats`](api/MiningStats.md), [`MiningScores`](api/MiningScores.md), [`DuplicateReport`](api/DuplicateReport.md), [`ClusterResult`](api/ClusterResult.md), and [`MiningComparison`](api/MiningComparison.md) are serializable report types with `show()`, `to_dict()`, and `save()`.
 
 Mining requires materialized `Detections`. Export remains the responsibility of `Detections.export()`, so mining does not duplicate dataset-writing logic.
+
+## Optional progress
+
+Processing APIs accept keyword-only `verbose=False`. Enable it for large datasets; nested processing forwards the flag and displays sequential stages.

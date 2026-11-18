@@ -17,7 +17,7 @@ Abstract base contract implemented by all archive format adapters.
 - Methods:
   - `require_operation(operation)`: Validates that an optional operation is supported.
   - `validate_option(operation, option, value, default)`: Validates that a non-default option value is accepted.
-  - Mandatory read methods: `extract`, `extract_file`, `list_files`, `iter_files`, `search`, `get_info`, `test`.
+  - Mandatory read methods: `extract`, `extract_file`, `list_files`, `iter_files`, `search`, `info`, `is_valid`.
   - Optional mutating methods: `compress`, `add`, `remove`, `merge`, `split_by_size`.
 
 ## Returns
@@ -54,11 +54,11 @@ class DummyBackend(ArchiveBackend):
     def list_files(self, archive_path): return []
     def iter_files(self, archive_path): yield from ()
     def search(self, archive_path, pattern, **kwargs): return []
-    def get_info(self, archive_path): return {"format": "dummy"}
-    def test(self, archive_path, **kwargs): return True
+    def info(self, archive_path): return {"format": "dummy"}
+    def is_valid(self, archive_path, **kwargs): return True
 
 backend = DummyBackend()
 assert backend.format_name == "dummy"
 assert backend.capabilities.compress is False
-assert backend.test("mock.dummy") is True
+assert backend.is_valid("mock.dummy") is True
 ```

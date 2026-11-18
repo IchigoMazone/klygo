@@ -13,7 +13,8 @@ class TestMove(unittest.TestCase):
             root = Path(directory)
             source, target = root / "a.txt", root / "nested" / "b.txt"
             source.write_text("a", encoding="utf-8")
-            self.assertEqual(files.move(source, target), target)
+            self.assertIsNone(files.move(source, target))
+            self.assertTrue(target.is_file())
             self.assertFalse(source.exists())
             replacement = root / "c.txt"
             replacement.write_text("c", encoding="utf-8")

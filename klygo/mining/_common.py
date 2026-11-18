@@ -6,14 +6,17 @@ across the public mining submodules (`analysis`, `curation`, `duplicates`).
 
 from __future__ import annotations
 
+from klygo.utils.progress import _iter_progress
+
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
+import os
 from typing import Any, Mapping, Optional, Sequence
 
 import cv2
 import numpy as np
-from rich.console import Console
-from rich.table import Table
+from PIL import Image
 
 from klygo import files, media, preprocessing, validators
 from klygo.outputs import Detections
@@ -125,7 +128,15 @@ def _normalize(values: Sequence[float]) -> list[float]:
     return [(float(value) - low) / (high - low) for value in values]
 
 
-def _quality(data: Detections) -> list[dict[str, float]]:
+def _pil_rgb(frame: Any) -> Image.Image:
+    """Return an RGB PIL image for a frame without redundant copying."""
+    source = getattr(frame, "_source", None)
+    if isinstance(source, Image.Image):
+        return source if source.mode == "RGB" else source.convert("RGB")
+    return _image(frame).to_pil(cache=False).convert("RGB")
+
+
+def _quality(data: Detections, verbose: bool = False) -> list[dict[str, float]]:
     """Compute six classical image-quality metrics for every frame in a dataset.
 
     Calculates brightness, contrast, sharpness, entropy, noise, and exposure
@@ -150,12 +161,16 @@ def _quality(data: Detections) -> list[dict[str, float]]:
         "exposure": preprocessing.exposure_score(),
     }
 
-    rows: list[dict[str, float]] = []
-    for frame in data:
-        image = _image(frame).to_pil(cache=False)
-        rows.append({name: float(metric(image)) for name, metric in metrics.items()})
+    def _score_one(frame: Any) -> dict[str, float]:
+        image = _pil_rgb(frame)
+        return {name: float(metric(image)) for name, metric in metrics.items()}
 
-    return rows
+    if len(data) >= 16 and not verbose:
+        workers = min(8, os.cpu_count() or 4, len(data))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            return list(pool.map(_score_one, data))
+
+    return [_score_one(frame) for frame in _iter_progress(data, verbose, "Image quality")]
 
 
 def _save_report(report: "_Report", path: Any) -> Any:
@@ -208,7 +223,7 @@ class _Report:
         """
         return asdict(self)  # type: ignore[arg-type]
 
-    def save(self, path: Any) -> Any:
+    def save(self, path: Any) -> None:
         """Save the report to disk as JSON, Markdown, or CSV.
 
         Parameters
@@ -219,10 +234,9 @@ class _Report:
 
         Returns
         -------
-        pathlib.Path
-            Path to the saved file.
+        None
         """
-        return _save_report(self, path)
+        _save_report(self, path)
 
     def _rows(self) -> list[dict[str, Any]]:
         """Return tabular rows for CSV serialization."""
@@ -242,26 +256,6 @@ class _Report:
             for row in rows
         )
         return "\n".join(lines) + "\n"
-
-    def show(self, console: Optional[Console] = None) -> None:
-        """Render a formatted, colorful Rich table to the console.
-
-        Parameters
-        ----------
-        console : rich.console.Console, optional
-            Console instance used for rendering. Defaults to a new Console().
-        """
-        table = Table(title=self.__class__.__name__)
-        rows = self._rows()
-        columns = list(rows[0]) if rows else ["metric", "value"]
-
-        for column in columns:
-            table.add_column(column.replace("_", " ").title())
-
-        for row in rows:
-            table.add_row(*(str(row.get(column, "")) for column in columns))
-
-        (console or Console()).print(table)
 
 
 class _UnionFind:
@@ -309,7 +303,7 @@ def _phash(frame: Any) -> tuple[str, np.ndarray]:
     return "".join("1" if value else "0" for value in bits), bits
 
 
-def _feature_matrix(data: Detections, features: tuple[str, ...]) -> np.ndarray:
+def _feature_matrix(data: Detections, features: tuple[str, ...], verbose: bool = False) -> np.ndarray:
     """Extract and standardize a multi-modal feature matrix across all images.
 
     Supports combining HSV color histograms, HOG gradient descriptors, image
@@ -345,10 +339,9 @@ def _feature_matrix(data: Detections, features: tuple[str, ...]) -> np.ndarray:
     )
 
     labels = [data.names[key] for key in sorted(data.names)]
-    rows: list[np.ndarray] = []
 
-    for frame in data:
-        pil_image = _image(frame).to_pil(cache=False).convert("RGB")
+    def _extract_one(frame: Any) -> np.ndarray:
+        pil_image = _pil_rgb(frame)
         image = np.asarray(pil_image)
         parts: list[np.ndarray] = []
 
@@ -405,7 +398,14 @@ def _feature_matrix(data: Detections, features: tuple[str, ...]) -> np.ndarray:
             present = set(frame.labels)
             parts.append(np.asarray([label in present for label in labels], dtype=np.float32))
 
-        rows.append(np.concatenate(parts).astype(np.float32))
+        return np.concatenate(parts).astype(np.float32)
+
+    if len(data) >= 16 and not verbose:
+        workers = min(8, os.cpu_count() or 4, len(data))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            rows = list(pool.map(_extract_one, data))
+    else:
+        rows = [_extract_one(frame) for frame in _iter_progress(data, verbose, "Extracting features")]
 
     matrix = np.vstack(rows)
 
@@ -415,7 +415,7 @@ def _feature_matrix(data: Detections, features: tuple[str, ...]) -> np.ndarray:
     return (matrix - matrix.mean(axis=0)) / deviation
 
 
-def _class_filter(data: Detections, classes: Sequence[str], match: str) -> list[int]:
+def _class_filter(data: Detections, classes: Sequence[str], match: str, verbose: bool = False) -> list[int]:
     """Filter frame indices matching class criteria.
 
     Parameters
@@ -442,7 +442,7 @@ def _class_filter(data: Detections, classes: Sequence[str], match: str) -> list[
         raise ValueError("match must be 'any', 'all', 'only', or 'exclude'")
 
     selected = []
-    for index, frame in enumerate(data):
+    for index, frame in enumerate(_iter_progress(data, verbose, "Filtering classes")):
         present = set(frame.labels)
         accepted = bool(present & requested) if match == "any" else requested <= present
         if match == "only":
@@ -461,6 +461,7 @@ def _quota(
     limit: Optional[int],
     *,
     count_by: str = "images",
+    verbose: bool = False,
 ) -> list[int]:
     """Greedily select frames to fulfill specified per-class target quotas.
 
@@ -492,7 +493,9 @@ def _quota(
     remaining = set(range(len(data)))
     chosen: list[int] = []
 
-    while remaining and (limit is None or len(chosen) < limit):
+    for _ in _iter_progress(range(len(data) if limit is None else min(len(data), limit)), verbose, "Selecting class quotas"):
+        if not remaining:
+            break
         deficits = {label: max(0, target - counts[label]) for label, target in quotas.items()}
         if not any(deficits.values()):
             break

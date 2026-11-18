@@ -11,7 +11,8 @@ from klygo import media, files
 with tempfile.TemporaryDirectory() as temporary:
     root = files.path(temporary)
     image = Image.new("RGB", (32, 24), "red")
-    source = media.save(root / "source.png", image)
+    source = root / "source.png"
+    media.save(source, image)
     lazy = media.LazyImage(source)
     print(lazy.size, lazy.is_loaded)
     print(lazy.to_array().shape)

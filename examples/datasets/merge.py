@@ -10,5 +10,7 @@ with TemporaryDirectory() as directory:
     root = files.path(directory)
     first = make_dataset(root / "first", ("apple", "banana"), "first")
     second = make_dataset(root / "second", ("banana", "orange"), "second")
-    output = datasets.merge([first, second], root / "merged.zip", verbose=False)
-    assert datasets.info(output)["classes"] == ["apple", "banana", "orange"]
+    for name in ("merged", "merged.zip"):
+        output = root / name
+        assert datasets.merge([first, second], output, verbose=False) is None
+        assert datasets.info(output)["classes"] == ["apple", "banana", "orange"]

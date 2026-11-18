@@ -58,6 +58,6 @@ with TemporaryDirectory() as directory:
 
     archive.convert(source, target, verbose=False)
     assert archive.detect_format(target) == "tar.gz"
-    assert archive.test(target)
+    assert archive.is_valid(target)
     print(target)
 ```

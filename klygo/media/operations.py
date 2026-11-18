@@ -1,7 +1,9 @@
 import builtins
 import importlib
 import math
+from numbers import Integral
 import os
+import random
 import threading
 import uuid
 import weakref
@@ -18,7 +20,7 @@ from klygo import files
 
 __all__ = [
     "load", "save", "convert", "copy", "save_video", "save_images",
-    "iter_frames", "probe", "to_array", "to_tensor", "to_pil",
+    "iter_frames", "info", "to_array", "to_pil",
     "MediaFrames", "LazyImage", "VideoReader",
     "compose",
 ]
@@ -173,7 +175,7 @@ class VideoReader:
 
             return None
 
-    def release(self) -> None:
+    def close(self) -> None:
         if getattr(self, "_cap", None) is not None:
             try:
                 self._cap.release()
@@ -181,11 +183,8 @@ class VideoReader:
                 pass
             self._cap = None
 
-    def close(self) -> None:
-        self.release()
-
     def __del__(self) -> None:
-        self.release()
+        self.close()
 
 
 # =========================================================================
@@ -335,10 +334,6 @@ class LazyImage(Image.Image):
         self._image = None
         self._processed_cache = None
 
-    def clear(self) -> None:
-        """Alias for :meth:`unload`."""
-        self.unload()
-
     @property
     def is_loaded(self) -> bool:
         """Check whether pixel data is currently loaded in memory."""
@@ -445,6 +440,12 @@ class LazyImage(Image.Image):
 
     def to_pil(self, cache: bool = False) -> Image.Image:
         """Materialize the pipeline as a PIL image; optionally cache its result."""
+        if not self._instructions and not self._preprocessing_ops:
+            loaded = self.load(cache=cache)
+            if isinstance(loaded, Image.Image):
+                return loaded.copy()
+            return Image.fromarray(cv.cvtColor(loaded, cv.COLOR_BGR2RGB))
+
         from klygo.preprocessing.core import _to_pil
 
         return _to_pil(self._execute_preprocessing(cache=cache))
@@ -454,24 +455,6 @@ class LazyImage(Image.Image):
         from klygo.preprocessing.core import _to_array
 
         return _to_array(self._execute_preprocessing(cache=cache))
-
-    def to_tensor(self, cache: bool = False) -> Any:
-        """Materialize LazyImage into a PyTorch Tensor."""
-        try:
-            import torch
-        except ImportError as exc:
-            raise ImportError("PyTorch is required for LazyImage.to_tensor()") from exc
-
-        result = self._execute_preprocessing(cache=cache)
-        if isinstance(result, torch.Tensor):
-            return result
-        from klygo.preprocessing.core import _to_array
-
-        array = np.array(_to_array(result), copy=True, order="C")
-        tensor = torch.from_numpy(array)
-        if tensor.ndim == 3 and tensor.shape[-1] in (1, 3, 4):
-            tensor = tensor.permute(2, 0, 1)
-        return tensor
 
     def _execute_preprocessing(self, cache: bool = False) -> Any:
         """Decode and apply queued operations, reusing the result when cached."""
@@ -507,12 +490,6 @@ class LazyImage(Image.Image):
             self._processed_cache = result
         return result
 
-    def process(self, operation_or_pipeline: Any) -> "LazyImage":
-        """Attach a preprocessing transform without decoding pixel data."""
-        from klygo.preprocessing import apply
-
-        return apply(self, operation_or_pipeline)
-
     def transform(self, operation_or_pipeline: Any) -> "LazyImage":
         """Apply a callable transform or pipeline to this image lazily."""
         if callable(operation_or_pipeline):
@@ -542,7 +519,7 @@ class LazyImage(Image.Image):
             reader=self.reader,
         )
 
-    def crop(self, *args, lazy: Optional[bool] = None, **kwargs) -> Any:
+    def crop(self, *args, lazy: Optional[bool] = None, **kwargs) -> Union["LazyImage", Image.Image]:
         """
         Crop image.
 
@@ -709,7 +686,7 @@ class MediaFrames(list):
                     self.height = reader.height
                     self.fps = reader.fps / sample_rate
                 finally:
-                    reader.release()
+                    reader.close()
             elif suffix in IMAGE_SUFFIXES:
                 self.source_type = "image"
                 source_total = 1
@@ -1008,6 +985,37 @@ class MediaFrames(list):
             return
         list.reverse(self)
 
+    def shuffle(self, seed: Optional[int] = None) -> None:
+        """Shuffle frames in place.
+
+        Parameters
+        ----------
+        seed : int or None, default=None
+            Random seed for deterministic permutation. If None, a random
+            permutation is applied using a local random generator.
+
+        Returns
+        -------
+        None
+            The collection is shuffled in place.
+
+        Raises
+        ------
+        TypeError
+            If the collection is an unmaterialized stream, or if seed is invalid.
+        """
+        self._require_materialized("shuffle()")
+        if seed is not None:
+            validate_type(seed, int, "seed")
+        if len(self) <= 1:
+            return
+        rng = random.Random(seed)
+        if getattr(self, "is_indexed", False):
+            rng.shuffle(self._indexed_entries)
+            self._invalidate_index_cache()
+            return
+        rng.shuffle(self)
+
     def sort(self, *, key: Optional[Callable[[Any], Any]] = None, reverse: bool = False) -> None:
         """Sort frames in place using list-compatible semantics."""
         self._require_materialized("sort()")
@@ -1041,7 +1049,7 @@ class MediaFrames(list):
             return
         list.insert(self, index, item)
 
-    def pop(self, index: int = -1) -> Any:
+    def pop(self, index: int = -1) -> Union["LazyImage", Image.Image, np.ndarray]:
         self._require_materialized("pop()")
         if getattr(self, "is_indexed", False):
             item = self[index]
@@ -1146,7 +1154,7 @@ class MediaFrames(list):
         cloned._preprocessing_ops.append(func)
         return cloned
 
-    def where(self, predicate: Callable[[Any], bool]) -> Any:
+    def where(self, predicate: Callable[[Any], bool]) -> "MediaFrames":
         """Retain items satisfying predicate evaluated sequentially."""
         if not callable(predicate):
             raise TypeError("predicate must be callable")
@@ -1156,10 +1164,6 @@ class MediaFrames(list):
             cloned.total_frames = None
             return cloned
         return self._new(frame for frame in self if predicate(frame))
-
-    def filter(self, func: Callable[[Any], bool]) -> Any:
-        """Compatibility alias for :meth:`where`."""
-        return self.where(func)
 
     def where_quality(
         self,
@@ -1171,7 +1175,7 @@ class MediaFrames(list):
         max_blur: Optional[float] = None,
         min_entropy: Optional[float] = None,
         preview_size: Tuple[int, int] = (160, 160),
-    ) -> Any:
+    ) -> "MediaFrames":
         """Filter frames based on image quality metrics."""
         from klygo import preprocessing as p
 
@@ -1190,7 +1194,7 @@ class MediaFrames(list):
             conditions.append(p.entropy_score(preview_size) >= min_entropy)
         return self.where(p.all_of(*conditions)) if conditions else (self._clone() if self.is_stream else self.copy())
 
-    def where_motion(self, threshold: float = 0.02) -> Any:
+    def where_motion(self, threshold: float = 0.02) -> "MediaFrames":
         """Filter frames that show motion difference above threshold."""
         if self.is_stream:
             cloned = self._clone()
@@ -1207,7 +1211,7 @@ class MediaFrames(list):
             filtered.append(frame)
         return self._new(filtered)
 
-    def deduplicate(self, threshold: float = 0.95) -> Any:
+    def deduplicate(self, threshold: float = 0.95) -> "MediaFrames":
         """Filter consecutive frames that have similarity above threshold."""
         if self.is_stream:
             cloned = self._clone()
@@ -1261,16 +1265,18 @@ class MediaFrames(list):
             cloned.total_frames = min(cloned.total_frames, max_frames)
         return cloned
 
-    def save_video(self, output_path: Union[str, Path], fps: Optional[float] = None, **kwargs: Any) -> Path:
-        """Encode and save all frames into an MP4/AVI video file."""
+    def save_video(self, output_path: Union[str, Path], fps: Optional[float] = None, *,
+                   size: Optional[Tuple[int, int]] = None, **kwargs: Any) -> None:
+        """Save frames as video, optionally letterboxing to size; return None."""
         target_fps = fps if fps is not None else getattr(self, "fps", 30.0)
-        return globals()["save_video"](output_path, self, fps=target_fps, **kwargs)
+        globals()["save_video"](output_path, self, fps=target_fps, size=size, **kwargs)
 
-    def save_images(self, output_dir: Union[str, Path], prefix: str = "frame", **kwargs: Any) -> Path:
-        """Save all frames into an image directory."""
-        return globals()["save_images"](output_dir, self, prefix=prefix, **kwargs)
+    def save_images(self, output_dir: Union[str, Path], prefix: str = "frame", *,
+                    size: Optional[Tuple[int, int]] = None, **kwargs: Any) -> None:
+        """Save numbered images, optionally letterboxing to size; return None."""
+        globals()["save_images"](output_dir, self, prefix=prefix, size=size, **kwargs)
 
-    def copy(self) -> Any:
+    def copy(self) -> "MediaFrames":
         """Copy collection without decoding pixels or losing metadata."""
         if self.is_stream or getattr(self, "is_indexed", False):
             return self._clone()
@@ -1343,7 +1349,7 @@ class MediaFrames(list):
                         lazy_image.unload()
                     frame_index += self.sample_rate
             finally:
-                reader.release()
+                reader.close()
                 if reader in self._active_readers:
                     self._active_readers.remove(reader)
             return
@@ -1370,12 +1376,12 @@ class MediaFrames(list):
     def close(self) -> None:
         """Release underlying video captures, readers, and cached pixels."""
         for reader in tuple(getattr(self, "_active_readers", ())):
-            reader.release()
+            reader.close()
         if hasattr(self, "_active_readers"):
             self._active_readers.clear()
         if hasattr(self, "reader") and self.reader is not None:
             try:
-                self.reader.release()
+                self.reader.close()
             except Exception:
                 pass
             self.reader = None
@@ -1652,7 +1658,7 @@ def load(
                 reader = VideoReader(p)
                 total_frames = reader.total_frames
                 if total_frames <= 0:
-                    reader.release()
+                    reader.close()
                     raise ValueError("indexed video loading requires a known frame count")
                 return MediaFrames._from_index(
                     range(total_frames),
@@ -1707,7 +1713,7 @@ def save(
     image: Union[Image.Image, np.ndarray],
     overwrite: bool = False,
     verbose: bool = False,
-) -> Path:
+) -> None:
     """Save one image to the requested path.
 
     Parameters
@@ -1723,8 +1729,7 @@ verbose : bool
 
     Returns
     -------
-    pathlib.Path
-        Destination path.
+    None
 
     Raises
     ------
@@ -1756,8 +1761,6 @@ TypeError
             raise TypeError("image must be PIL.Image.Image, numpy.ndarray, or LazyImage")
         pbar.update(1)
 
-    return p
-
 
 def convert(
     source: Union[str, Path],
@@ -1769,7 +1772,7 @@ def convert(
     preset: Optional[str] = None,
     overwrite: bool = False,
     verbose: bool = False,
-) -> Path:
+) -> None:
     """Convert an image format or transcode a video file.
 
     Parameters
@@ -1791,8 +1794,7 @@ overwrite, verbose : bool
 
     Returns
     -------
-    pathlib.Path
-        Converted output path.
+    None
 
     Raises
     ------
@@ -1817,9 +1819,9 @@ ValueError
     if src_suf in IMAGE_SUFFIXES and tgt_suf in IMAGE_SUFFIXES:
         with ProgressBar(total=1, desc=f"Converting image {files.name(src_p)} -> {files.name(tgt_p)}", unit="file", verbose=verbose, colour="cyan") as pbar:
             imgs = load(src_p, verbose=False)
-            res = save(tgt_p, imgs[0], overwrite=overwrite, verbose=False)
+            save(tgt_p, imgs[0], overwrite=overwrite, verbose=False)
             pbar.update(1)
-            return res
+            return
     elif src_suf in VIDEO_SUFFIXES and tgt_suf in VIDEO_SUFFIXES:
         import shutil
         import subprocess
@@ -1890,7 +1892,7 @@ ValueError
             cmd.append(str(tgt_p))
 
             try:
-                v_info = probe(src_p)
+                v_info = info(src_p)
                 total_frames = v_info.get("frame_count") or 1
                 with ProgressBar(total=total_frames, desc=f"Converting {files.name(src_p)} (FFmpeg)", unit="frame", verbose=verbose, colour="cyan") as pbar:
                     # Run FFmpeg with progress monitoring if verbose, or silent if not
@@ -1917,7 +1919,7 @@ ValueError
                     if result.returncode == 0:
                         if verbose and last_frame < total_frames:
                             pbar.update(total_frames - last_frame)
-                        return tgt_p
+                        return
                     elif use_gpu and gpu is None:
                         # Fallback to CPU FFmpeg if GPU NVENC was auto-detected but failed (e.g. ffmpeg build lacks nvenc)
                         cpu_cmd = [
@@ -1936,17 +1938,18 @@ ValueError
                         cpu_cmd.append(str(tgt_p))
                         cpu_res = subprocess.run(cpu_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                         if cpu_res.returncode == 0:
-                            return tgt_p
+                            return
             except Exception:
                 pass
 
         # 2. Fallback to OpenCV (frame-by-frame)
         frames = load(src_p, stream=True, verbose=False)
-        v_info = probe(src_p)
+        v_info = info(src_p)
         target_fps = fps if fps is not None else v_info.get("fps", 30.0)
 
         try:
-            return save_video(tgt_p, frames, fps=target_fps, fourcc=fourcc, overwrite=overwrite, verbose=verbose)
+            save_video(tgt_p, frames, fps=target_fps, fourcc=fourcc, overwrite=overwrite, verbose=verbose)
+            return
         except ValueError as e:
             if "iterable is empty" in str(e):
                 raise RuntimeError(
@@ -1963,7 +1966,7 @@ def copy(
     source: Union[str, Path],
     target: Union[str, Path],
     overwrite: bool = False,
-) -> Path:
+) -> None:
     """Copy a media file or directory to another location.
 
     Parameters
@@ -1975,8 +1978,7 @@ overwrite : bool
 
     Returns
     -------
-    pathlib.Path
-        Copied destination.
+    None
 
     Raises
     ------
@@ -1992,7 +1994,23 @@ FileExistsError
     if not files.exists(src_p):
         raise FileNotFoundError(f"Media source does not exist: {src_p}")
 
-    return files.copy(src_p, target, overwrite=overwrite)
+    files.copy(src_p, target, overwrite=overwrite)
+
+
+
+def _save_letterbox(size: Optional[Tuple[int, int]]) -> Any:
+    """Validate export size before touching files or consuming a stream."""
+    if size is None:
+        return None
+    validate_type(size, (tuple, list), "size")
+    if len(size) != 2:
+        raise ValueError("size must contain width and height")
+    for dimension in size:
+        validate_type(dimension, Integral, "size dimension")
+        if isinstance(dimension, bool) or dimension <= 0:
+            raise ValueError("size dimensions must be positive integers")
+    from klygo import preprocessing
+    return preprocessing.letterbox(tuple(int(dimension) for dimension in size))
 
 
 def save_video(
@@ -2002,33 +2020,51 @@ def save_video(
     fourcc: str = "mp4v",
     overwrite: bool = False,
     verbose: bool = False,
-) -> Path:
-    """Encode an iterable of image frames as a video.
+    *,
+    size: Optional[Tuple[int, int]] = None,
+) -> None:
+    """Encode frames as video, optionally letterboxing to a common size.
 
     Parameters
     ----------
-    output_path : str or pathlib.Path
-        Output video path.
-frames : iterable
-        Frames with matching dimensions.
-fps : float
-        Playback frame rate.
-fourcc : str
+    output_path : str or os.PathLike[str]
+        Output video file.
+    frames : iterable
+        RGB PIL images, RGB NumPy arrays, or LazyImage frames. Without size,
+        every frame must match the first frame's dimensions.
+    fps : float, default=30.0
+        Positive playback frame rate.
+    fourcc : str, default='mp4v'
         Four-character OpenCV codec.
-overwrite, verbose : bool
+    overwrite, verbose : bool, default=False
         Replacement and progress options.
+    size : tuple of int, optional
+        Positive (width, height). Letterbox each frame with centered gray
+        padding (114, 114, 114), preserving aspect ratio. Use even dimensions
+        for common video codecs. None keeps the existing frame sizes.
 
     Returns
     -------
-    pathlib.Path
-        Encoded video path.
+    None
+        Writes the video file without returning a path.
 
     Raises
     ------
+    TypeError
+        Options, size dimensions, or frame pixels have unsupported types.
     ValueError
-        Frames iterable is empty.
-RuntimeError
-        Video writer cannot be opened."""
+        Size or fps is invalid, frames are empty, or unresized frames differ.
+    FileExistsError
+        Output exists without overwrite permission.
+    RuntimeError
+        The video writer cannot be opened.
+
+    Notes
+    -----
+    Frames are processed one at a time. Input pixels are not modified. A
+    temporary video is published only after all frames encode successfully.
+    """
+    letterbox = _save_letterbox(size)
     validate_type(output_path, (str, os.PathLike), "output_path")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
@@ -2065,6 +2101,8 @@ RuntimeError
             raise ValueError("video frames must have one, three, or four channels")
         if array.dtype != np.uint8:
             raise TypeError("video frames must use uint8 pixels")
+        if letterbox is not None:
+            array = np.asarray(letterbox(Image.fromarray(array)))
         current = int(array.shape[1]), int(array.shape[0])
         if expected is not None and current != expected:
             raise ValueError(f"all video frames must have size {expected}; received {current}")
@@ -2099,7 +2137,6 @@ RuntimeError
         writer.release()
 
     files.move(temporary, p, overwrite=overwrite)
-    return p
 
 
 def save_images(
@@ -2109,29 +2146,46 @@ def save_images(
     extension: str = ".jpg",
     overwrite: bool = False,
     verbose: bool = False,
-) -> List[Path]:
-    """Save an iterable of images to numbered files.
+    *,
+    size: Optional[Tuple[int, int]] = None,
+) -> None:
+    """Save numbered images, optionally letterboxing them to a common size.
 
     Parameters
     ----------
-    output_dir : str or pathlib.Path
-        Output directory.
-images : iterable
-        Images to write.
-prefix, extension : str
-        Generated filename components.
-overwrite, verbose : bool
+    output_dir : str or os.PathLike[str]
+        Destination directory.
+    images : iterable
+        PIL images, NumPy arrays, or LazyImage frames, consumed sequentially.
+    prefix, extension : str
+        Generated filename components, defaulting to frame and .jpg.
+    overwrite, verbose : bool, default=False
         Replacement and progress options.
+    size : tuple of int, optional
+        Positive (width, height). Normalize through media.to_pil to RGB and
+        letterbox with centered gray padding (114, 114, 114), preserving aspect
+        ratio. None preserves each image's size and existing save behavior.
 
     Returns
     -------
-    list of pathlib.Path
-        Paths written in input order.
+    None
+        Writes files without collecting or returning their paths.
 
     Raises
     ------
+    TypeError
+        Arguments, size dimensions, or images have unsupported types.
+    ValueError
+        Size is invalid or image encoding fails.
     FileExistsError
-        A generated file already exists without overwrite."""
+        A generated file already exists without overwrite permission.
+
+    Notes
+    -----
+    Empty iterables create an empty directory. Images are processed one at a
+    time without changing input pixels. A later failure keeps earlier files.
+    """
+    letterbox = _save_letterbox(size)
     validate_type(output_dir, (str, os.PathLike), "output_dir")
     validate_type(overwrite, bool, "overwrite")
     validate_type(verbose, bool, "verbose")
@@ -2142,17 +2196,16 @@ overwrite, verbose : bool
     if not extension.startswith("."):
         extension = f".{extension}"
 
-    saved_paths: List[Path] = []
     is_sequential = bool(getattr(images, "is_stream", False))
     total = len(images) if isinstance(images, (builtins.list, tuple)) and not is_sequential else getattr(images, "total_frames", None)
     with ProgressBar(total=total, desc=f"Saving image batch to {files.name(out_p)}", unit="file", verbose=verbose, colour="cyan") as pbar:
         for idx, img in enumerate(images, start=1):
             file_path = files.join(out_p, f"{prefix}_{idx:06d}{extension}")
+            if letterbox is not None:
+                img = letterbox(to_pil(img).convert("RGB"))
             save(file_path, img, overwrite=overwrite, verbose=False)
-            saved_paths.append(file_path)
             pbar.update(1)
 
-    return saved_paths
 
 
 def iter_frames(
@@ -2227,15 +2280,13 @@ FileNotFoundError
                 yield img
 
 
-def probe(path: Union[str, Path], *, verbose: bool = False) -> Dict[str, Any]:
+def info(path: Union[str, Path]) -> Dict[str, Any]:
     """Read image or video metadata from a media file.
 
     Parameters
     ----------
     path : str or pathlib.Path
         Existing media file.
-    verbose : bool, default=False
-        Print the metadata as a Rich table while returning the dictionary.
 
     Returns
     -------
@@ -2316,22 +2367,10 @@ def probe(path: Union[str, Path], *, verbose: bool = False) -> Dict[str, Any]:
                 "size": (width, height),
             }
 
-    if verbose:
-        from rich.console import Console
-        from rich.table import Table
-
-        table = Table(title=f"Media Information: {files.name(p)}")
-        table.add_column("Property", style="cyan", no_wrap=True)
-        table.add_column("Value", style="green")
-        for key, val in result.items():
-            label = str(key).replace("_", " ").title()
-            table.add_row(label, str(val))
-        Console().print(table)
-
     return result
 
 # =========================================================================
-# 2. Format Conversions (to_array, to_tensor, to_pil)
+# 2. Format Conversions (to_array, to_pil)
 # =========================================================================
 
 def to_array(image: Any) -> np.ndarray:
@@ -2373,57 +2412,6 @@ def to_array(image: Any) -> np.ndarray:
         return arr
 
     raise TypeError(f"Unsupported image type for to_array: {type(image)}")
-
-
-def to_tensor(image: Any, normalize: bool = True) -> Any:
-    """Convert supported image data to a CHW PyTorch tensor.
-
-    Parameters
-    ----------
-    image : PIL image, numpy.ndarray, LazyImage, or torch.Tensor
-        Input image representation.
-    normalize : bool
-        Scale uint8 pixels to floating-point values in 0-1.
-
-    Returns
-    -------
-    torch.Tensor
-        CHW tensor.
-
-    Raises
-    ------
-    ImportError
-        PyTorch is unavailable.
-TypeError
-        Image representation is unsupported."""
-    torch = _optional_torch(required=True)
-
-    if isinstance(image, LazyImage):
-        tensor = image.to_tensor(cache=False)
-        if normalize and tensor.dtype == torch.uint8:
-            tensor = tensor.to(torch.float32) / 255.0
-        return tensor
-
-    if isinstance(image, torch.Tensor):
-        tensor = image.detach().clone()
-    elif isinstance(image, Image.Image):
-        arr = np.array(image)
-        tensor = torch.from_numpy(arr)
-        if arr.ndim == 2:
-            tensor = tensor.unsqueeze(-1)
-        tensor = tensor.permute(2, 0, 1)
-    elif isinstance(image, np.ndarray):
-        arr = image
-        if arr.ndim == 2:
-            arr = np.expand_dims(arr, axis=-1)
-        tensor = torch.from_numpy(arr).permute(2, 0, 1)
-    else:
-        raise TypeError(f"Unsupported image type for to_tensor: {type(image)}")
-
-    if normalize and tensor.dtype == torch.uint8:
-        tensor = tensor.to(torch.float32) / 255.0
-
-    return tensor
 
 
 def to_pil(image: Any) -> Image.Image:
@@ -2472,7 +2460,7 @@ LAZY_OPS = {"resize", "convert", "rotate", "transpose", "filter", "point", "quan
 for attr in dir(Image.Image):
     if attr.startswith("_") or not callable(getattr(Image.Image, attr)):
         continue
-    if attr in ["crop", "show", "save", "load", "copy", "thumbnail", "tobytes"]:
+    if attr in ["crop", "show", "save", "load", "copy", "thumbnail", "tobytes", "transform"]:
         continue
 
     def _make_forwarder(name):
@@ -2503,13 +2491,30 @@ for attr in dir(Image.Image):
     setattr(LazyImage, attr, _make_forwarder(attr))
 
 # Override specific terminal methods for consistency
-def _lazy_show(self, *args, **kwargs):
-    return self.to_pil(cache=False).show(*args, **kwargs)
+def _lazy_show(
+    self,
+    title: Optional[str] = "Image",
+    *,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
+    backend: str = "auto",
+    figsize: Tuple[int, int] = (10, 10),
+) -> None:
+    """Display the lazy image using Klygo's visual viewer without caching pixels."""
+    from klygo import visual
+    visual.show_image(
+        self.to_pil(cache=False),
+        title="Image" if title is None else title,
+        width=width,
+        height=height,
+        backend=backend,
+        figsize=figsize,
+    )
 
-def _lazy_save(self, *args, **kwargs):
-    return self.to_pil(cache=False).save(*args, **kwargs)
+def _lazy_save(self, *args, **kwargs) -> None:
+    self.to_pil(cache=False).save(*args, **kwargs)
 
-def _lazy_copy(self):
+def _lazy_copy(self) -> "LazyImage":
     return LazyImage(self)
 
 setattr(LazyImage, "show", _lazy_show)

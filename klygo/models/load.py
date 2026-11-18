@@ -16,6 +16,9 @@ from .detection.base import Detector
 __all__ = ["load", "export", "configure", "set_backend", "get_backend"]
 
 CLASS_MAPPING = {
+    "DFineDetect": "klygo.models.detection.dfine.DFineDetect",
+    "klygo.models.detection.DFineDetect": "klygo.models.detection.dfine.DFineDetect",
+    "klygo.models.detection.dfine.DFineDetect": "klygo.models.detection.dfine.DFineDetect",
     "Detector": Detector,
     "GroundingDinoDetect": "klygo.models.detection.grounding_dino.GroundingDinoDetect",
     "YOLODetect": "klygo.models.detection.yolo.YOLODetect",
@@ -286,7 +289,7 @@ def export(
     *,
     overwrite: bool = False,
     **kwargs,
-) -> os.PathLike[str]:
+) -> None:
     """Export a registered model configuration without loading its weights.
 
     Parameters
@@ -302,8 +305,7 @@ def export(
 
     Returns
     -------
-    pathlib.Path
-        Path to the exported configuration file.
+    None
 
     Raises
     ------
@@ -330,7 +332,6 @@ def export(
         overwrite=overwrite,
         verbose=False,
     )
-    return output_path
 
 def configure(
     model_id: str,

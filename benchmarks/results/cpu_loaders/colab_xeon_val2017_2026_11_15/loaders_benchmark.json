@@ -1,0 +1,122 @@
+[
+  {
+    "operation": "datasets.load (custom:/content/coco_val2017_yolo, 5000 imgs)",
+    "median_ms": 7810.8282,
+    "status": "passed"
+  },
+  {
+    "operation": "media.load_eager (custom:/content/coco_val2017_yolo, 5000 imgs)",
+    "median_ms": 326.7664,
+    "status": "passed"
+  },
+  {
+    "operation": "media.load_stream (custom:/content/coco_val2017_yolo, 5000 imgs)",
+    "median_ms": 340.6544,
+    "status": "passed"
+  },
+  {
+    "operation": "preprocessing.compose (custom:/content/coco_val2017_yolo, 32 imgs)",
+    "median_ms": 0.2416,
+    "status": "passed"
+  },
+  {
+    "operation": "datasets.load_scaled (5000 imgs)",
+    "median_ms": 7922.0788,
+    "status": "passed"
+  },
+  {
+    "operation": "media.load_indexed (5000 imgs)",
+    "median_ms": 192.2478,
+    "status": "passed"
+  },
+  {
+    "operation": "media.strided_decode (stride=32, 156 imgs)",
+    "median_ms": 790.8842,
+    "status": "passed"
+  },
+  {
+    "operation": "media.random_jump_numpy (64/5000 imgs)",
+    "median_ms": 251.2747,
+    "status": "passed"
+  },
+  {
+    "operation": "media.random_jump_pil (64/5000 imgs)",
+    "median_ms": 239.82,
+    "status": "passed"
+  },
+  {
+    "operation": "detections.random_jump_index (64/5000)",
+    "median_ms": 0.0113,
+    "status": "passed"
+  },
+  {
+    "operation": "detections.random_jump_image_read (64/5000)",
+    "median_ms": 22.0376,
+    "status": "passed"
+  },
+  {
+    "operation": "media.video_load_indexed (120 frames)",
+    "median_ms": 4.4794,
+    "status": "passed"
+  },
+  {
+    "operation": "media.video_random_jump_array (32/120)",
+    "median_ms": 1027.2384,
+    "status": "passed"
+  },
+  {
+    "operation": "media.video_random_jump_pil (32/120)",
+    "median_ms": 1023.5332,
+    "status": "passed"
+  },
+  {
+    "operation": "detections.export_yolo (500 imgs)",
+    "median_ms": 1096.9918,
+    "status": "passed"
+  },
+  {
+    "operation": "datasets.partition_yolo (500 imgs)",
+    "median_ms": 908.1938,
+    "status": "passed"
+  },
+  {
+    "operation": "archive.compress_zip (500 imgs)",
+    "median_ms": 946.5946,
+    "status": "passed"
+  },
+  {
+    "operation": "archive.extract_zip (500 imgs)",
+    "median_ms": 337.3182,
+    "status": "passed"
+  },
+  {
+    "operation": "files.save_json (5000 frames)",
+    "median_ms": 913.8758,
+    "status": "passed"
+  },
+  {
+    "operation": "files.load_json (5000 frames)",
+    "median_ms": 191.4489,
+    "status": "passed"
+  },
+  {
+    "operation": "media.info",
+    "median_ms": 0.116,
+    "status": "passed"
+  },
+  {
+    "operation": "media.save_images_letterbox",
+    "median_ms": 81.2563,
+    "status": "passed"
+  },
+  {
+    "operation": "visual.compare_images",
+    "median_ms": 150.0956,
+    "status": "passed"
+  },
+  {
+    "operation": "utils.tabulate",
+    "median_ms": 3.7029,
+    "status": "passed"
+  }
+]

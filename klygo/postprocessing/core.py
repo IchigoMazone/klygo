@@ -110,7 +110,13 @@ def compose(*operations: Callable[[Any], None]) -> Pipeline:
 
 
 def custom(function: Callable[[Any], None], name: Optional[str] = None) -> Operation:
-    """Wrap a custom in-place operation."""
+    """Wrap a custom in-place operation.
+
+    Raises
+    ------
+    TypeError
+        If ``function`` is not callable.
+    """
     if not callable(function):
         raise TypeError("function must be callable")
     return Operation(name or getattr(function, "__name__", "custom"), function)

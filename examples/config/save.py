@@ -9,11 +9,12 @@ with TemporaryDirectory() as directory:
     root = files.path(directory)
 
     settings_path = root / "settings.yaml"
-    assert config.save(
+    config.save(
         settings_path,
         {"debug": False},
         verbose=False,
-    ) == settings_path
+    )
+    assert files.is_file(settings_path)
 
     flags = models.flags(model=False, processor=True, post=True)
     schema = models.metadata(flags)

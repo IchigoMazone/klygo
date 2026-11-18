@@ -11,6 +11,8 @@ from klygo import media, files
 with tempfile.TemporaryDirectory() as temporary:
     root = files.path(temporary)
     image = Image.new("RGB", (32, 24), "red")
-    source = media.save(root / "source.png", image)
-    duplicate = media.copy(source, root / "copy.png")
-    print(media.probe(duplicate)["size"])
+    source = root / "source.png"
+    media.save(source, image)
+    duplicate = root / "copy.png"
+    media.copy(source, duplicate)
+    print(media.info(duplicate)["size"])

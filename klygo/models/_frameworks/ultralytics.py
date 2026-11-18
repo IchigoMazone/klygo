@@ -14,14 +14,23 @@ except ImportError as exc:
     ) from exc
 
 
+_EMPTY_BOXES = np.empty((0, 4), dtype=np.float64)
+_EMPTY_SCORES = np.empty((0,), dtype=np.float64)
+_EMPTY_CLASS_IDS = np.empty((0,), dtype=np.int32)
+
+
 def format_results(ultra_results: Any) -> List[Dict[str, Any]]:
     """Extract normalized ``boxes``, ``scores``, ``labels``, and ``class_ids`` from Ultralytics Results."""
     raw_list = []
     if ultra_results is not None:
         for res in ultra_results:
-            boxes_data, scores_data, labels_data, class_ids = [], [], [], []
+            boxes_data: Any = _EMPTY_BOXES
+            scores_data: Any = _EMPTY_SCORES
+            class_ids: Any = _EMPTY_CLASS_IDS
+            labels_data: List[str] = []
             boxes = getattr(res, "boxes", None)
             if boxes is not None and len(boxes):
+                res_names = res.names
                 if hasattr(boxes, "data") and boxes.data.shape[-1] >= 6:
                     # Copy the contiguous detection payload to the host once.
                     # Separate ``xyxy``, ``conf``, and ``cls`` transfers force
@@ -30,19 +39,21 @@ def format_results(ultra_results: Any) -> List[Dict[str, Any]]:
                     boxes_data = packed[:, :4]
                     scores_data = packed[:, 4]
                     class_ids = packed[:, 5].astype(np.int32, copy=False)
-                    labels_data = [res.names.get(int(class_id), str(int(class_id))) for class_id in class_ids]
+                    labels_data = [res_names.get(cid, str(cid)) for cid in class_ids.tolist()]
                 elif hasattr(boxes, "xyxy"):
                     boxes_data = boxes.xyxy.detach().cpu().numpy()
                     scores_data = boxes.conf.detach().cpu().numpy()
                     class_ids = boxes.cls.detach().to(dtype=torch_runtime.torch.int32).cpu().numpy()
-                    labels_data = [res.names.get(int(class_id), str(int(class_id))) for class_id in class_ids]
+                    labels_data = [res_names.get(cid, str(cid)) for cid in class_ids.tolist()]
                 else:
+                    boxes_list, scores_list, cids_list = [], [], []
                     for box in boxes:
-                        boxes_data.append(box.xyxy[0].tolist())
-                        scores_data.append(float(box.conf[0].item()))
+                        boxes_list.append(box.xyxy[0].tolist())
+                        scores_list.append(float(box.conf[0].item()))
                         class_id = int(box.cls[0].item())
-                        class_ids.append(class_id)
-                        labels_data.append(res.names.get(class_id, str(class_id)))
+                        cids_list.append(class_id)
+                        labels_data.append(res_names.get(class_id, str(class_id)))
+                    boxes_data, scores_data, class_ids = boxes_list, scores_list, cids_list
             raw_list.append(
                 {
                     "boxes": boxes_data,
@@ -96,7 +107,7 @@ def predict_prepared(
     ):
         return None
     if options and any(
-        hasattr(args, name) and not _option_matches(getattr(args, name), value)
+        (not hasattr(args, name)) or not _option_matches(getattr(args, name), value)
         for name, value in options.items()
         if name != "verbose"
     ):
@@ -139,31 +150,12 @@ def predict_prepared(
 
 
 def optimize_model(model: Any) -> Any:
-    """Reuse an initialized predictor for decoded image batches transparently.
+    """Return ``model`` untouched without monkey-patching ``model.predict``.
 
-    The concrete detector continues to call the public Ultralytics model API.
-    Unsupported sources, streaming calls, changed options, and custom predictors
-    fall back to the original ``predict`` implementation.
+    Upstream Ultralytics ``model.predict`` / ``model(...)`` already reuses its
+    initialized predictor across compatible calls while preserving argument
+    validation, ``setup_source``, callbacks, and caller-owned method identity.
     """
-    if model is None or getattr(model, "_klygo_predict_optimized", False):
-        return model
-
-    original_predict = getattr(model, "predict", None)
-    if not callable(original_predict):
-        return model
-
-    def optimized_predict(source=None, stream=False, predictor=None, **kwargs):
-        if predictor is None and not stream:
-            prepared = predict_prepared(model, source, options=kwargs)
-            if prepared is not None:
-                return prepared
-        call_options = dict(kwargs)
-        if predictor is not None:
-            call_options["predictor"] = predictor
-        return original_predict(source=source, stream=stream, **call_options)
-
-    model.predict = optimized_predict
-    model._klygo_predict_optimized = True
     return model
 
 # Historical adapter exports share the same runtime implementations.

@@ -194,7 +194,7 @@ class TestPredictionLifecycle(unittest.TestCase):
         self.model(self.image, prompt="dog", threshold=.6, verbose=False)
         before = deepcopy(self.model.predict_config)
         names = deepcopy(self.model.names)
-        report = self.model.benchmark([self.image] * 2, threshold=.8, iterations=3, warmup=1, verbose=False)
+        report = self.model.benchmark([self.image] * 2, threshold=.8, iterations=3, warmup=1)
         self.assertEqual(report["images_per_iteration"], 2)
         self.assertEqual(report["predict_config"]["threshold"], .8)
         self.assertIn("media resolution excluded", report["measurement_scope"])
@@ -203,7 +203,7 @@ class TestPredictionLifecycle(unittest.TestCase):
         self.assertEqual(self.model.names, names)
         self.model.fail_at = len(self.model.calls) + 1
         with self.assertRaises(RuntimeError):
-            self.model.benchmark(self.image, prompt="cat", warmup=1, iterations=1, verbose=False)
+            self.model.benchmark(self.image, prompt="cat", warmup=1, iterations=1)
         self.assertEqual(self.model.predict_config, before)
         self.assertEqual(self.model.names, names)
 
@@ -212,7 +212,7 @@ class TestPredictionLifecycle(unittest.TestCase):
                        {"warmup": 1.5}, {"stream": True}, {"workers": 2},
                        {"prefetch": 2}, {"num_runs": 2}):
             with self.subTest(kwargs=kwargs), self.assertRaises((ValueError, TypeError)):
-                self.model.benchmark(self.image, verbose=False, **kwargs)
+                self.model.benchmark(self.image, **kwargs)
 
     def test_info_device_dtype_read_only(self):
         self.assertEqual(self.model.device, "cpu")
@@ -220,10 +220,9 @@ class TestPredictionLifecycle(unittest.TestCase):
         for attribute in ("device", "dtype", "predict_config"):
             with self.assertRaises(AttributeError):
                 setattr(self.model, attribute, None)
-        output = StringIO()
-        with redirect_stdout(output):
-            self.model.info()
-        self.assertIn("Predict Configuration", output.getvalue())
+        info = self.model.info()
+        self.assertIsInstance(info, dict)
+        self.assertIn("predict_config", info)
 
     def test_forward_count_validation(self):
         with patch.object(self.model, "forward", return_value=[]), self.assertRaisesRegex(ValueError, "exactly one"):
@@ -416,13 +415,13 @@ class TestWrapperLifecycle(unittest.TestCase):
         model(self.image, verbose=False)
         self.assertEqual(model.model.changes, [["dog", "cat"]])
         before = model.predict_config
-        model.benchmark(self.image, prompt="bird", iterations=2, warmup=1, verbose=False)
+        model.benchmark(self.image, prompt="bird", iterations=2, warmup=1)
         self.assertEqual(model.predict_config, before)
         self.assertEqual(model.model.names, {0: "dog", 1: "cat"})
         self.assertEqual(model.model.changes[-2:], [["bird"], ["dog", "cat"]])
         model.model.fail = True
         with self.assertRaises(RuntimeError):
-            model.benchmark(self.image, prompt="fish", iterations=1, warmup=0, verbose=False)
+            model.benchmark(self.image, prompt="fish", iterations=1, warmup=0)
         self.assertEqual(model.model.names, {0: "dog", 1: "cat"})
         model.model.fail = False
         model(self.image, prompt=None, verbose=False)

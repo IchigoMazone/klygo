@@ -9,7 +9,7 @@ Temporarily silence Python warnings and noisy AI framework loggers as either a `
 ## Contract
 
 When entered as a context manager (`with models.suppress_warnings():`) or applied as a decorator (`@models.suppress_warnings`), this helper:
-1. Calls [`models.suppress_ai_warnings()`](suppress_ai_warnings.md) to set quiet environment flags and `ERROR`-level loggers for Hugging Face, Transformers, Accelerate, and PyTorch.
+1. Sets quiet environment flags and `ERROR`-level loggers for Hugging Face, Transformers, Accelerate, and PyTorch.
 2. Enters `warnings.catch_warnings()` and applies `warnings.filterwarnings("ignore")`.
 3. Restores the previous warning filter state cleanly upon exiting the `with` block or returning from the decorated function, even if an exception is raised.
 

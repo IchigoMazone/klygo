@@ -4,9 +4,11 @@ from tempfile import TemporaryDirectory
 from klygo import files
 
 with TemporaryDirectory() as directory:
-    source = files.path(directory) / "draft.txt"
+    root = files.path(directory)
+    source = root / "draft.txt"
     files.save(source, "done", verbose=False)
-    renamed = files.rename(source, "final.txt")
+    renamed = root / "final.txt"
+    files.rename(source, "final.txt")
     print(renamed)
 
 
@@ -18,4 +20,5 @@ with TemporaryDirectory() as directory:
     files.save(source, "item", verbose=False)
     destination = root / "nested" / "b.txt"
     files.mkdir(files.parent(destination))
-    assert files.rename(source, destination) == destination
+    files.rename(source, destination)
+    assert files.is_file(destination)

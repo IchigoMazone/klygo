@@ -1,8 +1,9 @@
 """Executable example for klygo.files.info."""
 
-from klygo import files
+from klygo import files, utils
 
-metadata = files.info("README.md", verbose=True)
+metadata = files.info("README.md")
+utils.tabulate(metadata, title="File information")
 print(metadata["name"], metadata["human_size"])
 
 
@@ -10,7 +11,3 @@ print(metadata["name"], metadata["human_size"])
 assert metadata["is_file"] is True
 assert metadata["size"] > 0
 assert "hash" not in metadata
-
-# Disable display when only the dictionary is needed.
-quiet = files.info("README.md")
-assert quiet == metadata

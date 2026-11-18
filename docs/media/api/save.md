@@ -48,14 +48,14 @@ with tempfile.TemporaryDirectory() as temporary:
     # Save a PIL Image into a nested directory
     pil_path = media.save(root / "nested" / "red.png", Image.new("RGB", (32, 24), "red"))
     assert files.is_file(pil_path)
-    assert media.probe(pil_path)["size"] == (32, 24)
+    assert media.info(pil_path)["size"] == (32, 24)
 
     # Save a cropped LazyImage and replace an existing file with overwrite=True
     lazy_crop = media.LazyImage(pil_path).lazy_crop((0, 0, 16, 12))
     media.save(pil_path, lazy_crop, overwrite=True)
-    assert media.probe(pil_path)["size"] == (16, 12)
+    assert media.info(pil_path)["size"] == (16, 12)
 
     # Save a NumPy array
     arr_path = media.save(root / "array.png", np.zeros((20, 30, 3), dtype=np.uint8))
-    print(media.probe(pil_path)["size"], media.probe(arr_path)["size"])
+    print(media.info(pil_path)["size"], media.info(arr_path)["size"])
 ```

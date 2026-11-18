@@ -4,7 +4,6 @@
 datasets.info(
     source: str | os.PathLike[str],
     format: str = "yolo",
-    verbose: bool = False,
 ) -> dict[str, Any]
 ```
 
@@ -14,13 +13,12 @@ Inspect structural statistics, class metadata, and split counts for a YOLO datas
 
 Reads `data.yaml`, scans the `images` and `labels` directories (extracting to an isolated temporary workspace when `source` is a supported archive), and counts labeled and unlabeled images across `train`, `val`, `test`, or `raw` splits.
 
-When `verbose=True`, prints a formatted Rich summary table to the console before returning the statistics dictionary.
+Use `utils.tabulate(stats)` when you want to print the returned statistics dictionary as a formatted Rich table.
 
 ## Parameters
 
 - `source`: `str | os.PathLike[str]` — dataset directory or supported archive containing `data.yaml` and `images/`.
 - `format`: `str`, default `"yolo"` — dataset annotation format to inspect. Currently only `"yolo"` is supported.
-- `verbose`: `bool`, default `False` — print the dataset statistics as a Rich table while returning the dictionary.
 
 ## Returns
 
@@ -71,7 +69,7 @@ with TemporaryDirectory() as directory:
         verbose=False,
     )
 
-    stats = datasets.info(root, format="yolo", verbose=False)
+    stats = datasets.info(root, format="yolo")
     assert stats["classes"] == ["apple", "banana"]
     assert stats["total_images"] == 1
     assert stats["splits"] == {"train": 1}

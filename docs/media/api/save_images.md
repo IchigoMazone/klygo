@@ -1,7 +1,7 @@
 # `media.save_images`
 
 ```python
-media.save_images(output_dir, images, prefix='frame', extension='.jpg', overwrite=False, verbose=False)
+media.save_images(output_dir, images, prefix='frame', extension='.jpg', overwrite=False, verbose=False, *, size=None)
 ```
 
 Save an iterable of images or lazy frames to sequentially numbered files inside a directory.
@@ -23,7 +23,7 @@ Because each item is saved sequentially as it is yielded, `images` can be [`Medi
 
 ## Returns
 
-`list[pathlib.Path]` — ordered list of paths written to disk. Returns an empty list if `images` is empty.
+`None` — saves files without returning paths.
 
 ## Errors and edge cases
 
@@ -46,12 +46,13 @@ with tempfile.TemporaryDirectory() as temporary:
     root = files.path(temporary)
     frames = [Image.new("RGB", (32, 24), color) for color in ("red", "green", "blue")]
 
-    paths = media.save_images(
+    media.save_images(
         root / "frames",
         frames,
         prefix="sample",
         extension="png",
     )
+    paths = files.find(root / "frames", recursive=False)
     names = [files.name(p) for p in paths]
     assert names == ["sample_000001.png", "sample_000002.png", "sample_000003.png"]
 
@@ -60,3 +61,14 @@ with tempfile.TemporaryDirectory() as temporary:
     assert len(reloaded) == 3 and reloaded[0].size == (32, 24)
     print(names)
 ```
+
+## Letterbox output size
+
+Pass `size=(width, height)` to preserve each image's aspect ratio while centering
+it on a gray (114, 114, 114) canvas. Different source dimensions then produce
+uniform output dimensions. Processing remains sequential and source pixels are
+unchanged. With size=None, images keep their sizes and video frames must all
+match the first frame. Common video codecs require even output dimensions.
+The size must be a pair of positive integers; invalid sizes fail before consuming
+the input iterable. Image export normalizes resized inputs through media.to_pil
+to RGB. File names remain known from output_dir/prefix/extension or output_path.

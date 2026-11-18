@@ -528,7 +528,18 @@ def materialize(image: Any, output: str = "pil", cache: bool = False) -> Any:
         if output in ("array", "numpy"):
             return image.to_array(cache=cache)
         if output == "tensor":
-            return image.to_tensor(cache=cache)
+            try:
+                import torch
+            except ImportError as exc:
+                raise ImportError("PyTorch is required for tensor output") from exc
+            value = image._execute_preprocessing(cache=cache)
+            if isinstance(value, torch.Tensor):
+                return value
+            array = np.array(_to_array(value), copy=True, order="C")
+            tensor = torch.from_numpy(array)
+            if tensor.ndim == 3 and tensor.shape[-1] in (1, 3, 4):
+                tensor = tensor.permute(2, 0, 1)
+            return tensor
         if output == "native":
             return image._execute_preprocessing(cache=cache)
         raise ValueError("output must be 'pil', 'array', 'tensor', or 'native'")

@@ -7,12 +7,17 @@ from copy import deepcopy
 from hashlib import sha1
 import math
 from numbers import Integral
+import random
 import sys
 import uuid
 import weakref
-from typing import Any, Callable, Iterable, Iterator, Mapping, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Mapping, Optional, Sequence
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 import numpy as np
+from klygo.utils.progress import _iter_progress
 
 from klygo import files, validators
 
@@ -731,6 +736,19 @@ class Detection:
     scores = property(lambda self: self._scores.tolist(), doc="Scores in current order.")
     labels = property(lambda self: list(self._labels), doc="Labels in current order.")
 
+    def to_arrays(self) -> dict[str, Any]:
+        """Copy annotation arrays on their current CPU or CUDA device.
+
+        Returns
+        -------
+        dict
+            Independent boxes (N, 4), scores (N,), class_ids (N,), and a Python
+            labels list. Arrays retain device and dtype. No pixels are decoded
+            and no CUDA annotation arrays are transferred to the CPU.
+        """
+        return {"boxes": self._xyxy.copy(), "scores": self._scores.copy(),
+                "class_ids": self._class_ids.copy(), "labels": list(self._labels)}
+
     @property
     def class_ids(self) -> list[int]:
         """Class IDs in current order."""
@@ -1371,7 +1389,7 @@ class Detection:
         self._slice_keep([], "clear_boxes")
         return self
 
-    def filter(self, predicate: Callable[[Box], bool]) -> "Detection":
+    def where(self, predicate: Callable[[Box], bool]) -> "Detection":
         """Remove boxes rejected by a predicate."""
         if not callable(predicate):
             raise TypeError("predicate must be callable")
@@ -1404,6 +1422,15 @@ class Detection:
         blocked = {_label(label) for label in labels}
         keep = [i for i, lbl in enumerate(self._labels) if lbl not in blocked]
         self._slice_keep(keep, "drop_labels")
+        return self
+
+    def keep(self, labels: Iterable[str]) -> "Detection":
+        """Keep only boxes with matching labels."""
+        if isinstance(labels, str):
+            labels = (labels,)
+        allowed = {_label(label) for label in labels}
+        keep_indices = [i for i, lbl in enumerate(self._labels) if lbl in allowed]
+        self._slice_keep(keep_indices, "keep_labels")
         return self
 
     def relabel(self, mapping: Mapping[str, str]) -> "Detection":
@@ -1439,6 +1466,94 @@ class Detection:
         self._label_ids = label_ids
         if self._owner is not None:
             self._owner._changed(self, "relabel", {"count": len(self._labels)})
+        return self
+
+    def combine(
+        self,
+        other: "Detection",
+        method: str = "union",
+        iou: float = 0.5,
+    ) -> "Detection":
+        """Combine same-label boxes from the same source frame in place.
+
+        Parameters
+        ----------
+        other : Detection
+            Detection with the same identity and image_size.
+        method : str, default='union'
+            One of union, intersection, average, weighted, first, second, append.
+        iou : float, default=0.5
+            Minimum IoU for greedy one-to-one same-label matching. Append does
+            not match boxes. At zero, matching still requires positive overlap.
+
+        Returns
+        -------
+        Detection
+            This instance, with unmatched boxes retained from both inputs.
+
+        Raises
+        ------
+        TypeError
+            The input or argument types are unsupported.
+        ValueError
+            Source identity, image_size, method, or IoU is invalid.
+
+        Notes
+        -----
+        Matched boxes receive a new UID, the higher score, and combination
+        metadata. Their previous metadata and track IDs are not preserved.
+        Intersection changes matched geometry; it retains unmatched boxes.
+        """
+        validators.validate_type(other, Detection, "other")
+        method_mode, iou_threshold = _validate_combine_args(method, iou)
+        _validate_combine_source(self, other)
+        boxes_a = list(self)
+        boxes_b = list(other)
+        if not boxes_a and not boxes_b:
+            return self
+
+        pairs = [] if method_mode == "append" else _match_combine_pairs(boxes_a, boxes_b, iou_threshold)
+        used_a: set[int] = set()
+        used_b: set[int] = set()
+        combined_boxes: list[Box] = []
+        next_uid = (max(int(u) for u in self._uids.tolist()) + 1) if len(self._uids) else 0
+
+        for pos_a, pos_b in pairs:
+            box_a, box_b = boxes_a[pos_a], boxes_b[pos_b]
+            coords = _combine_pair_coords(box_a.box, box_b.box, box_a.score, box_b.score, method_mode)
+            if coords is None:
+                continue
+            used_a.add(pos_a)
+            used_b.add(pos_b)
+            combined_boxes.append(
+                Box(
+                    uid=next_uid,
+                    label=box_a.label,
+                    score=max(box_a.score, box_b.score),
+                    box=coords,
+                    metadata={"combined": True, "method": method_mode},
+                )
+            )
+            next_uid += 1
+
+        final_boxes = [box for i, box in enumerate(boxes_a) if i not in used_a]
+        final_boxes.extend(combined_boxes)
+        for j, box in enumerate(boxes_b):
+            if j in used_b:
+                continue
+            final_boxes.append(
+                Box(
+                    uid=next_uid,
+                    label=box.label,
+                    score=box.score,
+                    box=box.box,
+                    track_id=box.track_id,
+                    metadata=dict(box.metadata) if box.metadata else None,
+                )
+            )
+            next_uid += 1
+
+        self._commit(final_boxes, "combine")
         return self
 
     def _validate_precision(self, dtype: int) -> int:
@@ -1508,10 +1623,40 @@ class Detection:
                 self._source = item; return item
         raise RuntimeError("Cannot access frame pixels: source frame is unavailable")
 
-    def _render(self, mode: str = "default", *, show_scores: bool = True,
-                line_width: Optional[int] = None, font_size: Optional[int] = None) -> Any:
+    @property
+    def image(self) -> "Image.Image":
+        """Return an independent PIL copy of this frame's source image.
+
+        Returns
+        -------
+        PIL.Image.Image
+            Unannotated source pixels, resolved lazily from source_path when
+            no in-memory source is available. Video sources use frame_index.
+
+        Raises
+        ------
+        RuntimeError
+            No source pixels or source path are available for this frame.
+        FileNotFoundError
+            The source path no longer exists.
+        """
+        from klygo import media
+        if self._source is not None:
+            return media.to_pil(self._source).copy()
+        if self.source_path is None:
+            raise RuntimeError("Cannot access frame pixels: source image is unavailable")
+        with media.load(self.source_path, indexed=True, verbose=False) as frames:
+            position = self.frame_index if frames.source_type == "video" else 0
+            if position >= len(frames):
+                raise RuntimeError("Cannot access frame pixels: source frame is unavailable")
+            return media.to_pil(frames[position]).copy()
+
+    def _render(self, mode: str = "default", *, show_labels: bool = True,
+                show_scores: bool = True, line_width: Optional[int] = None,
+                font_size: Optional[int] = None) -> Any:
         if mode not in {"default", "index", "uid"}:
             raise ValueError("mode must be 'default', 'index', or 'uid'")
+        validators.validate_type(show_labels, bool, "show_labels")
         from klygo import visual
         labels = (
             self.labels
@@ -1523,36 +1668,31 @@ class Detection:
         return visual.draw_bboxes(
             self._resolve_source(), self.boxes, labels=labels, scores=self.scores,
             line_width=line_width, font_size=font_size,
-            show_labels=True, show_scores=show_scores,
+            show_labels=show_labels, show_scores=show_scores,
         )
 
-    def show(self, mode: str = "default", *, show_scores: bool = True,
-             line_width: Optional[int] = None, font_size: Optional[int] = None,
-             width: Optional[int] = None, title: str = "Detection", backend: str = "auto") -> None:
-        """Display all boxes using default, positional-index, or UID captions."""
-        from klygo import visual
-        annotated = self._render(mode, show_scores=show_scores, line_width=line_width, font_size=font_size)
-        visual.show_image(annotated, title=title, width=width, backend=backend)
-
-    def save(self, output_path: Any, mode: str = "default", *, show_scores: bool = True,
-             line_width: Optional[int] = None, font_size: Optional[int] = None,
-             overwrite: bool = False, verbose: bool = False) -> Any:
+    def save(self, output_path: Any, mode: str = "default", *, show_labels: bool = True,
+             show_scores: bool = True, line_width: Optional[int] = None,
+             font_size: Optional[int] = None, overwrite: bool = False,
+             verbose: bool = False) -> None:
         """Draw this frame's boxes and save the annotated image."""
         from klygo import media
         annotated = self._render(
-            mode, show_scores=show_scores, line_width=line_width, font_size=font_size,
+            mode, show_labels=show_labels, show_scores=show_scores,
+            line_width=line_width, font_size=font_size,
         )
-        return media.save(output_path, annotated, overwrite=overwrite, verbose=verbose)
+        media.save(output_path, annotated, overwrite=overwrite, verbose=verbose)
 
     def preview_box(self, box: Box | Iterable[Any], *, label: Optional[str] = None,
                     score: float = 1.0, show_existing: bool = True,
-                    show_scores: bool = True,
+                    show_labels: bool = True, show_scores: bool = True,
                     preview_color: tuple[int, int, int] = (255, 0, 0),
                     line_width: Optional[int] = None,
                     font_size: Optional[int] = None,
-                    width: Optional[int] = None, title: str = "Box preview",
-                    backend: str = "auto") -> Any:
-        """Display and return a non-mutating preview of a proposed box."""
+                    width: Optional[int] = None, height: Optional[int] = None,
+                    title: str = "Box preview", backend: str = "auto") -> None:
+        """Display a non-mutating preview of a proposed box."""
+        validators.validate_type(show_labels, bool, "show_labels")
         if isinstance(box, Box):
             candidate = box
         else:
@@ -1571,15 +1711,14 @@ class Detection:
             annotated = visual.draw_bboxes(
                 source, self.boxes, labels=self.labels, scores=self.scores,
                 line_width=line_width, font_size=font_size,
-                show_labels=True, show_scores=show_scores,
+                show_labels=show_labels, show_scores=show_scores,
             )
         annotated = visual.draw_bboxes(
             annotated, [candidate.box], labels=[f"[preview] {candidate.label}"],
             scores=[candidate.score], line_width=line_width, font_size=font_size,
-            box_color=preview_color, show_labels=True, show_scores=show_scores,
+            box_color=preview_color, show_labels=show_labels, show_scores=show_scores,
         )
-        visual.show_image(annotated, title=title, width=width, backend=backend)
-        return annotated
+        visual.show_image(annotated, title=title, width=width, height=height, backend=backend)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize annotations without decoding pixels."""
@@ -1720,12 +1859,12 @@ class _PackedIdentities(Sequence[Identity]):
 
     def __getitem__(self, index: int | slice) -> Identity | list[Identity]:
         if isinstance(index, slice):
-            return [self.store.identity(position) for position in range(*index.indices(len(self)))]
-        return self.store.identity(index)
+            return [self.store.identity(self.store.logical_to_physical(position)) for position in range(*index.indices(len(self)))]
+        return self.store.identity(self.store.logical_to_physical(index))
 
     def __iter__(self) -> Iterator[Identity]:
         for position in range(len(self)):
-            yield self.store.identity(position)
+            yield self.store.identity(self.store.logical_to_physical(position))
 
 
 class _PackedDetectionStore:
@@ -1808,9 +1947,19 @@ class _PackedDetectionStore:
         self.overlay_labels: dict[int, set[str]] = {}
         self.cache: weakref.WeakValueDictionary[int, Detection] = weakref.WeakValueDictionary()
         self.overrides: dict[int, Detection] = {}
+        self.permutation: Optional[list[int]] = None
 
     def __len__(self) -> int:
         return len(self.frame_indices)
+
+    def logical_to_physical(self, position: int) -> int:
+        length = len(self)
+        idx = position + length if position < 0 else position
+        if idx < 0 or idx >= length:
+            raise IndexError("list index out of range")
+        if self.permutation is not None:
+            return self.permutation[idx]
+        return idx
 
     def identity(self, position: int) -> Identity:
         source_id = self.common_source_id if self.source_ids is None else self.source_ids[position]
@@ -1955,12 +2104,13 @@ class _PackedFrames:
 
     def __iter__(self) -> Iterator[Detection]:
         for index in range(len(self)):
-            yield self.owner._packed_store.frame(self.owner, index)
+            yield self[index]
 
     def __getitem__(self, index: int | slice) -> Detection | list[Detection]:
         if isinstance(index, slice):
-            return [self.owner._packed_store.frame(self.owner, i) for i in range(*index.indices(len(self)))]
-        return self.owner._packed_store.frame(self.owner, index)
+            return [self[i] for i in range(*index.indices(len(self)))]
+        pos = self.owner._packed_store.logical_to_physical(index)
+        return self.owner._packed_store.frame(self.owner, pos)
 
     def insert(self, index: int, frame: Detection) -> None:
         self.owner._materialize_packed()
@@ -1980,7 +2130,17 @@ class _PackedFrames:
 
     def index(self, frame: Detection) -> int:
         position = frame.__dict__.get("_packed_position")
-        if position is None or self[position] is not frame:
+        if position is None:
+            raise ValueError("frame is not in collection")
+        if self.owner._packed_store.permutation is not None:
+            try:
+                logical_idx = self.owner._packed_store.permutation.index(position)
+            except ValueError:
+                raise ValueError("frame is not in collection")
+            if self[logical_idx] is not frame:
+                raise ValueError("frame is not in collection")
+            return logical_idx
+        if self[position] is not frame:
             raise ValueError("frame is not in collection")
         return position
 
@@ -2079,13 +2239,14 @@ class Detections:
         if self._packed_store is None:
             return
         store = self._packed_store
-        frames = [store.frame(self, index) for index in range(len(store))]
+        frames = [store.frame(self, store.logical_to_physical(index)) for index in range(len(store))]
         self._packed_store = None
         self._frames = frames
         self._identity_map = {frame.identity: frame for frame in frames}
         for frame in frames:
             frame._owner = self
             frame.__dict__.pop("_packed_position", None)
+        self._baseline_identities = tuple(frame.identity for frame in frames)
         self._baseline_set = set(self._baseline_identities)
         self._synchronize_registry()
 
@@ -2528,6 +2689,42 @@ class Detections:
             self._record("unpack", count=len(self))
         return self
 
+    def shuffle(self, seed: Optional[int] = None) -> None:
+        """Shuffle collection frames in place.
+
+        Parameters
+        ----------
+        seed : int or None, default=None
+            Random seed for reproducible permutation. If None, a random
+            permutation is applied using a local random generator.
+
+        Returns
+        -------
+        None
+            The collection is shuffled in place.
+
+        Raises
+        ------
+        TypeError
+            If the collection is an unmaterialized stream, or if seed is invalid.
+        """
+        self._require_materialized("shuffle()")
+        if seed is not None:
+            validators.validate_type(seed, int, "seed")
+        if len(self) <= 1:
+            return
+        rng = random.Random(seed)
+        if self._packed_store is not None:
+            if self._packed_store.permutation is None:
+                self._packed_store.permutation = list(range(len(self._packed_store)))
+            rng.shuffle(self._packed_store.permutation)
+            self._baseline_identities = tuple(self._packed_store.identities)
+        else:
+            rng.shuffle(self._frames)
+            self._identity_map = {frame.identity: frame for frame in self._frames}
+            self._baseline_identities = tuple(frame.identity for frame in self._frames)
+        self._record("shuffle", seed=seed)
+
     def get_frame(self, frame_index: int, *, source_id: Optional[str] = None) -> Detection:
         """Return a frame by stable source identity."""
         self._require_materialized("get_frame()")
@@ -2624,7 +2821,7 @@ class Detections:
         other._require_materialized("merge()")
         self.extend(f._clone() for f in other); self._history[-1]["operation"] = "merge"
 
-    def filter(self, predicate: Callable[[Detection], bool]) -> "Detections":
+    def where(self, predicate: Callable[[Detection], bool]) -> "Detections":
         """Remove frames rejected by a predicate."""
         if not callable(predicate): raise TypeError("predicate must be callable")
         if self._stream_mode:
@@ -2703,6 +2900,26 @@ class Detections:
                     self._identity_map[identity].drop(blocked)
         return self
 
+    def keep(self, labels: Iterable[str]) -> "Detections":
+        """Keep only matching boxes in every frame."""
+        if isinstance(labels, str):
+            labels = (labels,)
+        allowed = {_label(label) for label in labels}
+        if self._stream_mode:
+            def transform(frame: Detection) -> Detection:
+                frame.keep(allowed)
+                return frame
+            self._transform_stream(transform)
+            return self
+        with self._batch("keep_labels"):
+            if self._packed_store is not None:
+                for position in range(len(self)):
+                    self._packed_store.frame(self, position).keep(allowed)
+            else:
+                for frame in self._frames:
+                    frame.keep(allowed)
+        return self
+
     def relabel(self, mapping: Mapping[str, str]) -> "Detections":
         """Rename or merge labels across all frames."""
         if not isinstance(mapping, Mapping):
@@ -2738,6 +2955,74 @@ class Detections:
                 del self._registry[current]
                 self._registry[class_id] = label
                 self._label_ids[label] = class_id
+        return self
+
+    def combine(
+        self,
+        other: "Detections",
+        method: str = "union",
+        iou: float = 0.5,
+        *,
+        verbose: bool = False,
+    ) -> "Detections":
+        """Combine matching source frames in place and append other-only frames.
+
+        Parameters
+        ----------
+        other : Detections
+            Materialized collection aligned by frame identity, not position.
+        method : str, default='union'
+            Box combination method forwarded to Detection.combine.
+        iou : float, default=0.5
+            Minimum IoU for matching same-label boxes.
+
+        verbose : bool, default=False
+            Display progress over input frames, including other-only frames.
+
+        Returns
+        -------
+        Detections
+            This instance. Frames unique to either input are retained.
+
+        Raises
+        ------
+        TypeError
+            Inputs are streaming or have unsupported argument types.
+        ValueError
+            A shared frame has a different image_size, or options are invalid.
+
+        Notes
+        -----
+        All shared frame sizes are checked before combining any boxes.
+        Supports regular and packed collections. The other input is unchanged.
+        """
+        validators.validate_type(verbose, bool, "verbose")
+        validators.validate_type(other, Detections, "other")
+        self._require_materialized("combine()")
+        other._require_materialized("combine()")
+        method_mode, iou_threshold = _validate_combine_args(method, iou)
+        other_by_identity = {frame.identity: frame for frame in other}
+        # Validate every shared frame before any box or history is changed.
+        for frame in self:
+            partner = other_by_identity.get(frame.identity)
+            if partner is not None:
+                _validate_combine_source(frame, partner)
+        extra_frames: list[Detection] = []
+        with self._batch("combine"):
+            if self._packed_store is not None:
+                for position in _iter_progress(range(len(self)), verbose, "Combining frames"):
+                    frame = self._packed_store.frame(self, position)
+                    partner = other_by_identity.pop(frame.identity, None)
+                    if partner is not None:
+                        frame.combine(partner, method=method_mode, iou=iou_threshold)
+            else:
+                for frame in _iter_progress(self._frames, verbose, "Combining frames"):
+                    partner = other_by_identity.pop(frame.identity, None)
+                    if partner is not None:
+                        frame.combine(partner, method=method_mode, iou=iou_threshold)
+            extra_frames = [frame._clone() for frame in _iter_progress(other, verbose, "Appending other-only frames") if frame.identity in other_by_identity]
+        if extra_frames:
+            self.extend(extra_frames)
         return self
 
     def compact(self) -> "Detections":
@@ -2916,57 +3201,103 @@ class Detections:
                 "metadata": deepcopy(self.metadata), "frames": [f.to_dict() for f in self]}
 
     def save_images(self, output_dir: Any, prefix: str = "frame", mode: str = "default", *,
-                    extension: str = ".jpg", show_scores: bool = True,
-                    line_width: Optional[int] = None, font_size: Optional[int] = None,
-                    overwrite: bool = False, verbose: bool = False) -> list[Any]:
-        """Draw boxes and save every frame as a numbered image sequence."""
+                    extension: str = ".jpg", show_labels: bool = True,
+                    show_scores: bool = True, line_width: Optional[int] = None,
+                    font_size: Optional[int] = None, overwrite: bool = False,
+                    verbose: bool = False, size: Optional[tuple[int, int]] = None) -> None:
+        """Save annotated images, optionally letterboxed to size; return None.
+
+        Size is (width, height). Render before letterboxing so boxes and labels
+        scale with the image. Original annotations remain unchanged.
+        """
         if mode not in {"default", "index", "uid"}:
             raise ValueError("mode must be 'default', 'index', or 'uid'")
         from klygo import media
 
         rendered = (
-            frame._render(mode, show_scores=show_scores, line_width=line_width, font_size=font_size)
+            frame._render(mode, show_labels=show_labels, show_scores=show_scores, line_width=line_width, font_size=font_size)
             for frame in self
         )
-        return media.save_images(
+        media.save_images(
             output_dir, rendered, prefix=prefix, extension=extension,
-            overwrite=overwrite, verbose=verbose,
+            overwrite=overwrite, verbose=verbose, size=size,
         )
 
     def save_video(self, output_path: Any, fps: float = 30.0, mode: str = "default", *,
-                   fourcc: str = "mp4v", show_scores: bool = True,
-                   line_width: Optional[int] = None, font_size: Optional[int] = None,
-                   overwrite: bool = False, verbose: bool = False) -> Any:
-        """Draw boxes and encode frames to video with bounded memory usage."""
+                   fourcc: str = "mp4v", show_labels: bool = True,
+                   show_scores: bool = True, line_width: Optional[int] = None,
+                   font_size: Optional[int] = None, overwrite: bool = False,
+                   verbose: bool = False, size: Optional[tuple[int, int]] = None) -> None:
+        """Save annotated video, optionally letterboxed to size; return None.
+
+        Size is (width, height). Render before letterboxing so boxes and labels
+        scale with the image. Without size, all frame dimensions must match.
+        """
         if mode not in {"default", "index", "uid"}:
             raise ValueError("mode must be 'default', 'index', or 'uid'")
         from klygo import media
 
         rendered = (
-            frame._render(mode, show_scores=show_scores, line_width=line_width, font_size=font_size)
+            frame._render(mode, show_labels=show_labels, show_scores=show_scores, line_width=line_width, font_size=font_size)
             for frame in self
         )
-        return media.save_video(
+        media.save_video(
             output_path, rendered, fps=fps, fourcc=fourcc,
-            overwrite=overwrite, verbose=verbose,
+            overwrite=overwrite, verbose=verbose, size=size,
         )
 
-    def export(self, path: str, *, format: str = "yolo", overwrite: bool = False) -> Any:
-        """Export annotations and source images, returning the output path."""
+    def export(
+        self,
+        path: str,
+        *,
+        format: str = "yolo",
+        image: bool = True,
+        images_dir: str = "images",
+        labels_dir: Optional[str] = None,
+        yaml_name: Optional[str] = None,
+        overwrite: bool = False,
+    ) -> None:
+        """Export annotations and optional source images."""
         self._require_materialized("export()")
+        validators.validate_type(image, bool, "image")
+        validators.validate_type(images_dir, str, "images_dir")
+        if not images_dir.strip():
+            raise ValueError("images_dir must be a non-empty string")
+        resolved_labels_dir = ("labels" if image else "pseudo_labels") if labels_dir is None else labels_dir
+        resolved_yaml_name = ("data.yaml" if image else "pseudo.yaml") if yaml_name is None else yaml_name
+        validators.validate_type(resolved_labels_dir, str, "labels_dir")
+        validators.validate_type(resolved_yaml_name, str, "yaml_name")
+        if not resolved_labels_dir.strip():
+            raise ValueError("labels_dir must be a non-empty string")
+        if not resolved_yaml_name.strip():
+            raise ValueError("yaml_name must be a non-empty string")
         format = str(format).lower()
         if format == "json":
-            return files.save(path, self.to_dict(), overwrite=overwrite, verbose=False)
+            files.save(path, self.to_dict(), overwrite=overwrite, verbose=False)
+            return
         if format != "yolo": raise ValueError("format must be 'yolo' or 'json'")
-        if files.exists(path) and not overwrite: raise FileExistsError(f"output path already exists: {path}")
-        if files.exists(path): files.remove(path, missing_ok=True)
-        from klygo import media
 
         output_dir = files.path(path)
-        images_dir = files.join(output_dir, "images")
-        labels_dir = files.join(output_dir, "labels")
-        files.mkdir(images_dir)
-        files.mkdir(labels_dir)
+        labels_root = files.join(output_dir, resolved_labels_dir)
+        yaml_path = files.join(output_dir, resolved_yaml_name)
+        targets = [labels_root, yaml_path]
+        if image:
+            images_root = files.join(output_dir, images_dir)
+            targets.append(images_root)
+
+        for target in targets:
+            if files.exists(target) and not overwrite:
+                raise FileExistsError(f"output path already exists: {target}")
+        if overwrite:
+            for target in targets:
+                files.remove(target, missing_ok=True)
+
+        files.mkdir(output_dir)
+        files.mkdir(labels_root)
+        if image:
+            from klygo import media
+
+            files.mkdir(images_root)
         active = sorted(self.names.items())
         names = {index: label for index, (_class_id, label) in enumerate(active)}
         label_ids = {label: key for key, label in names.items()}
@@ -2975,26 +3306,26 @@ class Detections:
             digest = sha1(f"{frame.source_id}:{frame.frame_index}".encode()).hexdigest()[:10]
             stem = f"frame_{position:06d}_{frame.frame_index}_{digest}"
             label_filename = f"{stem}.txt"
-            image_filename = f"{stem}.jpg"
             xyxy = frame._xyxy
             lines = [
                 f"{label_ids[lbl]} {(row[0]+row[2])/2/width:.6f} {(row[1]+row[3])/2/height:.6f} {(row[2]-row[0])/width:.6f} {(row[3]-row[1])/height:.6f}"
                 for lbl, row in zip(frame._labels, xyxy.tolist())
             ]
-            media.save(
-                files.join(images_dir, image_filename),
-                media.to_pil(frame._resolve_source()).convert("RGB"),
-                overwrite=True,
-                verbose=False,
-            )
+            if image:
+                image_filename = f"{stem}.jpg"
+                media.save(
+                    files.join(images_root, image_filename),
+                    media.to_pil(frame._resolve_source()).convert("RGB"),
+                    overwrite=True,
+                    verbose=False,
+                )
             files.save(
-                files.join(labels_dir, label_filename),
+                files.join(labels_root, label_filename),
                 lines,
                 overwrite=True,
                 verbose=False,
             )
-        files.save(files.join(output_dir, "data.yaml"), {"names": names}, overwrite=True, verbose=False)
-        return output_dir
+        files.save(yaml_path, {"names": names}, overwrite=True, verbose=False)
 
     def transform(self, *operations: Any) -> "Detections":
         """Apply one or more postprocessing operations or a callable pipeline in-place.
@@ -3024,6 +3355,106 @@ class Detections:
         from klygo.postprocessing import compose
         compose(*operations)(self)
         return self
+
+
+_COMBINE_METHODS = ("union", "intersection", "average", "weighted", "first", "second", "append")
+
+
+def _validate_combine_source(first: Detection, second: Detection) -> None:
+    """Require one original-image coordinate system for box combination."""
+    if first.identity != second.identity:
+        raise ValueError("combined detections must have the same frame identity")
+    if first.image_size != second.image_size:
+        raise ValueError("combined detections must have the same image_size")
+
+
+def _validate_combine_args(method: Any, iou: Any) -> tuple[str, float]:
+    """Validate and normalize arguments for ``Detection.combine`` and ``Detections.combine``."""
+    validators.validate_type(method, str, "method")
+    method_mode = method.strip().lower()
+    if method_mode not in _COMBINE_METHODS:
+        raise ValueError(f"method must be one of {_COMBINE_METHODS}")
+    if isinstance(iou, bool) or not isinstance(iou, (int, float)):
+        raise TypeError("iou must be a real number")
+    iou_threshold = float(iou)
+    if not math.isfinite(iou_threshold) or not (0.0 <= iou_threshold <= 1.0):
+        raise ValueError("iou must be between 0.0 and 1.0")
+    return method_mode, iou_threshold
+
+
+def _box_area(coords: tuple[float, float, float, float]) -> float:
+    return max(0.0, coords[2] - coords[0]) * max(0.0, coords[3] - coords[1])
+
+
+def _box_intersection(
+    box_a: tuple[float, float, float, float],
+    box_b: tuple[float, float, float, float],
+) -> float:
+    ix1 = max(box_a[0], box_b[0])
+    iy1 = max(box_a[1], box_b[1])
+    ix2 = min(box_a[2], box_b[2])
+    iy2 = min(box_a[3], box_b[3])
+    if ix2 <= ix1 or iy2 <= iy1:
+        return 0.0
+    return (ix2 - ix1) * (iy2 - iy1)
+
+
+def _match_combine_pairs(
+    boxes_a: Sequence[Box],
+    boxes_b: Sequence[Box],
+    iou_threshold: float,
+) -> list[tuple[int, int]]:
+    """Compute greedy 1-to-1 same-label box pairs meeting ``iou_threshold``."""
+    candidates: list[tuple[float, int, int]] = []
+    for pos_a, box_a in enumerate(boxes_a):
+        coords_a = box_a.box
+        area_a = _box_area(coords_a)
+        for pos_b, box_b in enumerate(boxes_b):
+            if box_a.label != box_b.label:
+                continue
+            coords_b = box_b.box
+            inter = _box_intersection(coords_a, coords_b)
+            union = area_a + _box_area(coords_b) - inter
+            score_iou = (inter / union) if union > 0.0 else 0.0
+            if (score_iou > 0.0) if iou_threshold == 0.0 else (score_iou >= iou_threshold):
+                candidates.append((score_iou, pos_a, pos_b))
+
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    used_a: set[int] = set()
+    used_b: set[int] = set()
+    matched: list[tuple[int, int]] = []
+    for _, pos_a, pos_b in candidates:
+        if pos_a in used_a or pos_b in used_b:
+            continue
+        used_a.add(pos_a)
+        used_b.add(pos_b)
+        matched.append((pos_a, pos_b))
+    return matched
+
+
+def _combine_pair_coords(
+    box_a: tuple[float, float, float, float],
+    box_b: tuple[float, float, float, float],
+    score_a: float,
+    score_b: float,
+    method: str,
+) -> Optional[tuple[float, float, float, float]]:
+    """Merge two XYXY boxes into one box according to ``method``."""
+    if method == "union":
+        return (min(box_a[0], box_b[0]), min(box_a[1], box_b[1]), max(box_a[2], box_b[2]), max(box_a[3], box_b[3]))
+    if method == "intersection":
+        x1, y1, x2, y2 = max(box_a[0], box_b[0]), max(box_a[1], box_b[1]), min(box_a[2], box_b[2]), min(box_a[3], box_b[3])
+        return (x1, y1, x2, y2) if (x2 > x1 and y2 > y1) else None
+    if method == "average":
+        return tuple((a + b) / 2.0 for a, b in zip(box_a, box_b))  # type: ignore[return-value]
+    if method == "weighted":
+        total = score_a + score_b
+        if total <= 0.0:
+            return tuple((a + b) / 2.0 for a, b in zip(box_a, box_b))  # type: ignore[return-value]
+        return tuple((score_a * a + score_b * b) / total for a, b in zip(box_a, box_b))  # type: ignore[return-value]
+    if method == "first":
+        return box_a
+    return box_b
 
 
 def _fast_detection_arrays(
@@ -3071,7 +3502,15 @@ def _fast_detection_arrays(
 def build_detections(images: Sequence[Any], predictions: Sequence[Mapping[str, Any]], *,
                      metadata: Optional[Mapping[str, Any]] = None,
                      names: Optional[Mapping[int, Any] | Sequence[Any]] = None) -> list[Detection]:
-    """Build one frame per image from normalized backend predictions."""
+    """Build one frame per image from normalized backend predictions.
+
+    Raises
+    ------
+    ValueError
+        If ``images`` and ``predictions`` differ in length, or prediction arrays are mismatched.
+    TypeError
+        If any prediction entry is not a mapping.
+    """
     images, predictions, registry = list(images), list(predictions), _names(names)
     if len(images) != len(predictions): raise ValueError("images and predictions must have the same length")
     registry_rev = {value: key for key, value in registry.items()}

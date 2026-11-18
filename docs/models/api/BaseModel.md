@@ -40,7 +40,7 @@ Subclasses must implement three abstract methods:
 - `model.supports(op_name: str) -> bool`: Check whether a method name is implemented and callable.
 - `model.has_flag(name: str) -> bool`: Check whether a parameter group is declared in `self.flags`.
 - `model.methods() -> list[str]`: Return sorted public method names.
-- `model.info() -> None`: Print a formatted Rich table summarizing the model's class, ID, backend, task, state, flags, and parameters.
+- `model.info() -> dict[str, Any]`: Return a dictionary summarizing the model's class, ID, backend, task, state, flags, and parameters (displayable via `utils.tabulate(model.info())`).
 - `model.export(output_path="config.json", overwrite=False) -> pathlib.Path`: Write the resolved Klygo metadata directly to a JSON file and return its path.
 
 ## Returns

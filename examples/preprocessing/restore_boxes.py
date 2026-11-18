@@ -14,7 +14,8 @@ image = Image.new("RGB", (64, 48), (120, 80, 40))
 import tempfile
 from klygo import files
 with tempfile.TemporaryDirectory() as temporary:
-    source = media.save(files.path(temporary) / "input.png", image)
+    source = files.path(temporary) / "input.png"
+    media.save(source, image)
     lazy = media.load(source)[0]
     processed = p.resize((32, 24))(lazy)
     p.materialize(processed, output="pil")

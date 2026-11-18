@@ -52,7 +52,8 @@ with tempfile.TemporaryDirectory() as temporary:
     assert [f.size for f in sampled_imgs] == [(32, 24), (32, 24)]
 
     # Yield every 2nd decoded numpy frame from a video with backend='opencv'
-    video = media.save_video(root / "clip.mp4", frames, fps=4.0)
+    video = root / "clip.mp4"
+    media.save_video(video, frames, fps=4.0)
     sampled_video = list(media.iter_frames(video, sample_rate=2, backend="opencv"))
     assert len(sampled_video) == 2 and sampled_video[0].shape == (24, 32, 3)
     print([f.size for f in sampled_imgs])

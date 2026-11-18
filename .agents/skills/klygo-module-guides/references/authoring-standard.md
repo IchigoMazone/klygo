@@ -2,6 +2,13 @@
 
 ## Source, cross-module reuse, and public API
 
+Apply root `AGENTS.md` Rule 0 and `docs/API_LEVELS.md` before dogfooding. For
+user-facing examples, select the public surface of the module owning the goal
+before building anything from smaller public operations. Every module, including
+`files`, has its own high-level API. Customize only a verified missing capability
+or an explicitly requested low-level example; do not recreate supported dataset,
+inference, matching, mining or export functions under new helper names.
+
 - `klygo/<module>/__init__.py` and its `__all__` define the supported inventory.
 - Every public implementation submodule `klygo/<module>/<submodule>.py` defines its
   own `__all__` listing the symbols it contributes to `klygo.<module>.__all__`.

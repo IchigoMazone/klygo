@@ -241,7 +241,7 @@ def _phash(gray: np.ndarray) -> np.ndarray:
     return coefficients > np.median(coefficients[1:])
 
 
-def perceptual_hash(image: Any = None, method: str = "phash") -> Any:
+def perceptual_hash(image: Any = None, method: str = "phash") -> Metric | str:
     """Measure or prepare the perceptual hash image statistic.
 
     Parameters
@@ -271,7 +271,7 @@ def perceptual_hash(image: Any = None, method: str = "phash") -> Any:
     return metric if image is None else metric(image)
 
 
-def histogram(image: Any = None, channel: Optional[int] = None, bins: int = 256) -> Any:
+def histogram(image: Any = None, channel: Optional[int] = None, bins: int = 256) -> Metric | np.ndarray:
     """Measure or prepare the histogram image statistic.
 
     Parameters
@@ -297,7 +297,7 @@ def histogram(image: Any = None, channel: Optional[int] = None, bins: int = 256)
     return metric if image is None else metric(image)
 
 
-def mean(image: Any = None, channel: Optional[int] = None) -> Any:
+def mean(image: Any = None, channel: Optional[int] = None) -> Metric | float:
     """Measure or prepare the mean image statistic.
 
     Parameters
@@ -316,7 +316,7 @@ def mean(image: Any = None, channel: Optional[int] = None) -> Any:
     return metric if image is None else metric(image)
 
 
-def std(image: Any = None, channel: Optional[int] = None) -> Any:
+def std(image: Any = None, channel: Optional[int] = None) -> Metric | float:
     """Measure or prepare the std image statistic.
 
     Parameters
@@ -335,7 +335,7 @@ def std(image: Any = None, channel: Optional[int] = None) -> Any:
     return metric if image is None else metric(image)
 
 
-def min_max(image: Any = None, channel: Optional[int] = None) -> Any:
+def min_max(image: Any = None, channel: Optional[int] = None) -> Metric | Tuple[float, float]:
     """Measure or prepare the min max image statistic.
 
     Parameters
@@ -360,7 +360,7 @@ def min_max(image: Any = None, channel: Optional[int] = None) -> Any:
     return metric if image is None else metric(image)
 
 
-def percentile(value: float, image: Any = None, channel: Optional[int] = None) -> Any:
+def percentile(value: float, image: Any = None, channel: Optional[int] = None) -> Metric | float:
     """Measure or prepare the percentile image statistic.
 
     Parameters

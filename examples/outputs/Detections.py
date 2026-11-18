@@ -17,3 +17,15 @@ results.save_images(
     mode="index", overwrite=True,
 )
 print(results.to_dict())
+
+other = outputs.Detections([
+    outputs.Detection(
+        [outputs.Box((12, 12, 42, 37), label="object", score=0.8)],
+        source_id=frame.source_id, frame_index=frame.frame_index,
+        image_size=frame.image_size,
+    )
+])
+results.combine(other, method="weighted", iou=0.5)
+print("Combined collection:", results.to_dict())
+
+# Collection combine supports optional verbose=True for frame progress.

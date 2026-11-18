@@ -157,7 +157,7 @@ class GZipBackend(ArchiveBackend):
         matched = bool(re.search(requested, name)) if regex else fnmatch.fnmatch(name, requested)
         return names if matched else []
 
-    def get_info(self, archive_path: Path) -> Dict[str, Any]:
+    def info(self, archive_path: Path) -> Dict[str, Any]:
         """Return normalized metadata for the single GZip stream."""
         archive_size = file_utils.size(archive_path)
         return {
@@ -179,7 +179,7 @@ class GZipBackend(ArchiveBackend):
             "smallest_file": file_utils.stem(archive_path),
         }
 
-    def test(self, archive_path: Path, raise_exception: bool = False) -> bool:
+    def is_valid(self, archive_path: Path, raise_exception: bool = False) -> bool:
         """Decompress the complete stream to verify framing and checksum data."""
         try:
             with gzip.open(archive_path, "rb") as f:

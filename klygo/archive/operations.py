@@ -220,7 +220,7 @@ def split_by_size(
     output_dir: Union[str, Path] = ".",
     overwrite: bool = False,
     verbose: bool = True,
-) -> List[str]:
+) -> None:
     """Split an archive into size-limited archive parts.
 
     Parameters
@@ -238,8 +238,7 @@ def split_by_size(
 
     Returns
     -------
-    list[str]
-        Paths to the generated archive parts.
+    None
 
     Raises
     ------
@@ -253,12 +252,12 @@ def split_by_size(
     Examples
     --------
     >>> import klygo.archive as archive
-    >>> parts = archive.split_by_size("large.zip", 100, "parts")
+    >>> archive.split_by_size("large.zip", 100, "parts")
     """
     path, backend = resolve_backend(archive_path)
     out_dir = fs.path(output_dir)
     backend.require_operation("split")
-    return backend.split_by_size(
+    backend.split_by_size(
         archive_path=path,
         size=float(size),
         output_dir=out_dir,

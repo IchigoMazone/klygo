@@ -18,7 +18,7 @@ Local Tutorial Notebooks (`tutorials/visual/`, 1-to-1 with `klygo/visual/` submo
 <details open>
 <summary><b>Non-destructive rendering, adaptive backends, and dataset inspection</b> <i>(Click to expand or collapse)</i></summary>
 
-`klygo.visual` separates visual presentation into three focused submodules that interoperate with `klygo.media`, `klygo.outputs`, and `klygo.datasets`:
+`klygo.visual` separates visual presentation into four focused submodules that interoperate with `klygo.media`, `klygo.outputs`, and `klygo.datasets`:
 
 | Submodule | Primary API | Input / Output Representation | Key Architectural Behavior |
 | :--- | :--- | :--- | :--- |
@@ -54,7 +54,7 @@ Local Tutorial Notebooks (`tutorials/visual/`, 1-to-1 with `klygo/visual/` submo
 
 ---
 
-## 3. Public APIs Reference (3 Functions across 3 Submodules)
+## 3. Public APIs Reference (4 Functions across 4 Submodules)
 
 <details open>
 <summary><b>Bounding-box annotation — <code>draw_bboxes.py</code> (1 function)</b> <i>(Click to expand)</i></summary>
@@ -76,3 +76,13 @@ Local Tutorial Notebooks (`tutorials/visual/`, 1-to-1 with `klygo/visual/` submo
 - [`plot_dataset_stats(source, figsize=(10, 6))`](api/plot_dataset_stats.md): Plot per-class object counts from a YOLO dataset directory or archive as a Matplotlib bar chart ([example](../../examples/visual/plot_dataset_stats.py)).
 
 </details>
+
+## Side-by-side annotation comparison
+
+Use [compare_images](api/compare_images.md) with two Detection frames; each supplies
+its own image and annotations. Use mode="show" (default) to display the comparison
+or mode="save" with output_path to save it without opening a viewer.
+Frames may have different sources and dimensions, or share an image for model/GT comparison.
+
+[Example](../../examples/visual/compare_images.py) ·
+[Guide](../../tutorials/visual/Document_Visual_Compare_Images.ipynb)

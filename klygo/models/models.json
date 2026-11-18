@@ -390,5 +390,37 @@
         "model_id": "IDEA-Research/grounding-dino-tiny"
       }
     }
+  },
+  "dfine_nano_coco": {
+    "class": "klygo.models.detection.DFineDetect",
+    "model_id": "dfine_nano_coco",
+    "details": {
+      "name": "D-FINE Nano COCO",
+      "task": "Object-Detection",
+      "backend": "Keras",
+      "library": "keras_hub"
+    },
+    "flags": {
+      "model": false,
+      "post": true
+    },
+    "priority": {
+      "model": [
+        "device",
+        "weights"
+      ],
+      "post": [
+        "threshold",
+        "iou"
+      ]
+    },
+    "model": {
+      "device": null,
+      "weights": null
+    },
+    "post": {
+      "threshold": 0.25,
+      "iou": 0.5
+    }
   }
 }

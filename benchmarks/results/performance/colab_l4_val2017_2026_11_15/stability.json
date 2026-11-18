@@ -1,0 +1,4048 @@
+{
+    "model": "yolov8n.pt",
+    "source_sha256": "0ebb1f3d2122f1d3bfc0ae97df9e096da354751fe1ceb71e00f68d230c77f27f",
+    "requested_seconds": 600.0,
+    "expected_frames_per_loop": 120,
+    "gpu": "NVIDIA L4",
+    "runner_sha256": "fd61a4e5dfb0879fa4a8c7da0dafa67b95c2ce6431304747f9c5a912492be3a4",
+    "tested_commit": "00ba3cf09b3bc9a561ec0fdb58bf10d924bdc620",
+    "samples": [
+        {
+            "elapsed_seconds": 1.5200579590000416,
+            "frames": 120,
+            "seconds": 1.3667812819985556,
+            "fps": 87.79751492099145,
+            "rss_mib": 1694.359375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 3.0335721150004247,
+            "frames": 120,
+            "seconds": 1.3656947309991665,
+            "fps": 87.86736689846191,
+            "rss_mib": 1694.36328125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 4.607761129998835,
+            "frames": 120,
+            "seconds": 1.425863140000729,
+            "fps": 84.15954984286827,
+            "rss_mib": 1694.3671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 6.142813127000409,
+            "frames": 120,
+            "seconds": 1.3862631900010456,
+            "fps": 86.56364885509907,
+            "rss_mib": 1694.37109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 7.7087608959991485,
+            "frames": 120,
+            "seconds": 1.4141295250010444,
+            "fps": 84.85785628435372,
+            "rss_mib": 1694.37109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 9.203555947000496,
+            "frames": 120,
+            "seconds": 1.3460861099993053,
+            "fps": 89.14734288437307,
+            "rss_mib": 1694.375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 10.700793324998813,
+            "frames": 120,
+            "seconds": 1.354890164999233,
+            "fps": 88.56806485127001,
+            "rss_mib": 1694.375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 12.174849879998874,
+            "frames": 120,
+            "seconds": 1.3283257729999605,
+            "fps": 90.33928456344388,
+            "rss_mib": 1694.375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 13.658980034999331,
+            "frames": 120,
+            "seconds": 1.3372347939985048,
+            "fps": 89.73741974001776,
+            "rss_mib": 1694.37109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 15.144214881000153,
+            "frames": 120,
+            "seconds": 1.3347609390002617,
+            "fps": 89.903739683812,
+            "rss_mib": 1694.51953125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 16.68519004799964,
+            "frames": 120,
+            "seconds": 1.3914492409985542,
+            "fps": 86.24101869061617,
+            "rss_mib": 1694.546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 18.223055854999984,
+            "frames": 120,
+            "seconds": 1.3946092189999035,
+            "fps": 86.04560931129791,
+            "rss_mib": 1694.546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 19.731977711999207,
+            "frames": 120,
+            "seconds": 1.3599418829999195,
+            "fps": 88.23906484539611,
+            "rss_mib": 1694.51953125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 21.268312973999855,
+            "frames": 120,
+            "seconds": 1.3902462380010547,
+            "fps": 86.31564446636465,
+            "rss_mib": 1694.51953125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 22.776495247999264,
+            "frames": 120,
+            "seconds": 1.3600548440008424,
+            "fps": 88.23173604308391,
+            "rss_mib": 1694.51953125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 24.32102662199941,
+            "frames": 120,
+            "seconds": 1.3959231630014983,
+            "fps": 85.9646169506761,
+            "rss_mib": 1694.51953125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 25.825946111999656,
+            "frames": 120,
+            "seconds": 1.3563557880006556,
+            "fps": 88.47236179593168,
+            "rss_mib": 1694.515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 27.325498550999328,
+            "frames": 120,
+            "seconds": 1.3556487669993658,
+            "fps": 88.51850340675753,
+            "rss_mib": 1694.51171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 28.85486457799925,
+            "frames": 120,
+            "seconds": 1.3801251599998068,
+            "fps": 86.9486358759062,
+            "rss_mib": 1694.51171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 30.436987302999114,
+            "frames": 120,
+            "seconds": 1.422197199999573,
+            "fps": 84.37648449879948,
+            "rss_mib": 1694.51171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 31.99044209099884,
+            "frames": 120,
+            "seconds": 1.4037750520001282,
+            "fps": 85.48378162799052,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 33.48816392499975,
+            "frames": 120,
+            "seconds": 1.3565537859994947,
+            "fps": 88.45944866947185,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 34.99886374599919,
+            "frames": 120,
+            "seconds": 1.3644784249991062,
+            "fps": 87.94569250890032,
+            "rss_mib": 1694.50390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 36.532620276999296,
+            "frames": 120,
+            "seconds": 1.388791172999845,
+            "fps": 86.40607913772605,
+            "rss_mib": 1694.50390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 38.06737652099946,
+            "frames": 120,
+            "seconds": 1.386445782998635,
+            "fps": 86.5522485419238,
+            "rss_mib": 1694.50390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 39.571408183999665,
+            "frames": 120,
+            "seconds": 1.3599607629985258,
+            "fps": 88.23783984430298,
+            "rss_mib": 1694.50390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 41.10304956799882,
+            "frames": 120,
+            "seconds": 1.3831728440000006,
+            "fps": 86.75705319153876,
+            "rss_mib": 1694.5,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 42.63320045199907,
+            "frames": 120,
+            "seconds": 1.384429697000087,
+            "fps": 86.67829089481924,
+            "rss_mib": 1694.5,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 44.13127373200041,
+            "frames": 120,
+            "seconds": 1.3543741800003772,
+            "fps": 88.60180721989737,
+            "rss_mib": 1694.5,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 45.64309871799924,
+            "frames": 120,
+            "seconds": 1.3612673209991044,
+            "fps": 88.15314828238571,
+            "rss_mib": 1694.5,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 47.15535743699911,
+            "frames": 120,
+            "seconds": 1.3708984580007382,
+            "fps": 87.53383541987716,
+            "rss_mib": 1694.51171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 48.6630514160006,
+            "frames": 120,
+            "seconds": 1.3709123749995342,
+            "fps": 87.53294680853747,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 50.24302020899995,
+            "frames": 120,
+            "seconds": 1.4311976000008144,
+            "fps": 83.84586447037901,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 51.77395045099911,
+            "frames": 120,
+            "seconds": 1.3751593100005266,
+            "fps": 87.2626168672443,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 53.37150185700011,
+            "frames": 120,
+            "seconds": 1.4464356049993512,
+            "fps": 82.9625595396304,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 54.94464077399971,
+            "frames": 120,
+            "seconds": 1.4171953799996118,
+            "fps": 84.6742811143181,
+            "rss_mib": 1694.50390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 56.51092808899921,
+            "frames": 120,
+            "seconds": 1.4166256449989305,
+            "fps": 84.70833520742214,
+            "rss_mib": 1694.50390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 58.04158549699969,
+            "frames": 120,
+            "seconds": 1.3801965080001537,
+            "fps": 86.94414114543365,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 59.589131896000254,
+            "frames": 120,
+            "seconds": 1.3954936169993744,
+            "fps": 85.9910776647098,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 61.11510455399912,
+            "frames": 120,
+            "seconds": 1.3756731819994457,
+            "fps": 87.23002059659862,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 62.632424069999615,
+            "frames": 120,
+            "seconds": 1.3718568620006408,
+            "fps": 87.47268270029177,
+            "rss_mib": 1694.53515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 64.16997051699946,
+            "frames": 120,
+            "seconds": 1.392299090999586,
+            "fps": 86.1883777528342,
+            "rss_mib": 1694.53515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 65.7050810439996,
+            "frames": 120,
+            "seconds": 1.3838327399989794,
+            "fps": 86.71568212794887,
+            "rss_mib": 1694.53515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 67.21060730299905,
+            "frames": 120,
+            "seconds": 1.362730400000146,
+            "fps": 88.05850372163647,
+            "rss_mib": 1694.515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 68.73618590499973,
+            "frames": 120,
+            "seconds": 1.3775062760014407,
+            "fps": 87.1139406698968,
+            "rss_mib": 1694.515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 70.24097264400007,
+            "frames": 120,
+            "seconds": 1.3557166800001141,
+            "fps": 88.51406917851737,
+            "rss_mib": 1694.51171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 71.7669372019991,
+            "frames": 120,
+            "seconds": 1.3791252829996665,
+            "fps": 87.01167434114035,
+            "rss_mib": 1694.51171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 73.24916666999889,
+            "frames": 120,
+            "seconds": 1.335521338000035,
+            "fps": 89.85255164825891,
+            "rss_mib": 1694.51171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 74.73384081599943,
+            "frames": 120,
+            "seconds": 1.339172062000216,
+            "fps": 89.60760413472592,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 76.23403793299985,
+            "frames": 120,
+            "seconds": 1.3566842269992776,
+            "fps": 88.45094356659304,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 77.74141465699904,
+            "frames": 120,
+            "seconds": 1.353241758999502,
+            "fps": 88.67595106488592,
+            "rss_mib": 1694.515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 79.23632860199905,
+            "frames": 120,
+            "seconds": 1.3534349239998846,
+            "fps": 88.66329505179093,
+            "rss_mib": 1694.51171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 80.74754754599962,
+            "frames": 120,
+            "seconds": 1.3674134299999423,
+            "fps": 87.75692659388687,
+            "rss_mib": 1694.51171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 82.25009350899927,
+            "frames": 120,
+            "seconds": 1.359344296000927,
+            "fps": 88.27785598764757,
+            "rss_mib": 1694.51171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 83.7420810120002,
+            "frames": 120,
+            "seconds": 1.3432669939993502,
+            "fps": 89.33443651639224,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 85.28779567200036,
+            "frames": 120,
+            "seconds": 1.4000952360001975,
+            "fps": 85.70845533537911,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 86.77429205999942,
+            "frames": 120,
+            "seconds": 1.3499388730015198,
+            "fps": 88.89291389408334,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 88.2768614079996,
+            "frames": 120,
+            "seconds": 1.351641324999946,
+            "fps": 88.7809493395038,
+            "rss_mib": 1694.50390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 89.7800145759993,
+            "frames": 120,
+            "seconds": 1.3503092680002737,
+            "fps": 88.8685302276809,
+            "rss_mib": 1694.50390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 91.31254090999937,
+            "frames": 120,
+            "seconds": 1.3832694230004563,
+            "fps": 86.7509958686916,
+            "rss_mib": 1694.515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 92.83743795400005,
+            "frames": 120,
+            "seconds": 1.3835363340003823,
+            "fps": 86.73425991858834,
+            "rss_mib": 1694.546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 94.31335901700004,
+            "frames": 120,
+            "seconds": 1.3331042580011854,
+            "fps": 90.01546524194906,
+            "rss_mib": 1694.54296875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 95.79358622299878,
+            "frames": 120,
+            "seconds": 1.3327252050003153,
+            "fps": 90.04106739316272,
+            "rss_mib": 1694.54296875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 97.27285897900038,
+            "frames": 120,
+            "seconds": 1.3338819239997974,
+            "fps": 89.96298535942843,
+            "rss_mib": 1694.54296875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 98.7616517610004,
+            "frames": 120,
+            "seconds": 1.3453943540007458,
+            "fps": 89.19317941476471,
+            "rss_mib": 1694.5390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 100.27357464600027,
+            "frames": 120,
+            "seconds": 1.3609455509995314,
+            "fps": 88.17399043765369,
+            "rss_mib": 1694.5390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 101.77074263199938,
+            "frames": 120,
+            "seconds": 1.346924413999659,
+            "fps": 89.09185901802978,
+            "rss_mib": 1694.5390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 103.26246966100007,
+            "frames": 120,
+            "seconds": 1.3476870770009555,
+            "fps": 89.04144147990144,
+            "rss_mib": 1694.53515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 104.75481645400032,
+            "frames": 120,
+            "seconds": 1.3502959510005894,
+            "fps": 88.86940667420221,
+            "rss_mib": 1694.54296875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 106.2581738609988,
+            "frames": 120,
+            "seconds": 1.360073645000739,
+            "fps": 88.2305163702623,
+            "rss_mib": 1694.54296875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 107.7629069300001,
+            "frames": 120,
+            "seconds": 1.3601474959996267,
+            "fps": 88.2257257782232,
+            "rss_mib": 1694.5390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 109.22471218099963,
+            "frames": 120,
+            "seconds": 1.3169691530001728,
+            "fps": 91.11830730934687,
+            "rss_mib": 1694.5390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 110.69241626099938,
+            "frames": 120,
+            "seconds": 1.3217966899992462,
+            "fps": 90.78552012417919,
+            "rss_mib": 1694.5390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 112.18336733399883,
+            "frames": 120,
+            "seconds": 1.3414964750008949,
+            "fps": 89.45234090154426,
+            "rss_mib": 1694.5390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 113.65821946699907,
+            "frames": 120,
+            "seconds": 1.3234157080005389,
+            "fps": 90.67445646485491,
+            "rss_mib": 1694.5390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 115.16633439900033,
+            "frames": 120,
+            "seconds": 1.3611043380005867,
+            "fps": 88.16370402306974,
+            "rss_mib": 1694.5390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 116.65219016999981,
+            "frames": 120,
+            "seconds": 1.3405107210001006,
+            "fps": 89.51812031049843,
+            "rss_mib": 1694.5390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 118.12656504400002,
+            "frames": 120,
+            "seconds": 1.3315471320001961,
+            "fps": 90.12073032648935,
+            "rss_mib": 1694.53515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 119.59624215199983,
+            "frames": 120,
+            "seconds": 1.3279863670013583,
+            "fps": 90.3623734262908,
+            "rss_mib": 1694.53515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 121.076979518999,
+            "frames": 120,
+            "seconds": 1.3351926499999536,
+            "fps": 89.87467089487362,
+            "rss_mib": 1694.53515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 122.57887466799912,
+            "frames": 120,
+            "seconds": 1.3590882230000716,
+            "fps": 88.29448888543101,
+            "rss_mib": 1694.5234375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 124.0679331880001,
+            "frames": 120,
+            "seconds": 1.333438602001479,
+            "fps": 89.99289492585643,
+            "rss_mib": 1694.515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 125.55412379199879,
+            "frames": 120,
+            "seconds": 1.3370471499983978,
+            "fps": 89.75001367763568,
+            "rss_mib": 1694.515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 127.02504818799935,
+            "frames": 120,
+            "seconds": 1.3268034660013655,
+            "fps": 90.44293527635125,
+            "rss_mib": 1694.515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 128.52816911899936,
+            "frames": 120,
+            "seconds": 1.358937954000794,
+            "fps": 88.30425233669638,
+            "rss_mib": 1694.515625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 130.019773480999,
+            "frames": 120,
+            "seconds": 1.3383394939992286,
+            "fps": 89.66334815497059,
+            "rss_mib": 1694.51171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 131.55283375599902,
+            "frames": 120,
+            "seconds": 1.3912814380000782,
+            "fps": 86.25142025361605,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 133.02804053900036,
+            "frames": 120,
+            "seconds": 1.3318930869991163,
+            "fps": 90.09732175303319,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 134.5067194940002,
+            "frames": 120,
+            "seconds": 1.3380829110010382,
+            "fps": 89.68054147722906,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 135.9767589080002,
+            "frames": 120,
+            "seconds": 1.3216025370002171,
+            "fps": 90.79885717560505,
+            "rss_mib": 1694.51171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 137.4634909180004,
+            "frames": 120,
+            "seconds": 1.3416988030003267,
+            "fps": 89.43885150054112,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 138.9271839289995,
+            "frames": 120,
+            "seconds": 1.3253495520002616,
+            "fps": 90.5421515545782,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 140.39198863399906,
+            "frames": 120,
+            "seconds": 1.3163595740006713,
+            "fps": 91.16050232027166,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 141.90781034300016,
+            "frames": 120,
+            "seconds": 1.3664976979998755,
+            "fps": 87.81573520075621,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 143.40134398100054,
+            "frames": 120,
+            "seconds": 1.3506076850007958,
+            "fps": 88.84889471062746,
+            "rss_mib": 1694.5078125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 144.87134089499887,
+            "frames": 120,
+            "seconds": 1.32895247200031,
+            "fps": 90.29668293507791,
+            "rss_mib": 1694.50390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 146.35055136299889,
+            "frames": 120,
+            "seconds": 1.331036371000664,
+            "fps": 90.1553125177074,
+            "rss_mib": 1694.50390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 147.85202107199984,
+            "frames": 120,
+            "seconds": 1.3470456240011117,
+            "fps": 89.0838423449724,
+            "rss_mib": 1694.50390625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 149.3791951359999,
+            "frames": 120,
+            "seconds": 1.3775893470010487,
+            "fps": 87.1086875499108,
+            "rss_mib": 1694.5,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 150.8802027620004,
+            "frames": 120,
+            "seconds": 1.356366332000107,
+            "fps": 88.47167403738723,
+            "rss_mib": 1694.5,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 152.37709934299892,
+            "frames": 120,
+            "seconds": 1.349702540999715,
+            "fps": 88.90847898316682,
+            "rss_mib": 1694.5,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 153.88073535799958,
+            "frames": 120,
+            "seconds": 1.3535219430013967,
+            "fps": 88.65759481808132,
+            "rss_mib": 1694.5,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 155.38298142199892,
+            "frames": 120,
+            "seconds": 1.34888864200002,
+            "fps": 88.96212501431845,
+            "rss_mib": 1694.49609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 156.86731600799976,
+            "frames": 120,
+            "seconds": 1.3450201699997706,
+            "fps": 89.21799291680546,
+            "rss_mib": 1694.57421875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 158.34703658699982,
+            "frames": 120,
+            "seconds": 1.336110883999936,
+            "fps": 89.81290507922077,
+            "rss_mib": 1694.57421875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 159.82347022499926,
+            "frames": 120,
+            "seconds": 1.328762352000922,
+            "fps": 90.30960263082223,
+            "rss_mib": 1694.57421875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 161.31789873399975,
+            "frames": 120,
+            "seconds": 1.3426505269999325,
+            "fps": 89.3754536916858,
+            "rss_mib": 1694.5703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 162.81177337900044,
+            "frames": 120,
+            "seconds": 1.3496157700010372,
+            "fps": 88.91419518601785,
+            "rss_mib": 1694.5703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 164.30022095200002,
+            "frames": 120,
+            "seconds": 1.340308229000584,
+            "fps": 89.53164459005026,
+            "rss_mib": 1694.5703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 165.79772740599947,
+            "frames": 120,
+            "seconds": 1.3484285089998593,
+            "fps": 88.99248213685796,
+            "rss_mib": 1694.57421875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 167.2777922869991,
+            "frames": 120,
+            "seconds": 1.3350917530005972,
+            "fps": 89.8814630008027,
+            "rss_mib": 1694.5703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 168.76195448399994,
+            "frames": 120,
+            "seconds": 1.3392241970013856,
+            "fps": 89.60411577739424,
+            "rss_mib": 1694.5703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 170.25779726200017,
+            "frames": 120,
+            "seconds": 1.3495073829999455,
+            "fps": 88.9213364162861,
+            "rss_mib": 1694.5703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 171.73073847699925,
+            "frames": 120,
+            "seconds": 1.3189997829995264,
+            "fps": 90.9780286143103,
+            "rss_mib": 1694.5703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 173.20123136999973,
+            "frames": 120,
+            "seconds": 1.3231677660005516,
+            "fps": 90.69144751214411,
+            "rss_mib": 1694.62109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 174.6837890930001,
+            "frames": 120,
+            "seconds": 1.340924008998627,
+            "fps": 89.49052980982376,
+            "rss_mib": 1694.6171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 176.17140916800054,
+            "frames": 120,
+            "seconds": 1.3412681369991333,
+            "fps": 89.46756930234714,
+            "rss_mib": 1694.6171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 177.66275525799938,
+            "frames": 120,
+            "seconds": 1.3465500040001643,
+            "fps": 89.11663112659673,
+            "rss_mib": 1694.6171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 179.1574681589991,
+            "frames": 120,
+            "seconds": 1.35629997399883,
+            "fps": 88.47600258090363,
+            "rss_mib": 1694.6171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 180.64663931199902,
+            "frames": 120,
+            "seconds": 1.3414570200002345,
+            "fps": 89.45497187824849,
+            "rss_mib": 1694.61328125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 182.1272293509992,
+            "frames": 120,
+            "seconds": 1.3369777409989183,
+            "fps": 89.75467303617367,
+            "rss_mib": 1694.61328125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 183.60125752800013,
+            "frames": 120,
+            "seconds": 1.323189419999835,
+            "fps": 90.68996334630226,
+            "rss_mib": 1694.61328125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 185.09336308300044,
+            "frames": 120,
+            "seconds": 1.341705627999545,
+            "fps": 89.43839654225606,
+            "rss_mib": 1694.60546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 186.56997083199894,
+            "frames": 120,
+            "seconds": 1.332541247998961,
+            "fps": 90.0534975410334,
+            "rss_mib": 1694.60546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 188.03432738499941,
+            "frames": 120,
+            "seconds": 1.3168107500005135,
+            "fps": 91.12926819586885,
+            "rss_mib": 1694.60546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 189.53710115899958,
+            "frames": 120,
+            "seconds": 1.3574940049984434,
+            "fps": 88.39818043994795,
+            "rss_mib": 1694.6015625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 191.04077682999923,
+            "frames": 120,
+            "seconds": 1.3559424920003949,
+            "fps": 88.49932848034462,
+            "rss_mib": 1694.6015625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 192.54004897499908,
+            "frames": 120,
+            "seconds": 1.3531120990010095,
+            "fps": 88.68444830889837,
+            "rss_mib": 1694.6015625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 194.0161400779998,
+            "frames": 120,
+            "seconds": 1.3317477040000085,
+            "fps": 90.10715741395356,
+            "rss_mib": 1694.60546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 195.47574356699988,
+            "frames": 120,
+            "seconds": 1.3114553539999179,
+            "fps": 91.50139929201701,
+            "rss_mib": 1694.6015625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 196.9411282910005,
+            "frames": 120,
+            "seconds": 1.3216327949994593,
+            "fps": 90.79677838960488,
+            "rss_mib": 1694.609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 198.42458816399994,
+            "frames": 120,
+            "seconds": 1.3403702309988148,
+            "fps": 89.52750309187232,
+            "rss_mib": 1694.609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 199.88813957399907,
+            "frames": 120,
+            "seconds": 1.3152499180014274,
+            "fps": 91.23741302515691,
+            "rss_mib": 1694.609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 201.3760292829993,
+            "frames": 120,
+            "seconds": 1.3402999690006254,
+            "fps": 89.53219635562344,
+            "rss_mib": 1694.609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 202.85281082099937,
+            "frames": 120,
+            "seconds": 1.32883652000055,
+            "fps": 90.30456206904242,
+            "rss_mib": 1694.60546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 204.36651473500024,
+            "frames": 120,
+            "seconds": 1.3696265870003117,
+            "fps": 87.61512162436775,
+            "rss_mib": 1694.60546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 205.8729035969991,
+            "frames": 120,
+            "seconds": 1.360382386999845,
+            "fps": 88.21049224596706,
+            "rss_mib": 1694.60546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 207.33820533799917,
+            "frames": 120,
+            "seconds": 1.317252789000122,
+            "fps": 91.09868736059961,
+            "rss_mib": 1694.60546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 208.79435688500052,
+            "frames": 120,
+            "seconds": 1.3130962580016785,
+            "fps": 91.38705503785435,
+            "rss_mib": 1694.60546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 210.26650871399943,
+            "frames": 120,
+            "seconds": 1.324125995999566,
+            "fps": 90.62581685016578,
+            "rss_mib": 1694.6015625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 211.73427599299976,
+            "frames": 120,
+            "seconds": 1.3177506900010485,
+            "fps": 91.06426648875784,
+            "rss_mib": 1694.6015625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 213.19814639300057,
+            "frames": 120,
+            "seconds": 1.3189388669998152,
+            "fps": 90.98223049030582,
+            "rss_mib": 1694.6015625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 214.69785153699922,
+            "frames": 120,
+            "seconds": 1.3565485439994518,
+            "fps": 88.45979049611401,
+            "rss_mib": 1694.609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 216.1707434079999,
+            "frames": 120,
+            "seconds": 1.3304009729999962,
+            "fps": 90.19837059304402,
+            "rss_mib": 1694.60546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 217.65516553499947,
+            "frames": 120,
+            "seconds": 1.3360803129999113,
+            "fps": 89.81496009814192,
+            "rss_mib": 1694.60546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 219.12889138199898,
+            "frames": 120,
+            "seconds": 1.3307262329999503,
+            "fps": 90.17632404335752,
+            "rss_mib": 1694.60546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 220.60207736099983,
+            "frames": 120,
+            "seconds": 1.3311719260000245,
+            "fps": 90.14613188289083,
+            "rss_mib": 1694.60546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 222.12993902299968,
+            "frames": 120,
+            "seconds": 1.378349666001668,
+            "fps": 87.06063705017415,
+            "rss_mib": 1694.60546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 223.61376999599997,
+            "frames": 120,
+            "seconds": 1.3361395320007432,
+            "fps": 89.81097941194157,
+            "rss_mib": 1694.60546875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 225.07264482999926,
+            "frames": 120,
+            "seconds": 1.3171461029996863,
+            "fps": 91.10606615827233,
+            "rss_mib": 1694.6015625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 226.55687100499927,
+            "frames": 120,
+            "seconds": 1.3373695899990707,
+            "fps": 89.72837493641782,
+            "rss_mib": 1694.6171875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 228.02812989700033,
+            "frames": 120,
+            "seconds": 1.32735427300031,
+            "fps": 90.40540452606956,
+            "rss_mib": 1698.95703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 229.52923058799934,
+            "frames": 120,
+            "seconds": 1.352264342000126,
+            "fps": 88.74004606415099,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 231.02654217300005,
+            "frames": 120,
+            "seconds": 1.3554692849993444,
+            "fps": 88.5302244233871,
+            "rss_mib": 1700.96484375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 232.50887287399928,
+            "frames": 120,
+            "seconds": 1.3392314489992714,
+            "fps": 89.60363056712036,
+            "rss_mib": 1700.96484375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 234.01547785399998,
+            "frames": 120,
+            "seconds": 1.3569027819994517,
+            "fps": 88.43669685987017,
+            "rss_mib": 1700.96484375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 235.5401246069996,
+            "frames": 120,
+            "seconds": 1.3827298350006458,
+            "fps": 86.7848490446031,
+            "rss_mib": 1700.96484375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 237.0091913289998,
+            "frames": 120,
+            "seconds": 1.3251245350002137,
+            "fps": 90.55752635353677,
+            "rss_mib": 1700.96484375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 238.4610608210005,
+            "frames": 120,
+            "seconds": 1.309485413999937,
+            "fps": 91.63905051332307,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 239.9146421459991,
+            "frames": 120,
+            "seconds": 1.3103912419992412,
+            "fps": 91.57570361727852,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 241.39034744899982,
+            "frames": 120,
+            "seconds": 1.324151531998723,
+            "fps": 90.62406914929713,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 242.86203833400032,
+            "frames": 120,
+            "seconds": 1.3230704810011957,
+            "fps": 90.69811602870426,
+            "rss_mib": 1700.95703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 244.34290384700034,
+            "frames": 120,
+            "seconds": 1.3277393490006943,
+            "fps": 90.37918480785889,
+            "rss_mib": 1700.95703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 245.8198364889995,
+            "frames": 120,
+            "seconds": 1.332311103000393,
+            "fps": 90.06905348890169,
+            "rss_mib": 1700.95703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 247.29918597699907,
+            "frames": 120,
+            "seconds": 1.336268139000822,
+            "fps": 89.80233569718165,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 248.76546247799888,
+            "frames": 120,
+            "seconds": 1.324897852000504,
+            "fps": 90.57302026628568,
+            "rss_mib": 1700.95703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 250.22393861199998,
+            "frames": 120,
+            "seconds": 1.3163557780007977,
+            "fps": 91.16076520152387,
+            "rss_mib": 1700.95703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 251.69510835899928,
+            "frames": 120,
+            "seconds": 1.3232212630009599,
+            "fps": 90.68778091416821,
+            "rss_mib": 1700.95703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 253.15678397400006,
+            "frames": 120,
+            "seconds": 1.311905802000183,
+            "fps": 91.4699819278513,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 254.64262169299946,
+            "frames": 120,
+            "seconds": 1.332049773000108,
+            "fps": 90.08672380892352,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 256.1444024430002,
+            "frames": 120,
+            "seconds": 1.355060121999486,
+            "fps": 88.5569562942577,
+            "rss_mib": 1700.95703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 257.63464625800043,
+            "frames": 120,
+            "seconds": 1.345517796000422,
+            "fps": 89.18499655426508,
+            "rss_mib": 1700.95703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 259.1092867539992,
+            "frames": 120,
+            "seconds": 1.3288329170009092,
+            "fps": 90.30480692097267,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 260.5730949209992,
+            "frames": 120,
+            "seconds": 1.3238887269999395,
+            "fps": 90.64205892283081,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 262.0479446629997,
+            "frames": 120,
+            "seconds": 1.3310601680004766,
+            "fps": 90.15370070029549,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 263.5103406590006,
+            "frames": 120,
+            "seconds": 1.3170512209999288,
+            "fps": 91.11262955201838,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 264.99105416900056,
+            "frames": 120,
+            "seconds": 1.3366733430011664,
+            "fps": 89.77511269175905,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 266.4745574489989,
+            "frames": 120,
+            "seconds": 1.3354431339994335,
+            "fps": 89.85781344400615,
+            "rss_mib": 1700.96484375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 267.96505714199884,
+            "frames": 120,
+            "seconds": 1.3412373089995526,
+            "fps": 89.46962569175,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 269.4618332459995,
+            "frames": 120,
+            "seconds": 1.3529078789997584,
+            "fps": 88.69783513177502,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 270.9382516730002,
+            "frames": 120,
+            "seconds": 1.3310521230014274,
+            "fps": 90.15424559739147,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 272.41639390399905,
+            "frames": 120,
+            "seconds": 1.3334126850004395,
+            "fps": 89.99464408122114,
+            "rss_mib": 1700.9609375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 273.88100127299913,
+            "frames": 120,
+            "seconds": 1.3210904130010022,
+            "fps": 90.83405557944123,
+            "rss_mib": 1700.95703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 275.3693400249995,
+            "frames": 120,
+            "seconds": 1.344505773000492,
+            "fps": 89.25212699697057,
+            "rss_mib": 1700.95703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 276.87816120299976,
+            "frames": 120,
+            "seconds": 1.3569502279988228,
+            "fps": 88.43360465547164,
+            "rss_mib": 1700.95703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 278.36106452700005,
+            "frames": 120,
+            "seconds": 1.3340517079996062,
+            "fps": 89.95153582160508,
+            "rss_mib": 1700.95703125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 279.8371798240005,
+            "frames": 120,
+            "seconds": 1.3332191600002261,
+            "fps": 90.00770735996598,
+            "rss_mib": 1700.953125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 281.3541730729994,
+            "frames": 120,
+            "seconds": 1.3628782229989156,
+            "fps": 88.04895255861425,
+            "rss_mib": 1700.953125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 282.8149772429988,
+            "frames": 120,
+            "seconds": 1.3167859929999395,
+            "fps": 91.1309815246535,
+            "rss_mib": 1700.953125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 284.29695221600014,
+            "frames": 120,
+            "seconds": 1.3386089539999375,
+            "fps": 89.64529905572826,
+            "rss_mib": 1700.953125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 285.7929595659989,
+            "frames": 120,
+            "seconds": 1.3490882570004032,
+            "fps": 88.94896192100212,
+            "rss_mib": 1700.953125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 287.27294212800007,
+            "frames": 120,
+            "seconds": 1.3338627469984203,
+            "fps": 89.96427876109064,
+            "rss_mib": 1700.94921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 288.75681491999967,
+            "frames": 120,
+            "seconds": 1.3367210479991627,
+            "fps": 89.77190879100691,
+            "rss_mib": 1700.94921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 290.23504373300057,
+            "frames": 120,
+            "seconds": 1.333916453000711,
+            "fps": 89.96065662887212,
+            "rss_mib": 1700.94921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 291.7998374050003,
+            "frames": 120,
+            "seconds": 1.4131462519999332,
+            "fps": 84.91690073137998,
+            "rss_mib": 1700.9453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 293.311768612999,
+            "frames": 120,
+            "seconds": 1.3659188029996585,
+            "fps": 87.8529527058791,
+            "rss_mib": 1700.9453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 294.8036507100005,
+            "frames": 120,
+            "seconds": 1.3471245950004231,
+            "fps": 89.07862008113831,
+            "rss_mib": 1700.9453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 296.28160804399886,
+            "frames": 120,
+            "seconds": 1.332145959000627,
+            "fps": 90.08021920512654,
+            "rss_mib": 1700.9453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 297.75383462100035,
+            "frames": 120,
+            "seconds": 1.3258254530010163,
+            "fps": 90.50965172555638,
+            "rss_mib": 1700.9453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 299.2218461299999,
+            "frames": 120,
+            "seconds": 1.327221023000675,
+            "fps": 90.41448102494303,
+            "rss_mib": 1700.9453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 300.69918796899947,
+            "frames": 120,
+            "seconds": 1.338363245000437,
+            "fps": 89.66175696192316,
+            "rss_mib": 1700.94921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 302.1682853809998,
+            "frames": 120,
+            "seconds": 1.3252775479995762,
+            "fps": 90.54707082386818,
+            "rss_mib": 1700.9453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 303.70475162599905,
+            "frames": 120,
+            "seconds": 1.3844386949986074,
+            "fps": 86.6777275393337,
+            "rss_mib": 1700.9453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 305.1960741540006,
+            "frames": 120,
+            "seconds": 1.3483390380006313,
+            "fps": 88.99838736252909,
+            "rss_mib": 1700.9453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 306.6532282219996,
+            "frames": 120,
+            "seconds": 1.3096035609996761,
+            "fps": 91.63078321839542,
+            "rss_mib": 1700.94140625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 308.1442893349995,
+            "frames": 120,
+            "seconds": 1.349795666999853,
+            "fps": 88.90234495026948,
+            "rss_mib": 1700.94140625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 309.6030289249993,
+            "frames": 120,
+            "seconds": 1.3198600039995654,
+            "fps": 90.91873352958994,
+            "rss_mib": 1700.94140625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 311.0998898809994,
+            "frames": 120,
+            "seconds": 1.351111903999481,
+            "fps": 88.81573735290404,
+            "rss_mib": 1700.9375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 312.58413204799945,
+            "frames": 120,
+            "seconds": 1.3371175419997599,
+            "fps": 89.74528882519256,
+            "rss_mib": 1700.9375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 314.0702315319995,
+            "frames": 120,
+            "seconds": 1.339596994999738,
+            "fps": 89.57917974429577,
+            "rss_mib": 1700.9375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 315.5807621690001,
+            "frames": 120,
+            "seconds": 1.3653574630006915,
+            "fps": 87.88907172797958,
+            "rss_mib": 1700.93359375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 317.1031264439989,
+            "frames": 120,
+            "seconds": 1.3782408839997515,
+            "fps": 87.06750858511148,
+            "rss_mib": 1700.9375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 318.56732775899945,
+            "frames": 120,
+            "seconds": 1.3253854970007524,
+            "fps": 90.53969601414153,
+            "rss_mib": 1700.9375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 320.037458028999,
+            "frames": 120,
+            "seconds": 1.3274192139997467,
+            "fps": 90.40098164499139,
+            "rss_mib": 1700.9375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 321.53144672300004,
+            "frames": 120,
+            "seconds": 1.3549285770004644,
+            "fps": 88.56555396126896,
+            "rss_mib": 1700.93359375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 322.99471921999975,
+            "frames": 120,
+            "seconds": 1.3181104520008375,
+            "fps": 91.03941161975078,
+            "rss_mib": 1700.93359375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 324.48565397399943,
+            "frames": 120,
+            "seconds": 1.3473394159991585,
+            "fps": 89.06441730646655,
+            "rss_mib": 1700.93359375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 325.95253574599883,
+            "frames": 120,
+            "seconds": 1.3203809309998178,
+            "fps": 90.88286356054363,
+            "rss_mib": 1700.93359375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 327.44641390700053,
+            "frames": 120,
+            "seconds": 1.347305478000635,
+            "fps": 89.06666079772552,
+            "rss_mib": 1700.9296875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 328.93742207799914,
+            "frames": 120,
+            "seconds": 1.3476007139997819,
+            "fps": 89.047147833449,
+            "rss_mib": 1700.93359375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 330.435482547,
+            "frames": 120,
+            "seconds": 1.3558292660000006,
+            "fps": 88.50671910485221,
+            "rss_mib": 1700.93359375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 331.90351738000027,
+            "frames": 120,
+            "seconds": 1.3262126160007028,
+            "fps": 90.4832291234488,
+            "rss_mib": 1700.93359375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 333.3834051590002,
+            "frames": 120,
+            "seconds": 1.3341627629997674,
+            "fps": 89.94404830351341,
+            "rss_mib": 1700.93359375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 334.85314581000057,
+            "frames": 120,
+            "seconds": 1.3240350619998935,
+            "fps": 90.63204098141145,
+            "rss_mib": 1700.9296875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 336.3257876589996,
+            "frames": 120,
+            "seconds": 1.326672052999129,
+            "fps": 90.45189406735682,
+            "rss_mib": 1700.9296875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 337.7979217110005,
+            "frames": 120,
+            "seconds": 1.3243417480007338,
+            "fps": 90.6110527597243,
+            "rss_mib": 1700.9296875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 339.33053976799965,
+            "frames": 120,
+            "seconds": 1.3827333700010058,
+            "fps": 86.7846271764691,
+            "rss_mib": 1700.9296875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 340.82595922200017,
+            "frames": 120,
+            "seconds": 1.3509320200009824,
+            "fps": 88.82756365484084,
+            "rss_mib": 1700.92578125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 342.33473014899937,
+            "frames": 120,
+            "seconds": 1.3617933929999708,
+            "fps": 88.1190939953419,
+            "rss_mib": 1700.92578125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 343.8089830609988,
+            "frames": 120,
+            "seconds": 1.330061939999723,
+            "fps": 90.2213621720692,
+            "rss_mib": 1700.92578125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 345.25737661899984,
+            "frames": 120,
+            "seconds": 1.3055575259986654,
+            "fps": 91.91475489232687,
+            "rss_mib": 1700.92578125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 346.7448119790006,
+            "frames": 120,
+            "seconds": 1.3401711890001025,
+            "fps": 89.54079970151547,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 348.230050664999,
+            "frames": 120,
+            "seconds": 1.3398612400014827,
+            "fps": 89.56151310106353,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 349.6813078180003,
+            "frames": 120,
+            "seconds": 1.300097593000828,
+            "fps": 92.30076314734286,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 351.2345742380003,
+            "frames": 120,
+            "seconds": 1.4044531200015626,
+            "fps": 85.44251017781674,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 352.73617572200055,
+            "frames": 120,
+            "seconds": 1.3592652030001773,
+            "fps": 88.28299270454019,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 354.2469112250001,
+            "frames": 120,
+            "seconds": 1.3614889720010979,
+            "fps": 88.13879691116826,
+            "rss_mib": 1700.91796875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 355.7376742380002,
+            "frames": 120,
+            "seconds": 1.3343014389993186,
+            "fps": 89.93470028031746,
+            "rss_mib": 1700.91796875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 357.2116248099992,
+            "frames": 120,
+            "seconds": 1.327331870999842,
+            "fps": 90.40693034034311,
+            "rss_mib": 1700.91796875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 358.7007598759992,
+            "frames": 120,
+            "seconds": 1.3471657250011049,
+            "fps": 89.07590044268798,
+            "rss_mib": 1700.91796875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 360.16175764000036,
+            "frames": 120,
+            "seconds": 1.3128795350003202,
+            "fps": 91.40214071504339,
+            "rss_mib": 1700.91796875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 361.6504618910003,
+            "frames": 120,
+            "seconds": 1.338003344999379,
+            "fps": 89.68587444006405,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 363.1965475849993,
+            "frames": 120,
+            "seconds": 1.3908721319985489,
+            "fps": 86.2768023309027,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 364.70476684499954,
+            "frames": 120,
+            "seconds": 1.3658303629999864,
+            "fps": 87.85864134432131,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 366.1793884479994,
+            "frames": 120,
+            "seconds": 1.3317635189996508,
+            "fps": 90.10608737062985,
+            "rss_mib": 1700.91796875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 367.6834534360005,
+            "frames": 120,
+            "seconds": 1.3575025999998616,
+            "fps": 88.39762074858069,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 369.18451905300026,
+            "frames": 120,
+            "seconds": 1.3570593809999991,
+            "fps": 88.42649163338275,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 370.6861755509999,
+            "frames": 120,
+            "seconds": 1.352178694000031,
+            "fps": 88.74566692440226,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 372.17537513800016,
+            "frames": 120,
+            "seconds": 1.3439467340012925,
+            "fps": 89.28925303663456,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 373.66397222199885,
+            "frames": 120,
+            "seconds": 1.3386903129994607,
+            "fps": 89.63985085626622,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 375.16381145800005,
+            "frames": 120,
+            "seconds": 1.3585645240000304,
+            "fps": 88.32852461558706,
+            "rss_mib": 1700.91796875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 376.6469619790005,
+            "frames": 120,
+            "seconds": 1.3395312570009992,
+            "fps": 89.58357587613239,
+            "rss_mib": 1700.91796875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 378.1155279960003,
+            "frames": 120,
+            "seconds": 1.3260862820006878,
+            "fps": 90.49184930783996,
+            "rss_mib": 1700.91796875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 379.5945495880005,
+            "frames": 120,
+            "seconds": 1.3354786290001357,
+            "fps": 89.85542515932526,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 381.08733128899985,
+            "frames": 120,
+            "seconds": 1.3427219349996449,
+            "fps": 89.37070056879033,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 382.5913998569995,
+            "frames": 120,
+            "seconds": 1.3640318990001106,
+            "fps": 87.97448218620455,
+            "rss_mib": 1700.921875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 384.051303500999,
+            "frames": 120,
+            "seconds": 1.3160882070005755,
+            "fps": 91.17929889629923,
+            "rss_mib": 1700.91796875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 385.51865804800036,
+            "frames": 120,
+            "seconds": 1.3214269560012326,
+            "fps": 90.81092182585085,
+            "rss_mib": 1700.91796875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 387.03675913199913,
+            "frames": 120,
+            "seconds": 1.3699095379997743,
+            "fps": 87.59702496503077,
+            "rss_mib": 1700.91796875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 388.5429171029991,
+            "frames": 120,
+            "seconds": 1.3638045890002104,
+            "fps": 87.9891451956256,
+            "rss_mib": 1700.91796875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 390.0294824089997,
+            "frames": 120,
+            "seconds": 1.3417740860004415,
+            "fps": 89.43383334946932,
+            "rss_mib": 1700.9140625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 391.507991122,
+            "frames": 120,
+            "seconds": 1.335528780000459,
+            "fps": 89.85205096063805,
+            "rss_mib": 1700.9140625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 392.97723938799936,
+            "frames": 120,
+            "seconds": 1.3204787470003794,
+            "fps": 90.8761313066143,
+            "rss_mib": 1700.9140625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 394.4362207089998,
+            "frames": 120,
+            "seconds": 1.3144078869991063,
+            "fps": 91.29586119113236,
+            "rss_mib": 1700.9140625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 395.9158190649996,
+            "frames": 120,
+            "seconds": 1.3299535250007466,
+            "fps": 90.22871682672718,
+            "rss_mib": 1700.9140625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 397.4064404740002,
+            "frames": 120,
+            "seconds": 1.3414356899993436,
+            "fps": 89.45639429055203,
+            "rss_mib": 1700.91796875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 398.88472253799955,
+            "frames": 120,
+            "seconds": 1.3306009879997873,
+            "fps": 90.18481203774604,
+            "rss_mib": 1700.9140625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 400.4069312039992,
+            "frames": 120,
+            "seconds": 1.3746949169999425,
+            "fps": 87.29209551591367,
+            "rss_mib": 1700.9140625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 401.89288940500046,
+            "frames": 120,
+            "seconds": 1.3373589189995982,
+            "fps": 89.72909089338944,
+            "rss_mib": 1700.91015625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 403.3751957989989,
+            "frames": 120,
+            "seconds": 1.3332245809997403,
+            "fps": 90.00734138131179,
+            "rss_mib": 1700.91015625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 404.86583890099973,
+            "frames": 120,
+            "seconds": 1.3453736709998338,
+            "fps": 89.194550619398,
+            "rss_mib": 1700.91015625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 406.3399775879989,
+            "frames": 120,
+            "seconds": 1.3291707600001246,
+            "fps": 90.2818536272862,
+            "rss_mib": 1700.91015625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 407.81906019099915,
+            "frames": 120,
+            "seconds": 1.3363080119997903,
+            "fps": 89.79965615892665,
+            "rss_mib": 1700.90625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 409.3072951939994,
+            "frames": 120,
+            "seconds": 1.3424667459985358,
+            "fps": 89.38768901179984,
+            "rss_mib": 1700.90625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 410.80669837799906,
+            "frames": 120,
+            "seconds": 1.3549603289993684,
+            "fps": 88.56347852532289,
+            "rss_mib": 1700.90625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 412.30606530099976,
+            "frames": 120,
+            "seconds": 1.3581884180002817,
+            "fps": 88.35298432060044,
+            "rss_mib": 1700.90234375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 413.78851943600057,
+            "frames": 120,
+            "seconds": 1.3356384839989914,
+            "fps": 89.84467087284871,
+            "rss_mib": 1700.90625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 415.24356256399915,
+            "frames": 120,
+            "seconds": 1.3102239290001307,
+            "fps": 91.58739765314424,
+            "rss_mib": 1700.90625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 416.7273368320002,
+            "frames": 120,
+            "seconds": 1.336919969000519,
+            "fps": 89.75855158309287,
+            "rss_mib": 1700.90625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 418.21688534199893,
+            "frames": 120,
+            "seconds": 1.3411071020000236,
+            "fps": 89.4783122250574,
+            "rss_mib": 1700.90625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 419.7099160729995,
+            "frames": 120,
+            "seconds": 1.3435226010005863,
+            "fps": 89.31744051840303,
+            "rss_mib": 1700.90234375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 421.18034569500014,
+            "frames": 120,
+            "seconds": 1.3314095589994395,
+            "fps": 90.13004239670666,
+            "rss_mib": 1700.90234375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 422.6781952299989,
+            "frames": 120,
+            "seconds": 1.3524600099990494,
+            "fps": 88.72720754241328,
+            "rss_mib": 1700.90234375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 424.1671578280002,
+            "frames": 120,
+            "seconds": 1.3498223100014002,
+            "fps": 88.90059018203331,
+            "rss_mib": 1700.90625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 425.64166798800034,
+            "frames": 120,
+            "seconds": 1.3287134269994567,
+            "fps": 90.31292795090349,
+            "rss_mib": 1700.91015625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 427.10772943200027,
+            "frames": 120,
+            "seconds": 1.318506883999362,
+            "fps": 91.01203903919706,
+            "rss_mib": 1700.91015625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 428.5728754169995,
+            "frames": 120,
+            "seconds": 1.3197961950008903,
+            "fps": 90.92312923353977,
+            "rss_mib": 1700.90625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 430.0658636449989,
+            "frames": 120,
+            "seconds": 1.3453026370007137,
+            "fps": 89.19926022559066,
+            "rss_mib": 1700.90625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 431.5574702319991,
+            "frames": 120,
+            "seconds": 1.3472425959989778,
+            "fps": 89.07081794798823,
+            "rss_mib": 1700.90625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 433.0452414329993,
+            "frames": 120,
+            "seconds": 1.3412466339996172,
+            "fps": 89.46900365532194,
+            "rss_mib": 1700.90234375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 434.5216255189989,
+            "frames": 120,
+            "seconds": 1.33319020899944,
+            "fps": 90.00966192968073,
+            "rss_mib": 1700.90234375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 436.0247943840004,
+            "frames": 120,
+            "seconds": 1.357912456998747,
+            "fps": 88.37093980654949,
+            "rss_mib": 1700.90234375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 437.51557258699904,
+            "frames": 120,
+            "seconds": 1.345856737001668,
+            "fps": 89.16253617553595,
+            "rss_mib": 1700.90234375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 438.991258131,
+            "frames": 120,
+            "seconds": 1.3226035429997864,
+            "fps": 90.73013650623449,
+            "rss_mib": 1700.90234375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 440.4868603239993,
+            "frames": 120,
+            "seconds": 1.3506648739985394,
+            "fps": 88.84513272692821,
+            "rss_mib": 1700.8984375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 441.9995499159995,
+            "frames": 120,
+            "seconds": 1.3600132809988281,
+            "fps": 88.23443246956306,
+            "rss_mib": 1700.8984375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 443.4729952969992,
+            "frames": 120,
+            "seconds": 1.3174038750003092,
+            "fps": 91.08823973967121,
+            "rss_mib": 1700.89453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 444.96025767299943,
+            "frames": 120,
+            "seconds": 1.3389935699997295,
+            "fps": 89.61954910659074,
+            "rss_mib": 1700.8984375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 446.46382090800034,
+            "frames": 120,
+            "seconds": 1.3579095469995082,
+            "fps": 88.37112918541361,
+            "rss_mib": 1700.8984375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 447.9602093859994,
+            "frames": 120,
+            "seconds": 1.3521506400011276,
+            "fps": 88.74750819176474,
+            "rss_mib": 1700.89453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 449.43574366400026,
+            "frames": 120,
+            "seconds": 1.3276699630005169,
+            "fps": 90.38390815801961,
+            "rss_mib": 1700.89453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 450.8914175560003,
+            "frames": 120,
+            "seconds": 1.3098660050000035,
+            "fps": 91.61242412730581,
+            "rss_mib": 1700.89453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 452.37197943799947,
+            "frames": 120,
+            "seconds": 1.3274235549997684,
+            "fps": 90.40068601164829,
+            "rss_mib": 1700.89453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 453.8689327110005,
+            "frames": 120,
+            "seconds": 1.3435957740002777,
+            "fps": 89.31257623915033,
+            "rss_mib": 1700.89453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 455.3563455660005,
+            "frames": 120,
+            "seconds": 1.3396650880004017,
+            "fps": 89.57462658007552,
+            "rss_mib": 1700.90234375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 456.8351622959999,
+            "frames": 120,
+            "seconds": 1.334698840000783,
+            "fps": 89.9079225991757,
+            "rss_mib": 1700.8984375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 458.309545307,
+            "frames": 120,
+            "seconds": 1.3250180989998626,
+            "fps": 90.5648006548569,
+            "rss_mib": 1700.8984375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 459.80972109399954,
+            "frames": 120,
+            "seconds": 1.3574124629994913,
+            "fps": 88.40349066402005,
+            "rss_mib": 1700.8984375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 461.3069308539998,
+            "frames": 120,
+            "seconds": 1.3436607439998625,
+            "fps": 89.30825771003717,
+            "rss_mib": 1700.8984375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 462.78010435299984,
+            "frames": 120,
+            "seconds": 1.329121570001007,
+            "fps": 90.28519490501465,
+            "rss_mib": 1700.89453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 464.2570750039995,
+            "frames": 120,
+            "seconds": 1.3321758419988328,
+            "fps": 90.07819855068738,
+            "rss_mib": 1700.89453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 465.7303312519998,
+            "frames": 120,
+            "seconds": 1.3234702340014337,
+            "fps": 90.67072074389397,
+            "rss_mib": 1700.89453125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 467.24181799100006,
+            "frames": 120,
+            "seconds": 1.3616595980001875,
+            "fps": 88.1277524692948,
+            "rss_mib": 1700.890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 468.7487317899995,
+            "frames": 120,
+            "seconds": 1.3589166150013625,
+            "fps": 88.30563897394079,
+            "rss_mib": 1700.890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 470.2680721910001,
+            "frames": 120,
+            "seconds": 1.3667503579999902,
+            "fps": 87.7995014214592,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 471.77938929099946,
+            "frames": 120,
+            "seconds": 1.3621447659988917,
+            "fps": 88.09636317326468,
+            "rss_mib": 1700.890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 473.2334344030005,
+            "frames": 120,
+            "seconds": 1.3078176290000556,
+            "fps": 91.75591255162297,
+            "rss_mib": 1700.890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 474.6925686020004,
+            "frames": 120,
+            "seconds": 1.314350311000453,
+            "fps": 91.29986046768519,
+            "rss_mib": 1700.890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 476.18194145599955,
+            "frames": 120,
+            "seconds": 1.3420554450003692,
+            "fps": 89.41508374116911,
+            "rss_mib": 1700.890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 477.68478383,
+            "frames": 120,
+            "seconds": 1.35136571700059,
+            "fps": 88.79905601449235,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 479.1871061689999,
+            "frames": 120,
+            "seconds": 1.352852313000767,
+            "fps": 88.70147823736023,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 480.66251047900005,
+            "frames": 120,
+            "seconds": 1.3287115820003237,
+            "fps": 90.31305335605238,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 482.15024159899986,
+            "frames": 120,
+            "seconds": 1.3406117419999646,
+            "fps": 89.5113747258251,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 483.62098537400016,
+            "frames": 120,
+            "seconds": 1.3259957610007405,
+            "fps": 90.49802686355117,
+            "rss_mib": 1700.890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 485.10027149599955,
+            "frames": 120,
+            "seconds": 1.3279828340000677,
+            "fps": 90.36261382878229,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 486.6012027510005,
+            "frames": 120,
+            "seconds": 1.3556132539997634,
+            "fps": 88.52082232593821,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 488.05819763399995,
+            "frames": 120,
+            "seconds": 1.3102345320003224,
+            "fps": 91.58665648721467,
+            "rss_mib": 1700.890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 489.54436356599945,
+            "frames": 120,
+            "seconds": 1.3361213469997892,
+            "fps": 89.81220176554737,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 491.05081082200013,
+            "frames": 120,
+            "seconds": 1.3601229249998141,
+            "fps": 88.22731960055478,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 492.53727593199983,
+            "frames": 120,
+            "seconds": 1.3376746399990225,
+            "fps": 89.70791283004938,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 494.0420268729995,
+            "frames": 120,
+            "seconds": 1.3576190969997697,
+            "fps": 88.3900353679397,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 495.54102339400015,
+            "frames": 120,
+            "seconds": 1.3503204179996828,
+            "fps": 88.86779641365698,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 497.0487780259991,
+            "frames": 120,
+            "seconds": 1.358946742999251,
+            "fps": 88.30368122826881,
+            "rss_mib": 1700.890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 498.5380671009989,
+            "frames": 120,
+            "seconds": 1.3415100279999024,
+            "fps": 89.45143718300162,
+            "rss_mib": 1700.890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 500.0154296389992,
+            "frames": 120,
+            "seconds": 1.3302530260007188,
+            "fps": 90.20840220207486,
+            "rss_mib": 1700.890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 501.5105014719993,
+            "frames": 120,
+            "seconds": 1.3440170489993761,
+            "fps": 89.28458168692151,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 502.96967188099916,
+            "frames": 120,
+            "seconds": 1.316983718001211,
+            "fps": 91.11729959890792,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 504.435512738999,
+            "frames": 120,
+            "seconds": 1.3159435010002198,
+            "fps": 91.1893253082603,
+            "rss_mib": 1700.8828125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 505.9172417589998,
+            "frames": 120,
+            "seconds": 1.329268609000792,
+            "fps": 90.27520787555775,
+            "rss_mib": 1700.8828125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 507.4074720610006,
+            "frames": 120,
+            "seconds": 1.3423602230013785,
+            "fps": 89.39478237197197,
+            "rss_mib": 1700.8828125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 508.85730424899884,
+            "frames": 120,
+            "seconds": 1.303549729000224,
+            "fps": 92.05632691284873,
+            "rss_mib": 1700.87890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 510.32988212499913,
+            "frames": 120,
+            "seconds": 1.3251045110009727,
+            "fps": 90.55889479189307,
+            "rss_mib": 1700.87890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 511.8318623750001,
+            "frames": 120,
+            "seconds": 1.3530067730007431,
+            "fps": 88.69135202764731,
+            "rss_mib": 1700.87890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 513.3108933019994,
+            "frames": 120,
+            "seconds": 1.3349353829999018,
+            "fps": 89.8919914238342,
+            "rss_mib": 1700.87890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 514.7819951130004,
+            "frames": 120,
+            "seconds": 1.3284706379999989,
+            "fps": 90.32943338564033,
+            "rss_mib": 1700.87890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 516.2435168409993,
+            "frames": 120,
+            "seconds": 1.31299721600044,
+            "fps": 91.39394854585875,
+            "rss_mib": 1700.87890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 517.7535016059992,
+            "frames": 120,
+            "seconds": 1.3595301100012875,
+            "fps": 88.265790597228,
+            "rss_mib": 1700.875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 519.295172307,
+            "frames": 120,
+            "seconds": 1.3956158729997696,
+            "fps": 85.98354484323052,
+            "rss_mib": 1700.875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 520.7682156129995,
+            "frames": 120,
+            "seconds": 1.3280946489994676,
+            "fps": 90.35500601587628,
+            "rss_mib": 1700.875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 522.2650126489989,
+            "frames": 120,
+            "seconds": 1.3470980540005257,
+            "fps": 89.08037513945749,
+            "rss_mib": 1700.875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 523.7391871870004,
+            "frames": 120,
+            "seconds": 1.3235934280000947,
+            "fps": 90.6622815295449,
+            "rss_mib": 1700.87109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 525.2275987079993,
+            "frames": 120,
+            "seconds": 1.3429011019998143,
+            "fps": 89.35877692057818,
+            "rss_mib": 1700.87109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 526.7030768929999,
+            "frames": 120,
+            "seconds": 1.3293017560008593,
+            "fps": 90.2729568047922,
+            "rss_mib": 1700.875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 528.1795048120002,
+            "frames": 120,
+            "seconds": 1.3305554469989147,
+            "fps": 90.18789879870214,
+            "rss_mib": 1700.875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 529.7050599449994,
+            "frames": 120,
+            "seconds": 1.3705060439988301,
+            "fps": 87.55889879176807,
+            "rss_mib": 1700.87109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 531.2422983819997,
+            "frames": 120,
+            "seconds": 1.3864655069992295,
+            "fps": 86.55101724075324,
+            "rss_mib": 1700.87109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 532.7627679130001,
+            "frames": 120,
+            "seconds": 1.3769569510004658,
+            "fps": 87.1486940189457,
+            "rss_mib": 1700.87109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 534.2749123840003,
+            "frames": 120,
+            "seconds": 1.3624839470012375,
+            "fps": 88.07443218990895,
+            "rss_mib": 1700.87109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 535.7571765840003,
+            "frames": 120,
+            "seconds": 1.3330813509983273,
+            "fps": 90.0170120226598,
+            "rss_mib": 1700.87109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 537.2577524569988,
+            "frames": 120,
+            "seconds": 1.3547340220011392,
+            "fps": 88.5782729681082,
+            "rss_mib": 1700.87109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 538.723191789999,
+            "frames": 120,
+            "seconds": 1.3185995590010862,
+            "fps": 91.00564244910471,
+            "rss_mib": 1700.8671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 540.1908591869997,
+            "frames": 120,
+            "seconds": 1.3168698659992515,
+            "fps": 91.12517728465373,
+            "rss_mib": 1700.8671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 541.7005362990003,
+            "frames": 120,
+            "seconds": 1.356538644999091,
+            "fps": 88.46043600923763,
+            "rss_mib": 1700.875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 543.2429411459998,
+            "frames": 120,
+            "seconds": 1.3967402329999459,
+            "fps": 85.91432906766182,
+            "rss_mib": 1700.875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 544.7123122459998,
+            "frames": 120,
+            "seconds": 1.324550247998559,
+            "fps": 90.59678949992583,
+            "rss_mib": 1700.87109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 546.1946373409992,
+            "frames": 120,
+            "seconds": 1.3369701619994885,
+            "fps": 89.75518183632127,
+            "rss_mib": 1700.87109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 547.6874447869995,
+            "frames": 120,
+            "seconds": 1.3401718660006736,
+            "fps": 89.54075446912843,
+            "rss_mib": 1700.87109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 549.1540059649997,
+            "frames": 120,
+            "seconds": 1.3230384470007266,
+            "fps": 90.70031205218189,
+            "rss_mib": 1700.8671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 550.6187739449997,
+            "frames": 120,
+            "seconds": 1.3186361530006252,
+            "fps": 91.00311691510487,
+            "rss_mib": 1700.87109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 552.1407877519996,
+            "frames": 120,
+            "seconds": 1.3753451329994277,
+            "fps": 87.25082680759371,
+            "rss_mib": 1700.87109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 553.6206780199991,
+            "frames": 120,
+            "seconds": 1.3344898389987065,
+            "fps": 89.92200352011545,
+            "rss_mib": 1700.8671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 555.1256680289989,
+            "frames": 120,
+            "seconds": 1.355473993000487,
+            "fps": 88.52991692918219,
+            "rss_mib": 1700.8671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 556.6389069380002,
+            "frames": 120,
+            "seconds": 1.3676795459996356,
+            "fps": 87.73985130580579,
+            "rss_mib": 1700.8671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 558.101683068,
+            "frames": 120,
+            "seconds": 1.3152635609985737,
+            "fps": 91.2364666355492,
+            "rss_mib": 1700.8671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 559.6036732110006,
+            "frames": 120,
+            "seconds": 1.357840380000198,
+            "fps": 88.37563072029315,
+            "rss_mib": 1700.86328125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 561.0623205909997,
+            "frames": 120,
+            "seconds": 1.3077680959995632,
+            "fps": 91.75938789688908,
+            "rss_mib": 1700.86328125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 562.5408405059989,
+            "frames": 120,
+            "seconds": 1.3341864719986916,
+            "fps": 89.94244996370918,
+            "rss_mib": 1700.86328125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 564.0168073829991,
+            "frames": 120,
+            "seconds": 1.3296745249990636,
+            "fps": 90.24764913811109,
+            "rss_mib": 1700.86328125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 565.5602878110003,
+            "frames": 120,
+            "seconds": 1.3861759569990681,
+            "fps": 86.56909636478471,
+            "rss_mib": 1700.86328125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 567.0889956939991,
+            "frames": 120,
+            "seconds": 1.3746063269991282,
+            "fps": 87.29772127702138,
+            "rss_mib": 1700.86328125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 568.6296269449995,
+            "frames": 120,
+            "seconds": 1.3840678859996842,
+            "fps": 86.70094958046543,
+            "rss_mib": 1700.86328125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 570.1570120790002,
+            "frames": 120,
+            "seconds": 1.3704113210005744,
+            "fps": 87.5649508735704,
+            "rss_mib": 1700.86328125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 571.7080274589989,
+            "frames": 120,
+            "seconds": 1.392678115000308,
+            "fps": 86.16492117417488,
+            "rss_mib": 1700.8671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 573.2515104680006,
+            "frames": 120,
+            "seconds": 1.3879311340006097,
+            "fps": 86.45962112983862,
+            "rss_mib": 1700.8671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 574.7845667349993,
+            "frames": 120,
+            "seconds": 1.3794687159988825,
+            "fps": 86.99001188519682,
+            "rss_mib": 1700.8671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 576.3388621149988,
+            "frames": 120,
+            "seconds": 1.4010631529999955,
+            "fps": 85.64924410655769,
+            "rss_mib": 1700.8671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 577.8985499289993,
+            "frames": 120,
+            "seconds": 1.4033229409997148,
+            "fps": 85.51132208706933,
+            "rss_mib": 1700.8671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 579.4924613259991,
+            "frames": 120,
+            "seconds": 1.4384003799987113,
+            "fps": 83.4260068814133,
+            "rss_mib": 1700.8671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 581.0631507140006,
+            "frames": 120,
+            "seconds": 1.4160897319998185,
+            "fps": 84.74039270840174,
+            "rss_mib": 1700.8671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 582.6322989790006,
+            "frames": 120,
+            "seconds": 1.4123834359998,
+            "fps": 84.96276361033237,
+            "rss_mib": 1700.87109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 584.1856989099997,
+            "frames": 120,
+            "seconds": 1.3997199519999413,
+            "fps": 85.73143494064092,
+            "rss_mib": 1700.87109375,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 585.7285711379991,
+            "frames": 120,
+            "seconds": 1.3846284160008508,
+            "fps": 86.66585100614189,
+            "rss_mib": 1700.875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 587.2571064080003,
+            "frames": 120,
+            "seconds": 1.372554179000872,
+            "fps": 87.42824278700023,
+            "rss_mib": 1700.875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 588.819196692999,
+            "frames": 120,
+            "seconds": 1.4051726030011196,
+            "fps": 85.39876150709749,
+            "rss_mib": 1700.87890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 590.3719835270003,
+            "frames": 120,
+            "seconds": 1.395623173999411,
+            "fps": 85.98309503282198,
+            "rss_mib": 1700.8828125,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 591.9159839269996,
+            "frames": 120,
+            "seconds": 1.392431468999348,
+            "fps": 86.18018385223394,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 593.4556186869995,
+            "frames": 120,
+            "seconds": 1.3840122050005448,
+            "fps": 86.70443769674182,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 595.000162938999,
+            "frames": 120,
+            "seconds": 1.3880233079999016,
+            "fps": 86.45387963471325,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 596.5586072900005,
+            "frames": 120,
+            "seconds": 1.405152741001075,
+            "fps": 85.3999686286832,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 598.0913166070004,
+            "frames": 120,
+            "seconds": 1.3783816169998317,
+            "fps": 87.05861897751547,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 599.618163264,
+            "frames": 120,
+            "seconds": 1.37127709699962,
+            "fps": 87.50966545168897,
+            "rss_mib": 1700.88671875,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        },
+        {
+            "elapsed_seconds": 601.1568873559991,
+            "frames": 120,
+            "seconds": 1.3832838460002677,
+            "fps": 86.75009134746794,
+            "rss_mib": 1700.890625,
+            "vram_allocated_mib": 12.09521484375,
+            "vram_reserved_mib": 60.0,
+            "open_fds": 44
+        }
+    ],
+    "exceptions": [],
+    "elapsed_seconds": 601.1642746559992,
+    "total_frames": 48240,
+    "rss_mib_first_window": 1694.5078125,
+    "rss_mib_last_window": 1700.869140625,
+    "rss_mib_growth_percent": 0.37540860408395993,
+    "vram_allocated_mib_first_window": 12.09521484375,
+    "vram_allocated_mib_last_window": 12.09521484375,
+    "vram_allocated_mib_growth_percent": 0.0,
+    "fps_first_window": 86.9486358759062,
+    "fps_last_window": 87.02431543135614,
+    "fps_growth_percent": 0.0870393821450488,
+    "open_fds_first_window": 44,
+    "open_fds_last_window": 44.0,
+    "open_fds_growth_percent": 0.0,
+    "pass": true,
+    "failed_gates": []
+}

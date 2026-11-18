@@ -101,7 +101,7 @@ def hash(path: PathInput, algorithm: str = "sha256") -> str:
     return hasher.hexdigest()
 
 
-def info(path: PathInput, *, verbose: bool = False) -> Dict[str, Any]:
+def info(path: PathInput) -> Dict[str, Any]:
     """Collect common metadata for a file or directory.
 
     The result includes names, type flags, byte and human sizes, and timestamps.
@@ -111,8 +111,6 @@ def info(path: PathInput, *, verbose: bool = False) -> Dict[str, Any]:
     ----------
     path : str or os.PathLike[str]
         Path to inspect or operate on.
-    verbose : bool, default=False
-        Print the metadata as a Rich table while returning the dictionary.
 
     Returns
     -------
@@ -121,8 +119,6 @@ def info(path: PathInput, *, verbose: bool = False) -> Dict[str, Any]:
 
     Raises
     ------
-    TypeError
-        If ``verbose`` is not a boolean.
     FileNotFoundError
         If the path does not exist.
 
@@ -133,16 +129,16 @@ def info(path: PathInput, *, verbose: bool = False) -> Dict[str, Any]:
 
     Examples
     --------
-    >>> from klygo import files
-    >>> metadata = files.info("model.onnx", verbose=True)
+    >>> from klygo import files, utils
+    >>> metadata = files.info("model.onnx")
+    >>> utils.tabulate(metadata, title="File information")
     """
-    validate_type(verbose, bool, "verbose")
     candidate = _to_path(path)
     if not exists(candidate):
         raise FileNotFoundError(f"Path does not exist: {candidate}")
     stat = candidate.stat()
     byte_size = size(candidate)
-    metadata = {
+    return {
         "name": name(candidate),
         "stem": stem(candidate),
         "extension": extension(candidate),
@@ -154,17 +150,6 @@ def info(path: PathInput, *, verbose: bool = False) -> Dict[str, Any]:
         "created": datetime.fromtimestamp(stat.st_ctime),
         "modified": datetime.fromtimestamp(stat.st_mtime),
     }
-    if verbose:
-        from rich.console import Console
-        from rich.table import Table
-
-        table = Table(title=f"File information: {candidate}")
-        table.add_column("Field", style="cyan")
-        table.add_column("Value")
-        for key, value in metadata.items():
-            table.add_row(key, str(value))
-        Console().print(table)
-    return metadata
 
 
 def compare(path1: PathInput, path2: PathInput, by: str = "content") -> bool:

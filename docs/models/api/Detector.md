@@ -36,7 +36,7 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
    - `packed=True` returns materialized `Detections` using shared compact arrays and lazy frame facades. It cannot be combined with `stream=True`.
 4. **Lifecycle & Isolated Benchmarking**:
    - `warmup()`: Run a single 640×640 dummy inference pass to initialize GPU kernels.
-   - `benchmark(source=None, iterations=10, warmup=3, verbose=True, **kwargs)`: Measure mean latency (ms), throughput (FPS), device, and dtype inside accelerator synchronization. Temporary overrides apply only during the benchmark run and are safely restored on completion or failure.
+   - `benchmark(source=None, iterations=10, warmup=3, **kwargs)`: Measure mean latency (ms), throughput (FPS), device, and dtype inside accelerator synchronization. Temporary overrides apply only during the benchmark run and are safely restored on completion or failure.
 
 ## Parameters
 
@@ -52,7 +52,7 @@ Base Layer-2 object-detection engine providing unified batch/streaming inference
 - `predict_config`: Read-only defensive snapshot dictionary of remembered inference parameters.
 - `predict(source, prompt=None, batch=1, workers=1, prefetch=1, vid_stride=1, max_frames=None, stream=False, native=False, packed=False, verbose=True, **kwargs) -> Detections`: Run Klygo-managed or supported backend-native detection.
 - `forward(images, prompt=None) -> list[Detection]`: Pure inference hook implemented by subclasses on a batch of `PIL.Image.Image` instances.
-- `benchmark(source=None, iterations=10, warmup=3, verbose=True, **kwargs) -> dict[str, Any]`: Measure latency and FPS in isolation without mutating persistent model settings.
+- `benchmark(source=None, iterations=10, warmup=3, **kwargs) -> dict[str, Any]`: Measure latency and FPS in isolation without mutating persistent model settings.
 - `warmup() -> None`: Warm up the accelerator pipeline on a 640×640 image.
 - `export(output_path="config.json", overwrite=False) -> pathlib.Path`: Export the resolved registry configuration directly to a JSON file.
 - `help() -> None`: Display a Rich guide covering parameters and usage.

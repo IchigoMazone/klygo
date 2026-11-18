@@ -21,7 +21,7 @@ Local Tutorial Notebooks (`tutorials/utils/`, 1-to-1 with `klygo/utils/` submodu
 
 | Submodule | Public APIs | Key Architectural Guarantees |
 | :--- | :--- | :--- |
-| **`formatting.py`** | [`exclude_keys()`](api/exclude_keys.md), [`invert()`](api/invert.md), [`human_size()`](api/human_size.md) | **Pure, non-mutating transformations**: `exclude_keys()` and `invert()` accept any `collections.abc.Mapping` and return a new `dict` without modifying the caller's input. `invert()` enforces one-to-one reversibility by rejecting duplicate or unhashable values. `human_size()` formats non-negative integer byte counts using base-1024 binary steps (`B`, `KB`, `MB`, `GB`, `TB`). |
+| **`formatting.py`** | [`exclude_keys()`](api/exclude_keys.md), [`invert()`](api/invert.md), [`human_size()`](api/human_size.md), [`tabulate()`](api/tabulate.md) | **Pure, non-mutating transformations & Rich table rendering**: `exclude_keys()` and `invert()` accept any `collections.abc.Mapping` and return a new `dict` without modifying the caller's input. `invert()` enforces one-to-one reversibility by rejecting duplicate or unhashable values. `human_size()` formats non-negative integer byte counts using base-1024 binary steps (`B`, `KB`, `MB`, `GB`, `TB`). `tabulate()` renders any mapping as a rounded Rich table. |
 | **`progress.py`** | [`ProgressBar`](api/ProgressBar.md), [`create_progress_bar()`](api/create_progress_bar.md) | **Zero-overhead `verbose=False` mode**: `ProgressBar` wraps `tqdm.auto.tqdm` for terminal and notebook compatibility. When `verbose=False`, no `tqdm` instance is allocated (`bar is None`), and `.update()` and `.close()` become no-ops. Using `with utils.ProgressBar(...) as progress:` guarantees cleanup on block exit. |
 
 Note the intentional default difference between the class constructor and factory function:
@@ -45,6 +45,7 @@ Note the intentional default difference between the class constructor and factor
 | **Verify that a mapping is strictly one-to-one before inverting** | [`invert()`](api/invert.md) | `utils.invert(mapping)` (raises `ValueError` on duplicate values) |
 | **Format byte counts as human-readable `B`, `KB`, `MB`, `GB`, or `TB`** | [`human_size()`](api/human_size.md) | `utils.human_size(1048576)  # '1.00 MB'` |
 | **Control decimal precision when formatting byte sizes** | [`human_size()`](api/human_size.md) | `utils.human_size(1536, decimal_places=1)  # '1.5 KB'` |
+| **Render a dictionary or summary mapping as a styled Rich table** | [`tabulate()`](api/tabulate.md) | `utils.tabulate({"nc": 2, "classes": ["cat", "dog"]}, title="Dataset")` |
 | **Display a context-managed progress bar for a loop** | [`ProgressBar`](api/ProgressBar.md) | `with utils.ProgressBar(100, "Processing", unit="img") as bar: bar.update()` |
 | **Silence progress output in headless or quiet workflows** | [`ProgressBar`](api/ProgressBar.md) | `with utils.ProgressBar(100, "Silent", verbose=False) as bar: bar.update()` |
 | **Create a byte-oriented progress bar via a factory function** | [`create_progress_bar()`](api/create_progress_bar.md) | `bar = utils.create_progress_bar(total_bytes, "Downloading", unit="B", unit_scale=True)` |
@@ -64,6 +65,7 @@ Note the intentional default difference between the class constructor and factor
 - [`exclude_keys(values, keys)`](api/exclude_keys.md): Return a shallow dictionary copy omitting one key (`str`) or a list of keys (`list[str]`) without mutating the source mapping ([example](../../examples/utils/exclude_keys.py)).
 - [`invert(values)`](api/invert.md): Return a new dictionary with keys and values exchanged, enforcing unique and hashable values ([example](../../examples/utils/invert.py)).
 - [`human_size(num_bytes, decimal_places=2)`](api/human_size.md): Format a non-negative integer byte count using base-1024 binary units (`B`, `KB`, `MB`, `GB`, `TB`) ([example](../../examples/utils/human_size.py)).
+- [`tabulate(data, *, title=None, key_header='Property', value_header='Value', show=True)`](api/tabulate.md): Render a key-value mapping as a styled Rich table with rounded borders ([example](../../examples/utils/tabulate.py)).
 
 </details>
 

@@ -9,11 +9,18 @@ Klygo is a modular, composable Python toolkit for files, archives,
 configuration, media, dataset management, dataset mining, preprocessing, and
 multi-backend object-detection pipelines. Every public module exposes small,
 independent APIs backed by shared result types so teams can adopt a single layer
-or chain all 13 modules end to end.
+or chain all 14 modules end to end.
 
 Klygo supports **Python 3.10+** and keeps core installation lightweight—heavy
 deep-learning frameworks (`torch`, `transformers`, `ultralytics`, `torchvision`,
 `keras-hub`) are strictly optional extras.
+
+## Use the public API first
+
+Each module's supported public surface is its high-level API, including `files`.
+For a task already covered by that surface, call it directly instead of rebuilding
+it from smaller operations. Compose existing APIs for workflows and customize only
+a verified missing capability. See [API levels and selection](docs/API_LEVELS.md).
 
 ## Architecture
 
@@ -30,6 +37,8 @@ deep-learning frameworks (`torch`, `transformers`, `ultralytics`, `torchvision`,
 - `outputs`, `postprocessing`, and `visual` standardize detections (`Box`,
   `Detection`, `Detections`), compose NMS/filtering pipelines, and render clean
   annotations and dataset charts.
+- [`metrics`](docs/metrics/README.md) evaluates same-source `Detection` or
+  `Detections` pairs directly or through reusable composed configurations.
 
 ```text
 files / archives / images / videos
@@ -227,6 +236,7 @@ model_options = utils.exclude_keys(options, ["dtype", "device"])
 | `klygo.models` | Detector lifecycle, metadata, loading, and backend hooks | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/models/README.md) |
 | `klygo.outputs` | Structured detection results and normalized-result construction | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/outputs/README.md) |
 | `klygo.postprocessing` | Backend-independent detection transformations | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/postprocessing/README.md) |
+| `klygo.metrics` | Composable evaluation of same-source detection pairs | [Guide](docs/metrics/README.md) |
 | `klygo.datasets` | Convert, load, inspect, partition, merge, split, and relabel datasets | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/datasets/README.md) |
 | `klygo.mining` | Analyze, deduplicate, cluster, select, and balance detection datasets | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/mining/README.md) |
 | `klygo.visual` | Display images, boxes, and dataset statistics | [Guide](https://github.com/IchigoMazone/klygo/blob/main/docs/visual/README.md) |

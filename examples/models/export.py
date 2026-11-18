@@ -7,9 +7,10 @@ sys.path.pop(0)
 
 from klygo import models
 
-output = models.export(
+output = "artifacts/models/yolo11n.json"
+models.export(
     "ultralytics/yolo11n.pt",
-    "artifacts/models/yolo11n.json",
+    output,
     overwrite=True,
     device="cpu",
     threshold=0.4,

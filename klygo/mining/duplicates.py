@@ -7,13 +7,17 @@ images via perceptual Discrete Cosine Transform (DCT) pHash similarity.
 from __future__ import annotations
 
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
+import os
 from typing import Any
 
 import numpy as np
 
 from klygo import files
 from klygo.outputs import Detections
+from klygo import validators
+from klygo.utils.progress import _iter_progress
 
 from ._common import _Report, _UnionFind, _phash, _require, _subset
 from .analysis import score
@@ -77,6 +81,7 @@ def find_duplicates(
     exact: bool = True,
     method: str = "phash",
     threshold: float = 0.95,
+    verbose: bool = False,
 ) -> DuplicateReport:
     """Detect exact and near-duplicate images across a detection dataset.
 
@@ -96,6 +101,9 @@ def find_duplicates(
     threshold : float, default=0.95
         Minimum normalized perceptual similarity in [0.0, 1.0] required to group
         two images as near-duplicates. Default 0.95 corresponds to <= 3 bit differences.
+
+    verbose : bool, default=False
+        Display throttled progress for processing stages; disabled by default.
 
     Returns
     -------
@@ -120,9 +128,10 @@ def find_duplicates(
     >>> from klygo import datasets, mining
     >>> data = datasets.load("artifacts/datasets/flat_data", format="yolo", verbose=False)
     >>> report = mining.find_duplicates(data, threshold=0.95)
-    >>> report.show()
+    >>> utils.tabulate(report.to_dict())
     >>> print(f"Removable duplicates: {report.duplicate_images}")
     """
+    validators.validate_type(verbose, bool, "verbose")
     _require(data)
 
     if method != "phash":
@@ -133,22 +142,43 @@ def find_duplicates(
     union = _UnionFind(len(data))
     exact_map: dict[str, list[int]] = defaultdict(list)
 
+    total = len(data)
+    workers = min(8, os.cpu_count() or 4, max(1, total))
+
     # 1. Exact pass: group identical source files using cryptographic hashes
     if exact:
-        for index, frame in enumerate(data):
-            if frame.source_path is not None:
-                exact_map[files.hash(frame.source_path)].append(index)
+        if total >= 16 and not verbose:
+            def _hash_one(frame: Any) -> str | None:
+                return files.hash(frame.source_path) if frame.source_path is not None else None
+
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                for index, digest in enumerate(pool.map(_hash_one, data)):
+                    if digest is not None:
+                        exact_map[digest].append(index)
+        else:
+            for index, frame in enumerate(_iter_progress(data, verbose, "Exact image hashes")):
+                if frame.source_path is not None:
+                    exact_map[files.hash(frame.source_path)].append(index)
         for group in exact_map.values():
             for index in group[1:]:
                 union.union(group[0], index)
 
     # 2. Perceptual pass: compute 63-bit DCT pHash for each frame
-    computed = [_phash(frame) for frame in data]
+    if total >= 16 and not verbose:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            computed = list(pool.map(_phash, data))
+    else:
+        computed = [_phash(frame) for frame in _iter_progress(data, verbose, "Perceptual image hashes")]
     similarities: dict[str, float] = {}
 
-    # Pairwise comparison across frames
-    for first in range(len(computed)):
-        for second in range(first + 1, len(computed)):
+    # Vectorized pairwise comparison across frames
+    if len(computed) >= 2:
+        bits = np.stack([item[1] for item in computed]).astype(np.float32)
+        n_bits = bits.shape[1]
+        matches = bits @ bits.T + (1.0 - bits) @ (1.0 - bits).T
+        min_matches = threshold * n_bits - 1e-4
+        first_idx, second_idx = np.where(np.triu(matches >= min_matches, k=1))
+        for first, second in zip(first_idx.tolist(), second_idx.tolist()):
             similarity = float(1.0 - np.mean(computed[first][1] != computed[second][1]))
             if similarity >= threshold:
                 union.union(first, second)
@@ -182,6 +212,7 @@ def deduplicate(
     *,
     keep: str = "best",
     threshold: float = 0.95,
+    verbose: bool = False,
 ) -> Detections:
     """Return an independent detection dataset with duplicate images filtered out.
 
@@ -201,6 +232,9 @@ def deduplicate(
         - `'annotations'`: keep the frame with highest bounding box count.
     threshold : float, default=0.95
         Perceptual hash similarity threshold in [0.0, 1.0].
+
+    verbose : bool, default=False
+        Display throttled progress for processing stages; disabled by default.
 
     Returns
     -------
@@ -226,14 +260,15 @@ def deduplicate(
     >>> unique = mining.deduplicate(data, keep="best", threshold=0.95)
     >>> print(f"Removed {len(data) - len(unique)} duplicate frames.")
     """
+    validators.validate_type(verbose, bool, "verbose")
     _require(data)
 
     if keep not in {"best", "first", "quality", "annotations"}:
         raise ValueError("keep must be 'best', 'first', 'quality', or 'annotations'")
 
-    report = find_duplicates(data, threshold=threshold)
+    report = find_duplicates(data, threshold=threshold, verbose=verbose)
     ranking = (
-        score(data, weights={"quality": 1.0} if keep == "quality" else None)
+        score(data, weights={"quality": 1.0} if keep == "quality" else None, verbose=verbose)
         if keep in {"best", "quality"}
         else None
     )

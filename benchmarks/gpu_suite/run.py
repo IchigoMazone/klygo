@@ -38,31 +38,24 @@ MODEL_IDS = ("yolo", "yolo11", "yolo26", "yolo-world", "grounding-dino",
              "grounding-dino-base", "faster-rcnn", "d-fine", "locate-anything")
 
 
-class KerasDFine(models.Detector):
-    def __init__(self, device):
-        import keras_hub
-
-        super().__init__(backend="Keras", model_id="dfine_nano_coco")
-        self.model = keras_hub.models.ObjectDetector.from_preset(self.model_id)
-        self.model.to(device)
-        self.names = {index: str(index) for index in range(80)}
-
-    def forward(self, images, prompt=None):
-        raw = self.run_inference(self.cast_inputs(images))
-        formatted = self.format_results(raw)
-        for item in formatted:
-            keep = [i for i, score in enumerate(item["scores"]) if score >= 0.25]
-            for key in ("boxes", "scores", "class_ids", "labels"):
-                item[key] = [item[key][i] for i in keep]
-        return outputs.build_detections(images, formatted, names=self.names)
+def _resolve_torch_dtype(dtype_arg: str):
+    if dtype_arg == "float16":
+        return torch.float16
+    if dtype_arg == "bfloat16":
+        return torch.bfloat16
+    if dtype_arg == "float32":
+        return torch.float32
+    return None
 
 
 def build(key, args):
+    req_dtype = _resolve_torch_dtype(getattr(args, "dtype", "auto"))
     if key in ("yolo", "yolo11", "yolo26", "yolo-world"):
         name = {"yolo": "yolov8n.pt", "yolo11": "yolo11n.pt", "yolo26": "yolo26n.pt",
                 "yolo-world": "yolov8s-worldv2.pt"}[key]
+        use_half = (req_dtype == torch.float16) and str(args.device).startswith("cuda")
         detector = models.load(name, device=args.device, imgsz=args.imgsz,
-                               half=False, threshold=0.25, iou=0.7, model_stream=False)
+                               half=use_half, threshold=0.25, iou=0.7, model_stream=False)
         prompt = ["person", "bus", "car"] if key == "yolo-world" else None
         if prompt:
             detector.model.set_classes(prompt)
@@ -71,20 +64,28 @@ def build(key, args):
     if key.startswith("grounding-dino"):
         name = "grounding-dino-base" if key.endswith("base") else "grounding-dino-tiny"
         detector = models.load(name, size={"shortest_edge": args.imgsz, "longest_edge": args.imgsz*2})
-        detector.model.to(args.device).eval()
+        target_dtype = req_dtype or torch.float32
+        detector.model.to(device=args.device, dtype=target_dtype).eval()
         return detector, ["person", "bus", "car"]
     if key == "faster-rcnn":
         detector = models.load("fasterrcnn_mobilenet_v3_large_fpn", device=args.device, threshold=0.25)
         # Keep the declared resize policy equal in raw/native/managed execution.
         detector.model.transform.min_size = (args.imgsz,)
         detector.model.transform.max_size = args.imgsz*2
+        if req_dtype is not None:
+            detector.model.to(device=args.device, dtype=req_dtype).eval()
         return detector, None
     if key == "d-fine":
-        return KerasDFine(args.device), None
+        if req_dtype is not None:
+            import keras
+            keras.mixed_precision.set_global_policy(
+                "float16" if req_dtype == torch.float16 else ("bfloat16" if req_dtype == torch.bfloat16 else "float32")
+            )
+        return models.load("dfine_nano_coco", device=args.device, threshold=0.25, iou=0.5), None
     if not args.allow_remote_code:
         raise PermissionError("LocateAnything requires --allow-remote-code for its pinned NVIDIA checkpoint")
     detector = models.load("locate-anything", model_trust_remote_code=True,
-                           model_device=args.device, model_torch_dtype=torch.float16,
+                           model_device=args.device, model_torch_dtype=req_dtype or torch.float16,
                            generation_mode="fast", max_new_tokens=512)
     return detector, ["person"]
 
@@ -127,13 +128,14 @@ def raw(detector, key, images, prompt):
         text = ". ".join(prompt)+"."
         inputs = detector.processor(images=images, text=[text]*len(images), return_tensors="pt",
                                     **dict(detector.metadata.get("processor", {})))
-        inputs = inputs.to(detector.device)
+        inputs = detector.cast_inputs(inputs)
         prediction = detector.model(**inputs)
         return detector.processor.post_process_grounded_object_detection(
             outputs=prediction, input_ids=inputs["input_ids"], threshold=0.25,
             text_threshold=0.3, target_sizes=[image.size[::-1] for image in images])
     if key == "faster-rcnn":
-        tensors = [media.to_tensor(image).to(detector.device) for image in images]
+        from torchvision.transforms.functional import pil_to_tensor
+        tensors = [(pil_to_tensor(image.convert("RGB")).float() / 255.0).to(device=detector.device, dtype=detector.dtype) for image in images]
         predictions = detector.model(tensors)
         result = []
         for item in predictions:
@@ -147,11 +149,18 @@ def raw(detector, key, images, prompt):
 
         inputs = keras.ops.convert_to_tensor(np.stack([np.asarray(image) for image in images]), dtype="float32")
         converter = detector.model.preprocessor.image_converter
-        prepared = detector.model.preprocessor(keras.ops.image.resize(inputs, converter.image_size))
-        prediction = detector.model(prepared, training=False)
-        decoded = detector.model.decode_predictions(prediction, inputs)
+        prepared = detector.model.preprocess_samples(inputs)
+        prepared, _, _ = keras.utils.unpack_x_y_sample_weight(prepared)
+        decoder = detector.model.prediction_decoder
+        previous = decoder.confidence_threshold, decoder.iou_threshold
+        try:
+            decoder.confidence_threshold, decoder.iou_threshold = 0.25, 0.5
+            prediction = detector.model(prepared, training=False)
+            decoded = detector.model.decode_predictions(prediction, prepared)
+        finally:
+            decoder.confidence_threshold, decoder.iou_threshold = previous
         # Retain raw tensors until timing has ended. Output conversion is untimed.
-        return [(decoded, index) for index in range(len(images))]
+        return [(decoded, index, image.size, converter.get_config(), detector.names) for index, image in enumerate(images)]
     result = []
     for image in images:
         question = f"Locate all the instances that matches the following description: {prompt[0]}."
@@ -183,14 +192,20 @@ def canonical(item, key, is_raw):
     if key == "d-fine":
         import keras
 
-        decoded, index = item
+        decoded, index, (width, height), converter, names = item
         boxes = keras.ops.convert_to_numpy(decoded["boxes"])[index]
         scores = keras.ops.convert_to_numpy(decoded.get("confidence", decoded.get("scores")))[index]
         ids = keras.ops.convert_to_numpy(decoded.get("classes", decoded.get("labels")))[index]
         keep = (scores >= 0.25) & (ids >= 0)
-        boxes = boxes[keep]
-        return {"boxes": boxes[:,[1,0,3,2]].tolist(), "scores": scores[keep].tolist(),
-                "labels": [str(int(x)) for x in ids[keep]]}
+        boxes = boxes[keep][:, [1, 0, 3, 2]].astype(float)
+        # Independent inverse of the preset's integer center crop in original pixels.
+        target_height, target_width = converter["image_size"]
+        crop_height = max(min(height, int(width * target_height / target_width)), 1)
+        crop_width = max(min(width, int(height * target_width / target_height)), 1)
+        boxes[:, [0, 2]] = boxes[:, [0, 2]] * crop_width / target_width + (width - crop_width) // 2
+        boxes[:, [1, 3]] = boxes[:, [1, 3]] * crop_height / target_height + (height - crop_height) // 2
+        return {"boxes": boxes.tolist(), "scores": scores[keep].tolist(),
+                "labels": [names[int(x)] for x in ids[keep]]}
     if key == "locate-anything":
         answer, (width,height) = item
         found = re.findall(r"<box>\s*<(\d+)>\s*<(\d+)>\s*<(\d+)>\s*<(\d+)>\s*</box>",answer)
@@ -279,17 +294,24 @@ class Telemetry:
 def execute(detector,key,prompt,mode,images,args,video=None):
     if mode.startswith("raw"):
         if key in ("yolo","yolo11","yolo26","yolo-world"):
+            use_half = bool(detector.metadata.get("model", {}).get("half", False))
             return detector.model.predict(source=video or images, stream=mode.endswith("-stream") and mode!="raw-non-stream",
-                device=args.device,imgsz=args.imgsz,conf=0.25,iou=0.7,half=False,batch=args.batch,
+                device=args.device,imgsz=args.imgsz,conf=0.25,iou=0.7,half=use_half,batch=args.batch,
                 rect=True,verbose=False)
         return raw(detector,key,images,prompt)
     if mode.startswith("native"):
         # Native calls may override a frozen model group transiently. Frozen
         # options are not remembered by Detector's runtime configuration.
         kwargs = {"model_stream": mode=="native-stream"} if key in ("yolo","yolo11","yolo26","yolo-world") else {}
+        if mode != "native-stream" and getattr(args, "packed", False):
+            kwargs["packed"] = True
         return detector.predict(video or images,prompt=prompt,native=True,verbose=False,**kwargs)
-    return detector.predict(video or images,prompt=prompt,batch=args.batch,workers=1,prefetch=1,
-                            stream=mode=="managed-stream",verbose=False)
+    is_stream = mode=="managed-stream"
+    return detector.predict(video or images,prompt=prompt,batch=args.batch,
+                            workers=getattr(args, "workers", 1),
+                            prefetch=getattr(args, "prefetch", 1),
+                            packed=bool(getattr(args, "packed", False) and not is_stream),
+                            stream=is_stream,verbose=False)
 
 
 def measure(detector,key,prompt,mode,packs,args,video=None,ready_latency=False):
@@ -494,8 +516,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model",choices=MODEL_IDS,required=True)
     parser.add_argument("--device",default="cuda:0")
+    parser.add_argument("--dtype",choices=("auto","float32","float16","bfloat16"),default="auto")
     parser.add_argument("--imgsz",type=int,default=640)
     parser.add_argument("--batch",type=int,default=1)
+    parser.add_argument("--workers",type=int,default=1)
+    parser.add_argument("--prefetch",type=int,default=1)
+    parser.add_argument("--packed",action="store_true")
     parser.add_argument("--iterations",type=int,default=8)
     parser.add_argument("--repeats",type=int,default=7)
     parser.add_argument("--profile",choices=("images","video"),default="images")

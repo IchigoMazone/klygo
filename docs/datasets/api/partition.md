@@ -69,7 +69,8 @@ with TemporaryDirectory() as directory:
         files.save(source / "labels" / f"img_{idx}.txt", ["0 0.5 0.5 0.5 0.5"], overwrite=True, verbose=False)
     config.save(source / "data.yaml", {"train": "images", "nc": 1, "names": ["apple"]}, overwrite=True, verbose=False)
 
-    output = datasets.partition(source, root / "partitioned", (0.5, 0.25, 0.25), verbose=False)
+    output = root / "partitioned"
+    datasets.partition(source, output, (0.5, 0.25, 0.25), verbose=False)
     assert files.is_dir(output / "images" / "train")
     assert datasets.info(output)["splits"] == {"train": 2, "val": 1, "test": 1}
 ```

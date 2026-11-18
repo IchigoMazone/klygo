@@ -15,8 +15,8 @@ class TestRename(unittest.TestCase):
             root = Path(directory)
             source = root / "draft.txt"
             source.touch()
-            renamed = files.rename(source, "final.txt")
-            self.assertEqual(renamed, root / "final.txt")
+            renamed = root / "final.txt"
+            self.assertIsNone(files.rename(source, "final.txt"))
             self.assertTrue(renamed.exists())
             with self.assertRaises(ValueError):
                 files.rename(renamed, renamed)
@@ -29,7 +29,7 @@ class TestRename(unittest.TestCase):
             target = root / "old.txt"
             source.write_text("new", encoding="utf-8")
             target.write_text("old", encoding="utf-8")
-            self.assertEqual(files.rename(source, target, overwrite=True), target)
+            self.assertIsNone(files.rename(source, target, overwrite=True))
             self.assertEqual(target.read_text(encoding="utf-8"), "new")
             self.assertFalse(source.exists())
 

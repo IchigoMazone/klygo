@@ -41,7 +41,7 @@ class TestRealDetectionOptIn(unittest.TestCase):
             self.assertEqual(result[0].text_prompt, ["person"])
             detector(source, verbose=False)
             before = detector.predict_config
-            detector.benchmark(source, iterations=1, warmup=0, verbose=False)
+            detector.benchmark(source, iterations=1, warmup=0)
             self.assertEqual(detector.predict_config, before)
         finally:
             del detector

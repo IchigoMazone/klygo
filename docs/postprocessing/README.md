@@ -22,7 +22,6 @@ results.transform(pipeline)
 | [`Pipeline`](api/Pipeline.md) | Stores ordered operations and applies them as one atomic transaction for `Detection` and `Detections`. |
 | [`compose`](api/compose.md) | Builds a reusable atomic `Pipeline` from operation callables. |
 | [`custom`](api/custom.md) | Wraps a caller-owned in-place callable as a named `Operation`. |
-| [`select`](api/select.md) | Creates an operation that keeps boxes matching every supplied selector. |
 | [`map_boxes`](api/map_boxes.md) | Creates an operation that transforms detached box drafts atomically. |
 | [`box_iou`](api/box_iou.md) | Returns the intersection-over-union value for two boxes without mutation. |
 | [`threshold`](api/threshold.md) | Creates a score-threshold operation. |

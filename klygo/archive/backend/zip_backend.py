@@ -247,7 +247,7 @@ class ZipBackend(ArchiveBackend):
                 results.append(name)
         return results
 
-    def get_info(self, archive_path: Path) -> Dict[str, Any]:
+    def info(self, archive_path: Path) -> Dict[str, Any]:
         """Return normalized ZIP sizes, counts, ratio, encryption, and extrema."""
         with ZipFile(archive_path, mode="r") as zf:
             members = zf.infolist()
@@ -290,7 +290,7 @@ class ZipBackend(ArchiveBackend):
                 "smallest_file": smallest,
             }
 
-    def test(self, archive_path: Path, raise_exception: bool = False) -> bool:
+    def is_valid(self, archive_path: Path, raise_exception: bool = False) -> bool:
         """Run the ZIP CRC check and optionally raise for the first bad member."""
         try:
             with ZipFile(archive_path, mode="r") as zf:

@@ -25,14 +25,12 @@ class TestConfig(unittest.TestCase):
                 {"default": {"root": str(root)}},
                 verbose=False,
             )
-            manager.read(verbose=False)
+            manager.load(verbose=False)
             manager.set("model.batch", 32)
-            manager.update({"model": {"epochs": 5}})
-            manager.merge({"seed": 7})
+            manager.merge({"model": {"epochs": 5}}, {"seed": 7})
             self.assertTrue(manager.has("seed"))
             self.assertTrue(manager.delete("model.lr"))
             self.assertEqual(json.loads(manager.to_json())["model"]["batch"], 32)
-            self.assertTrue(manager.export_file("result", "toml", output_dir=TextPath(root), verbose=False).is_file())
             self.assertEqual(manager.to_dict()["seed"], 7)
 
 

@@ -1,276 +1,567 @@
-"""Convert raw image and label trees into a flat YOLO dataset."""
+"""Convert Pascal VOC or COCO object-detection datasets to flat YOLO format."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections import defaultdict
+from math import isfinite
 from os import PathLike
 from pathlib import Path
+from typing import Any, Sequence
 import warnings
+import xml.etree.ElementTree as ET
 
 from klygo import config, files, validators
-
-from ._structure import IMAGE_EXTENSIONS, copy_entry, validate_dataset_format
+from ._structure import IMAGE_EXTENSIONS, copy_entry
 from ._workspace import dataset_workspace, write_output
 
 
-_CONFLICT_MODES = {"error", "rename", "skip", "overwrite"}
+_SUPPORTED_SRC = {"voc", "coco"}
+_SUPPORTED_DST = {"yolo"}
 
 
-@dataclass(frozen=True)
-class _Sample:
-    image: Path
-    label: Path | None
-    stem: str
+def _resolve_paths(
+    source: str | PathLike[str] | None,
+    images: str | PathLike[str] | None,
+    annotations: str | PathLike[str] | None,
+    src_format: str,
+) -> tuple[Path, Path]:
+    """Resolve images directory and annotations path/directory from inputs."""
+    images_path: Path | None = files.path(images) if images is not None else None
+    ann_path: Path | None = files.path(annotations) if annotations is not None else None
+
+    if source is not None:
+        src_root = files.path(source)
+        if not files.exists(src_root):
+            raise FileNotFoundError(f"source path does not exist: {src_root}")
+
+        if src_format == "voc":
+            if images_path is None:
+                for candidate in ["JPEGImages", "images", "JPEGImages/val", "images/val"]:
+                    cand_path = files.join(src_root, candidate)
+                    if files.is_dir(cand_path):
+                        images_path = cand_path
+                        break
+            if ann_path is None:
+                for candidate in ["Annotations", "annotations"]:
+                    cand_path = files.join(src_root, candidate)
+                    if files.is_dir(cand_path):
+                        ann_path = cand_path
+                        break
+        elif src_format == "coco":
+            if images_path is None:
+                for candidate in ["val2017", "train2017", "images", "images/val2017"]:
+                    cand_path = files.join(src_root, candidate)
+                    if files.is_dir(cand_path):
+                        images_path = cand_path
+                        break
+            if ann_path is None:
+                if files.is_file(src_root) and files.extension(src_root).lower() == ".json":
+                    ann_path = src_root
+                else:
+                    candidates = files.find(src_root, "*.json", recursive=True)
+                    if candidates:
+                        ann_path = candidates[0]
+
+    if images_path is None or not files.is_dir(images_path):
+        raise ValueError(
+            f"could not resolve valid images directory for {src_format}. "
+            "Please specify images=... explicitly."
+        )
+    if ann_path is None or not files.exists(ann_path):
+        raise ValueError(
+            f"could not resolve valid annotations path for {src_format}. "
+            "Please specify annotations=... explicitly."
+        )
+
+    return images_path, ann_path
 
 
-def _patterns(value, name: str) -> list[str]:
-    if isinstance(value, str):
-        result = [value]
-    elif isinstance(value, list):
-        result = value
-    else:
-        raise TypeError(f"{name} must be a string or list of strings")
-    if not result or any(not isinstance(item, str) or not item.strip() for item in result):
-        raise ValueError(f"{name} must contain non-empty path patterns")
-    return result
-
-
-def _matches(root: Path, pattern: str, *, directories: bool) -> list[Path]:
-    relative = files.path(pattern)
-    if relative.is_absolute():
-        raise ValueError("tree paths must be relative to source")
-    direct = files.join(root, relative)
-    if files.exists(direct):
-        candidates = [direct]
-    else:
-        candidates = files.list_entries(root, pattern=pattern, recursive=False)
-    result = []
-    for candidate in candidates:
-        resolved = files.resolve(candidate)
-        if not files.is_within(resolved, root):
-            raise ValueError(f"tree path escapes source: {pattern}")
-        if directories and files.is_dir(resolved):
-            result.append(resolved)
-        elif not directories and files.is_file(resolved):
-            result.append(resolved)
-    return sorted(set(result), key=files.as_posix)
-
-
-def _class_map(value) -> dict[int, str]:
-    if isinstance(value, (list, tuple)):
-        result = {index: str(name).strip() for index, name in enumerate(value)}
-    elif isinstance(value, dict):
+def _parse_classes(
+    classes: list[str] | dict[int, str] | None,
+) -> dict[int, str] | None:
+    """Normalize user-supplied classes mapping or sequence."""
+    if classes is None:
+        return None
+    if isinstance(classes, (list, tuple)):
+        class_map = {index: str(name).strip() for index, name in enumerate(classes)}
+    elif isinstance(classes, dict):
         try:
-            result = {int(index): str(name).strip() for index, name in value.items()}
+            class_map = {int(index): str(name).strip() for index, name in classes.items()}
         except (TypeError, ValueError) as error:
             raise ValueError("class IDs must be integers") from error
     else:
-        raise TypeError("classes or YAML names must be a mapping or sequence")
-    if set(result) != set(range(len(result))):
-        raise ValueError("class IDs must be contiguous from 0")
-    if any(not name for name in result.values()) or len(set(result.values())) != len(result):
+        raise TypeError("classes must be a mapping or sequence of class names")
+    if set(class_map) != set(range(len(class_map))):
+        raise ValueError("class IDs must be contiguous starting from 0")
+    if any(not name for name in class_map.values()) or len(set(class_map.values())) != len(class_map):
         raise ValueError("class names must be non-empty and unique")
-    return result
+    return class_map
 
 
-def _metadata(root: Path, yaml_pattern: str | None, classes) -> dict:
-    if yaml_pattern is not None and classes is not None:
-        raise ValueError("classes cannot be used together with a YAML source")
-    if yaml_pattern is not None:
-        matches = _matches(root, yaml_pattern, directories=False)
-        if len(matches) != 1 or files.extension(matches[0]).lower() not in {".yaml", ".yml"}:
-            raise ValueError("the third tree entry must resolve to exactly one YAML file")
-        source_metadata = config.load(matches[0], verbose=False).to_dict()
-        if "names" not in source_metadata:
-            raise ValueError("source YAML must define names")
-        names = _class_map(source_metadata["names"])
-        if "nc" in source_metadata and int(source_metadata["nc"]) != len(names):
-            raise ValueError("source YAML nc must match names")
-    elif classes is not None:
-        if not isinstance(classes, dict):
-            raise TypeError("classes must be a mapping of contiguous integer IDs to names")
-        names = _class_map(classes)
-    else:
-        names = {}
-        warnings.warn("No class metadata was provided; the dataset is not ready for training", UserWarning, stacklevel=3)
-    return {"path": ".", "train": "images", "nc": len(names), "names": names}
+def _voc_to_yolo(
+    xml_file: Path,
+    img_width: float,
+    img_height: float,
+    name_to_id: dict[str, int],
+    *,
+    include_difficult: bool,
+    voc_1_based: bool,
+) -> list[str]:
+    """Parse a single Pascal VOC XML annotation file and produce YOLO lines."""
+    try:
+        tree = ET.parse(xml_file)
+    except ET.ParseError as error:
+        raise ValueError(f"malformed XML in {xml_file}: {error}") from error
+    root = tree.getroot()
+
+    size_elem = root.find("size")
+    if size_elem is not None:
+        w_elem, h_elem = size_elem.find("width"), size_elem.find("height")
+        if w_elem is not None and w_elem.text and h_elem is not None and h_elem.text:
+            w_val = float(w_elem.text)
+            h_val = float(h_elem.text)
+            if w_val > 0 and h_val > 0:
+                img_width, img_height = w_val, h_val
+
+    if not all(isfinite(v) and v > 0 for v in (img_width, img_height)):
+        raise ValueError(f"invalid image dimensions ({img_width}x{img_height}) in {xml_file}")
+
+    lines: list[str] = []
+    for obj in root.findall("object"):
+        name_elem = obj.find("name")
+        if name_elem is None or not name_elem.text:
+            raise ValueError(f"missing object class in {xml_file}")
+        cname = name_elem.text.strip()
+        if cname not in name_to_id:
+            raise ValueError(f"unknown object class {cname!r} in {xml_file}")
+        cid = name_to_id[cname]
+
+        difficult_elem = obj.find("difficult")
+        if difficult_elem is not None and difficult_elem.text:
+            is_diff = int(difficult_elem.text.strip() or 0) == 1
+            if is_diff and not include_difficult:
+                continue
+
+        bnd = obj.find("bndbox")
+        if bnd is None:
+            raise ValueError(f"missing bounding box in {xml_file}")
+        xmin_e, ymin_e = bnd.find("xmin"), bnd.find("ymin")
+        xmax_e, ymax_e = bnd.find("xmax"), bnd.find("ymax")
+        if any(value is None or value.text is None for value in (xmin_e, ymin_e, xmax_e, ymax_e)):
+            raise ValueError(f"incomplete bounding box in {xml_file}")
+
+        xmin = float(xmin_e.text)
+        ymin = float(ymin_e.text)
+        xmax = float(xmax_e.text)
+        ymax = float(ymax_e.text)
+
+        if not all(isfinite(v) for v in (xmin, ymin, xmax, ymax)):
+            raise ValueError(f"non-finite bounding box in {xml_file}")
+        if xmax <= xmin or ymax <= ymin:
+            raise ValueError(f"invalid bounding box in {xml_file}")
+
+        if voc_1_based:
+            xmin -= 1.0
+            ymin -= 1.0
+
+        xmin = max(0.0, min(xmin, img_width))
+        ymin = max(0.0, min(ymin, img_height))
+        xmax = max(0.0, min(xmax, img_width))
+        ymax = max(0.0, min(ymax, img_height))
+
+        box_w = xmax - xmin
+        box_h = ymax - ymin
+        if box_w <= 0 or box_h <= 0:
+            raise ValueError(f"bounding box lies outside image in {xml_file}")
+
+        xc = ((xmin + xmax) / 2.0) / img_width
+        yc = ((ymin + ymax) / 2.0) / img_height
+        bw = box_w / img_width
+        bh = box_h / img_height
+
+        xc = max(0.0, min(1.0, xc))
+        yc = max(0.0, min(1.0, yc))
+        bw = max(0.0, min(1.0, bw))
+        bh = max(0.0, min(1.0, bh))
+
+        lines.append(f"{cid} {xc:.6f} {yc:.6f} {bw:.6f} {bh:.6f}")
+    return lines
 
 
-def _discover_group(image_root: Path, label_root: Path | None) -> tuple[list[_Sample], int]:
-    images = [
-        path for path in files.find(image_root, "*", recursive=True)
+def _convert_voc(
+    images_dir: Path,
+    ann_dir: Path,
+    workspace: Path,
+    classes: dict[int, str] | None,
+    image_ids: Sequence[str] | None,
+    *,
+    include_difficult: bool,
+    voc_1_based: bool,
+) -> dict[int, str]:
+    """Execute Pascal VOC to YOLO conversion in the workspace."""
+    # Discover available images
+    all_images = [
+        path for path in files.find(images_dir, "*", recursive=False)
         if files.extension(path).lower() in IMAGE_EXTENSIONS
     ]
-    labels = files.find(label_root, "*.txt", recursive=True) if label_root is not None else []
-    label_map: dict[str, Path] = {}
-    for label in labels:
-        key = files.as_posix(files.with_extension(files.relative(label, label_root), "")).lower()
-        if key in label_map:
-            raise ValueError(f"duplicate label stem in one source group: {key}")
-        label_map[key] = label
-    used = set()
-    samples = []
-    for image in images:
-        key = files.as_posix(files.with_extension(files.relative(image, image_root), "")).lower()
-        label = label_map.get(key)
-        if label is not None:
-            used.add(key)
-        samples.append(_Sample(image, label, files.stem(image)))
-    return samples, len(set(label_map) - used)
+    image_by_stem: dict[str, Path] = {}
+    seen_stems: set[str] = set()
+    for img_path in all_images:
+        stem = files.stem(img_path)
+        if stem.lower() in seen_stems:
+            raise ValueError(f"duplicate image stem in source: {stem}")
+        seen_stems.add(stem.lower())
+        image_by_stem[stem] = img_path
 
+    if image_ids is not None:
+        target_stems = [str(item).strip() for item in image_ids if str(item).strip()]
+    else:
+        target_stems = sorted(image_by_stem.keys())
 
-def _plan(samples: list[_Sample], mode: str) -> list[_Sample]:
-    planned: dict[str, _Sample] = {}
-    for sample in samples:
-        base = sample.stem
-        key = base.lower()
-        if key not in planned:
-            planned[key] = sample
-            continue
-        if mode == "error":
-            raise ValueError(f"sample name conflict: {base}")
-        if mode == "skip":
-            continue
-        if mode == "overwrite":
-            planned[key] = sample
-            continue
-        suffix = 1
-        while f"{base}_{suffix}".lower() in planned:
-            suffix += 1
-        renamed = f"{base}_{suffix}"
-        planned[renamed.lower()] = _Sample(sample.image, sample.label, renamed)
-    return list(planned.values())
+    if len(target_stems) != len(set(target_stems)):
+        raise ValueError("image_ids must not contain duplicate identifiers")
 
-
-def _validate_labels(samples: list[_Sample], names: dict[int, str]) -> None:
-    if not names:
-        return
-    for sample in samples:
-        if sample.label is None:
-            continue
-        for line_number, line in enumerate(files.load(sample.label, as_lines=True, verbose=False), 1):
-            parts = str(line).strip().split()
-            if not parts:
+    # If classes not provided, discover all unique class names across XMLs
+    if classes is None:
+        discovered_names: set[str] = set()
+        for stem in target_stems:
+            xml_path = files.join(ann_dir, f"{stem}.xml")
+            if not files.exists(xml_path):
                 continue
             try:
-                class_id = int(parts[0])
-            except ValueError as error:
-                raise ValueError(f"{sample.label}:{line_number}: invalid class ID") from error
-            if class_id not in names:
-                raise ValueError(f"{sample.label}:{line_number}: unknown class ID {class_id}")
+                tree = ET.parse(xml_path)
+                for obj in tree.getroot().findall("object"):
+                    ne = obj.find("name")
+                    if ne is not None and ne.text:
+                        discovered_names.add(ne.text.strip())
+            except ET.ParseError as error:
+                raise ValueError(f"malformed XML in {xml_path}: {error}") from error
+        sorted_names = sorted(discovered_names)
+        classes = {idx: name for idx, name in enumerate(sorted_names)}
+
+    name_to_id = {name: cid for cid, name in classes.items()}
+
+    images_out = files.join(workspace, "images")
+    labels_out = files.join(workspace, "labels")
+    files.mkdir(images_out)
+    files.mkdir(labels_out)
+
+    processed_count = 0
+    for stem in target_stems:
+        img_path = image_by_stem.get(stem)
+        if img_path is None:
+            # Check with extension directly
+            cand = files.join(images_dir, f"{stem}.jpg")
+            if files.exists(cand):
+                img_path = cand
+            else:
+                raise FileNotFoundError(f"source image not found: {stem}")
+
+        # Default dimensions from image file if needed
+        img_w, img_h = 0.0, 0.0
+        xml_path = files.join(ann_dir, f"{stem}.xml")
+
+        lines: list[str] = []
+        if files.exists(xml_path):
+            lines = _voc_to_yolo(
+                xml_path,
+                img_w,
+                img_h,
+                name_to_id,
+                include_difficult=include_difficult,
+                voc_1_based=voc_1_based,
+            )
+
+        # Copy original image bytes without re-encoding
+        dest_img = files.join(images_out, f"{stem}{files.extension(img_path).lower()}")
+        copy_entry(img_path, dest_img)
+
+        # Write label file (empty if no detections -> negative image)
+        dest_lbl = files.join(labels_out, f"{stem}.txt")
+        files.save(dest_lbl, lines if lines else "", overwrite=True, verbose=False)
+        processed_count += 1
+
+    if processed_count == 0:
+        warnings.warn("No matching VOC samples were converted", UserWarning, stacklevel=3)
+    return classes
+
+
+def _convert_coco(
+    images_dir: Path,
+    ann_file: Path,
+    workspace: Path,
+    classes: dict[int, str] | None,
+    image_ids: Sequence[str] | None,
+    *,
+    include_crowd: bool,
+) -> dict[int, str]:
+    """Execute COCO instances JSON to YOLO conversion in the workspace."""
+    coco_data = files.load(ann_file, verbose=False)
+    if not isinstance(coco_data, dict):
+        raise ValueError(f"COCO annotations must be a JSON object: {ann_file}")
+
+    raw_categories = coco_data.get("categories", [])
+    sorted_categories = sorted(raw_categories, key=lambda cat: int(cat.get("id", 0)))
+
+    if classes is None:
+        classes = {idx: str(cat.get("name", "")).strip() for idx, cat in enumerate(sorted_categories)}
+        cat_to_yolo = {cat["id"]: idx for idx, cat in enumerate(sorted_categories)}
+    else:
+        name_to_id = {name: cid for cid, name in classes.items()}
+        cat_to_yolo = {}
+        for cat in sorted_categories:
+            cname = str(cat.get("name", "")).strip()
+            if cname in name_to_id:
+                cat_to_yolo[cat["id"]] = name_to_id[cname]
+
+    _parse_classes(classes)
+    if len({cat["id"] for cat in sorted_categories}) != len(sorted_categories):
+        raise ValueError("duplicate COCO category IDs")
+
+    # Map image IDs to image metadata
+    raw_images = coco_data.get("images", [])
+    img_map: dict[int, dict[str, Any]] = {im["id"]: im for im in raw_images}
+
+    if len(img_map) != len(raw_images):
+        raise ValueError("duplicate COCO image IDs")
+
+    # Group annotations by image_id
+    ann_by_img: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for ann in coco_data.get("annotations", []):
+        if ann.get("image_id") not in img_map:
+            raise ValueError(f"unknown COCO image ID: {ann.get('image_id')}")
+        if ann.get("iscrowd") and not include_crowd:
+            continue
+        ann_by_img[ann["image_id"]].append(ann)
+
+    if image_ids is not None:
+        target_ids = {str(item).strip() for item in image_ids if str(item).strip()}
+        selected_images = [
+            im for im in raw_images
+            if str(im["id"]) in target_ids
+            or im.get("file_name") in target_ids
+            or files.stem(im.get("file_name", "")) in target_ids
+        ]
+    else:
+        selected_images = raw_images
+
+    images_out = files.join(workspace, "images")
+    labels_out = files.join(workspace, "labels")
+    files.mkdir(images_out)
+    files.mkdir(labels_out)
+
+    processed_count = 0
+    seen_stems: set[str] = set()
+    for im_info in selected_images:
+        fname = im_info.get("file_name", "")
+        if not fname:
+            raise ValueError("COCO image must define file_name")
+        src_path = files.join(images_dir, fname)
+        if not files.is_within(src_path, images_dir):
+            raise ValueError(f"image path escapes images directory: {fname}")
+        if not files.is_file(src_path):
+            raise FileNotFoundError(f"source image not found: {src_path}")
+
+        stem = files.stem(fname)
+        if stem.lower() in seen_stems:
+            raise ValueError(f"duplicate sample stem in COCO images: {stem}")
+        seen_stems.add(stem.lower())
+
+        w = float(im_info.get("width", 0))
+        h = float(im_info.get("height", 0))
+        if not all(isfinite(v) and v > 0 for v in (w, h)):
+            raise ValueError(f"invalid dimensions ({w}x{h}) for image {fname}")
+
+        lines: list[str] = []
+        for ann in ann_by_img.get(im_info["id"], []):
+            cat_id = ann.get("category_id")
+            if cat_id not in cat_to_yolo:
+                raise ValueError(f"unknown or unmapped COCO category: {cat_id}")
+            cid = cat_to_yolo[cat_id]
+
+            bbox = ann.get("bbox", [])
+            if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                raise ValueError(f"COCO bbox must contain four numbers for {fname}")
+            x, y, bw_px, bh_px = [float(val) for val in bbox]
+            if not all(isfinite(v) for v in (x, y, bw_px, bh_px)):
+                raise ValueError(f"non-finite bounding box for {fname}")
+            if bw_px <= 0 or bh_px <= 0:
+                raise ValueError(f"invalid bounding box for {fname}")
+
+            xmin = max(0.0, min(x, w))
+            ymin = max(0.0, min(y, h))
+            xmax = max(0.0, min(x + bw_px, w))
+            ymax = max(0.0, min(y + bh_px, h))
+
+            box_w = xmax - xmin
+            box_h = ymax - ymin
+            if box_w <= 0 or box_h <= 0:
+                raise ValueError(f"bounding box lies outside image: {fname}")
+
+            xc = ((xmin + xmax) / 2.0) / w
+            yc = ((ymin + ymax) / 2.0) / h
+            norm_w = box_w / w
+            norm_h = box_h / h
+
+            xc = max(0.0, min(1.0, xc))
+            yc = max(0.0, min(1.0, yc))
+            norm_w = max(0.0, min(1.0, norm_w))
+            norm_h = max(0.0, min(1.0, norm_h))
+
+            lines.append(f"{cid} {xc:.6f} {yc:.6f} {norm_w:.6f} {norm_h:.6f}")
+
+        # Copy original image bytes without re-encoding
+        dest_img = files.join(images_out, f"{stem}{files.extension(fname).lower()}")
+        copy_entry(src_path, dest_img)
+
+        # Write label file (empty if no detections -> negative image)
+        dest_lbl = files.join(labels_out, f"{stem}.txt")
+        files.save(dest_lbl, lines if lines else "", overwrite=True, verbose=False)
+        processed_count += 1
+
+    if processed_count == 0:
+        warnings.warn("No matching COCO samples were converted", UserWarning, stacklevel=3)
+    return classes
 
 
 def convert(
-    source: str | PathLike[str],
-    target: str | PathLike[str],
-    format: str = "yolo",
-    tree: dict[str, str | list[str]] | None = None,
-    classes: dict[int, str] | None = None,
-    on_conflict: str = "error",
+    source: str | PathLike[str] | None = None,
+    target: str | PathLike[str] = "",
+    *,
+    src_format: str = "voc",
+    dst_format: str = "yolo",
+    images: str | PathLike[str] | None = None,
+    annotations: str | PathLike[str] | None = None,
+    classes: list[str] | dict[int, str] | None = None,
+    image_ids: Sequence[str] | None = None,
+    include_difficult: bool = True,
+    include_crowd: bool = False,
+    voc_1_based: bool = False,
     overwrite: bool = False,
-) -> Path:
-    """Convert mapped source directories into one flat YOLO dataset.
+    verbose: bool = False,
+    **kwargs,
+) -> None:
+    """Convert Pascal VOC XML or COCO instances JSON to a flat YOLO dataset.
 
     Parameters
     ----------
-    source : str or os.PathLike[str]
-        Root directory containing every mapped input.
+    source : str or os.PathLike[str], optional
+        Root directory containing the source dataset.
     target : str or os.PathLike[str]
-        Flat dataset output directory.
-    format : str, default='yolo'
-        Target dataset format. Currently only ``'yolo'`` is supported.
-    tree : dict
-        Ordered mapping whose first value selects image directories, second
-        value selects label directories, and optional third value selects one YAML file.
-    classes : dict[int, str], optional
-        Contiguous class names used when no YAML source is supplied.
-    on_conflict : {'error', 'rename', 'skip', 'overwrite'}, default='error'
-        Whole-sample filename conflict policy.
+        Destination directory or ``.zip`` archive for the flat YOLO dataset.
+    src_format : {'voc', 'coco'}, default='voc'
+        Source annotation format.
+    dst_format : {'yolo'}, default='yolo'
+        Destination dataset format. Currently only ``'yolo'`` is supported.
+    images : str or os.PathLike[str], optional
+        Explicit path to the directory containing source image files.
+    annotations : str or os.PathLike[str], optional
+        Explicit path to the directory of VOC XML files or path to COCO JSON file.
+    classes : list[str] or dict[int, str], optional
+        Ordered sequence or mapping of target class names. If omitted, discovered
+        automatically from the source annotations.
+    image_ids : Sequence[str], optional
+        Subset of image identifiers or file stems to convert.
+    include_difficult : bool, default=True
+        Whether to retain objects marked as difficult in Pascal VOC XML.
+    include_crowd : bool, default=False
+        Whether to retain annotations marked with ``iscrowd=1`` in COCO JSON.
+    voc_1_based : bool, default=False
+        Whether source Pascal VOC coordinates are 1-based (requiring 1-pixel offset).
     overwrite : bool, default=False
-        Atomically replace an existing target.
+        Whether to overwrite an existing target directory or archive.
+    verbose : bool, default=False
+        Whether to display progress information.
+    **kwargs
+        Additional options. Passing ``tree`` raises an explicit migration error.
 
     Returns
     -------
-    pathlib.Path
-        Created flat dataset directory.
+    None
+        Writes the flat dataset directory or ZIP archive without returning a path.
 
     Raises
     ------
-    FileNotFoundError
-        If ``source`` does not exist.
-    FileExistsError
-        If ``target`` exists and overwrite is disabled.
     TypeError
-        If an argument or tree value has an unsupported type.
+        If ``tree`` is passed, directing users to ``datasets.flatten()``.
     ValueError
-        If paths, metadata, conflicts, or class IDs violate the conversion contract.
-    """
-    validate_dataset_format(format)
-    validators.validate_type(source, (str, PathLike), "source")
-    validators.validate_type(target, (str, PathLike), "target")
-    validators.validate_type(overwrite, bool, "overwrite")
-    if tree is None or not isinstance(tree, dict) or len(tree) not in {2, 3}:
-        raise ValueError("tree must be an ordered mapping with exactly two or three entries")
-    if not isinstance(on_conflict, str) or on_conflict not in _CONFLICT_MODES:
-        raise ValueError(f"on_conflict must be one of {sorted(_CONFLICT_MODES)}")
+        If format, paths, dimensions, or annotations violate the conversion contract.
+    FileNotFoundError
+        If source directories or annotations do not exist.
+    FileExistsError
+        If target exists and ``overwrite=False``.
 
-    root, destination = files.resolve(source), files.resolve(target)
-    if not files.is_dir(root):
-        raise FileNotFoundError(f"source directory does not exist: {root}")
+    Examples
+    --------
+    >>> from klygo import datasets
+    >>> datasets.convert(source="voc_dir", target="flat_yolo", src_format="voc")
+    """
+    if "tree" in kwargs:
+        raise TypeError(
+            "datasets.convert() is now dedicated to annotation format conversion "
+            "(VOC/COCO -> YOLO). For dataset layout flattening with directory trees, "
+            "use datasets.flatten()."
+        )
+    if kwargs:
+        raise TypeError(f"unexpected conversion options: {sorted(kwargs)}")
+    if not target:
+        raise ValueError("target destination must be specified")
+
+    src_fmt = str(src_format).strip().lower()
+    if src_fmt not in _SUPPORTED_SRC:
+        raise ValueError(f"unsupported source format: {src_format!r}; supported: {sorted(_SUPPORTED_SRC)}")
+    dst_fmt = str(dst_format).strip().lower()
+    if dst_fmt not in _SUPPORTED_DST:
+        raise ValueError(f"unsupported destination format: {dst_format!r}; supported: {sorted(_SUPPORTED_DST)}")
+
+    validators.validate_type(overwrite, bool, "overwrite")
+    for name, value in (("include_difficult", include_difficult), ("include_crowd", include_crowd),
+                        ("voc_1_based", voc_1_based), ("verbose", verbose)):
+        validators.validate_type(value, bool, name)
+    parsed_classes = _parse_classes(classes)
+
+    images_dir, ann_path = _resolve_paths(source, images, annotations, src_fmt)
+    destination = files.resolve(target)
+    protected = [images_dir, ann_path]
+    if source is not None:
+        protected.append(files.path(source))
+    for input_path in protected:
+        resolved = files.resolve(input_path)
+        if files.is_within(resolved, destination) or files.is_within(destination, resolved):
+            raise ValueError("source and target paths must not overlap")
     if files.exists(destination) and not overwrite:
         raise FileExistsError(f"target already exists: {destination}")
-    if files.is_within(destination, root) or files.is_within(root, destination):
-        raise ValueError("source and target directories must not overlap")
-
-    values = list(tree.values())
-    image_patterns = _patterns(values[0], "image tree entry")
-    label_patterns = _patterns(values[1], "label tree entry")
-    if len(image_patterns) != len(label_patterns):
-        raise ValueError("image and label tree entries must contain the same number of patterns")
-    yaml_pattern = values[2] if len(values) == 3 else None
-    if yaml_pattern is not None and not isinstance(yaml_pattern, str):
-        raise TypeError("the third tree entry must be one YAML path string")
-    metadata = _metadata(root, yaml_pattern, classes)
-
-    discovered: list[_Sample] = []
-    orphan_labels = 0
-    for image_pattern, label_pattern in zip(image_patterns, label_patterns):
-        image_roots = _matches(root, image_pattern, directories=True)
-        label_roots = _matches(root, label_pattern, directories=True)
-        if not image_roots:
-            warnings.warn(f"No image directories matched: {image_pattern}", UserWarning, stacklevel=2)
-        if not label_roots:
-            warnings.warn(f"No label directories matched: {label_pattern}", UserWarning, stacklevel=2)
-        if image_roots and label_roots and len(image_roots) != len(label_roots):
-            raise ValueError("image and label glob patterns must resolve to the same number of directories")
-        if not image_roots:
-            orphan_labels += sum(len(files.find(label_root, "*.txt", recursive=True)) for label_root in label_roots)
-        for index, image_root in enumerate(image_roots):
-            label_root = label_roots[index] if label_roots else None
-            group, orphans = _discover_group(image_root, label_root)
-            discovered.extend(group)
-            orphan_labels += orphans
-
-    planned = _plan(discovered, on_conflict)
-    _validate_labels(planned, metadata["names"])
-    if not planned:
-        warnings.warn("No supported images were found; an empty dataset will be created", UserWarning, stacklevel=2)
-    unlabeled = sum(sample.label is None for sample in planned)
-    if unlabeled:
-        warnings.warn(f"Keeping {unlabeled} unlabeled image(s) as negative samples", UserWarning, stacklevel=2)
-    if orphan_labels:
-        warnings.warn(f"Ignoring {orphan_labels} label file(s) without matching images", UserWarning, stacklevel=2)
 
     with dataset_workspace("convert") as workspace:
-        files.mkdir(files.join(workspace, "images"))
-        files.mkdir(files.join(workspace, "labels"))
-        for sample in planned:
-            image_name = sample.stem + files.extension(sample.image).lower()
-            copy_entry(sample.image, files.join(workspace, "images", image_name))
-            if sample.label is not None:
-                copy_entry(sample.label, files.join(workspace, "labels", sample.stem + ".txt"))
-        config.save(files.join(workspace, "data.yaml"), metadata, overwrite=True, verbose=False)
-        return write_output(workspace, destination, overwrite=overwrite, verbose=False)
+        if src_fmt == "voc":
+            final_classes = _convert_voc(
+                images_dir,
+                ann_path,
+                workspace,
+                parsed_classes,
+                image_ids,
+                include_difficult=include_difficult,
+                voc_1_based=voc_1_based,
+            )
+        else:
+            final_classes = _convert_coco(
+                images_dir,
+                ann_path,
+                workspace,
+                parsed_classes,
+                image_ids,
+                include_crowd=include_crowd,
+            )
+
+        data_yaml = {
+            "path": ".",
+            "train": "images",
+            "val": "images",
+            "nc": len(final_classes),
+            "names": final_classes,
+        }
+        config.save(files.join(workspace, "data.yaml"), data_yaml, overwrite=True, verbose=False)
+        write_output(workspace, destination, overwrite=overwrite, verbose=verbose)
 
 
 __all__ = ["convert"]

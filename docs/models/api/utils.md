@@ -8,7 +8,7 @@ Public submodule namespace providing metadata normalization, parameter-group res
 
 ## Contract
 
-`klygo.models.utils` is exposed as `models.utils` on the package facade. Its public `__all__` exports [`suppress_warnings`](suppress_warnings.md) and [`suppress_ai_warnings`](suppress_ai_warnings.md), and it also provides the schema validation and input resolution helpers used across `BaseModel`, `Detector`, `load`, and `metadata`:
+`klygo.models.utils` is exposed as `models.utils` on the package facade. Its public `__all__` exports [`suppress_warnings`](suppress_warnings.md), and it also provides the schema validation and input resolution helpers used across `BaseModel`, `Detector`, `load`, and `metadata`:
 
 - `utils.suppress_warnings(func=None)`: Context manager or decorator silencing Python and AI framework warnings.
 - `utils.suppress_ai_warnings() -> None`: Configure quiet logging levels (`logging.ERROR`) and environment variables for Hugging Face, Torch, and Accelerate without importing them.

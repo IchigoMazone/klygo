@@ -370,12 +370,16 @@ def save(
                     for key, value in data.items():
                         stream.write(f"{key}={value}\n")
         elif suffix == ".xml":
-            if isinstance(data, dict) and len(data) == 1:
+            if isinstance(data, str):
+                with destination.open("w", encoding="utf-8") as stream:
+                    stream.write(data)
+            elif isinstance(data, dict) and len(data) == 1:
                 root_tag = next(iter(data))
                 root = _data_to_xml(root_tag, data[root_tag])
+                ET.ElementTree(root).write(destination, encoding="utf-8", xml_declaration=True)
             else:
                 root = _data_to_xml("root", data)
-            ET.ElementTree(root).write(destination, encoding="utf-8", xml_declaration=True)
+                ET.ElementTree(root).write(destination, encoding="utf-8", xml_declaration=True)
         else:
             with destination.open("wb") as stream:
                 pickle.dump(data, stream)
@@ -408,7 +412,7 @@ def convert(
     target: PathInput,
     overwrite: bool = False,
     verbose: bool = True,
-) -> Path:
+) -> None:
     """Convert data between two supported structured-data formats.
 
     The source is decoded with ``load`` and the resulting object is encoded with ``save``.
@@ -426,8 +430,7 @@ def convert(
 
     Returns
     -------
-    pathlib.Path
-        Path to the converted file.
+    None
 
     Raises
     ------
@@ -450,7 +453,6 @@ def convert(
     """
     data = load(source, verbose=verbose)
     save(target, data, overwrite=overwrite, verbose=verbose)
-    return _to_path(target)
 
 
 __all__ = ["load", "iter_load", "save", "convert"]

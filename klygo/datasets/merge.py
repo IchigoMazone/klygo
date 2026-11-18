@@ -24,8 +24,8 @@ def merge(
     format: str = "yolo",
     overwrite: bool = False,
     verbose: bool = True,
-) -> Path:
-    """Merge multiple YOLO datasets into one ZIP archive.
+) -> None:
+    """Merge multiple YOLO datasets into one directory or ZIP archive.
 
     Class names are combined in first-seen order. Label IDs from each source
     are rewritten to the corresponding global IDs, and source prefixes prevent
@@ -36,25 +36,24 @@ def merge(
     sources : list[str or os.PathLike[str]]
         Two or more dataset directories or supported archives.
     output_path : str or os.PathLike[str]
-        Destination ``.zip`` archive.
+        Destination directory, or a ZIP archive when the path ends in .zip.
     format : str, default='yolo'
         Dataset format to merge. Currently only ``'yolo'`` is supported.
     overwrite : bool, default=False
-        Replace an existing archive.
+        Replace an existing output dataset.
     verbose : bool, default=True
         Display archive progress.
 
     Returns
     -------
-    pathlib.Path
-        Created archive path.
+    None
 
     Raises
     ------
     TypeError
         If ``format`` is not a string.
     ValueError
-        If ``format`` is not supported, the output is not ZIP, or a source has invalid metadata.
+        If the format or metadata is invalid, or source and output paths overlap.
     FileNotFoundError
         If a source does not exist.
     FileExistsError
@@ -63,7 +62,7 @@ def merge(
     Examples
     --------
     >>> from klygo import datasets
-    >>> merged = datasets.merge(["cars", "buses.zip"], "transport.zip")
+    >>> datasets.merge(["cars", "buses.zip"], "transport.zip")
     """
     validate_dataset_format(format)
     params = Merge(sources, output_path, overwrite, verbose)
@@ -105,7 +104,7 @@ def merge(
         }
         set_output_metadata_path(metadata, params.output_path)
         config.save(files.join(workspace, "data.yaml"), metadata, overwrite=True, verbose=False)
-        return write_output(
+        write_output(
             workspace,
             params.output_path,
             overwrite=params.overwrite,

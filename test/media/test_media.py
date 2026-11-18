@@ -167,13 +167,10 @@ class TestMedia(unittest.TestCase):
         assert isinstance(arr, np.ndarray)
         assert arr.shape == (10, 20, 3)
 
-        # 2. to_tensor (optional PyTorch extra)
+        # 2. to_tensor is intentionally removed from public klygo.media
+        assert not hasattr(media, "to_tensor")
         if torch is not None:
-            tensor = media.to_tensor(img_pil, normalize=True)
-            assert isinstance(tensor, torch.Tensor)
-            assert tensor.shape == (3, 10, 20)
-            assert tensor.dtype == torch.float32
-
+            tensor = torch.from_numpy(arr.copy()).permute(2, 0, 1).to(torch.float32) / 255.0
             # 3. to_pil from tensor & array
             pil_from_tensor = media.to_pil(tensor)
             assert isinstance(pil_from_tensor, Image.Image)
@@ -193,7 +190,8 @@ class TestMedia(unittest.TestCase):
 
         # 1. save_images
         batch_dir = self.tmp_path / "saved_batch"
-        saved_files = media.save_images(batch_dir, frames, prefix="frame", extension=".jpg")
+        media.save_images(batch_dir, frames, prefix="frame", extension=".jpg")
+        saved_files = files.find(batch_dir, recursive=False)
         assert len(saved_files) == 3
         assert saved_files[0].name == "frame_000001.jpg"
 
@@ -210,11 +208,12 @@ class TestMedia(unittest.TestCase):
         except FileExistsError:
             pass
 
-        saved_vid = media.save_video(vid_p, frames, fps=10, overwrite=True)
+        saved_vid = vid_p
+        media.save_video(saved_vid, frames, fps=10, overwrite=True)
         assert saved_vid.exists()
 
-        # 4. probe video metadata
-        v_info = media.probe(vid_p)
+        # 4. Inspect video metadata
+        v_info = media.info(vid_p)
         assert v_info["type"] == "video"
         assert v_info["width"] == 30
         assert v_info["height"] == 20
@@ -226,13 +225,13 @@ class TestMedia(unittest.TestCase):
         # 6. media.convert
         png_p = self.tmp_path / "saved.png"
         jpg_p = self.tmp_path / "converted.jpg"
-        conv_res = media.convert(png_p, jpg_p, overwrite=True, verbose=False)
-        assert conv_res.exists()
+        self.assertIsNone(media.convert(png_p, jpg_p, overwrite=True, verbose=False))
+        assert jpg_p.exists()
 
         # 7. media.copy
         copied_p = self.tmp_path / "copied.png"
-        cp_res = media.copy(png_p, copied_p, overwrite=True)
-        assert cp_res.exists()
+        self.assertIsNone(media.copy(png_p, copied_p, overwrite=True))
+        assert copied_p.exists()
 
     def test_stream_counts_validation(self):
         img_dir = self.tmp_path / "stream_val_images"

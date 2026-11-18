@@ -57,5 +57,5 @@ with TemporaryDirectory() as directory:
     backend = GZipBackend()
     backend.compress(source, packed, verbose=False)
     assert backend.list_files(packed) == ["log.txt"]
-    assert backend.test(packed) is True
+    assert backend.is_valid(packed) is True
 ```

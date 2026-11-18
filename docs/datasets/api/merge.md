@@ -7,33 +7,33 @@ datasets.merge(
     format: str = "yolo",
     overwrite: bool = False,
     verbose: bool = True,
-) -> pathlib.Path
+) -> None
 ```
 
-Combine two or more YOLO datasets into a single `.zip` archive while unifying class names and rewriting local class IDs.
+Combine two or more YOLO datasets into a single directory or `.zip` archive while unifying class names and rewriting local class IDs.
 
 ## Contract
 
 Opens each source dataset (directory or archive), builds a unified global class list in first-seen order across all sources, copies all images with source-index prefixes (`src0_...`, `src1_...`) and encoded relative paths to prevent filename collisions, and rewrites every `.txt` annotation file so local class IDs (including sparse IDs) map to the unified global class indices.
 
-The merged dataset is staged in a temporary workspace and written as a portable `.zip` archive without machine-specific absolute paths in `data.yaml`.
+The merged dataset is staged in a temporary workspace and written as a directory or portable `.zip` archive without machine-specific absolute paths in `data.yaml`.
 
 ## Parameters
 
 - `sources`: `list[str | os.PathLike[str]]` — two or more dataset directories or supported archives to combine.
-- `output_path`: `str | os.PathLike[str]` — destination `.zip` archive path.
+- `output_path`: `str | os.PathLike[str]` — destination directory, or ZIP archive when the path ends in `.zip` (case-insensitive).
 - `format`: `str`, default `"yolo"` — dataset format to merge. Currently only `"yolo"` is supported.
 - `overwrite`: `bool`, default `False` — replace `output_path` if it already exists.
 - `verbose`: `bool`, default `True` — display archive creation progress.
 
 ## Returns
 
-`pathlib.Path` pointing to the created `.zip` archive.
+`None`. The merged dataset is written to `output_path`.
 
 ## Errors and edge cases
 
 - Raises `TypeError` if `format` is not a `str` or `sources` is not a list/tuple of paths.
-- Raises `ValueError` if `len(sources) < 2`, if `output_path` does not end with `.zip`, if `format` is unsupported, or if any source has invalid `data.yaml` metadata.
+- Raises `ValueError` if `len(sources) < 2`, if `format` is unsupported, if source and output paths overlap, or if any source has invalid `data.yaml` metadata.
 - Raises `FileNotFoundError` if any source dataset or its `images` directory is missing.
 - Raises `FileExistsError` if `output_path` already exists and `overwrite=False`.
 
@@ -66,8 +66,12 @@ with TemporaryDirectory() as directory:
         files.save(ds / "labels" / f"{name}.txt", ["1 0.5 0.5 0.5 0.5"], overwrite=True, verbose=False)
         config.save(ds / "data.yaml", {"train": "images", "nc": 2, "names": classes}, overwrite=True, verbose=False)
 
-    merged = datasets.merge([root / "first", root / "second"], root / "merged.zip", verbose=False)
+    merged = root / "merged"
+    datasets.merge([root / "first", root / "second"], merged, verbose=False)
     info = datasets.info(merged)
     assert info["classes"] == ["apple", "banana", "orange"]
     assert info["total_images"] == 2
 ```
+
+Use `"merged"` for a directory or `"merged.zip"` for a ZIP. Both preserve the
+same class reconciliation and filename collision rules.

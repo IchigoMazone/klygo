@@ -4,7 +4,8 @@ from tempfile import TemporaryDirectory
 from klygo import files
 
 with TemporaryDirectory() as directory:
-    target = files.mkdir(files.path(directory) / "temporary")
+    target = files.path(directory) / "temporary"
+    files.mkdir(target)
     files.remove(target)
     print(files.exists(target))
 

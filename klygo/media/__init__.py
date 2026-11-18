@@ -22,10 +22,10 @@ save_images
     Write a sequence of images to a directory.
 iter_frames
     Iterate over decoded video frames.
-probe
+info
     Inspect image or video metadata.
-to_array, to_tensor, to_pil
-    Convert between NumPy, PyTorch, and Pillow representations.
+to_array, to_pil
+    Convert between NumPy and Pillow representations.
 compose
     Compose sequential filtering, sampling, and transformation pipelines.
 """
@@ -38,9 +38,8 @@ from .operations import (
     save_video,
     save_images,
     iter_frames,
-    probe,
+    info,
     to_array,
-    to_tensor,
     to_pil,
     MediaFrames,
     LazyImage,
@@ -66,9 +65,8 @@ __all__ = [
     "save_video",
     "save_images",
     "iter_frames",
-    "probe",
+    "info",
     "to_array",
-    "to_tensor",
     "to_pil",
     "MediaFrames",
     "LazyImage",
