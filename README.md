@@ -256,9 +256,9 @@ Klygo is rigorously benchmarked across 4 major deep learning backends (Ultralyti
 | :---: | :---: |
 | ![3 Runs Evolution](analyzt/07_three_benchmark_runs_evolution.png) | ![3 Video Workloads](analyzt/08_three_workloads_comparison.png) |
 
-| COCO mAP vs. Latency Pareto Frontier | Klygo Multi-Backend Pareto Trade-off (L4) |
+| Mining Dataset Size vs. Accuracy Pareto Frontier | 3-Round Latency vs. Throughput Trajectory |
 | :---: | :---: |
-| ![YOLO Pareto Curve](analyzt/09_yolo_pareto_speed_vs_accuracy.png) | ![Klygo Pareto](analyzt/10_klygo_integrated_detectors_pareto_l4.png) |
+| ![Mining Pareto Curve](analyzt/09_mining_pareto_accuracy_vs_data_size.png) | ![Optimization Trajectory](analyzt/10_three_benchmark_runs_trajectory.png) |
 
 👉 **For complete visualization charts, telemetry data, and hardware scaling comparisons, see the [Visual Benchmark Analysis Report](analyzt/README.md).**
 

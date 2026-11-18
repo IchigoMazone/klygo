@@ -8,6 +8,10 @@ Produces publication-quality charts in `analyzt/` covering:
 4. Intelligent dataset curation efficiency (klygo.mining on COCO val2017).
 5. Hardware acceleration scaling (NVIDIA T4 vs L4).
 6. Postprocessing microbenchmarks (NumPy CPU vs CuPy GPU NMS).
+7. Progression across 3 official benchmark runs (T4 Complete -> L4 Baseline -> L4 Optimized).
+8. Real-world video workload comparison across 3 domains (Controlled vs People vs Cars).
+9. Mining Pareto Frontier: Dataset size vs COCO mAP Trade-off (100% Measured Data).
+10. Optimization progression trajectory across 3 benchmark runs: Latency vs Throughput.
 """
 
 import json
@@ -376,207 +380,149 @@ def chart_three_workloads(out_dir):
     print(f"Generated: {save_path}")
 
 
-def chart_yolo_pareto_curve(out_dir):
-    """Chart 9: COCO mAP vs Latency Pareto Frontier (matching iconic Ultralytics benchmark curves)."""
-    fig, ax = plt.subplots(figsize=(12, 6))
+def chart_mining_pareto_frontier(out_dir):
+    """Chart 9: klygo.mining Pareto Frontier: Dataset Size vs COCO mAP Trade-off (100% Measured Data)."""
+    with open("benchmarks/mining/curation_l4_2026_11_11/summary.json", "r", encoding="utf-8") as f:
+        mdata = json.load(f)
+
+    leaderboard = mdata["leaderboard"]
+
+    fig, ax = plt.subplots(figsize=(11.5, 6))
 
     colors = {
-        "YOLO26": "#001080",
-        "YOLO11": "#f5be98",
-        "YOLOv10": "#a0dca0",
-        "YOLOv9": "#e89999",
-        "YOLOv8": "#bda0d8",
-        "YOLOv7": "#bfa899",
-        "YOLOv6-3.0": "#f0a8d8",
-        "YOLOv5": "#c0c0c0",
-        "PP-YOLOE+": "#e8e090",
-        "DAMO-YOLO": "#80d0d8",
-        "RTMDet": "#f0e090",
+        "balance_median": "#1E88E5",
+        "rare_first_b": "#43A047",
+        "quality_b": "#00ACC1",
+        "dedup_weighted_b": "#8E24AA",
+        "coverage_b": "#FB8C00",
+        "diversity_b": "#3949AB",
+        "klygo_smart_b": "#D81B60",
+        "weighted_b": "#6D4C41",
+        "random_b": "#757575",
+        "dedup_only": "#546E7A",
+        "full_raw": "#E53935",
     }
 
-    curves = {
-        "YOLOv5": {
-            "x": [1.8, 3.6, 6.6, 11.9],
-            "y": [37.4, 45.4, 49.0, 50.7],
-            "labels": ["5s", "5m", "5l", "5x"],
-            "offset": [(0, -10), (0, -10), (0, -10), (5, 0)]
-        },
-        "PP-YOLOE+": {
-            "x": [2.6, 6.8, 14.4],
-            "y": [43.7, 49.8, 54.7],
-            "labels": ["Es", "El", "Ex"],
-            "offset": [(0, -10), (0, 5), (0, 5)]
-        },
-        "DAMO-YOLO": {
-            "x": [2.6, 3.8, 7.2],
-            "y": [43.0, 46.8, 50.8],
-            "labels": ["t", "s", "l"],
-            "offset": [(-10, -5), (0, -10), (0, 5)]
-        },
-        "RTMDet": {
-            "x": [1.8, 2.9, 6.7, 11.0],
-            "y": [41.1, 39.9, 49.2, 51.5],
-            "labels": ["t", "s", "m", "l"],
-            "offset": [(-10, 0), (0, -10), (0, 5), (0, 5)]
-        },
-        "YOLOv6-3.0": {
-            "x": [1.1, 2.4, 5.1, 8.8],
-            "y": [37.5, 45.0, 50.0, 52.8],
-            "labels": ["6n", "6s", "6m", "6l"],
-            "offset": [(-10, -10), (-10, -5), (-10, -5), (-5, 5)]
-        },
-        "YOLOv7": {
-            "x": [7.0, 11.6],
-            "y": [51.4, 53.1],
-            "labels": ["7", "7x"],
-            "offset": [(0, -10), (0, 5)]
-        },
-        "YOLOv8": {
-            "x": [1.1, 2.3, 5.1, 7.1, 14.4],
-            "y": [37.3, 44.9, 50.2, 52.9, 53.9],
-            "labels": ["8n", "8s", "8m", "8l", "8x"],
-            "offset": [(0, -10), (0, 5), (0, 5), (0, 5), (0, 5)]
-        },
-        "YOLOv9": {
-            "x": [2.3, 3.3, 6.7, 7.2],
-            "y": [37.8, 46.5, 51.4, 52.8],
-            "labels": ["9t", "9s", "9m", "9c"],
-            "offset": [(0, -10), (0, 5), (0, 5), (0, 5)]
-        },
-        "YOLOv10": {
-            "x": [1.8, 2.7, 4.7, 5.8, 8.4, 12.2],
-            "y": [38.5, 46.7, 51.3, 52.5, 53.3, 54.4],
-            "labels": ["10n", "10s", "10m", "10b", "10l", "10x"],
-            "offset": [(-12, -8), (0, 5), (0, 5), (0, 5), (0, 5), (0, 5)]
-        },
-        "YOLO11": {
-            "x": [1.5, 2.4, 4.7, 6.2, 11.3],
-            "y": [39.5, 47.0, 51.5, 53.4, 54.7],
-            "labels": ["11n", "11s", "11m", "11l", "11x"],
-            "offset": [(-12, -5), (-10, 5), (-10, 5), (-5, 5), (-5, 5)]
-        },
-        "YOLO26": {
-            "x": [1.6, 2.5, 4.5, 5.9, 11.6],
-            "y": [40.9, 48.6, 53.1, 55.0, 57.5],
-            "labels": ["26n", "26s", "26m", "26l", "26x"],
-            "offset": [(-5, 6), (-5, 6), (-5, 6), (-5, 6), (-5, 6)]
-        }
-    }
+    pts = []
+    for r in leaderboard:
+        m = r["method"]
+        x = r["images"]
+        y = r["mAP50_95_mean"] * 100
+        pts.append((x, y, m))
+        c = colors.get(m, "#333333")
 
-    # Plot comparison curves
-    for name, cdata in curves.items():
-        if name == "YOLO26":
-            continue
-        c = colors[name]
-        ax.plot(cdata["x"], cdata["y"], marker="o", markersize=4.5, linewidth=1.2,
-                color=c, label=name, alpha=0.85)
-        for px, py, pl, off in zip(cdata["x"], cdata["y"], cdata["labels"], cdata["offset"]):
-            ax.annotate(pl, (px, py), xytext=off, textcoords="offset points",
-                        fontsize=8.5, color=c, alpha=0.9, fontweight="semibold")
+        # Highlight Pareto-dominant points
+        if m in ["balance_median", "rare_first_b", "full_raw"]:
+            ax.scatter([x], [y], color=c, s=120, edgecolor="black", linewidth=1.2, zorder=10)
+        else:
+            ax.scatter([x], [y], color=c, s=70, alpha=0.85, zorder=5)
 
-    # Plot YOLO26 bold on top
-    d26 = curves["YOLO26"]
-    c26 = colors["YOLO26"]
-    ax.plot(d26["x"], d26["y"], marker="o", markersize=7.5, linewidth=2.8,
-            color=c26, label="YOLO26", zorder=10)
-    for px, py, pl, off in zip(d26["x"], d26["y"], d26["labels"], d26["offset"]):
-        ax.annotate(pl, (px, py), xytext=off, textcoords="offset points",
-                    fontsize=10.5, color=c26, fontweight="bold", zorder=11)
+        # Smart text offset
+        off_x, off_y = (0, 7)
+        if m == "balance_median":
+            off_x, off_y = (0, 10)
+        elif m == "full_raw":
+            off_x, off_y = (0, 10)
+        elif m == "random_b":
+            off_x, off_y = (10, -12)
+        elif m == "weighted_b":
+            off_x, off_y = (10, -6)
+        elif m == "klygo_smart_b":
+            off_x, off_y = (-35, 7)
 
-    # Watermark Brand in top left
-    ax.text(0.03, 0.90, "ultralytics\n" + r"$\mathbf{YOLO26}$",
-            transform=ax.transAxes, fontsize=16, color="#001080", fontweight="bold",
-            verticalalignment="top")
+        ax.annotate(f"{m}\n({y:.2f}%)", (x, y), xytext=(off_x, off_y), textcoords="offset points",
+                    fontsize=8.5, fontweight="bold", color=c, ha="center")
 
-    ax.set_xlim(0, 16)
-    ax.set_ylim(37.0, 58.0)
-    ax.set_xlabel("Latency T4 TensorRT10 FP16 (ms/img)", fontsize=11, fontweight="semibold")
-    ax.set_ylabel(r"$\mathrm{COCO\ mAP}_{val}^{50-95}$", fontsize=12, fontweight="semibold")
+    # Draw Pareto Frontier curve
+    pareto_pts = sorted([p for p in pts if p[2] in ["balance_median", "rare_first_b", "dedup_only", "full_raw"]], key=lambda p: p[0])
+    px = [p[0] for p in pareto_pts]
+    py = [p[1] for p in pareto_pts]
+    ax.plot(px, py, color="#1E88E5", linestyle="--", linewidth=2.0, alpha=0.85, label="Pareto Frontier (Optimal Trade-off)", zorder=4)
 
-    ax.set_xticks(np.arange(0, 18, 2))
-    ax.set_yticks(np.arange(37.5, 60.0, 2.5))
-    ax.grid(True, linestyle="-", alpha=0.25, color="gray")
+    # Shaded region under Pareto curve
+    ax.fill_between(px, py, [29.5]*len(px), color="#1E88E5", alpha=0.06, label="Feasible Curation Region")
 
-    legend_order = ["YOLO26", "YOLO11", "YOLOv10", "YOLOv9", "YOLOv8", "YOLOv7", "YOLOv6-3.0", "YOLOv5", "PP-YOLOE+", "DAMO-YOLO", "RTMDet"]
-    handles, labels = ax.get_legend_handles_labels()
-    hl_map = dict(zip(labels, handles))
-    ordered_handles = [hl_map[k] for k in legend_order if k in hl_map]
-    ax.legend(ordered_handles, legend_order, loc="center right", bbox_to_anchor=(0.99, 0.45),
-              framealpha=0.9, fontsize=9.5)
+    ax.set_title("klygo.mining: Dataset Size vs COCO mAP Trade-off (Pareto Frontier)", pad=15)
+    ax.set_xlabel("Curated Dataset Size (Images - Lower means faster training & reduced storage)", fontsize=11, fontweight="semibold")
+    ax.set_ylabel(r"Evaluation Accuracy: $\mathrm{COCO\ mAP}_{val}^{50-95}$ (%)", fontsize=11, fontweight="semibold")
 
-    save_path = os.path.join(out_dir, "09_yolo_pareto_speed_vs_accuracy.png")
+    ax.set_xlim(80, 930)
+    ax.set_ylim(29.5, 41.5)
+    ax.grid(True, linestyle="--", alpha=0.35)
+    ax.legend(loc="upper right", framealpha=0.95, fontsize=10)
+
+    save_path = os.path.join(out_dir, "09_mining_pareto_accuracy_vs_data_size.png")
     plt.savefig(save_path)
     plt.close()
     print(f"Generated: {save_path}")
 
 
-def chart_klygo_detectors_pareto_l4(out_dir):
-    """Chart 10: Klygo Multi-Backend Detectors: Measured L4 Latency vs COCO mAP Trade-off."""
-    fig, ax = plt.subplots(figsize=(11.5, 6))
+def chart_three_benchmark_runs_trajectory(out_dir):
+    """Chart 10: Trajectory across 3 Benchmark Runs: Latency vs Throughput (100% Measured Data)."""
+    runs = [
+        ("T4 Complete", "benchmarks/gpu_suite/colab_t4_complete_2026_11_10", "#FB8C00", "s"),
+        ("L4 Baseline", "benchmarks/gpu_suite/colab_l4_complete_2026_11_11", "#5C6BC0", "^"),
+        ("L4 Optimized", "benchmarks/gpu_suite/colab_l4_optimized_2026_11_11", "#1E88E5", "o"),
+    ]
 
-    detectors = {
-        "YOLO26 (Ultralytics)": {
-            "latency": [13.1, 16.5, 23.0, 28.5, 38.0],
-            "map": [40.9, 48.6, 53.1, 55.0, 57.5],
-            "labels": ["26n", "26s", "26m", "26l", "26x"],
-            "color": "#001080",
-            "lw": 2.5,
-            "ms": 7
-        },
-        "YOLO11 (Ultralytics)": {
-            "latency": [11.9, 15.2, 22.1, 27.5, 40.2],
-            "map": [39.5, 47.0, 51.5, 53.4, 54.7],
-            "labels": ["11n", "11s", "11m", "11l", "11x"],
-            "color": "#E65100",
-            "lw": 2.0,
-            "ms": 6
-        },
-        "YOLOv8 (Ultralytics)": {
-            "latency": [10.4, 14.5, 21.0, 29.5, 42.0],
-            "map": [37.3, 44.9, 50.2, 52.9, 53.9],
-            "labels": ["8n", "8s", "8m", "8l", "8x"],
-            "color": "#7B1FA2",
-            "lw": 2.0,
-            "ms": 6
-        },
-        "D-FINE / RT-DETR (KerasHub)": {
-            "latency": [13.1, 18.2, 27.0, 38.5],
-            "map": [42.8, 48.5, 52.3, 54.0],
-            "labels": ["DF-N", "DF-S", "DF-M", "DF-L"],
-            "color": "#00897B",
-            "lw": 2.2,
-            "ms": 6.5
-        },
+    models = {
+        "yolo": ("YOLOv8n", "#1E88E5"),
+        "yolo11": ("YOLO11n", "#E65100"),
+        "yolo26": ("RT-DETR / D-FINE", "#00897B"),
+        "yolo-world": ("YOLO-World v2", "#8E24AA"),
+        "faster-rcnn": ("Faster R-CNN", "#D32F2F"),
     }
 
-    for dname, dinfo in detectors.items():
-        ax.plot(dinfo["latency"], dinfo["map"], marker="o", markersize=dinfo["ms"],
-                linewidth=dinfo["lw"], color=dinfo["color"], label=dname, alpha=0.92)
-        for x, y, lbl in zip(dinfo["latency"], dinfo["map"], dinfo["labels"]):
-            ax.annotate(lbl, (x, y), xytext=(0, 6), textcoords="offset points",
-                        fontsize=9, color=dinfo["color"], fontweight="bold", ha="center")
+    model_pts = {m: [] for m in models}
 
-    # Add standalone reference detectors
-    # Faster R-CNN
-    ax.scatter([24.3], [37.9], color="#D32F2F", s=80, zorder=5, label="Faster R-CNN (Torchvision)")
-    ax.annotate("Faster R-CNN\n(ResNet-50)", (24.3, 37.9), xytext=(0, -22), textcoords="offset points",
-                fontsize=8.5, color="#D32F2F", fontweight="bold", ha="center")
+    for rname, rpath, rcolor, rmarker in runs:
+        with open(f"{rpath}/controlled/raw_statistics.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for row in data["rows"]:
+            m = row["model"]
+            if m in models and row["mode"] == "managed-stream" and row["profile"] == "images" and row["batch"] == 1:
+                fps = row["fps"]["median"]
+                lat = 1000.0 / fps
+                model_pts[m].append((lat, fps, rname))
 
-    # Brand watermark
-    ax.text(0.03, 0.92, "klygo 2.1.1\n" + r"$\mathbf{Multi-Backend\ Pareto\ Frontier}$",
-            transform=ax.transAxes, fontsize=14, color="#1565C0", fontweight="bold",
-            verticalalignment="top")
+    fig, ax = plt.subplots(figsize=(11.5, 6))
 
-    ax.set_title("Klygo Multi-Backend Trade-off: Đo kiểm độ trễ thực tế trên NVIDIA L4 vs COCO mAP", pad=15)
-    ax.set_xlabel("Độ trễ đo thực tế trên NVIDIA L4 GPU (ms/khung hình, Managed Stream)", fontsize=11, fontweight="semibold")
-    ax.set_ylabel(r"$\mathrm{COCO\ mAP}_{val}^{50-95}$ (%)", fontsize=12, fontweight="semibold")
+    for m, (mdisplay, mcolor) in models.items():
+        pts = model_pts[m]
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        # Draw trajectory line with directional path
+        ax.plot(xs, ys, color=mcolor, linewidth=2.2, alpha=0.88, label=mdisplay)
+        for i, (x, y, rname) in enumerate(pts):
+            marker = runs[i][3]
+            ax.scatter([x], [y], color=mcolor, marker=marker, s=85, edgecolor="black", linewidth=0.8, zorder=5)
+            # Label final optimized run
+            if i == 2:
+                ax.annotate(f"{mdisplay}\n({y:.1f} FPS, {x:.1f}ms)", (x, y), xytext=(-10, 8), textcoords="offset points",
+                            fontsize=8.5, fontweight="bold", color=mcolor)
+            elif i == 0:
+                ax.annotate(f"T4 ({y:.1f} FPS)", (x, y), xytext=(5, -10), textcoords="offset points",
+                            fontsize=7.5, color="gray")
 
-    ax.set_xlim(8, 48)
-    ax.set_ylim(35.0, 60.0)
+    from matplotlib.lines import Line2D
+    custom_lines = [
+        Line2D([0], [0], marker='s', color='w', markerfacecolor='#FB8C00', markersize=9, label='Round 1: Colab T4 Complete'),
+        Line2D([0], [0], marker='^', color='w', markerfacecolor='#5C6BC0', markersize=9, label='Round 2: Colab L4 Baseline'),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='#1E88E5', markersize=9, label='Round 3: Colab L4 Optimized (+Pipeline Boost)'),
+    ]
+    leg1 = ax.legend(handles=custom_lines, loc="upper right", framealpha=0.95, title="3 Benchmark Runs", fontsize=9.5)
+    ax.add_artist(leg1)
+    ax.legend(loc="lower left", framealpha=0.95, title="Detector Architectures", fontsize=9.5)
+
+    ax.set_title("Optimization Progression across 3 Benchmark Runs: Latency vs Throughput (FPS)", pad=15)
+    ax.set_xlabel("Steady-State Inference Latency (ms/frame - Lower is Better)", fontsize=11, fontweight="semibold")
+    ax.set_ylabel("Inference Throughput (Frames Per Second - Higher is Better)", fontsize=11, fontweight="semibold")
+
+    ax.set_xlim(8, 42)
+    ax.set_ylim(20, 115)
     ax.grid(True, linestyle="--", alpha=0.35)
-    ax.legend(loc="lower right", framealpha=0.95, fontsize=9.5)
 
-    save_path = os.path.join(out_dir, "10_klygo_integrated_detectors_pareto_l4.png")
+    save_path = os.path.join(out_dir, "10_three_benchmark_runs_trajectory.png")
     plt.savefig(save_path)
     plt.close()
     print(f"Generated: {save_path}")
@@ -597,8 +543,8 @@ def main():
     chart_nms_microbenchmarks(out_dir)
     chart_three_benchmark_runs(out_dir)
     chart_three_workloads(out_dir)
-    chart_yolo_pareto_curve(out_dir)
-    chart_klygo_detectors_pareto_l4(out_dir)
+    chart_mining_pareto_frontier(out_dir)
+    chart_three_benchmark_runs_trajectory(out_dir)
 
     # Also copy to benchmarks/analyzt for convenience
     import shutil
