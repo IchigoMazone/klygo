@@ -58,34 +58,11 @@ Building modern Computer Vision applications typically involves juggling conflic
 
 ## Architecture & 14 Public Modules
 
-Klygo is designed as four cooperative layers:
+Klygo is organized into four cooperative layers with shared foundational utilities:
 
-```text
-┌────────────────────────────────────────────────────────────────────────┐
-│  1. Storage, Config & Datasets                                         │
-│     klygo.files  •  klygo.archive  •  klygo.config  •  klygo.datasets  │
-│     klygo.mining (Audit, deduplicate, cluster, balance datasets)       │
-├────────────────────────────────────────────────────────────────────────┤
-│  2. Media & Preprocessing                                              │
-│     klygo.media (LazyImage, MediaFrames, streaming video frames)       │
-│     klygo.preprocessing (134+ lazy transforms with affine trace)       │
-├────────────────────────────────────────────────────────────────────────┤
-│  3. Multi-Backend AI Models                                            │
-│     klygo.models (BaseModel -> Detector -> native framework wrappers)   │
-│     ├── Ultralytics (YOLOv8, YOLO11, YOLO-World v2)                   │
-│     ├── Hugging Face (Grounding DINO, DETR)                            │
-│     ├── Torchvision (Faster R-CNN, RetinaNet, FCOS, SSD)               │
-│     └── Keras 3 / KerasHub (RT-DETR, D-FINE on PyTorch/JAX/TF)        │
-├────────────────────────────────────────────────────────────────────────┤
-│  4. Outputs, Postprocessing, Metrics & Visual                          │
-│     klygo.outputs (Box, Crops, Detection, Detections, DetectionGroup)  │
-│     klygo.postprocessing (Composable NMS, clipping, threshold, top-k)  │
-│     klygo.metrics (COCO mAP@50-95, PR curves, confusion matrix, error) │
-│     klygo.visual (Non-destructive bbox rendering, dataset charts)      │
-├────────────────────────────────────────────────────────────────────────┤
-│  Shared Foundation: klygo.utils  •  klygo.validators                   │
-└────────────────────────────────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="analyzt/klygo_architecture.png" alt="Klygo 2.1.1 System Architecture" width="100%">
+</p>
 
 ### Module Directory
 
