@@ -101,7 +101,7 @@ class DetectionGroup:
         show_labels, show_scores : bool, default=True
             Include class names and confidence scores on bounding boxes.
         backend : str, default='auto'
-            Display backend forwarded to visual.compare_images().
+            Display backend forwarded to graphics.compare_images().
 
         Returns
         -------
@@ -122,7 +122,7 @@ class DetectionGroup:
         RuntimeError
             Source pixels are unavailable for a selected image.
         """
-        from klygo import visual
+        from klygo import graphics
 
         validators.validate_type(index, int, "index")
         if isinstance(index, bool):
@@ -145,7 +145,7 @@ class DetectionGroup:
         self._validate()
         first = selected[0][index]
         second = selected[1].get_frame(first.frame_index, source_id=first.source_id)
-        visual.compare_images(
+        graphics.compare_images(
             first, second,
             titles=tuple(selected_names) if titles is None else titles,
             show_labels=show_labels,

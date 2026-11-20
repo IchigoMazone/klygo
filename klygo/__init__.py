@@ -14,7 +14,8 @@ Public Modules (14 packages + Config):
     - ``preprocessing``  : Lazy image transforms, quality metrics, and coordinate trace restoration.
     - ``utils``          : Mapping helpers, binary size formatting, table rendering, and ``ProgressBar``.
     - ``validators``     : Standardized runtime type and count validation helpers.
-    - ``visual``         : Non-destructive box rendering, image display, and dataset charts.
+    - ``graphics``       : Non-destructive box rendering, image display, grids, and report charts.
+    - ``reports``        : Experiment log loading, multi-seed aggregation, and audit tables.
 """
 
 import importlib
@@ -29,9 +30,10 @@ from . import outputs
 from . import postprocessing
 from . import preprocessing
 from . import mining
+from . import reports
 from . import utils
 from . import validators
-from . import visual
+from . import graphics
 from .config import Config
 
 __version__ = "2.1.2"
@@ -64,8 +66,9 @@ __all__ = [
     "outputs",
     "postprocessing",
     "preprocessing",
+    "reports",
     "utils",
     "validators",
-    "visual",
+    "graphics",
     "Config",
 ]

@@ -7,7 +7,7 @@ Exercises all 4 standard Klygo backends:
 4. Keras (Keras 3 with PyTorch engine)
 
 Uses exclusively public Klygo APIs:
-files, datasets, media, preprocessing, models, outputs, postprocessing, visual, and utils.
+files, datasets, media, preprocessing, models, outputs, postprocessing, graphics, and utils.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from klygo import (
     postprocessing,
     preprocessing,
     utils,
-    visual,
+    graphics,
 )
 from klygo.models.detection.base import Detector
 from klygo.outputs.detect import Box, Detection, Detections
@@ -337,12 +337,12 @@ def evaluate_model_on_dataset(
             class_stats[label]["fp"] += fp
             class_stats[label]["fn"] += fn
 
-            # Save annotated visualization preview with visual.draw_bboxes
+            # Save annotated visualization preview with graphics.draw_bboxes
             if pred_boxes:
                 bboxes_coords = [b.box for b in pred_boxes]
                 bboxes_labels = [b.label for b in pred_boxes]
                 bboxes_scores = [b.score for b in pred_boxes]
-                vis_img = visual.draw_bboxes(
+                vis_img = graphics.draw_bboxes(
                     image,
                     bboxes=bboxes_coords,
                     labels=bboxes_labels,

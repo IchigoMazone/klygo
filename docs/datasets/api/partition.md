@@ -8,6 +8,9 @@ datasets.partition(
     format: str = "yolo",
     overwrite: bool = False,
     verbose: bool = True,
+    shuffle: bool = True,
+    seed: int = 42,
+    stratify: bool = False,
 ) -> pathlib.Path
 ```
 
@@ -28,6 +31,9 @@ Scans all image/label pairs in `source`, shuffles them with a deterministic seed
 - `format`: `str`, default `"yolo"` — dataset format to partition. Currently only `"yolo"` is supported.
 - `overwrite`: `bool`, default `False` — replace `target` if it already exists.
 - `verbose`: `bool`, default `True` — display progress when writing a `.zip` target.
+- `shuffle`: `bool`, default `True` — shuffle samples before assigning to partitions.
+- `seed`: `int`, default `42` — random seed used when shuffling.
+- `stratify`: `bool`, default `False` — preserve per-class label proportions across splits using iterative multi-label stratification.
 
 ## Returns
 

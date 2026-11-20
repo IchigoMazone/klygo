@@ -18,6 +18,7 @@ def partition(
     verbose: bool = True,
     shuffle: bool = True,
     seed: int = 42,
+    stratify: bool = False,
 ) -> None:
     """Partition a YOLO dataset reproducibly.
 
@@ -41,6 +42,9 @@ def partition(
         Whether to shuffle samples before assigning to partitions.
     seed : int, default=42
         Random seed used when shuffling.
+    stratify : bool, default=False
+        Whether to preserve per-class label proportions across splits using
+        iterative multi-label stratification.
 
     Returns
     -------
@@ -63,7 +67,16 @@ def partition(
     >>> datasets.partition("dataset", "partitioned", (0.8, 0.1, 0.1), shuffle=True, seed=42)
     """
     validate_dataset_format(format)
-    params = Partition(source, target, ratios, overwrite, verbose, shuffle=shuffle, seed=seed)
+    params = Partition(
+        source,
+        target,
+        ratios,
+        overwrite,
+        verbose,
+        shuffle=shuffle,
+        seed=seed,
+        stratify=stratify,
+    )
     execute_partition(
         params.source,
         params.target,
@@ -72,6 +85,7 @@ def partition(
         verbose=params.verbose,
         shuffle=params.shuffle,
         seed=params.seed,
+        stratify=params.stratify,
     )
 
 

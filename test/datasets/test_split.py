@@ -81,3 +81,42 @@ class TestSplit(unittest.TestCase):
             assert False, "Should raise ValidationError for missing split strategy"
         except (ValidationError, ValueError):
             pass
+
+    def test_split_stratified_ratios_preserves_class_proportions(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as td:
+            src = os.path.join(td, "src")
+            os.makedirs(os.path.join(src, "images"), exist_ok=True)
+            os.makedirs(os.path.join(src, "labels"), exist_ok=True)
+            with open(os.path.join(src, "data.yaml"), "w", encoding="utf-8") as fh:
+                fh.write("names:\n  0: majority\n  1: rare\n")
+
+            for i in range(12):
+                Image.new("RGB", (16, 16), (i * 15, 0, 0)).save(os.path.join(src, "images", f"img_{i:02d}.png"))
+                cls = "0" if i < 8 else "1"
+                with open(os.path.join(src, "labels", f"img_{i:02d}.txt"), "w", encoding="utf-8") as fh:
+                    fh.write(f"{cls} 0.5 0.5 0.2 0.2\n")
+
+            out = os.path.join(td, "parts")
+            split(
+                source=src,
+                output_dir=out,
+                ratios=(0.5, 0.5),
+                stratify=True,
+                shuffle=True,
+                seed=42,
+                overwrite=True,
+                verbose=False,
+            )
+
+            for part in ("split_part_0", "split_part_1"):
+                rare_count = 0
+                lbl_dir = os.path.join(out, part, "labels")
+                for name in os.listdir(lbl_dir):
+                    with open(os.path.join(lbl_dir, name), encoding="utf-8") as fh:
+                        if fh.read().startswith("1 "):
+                            rare_count += 1
+                self.assertEqual(rare_count, 2)
+
+            with self.assertRaises(ValueError):
+                split(source=src, output_dir=out, by_class=True, stratify=True, overwrite=True)

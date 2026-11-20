@@ -17,6 +17,7 @@ Reports contain ordinary dictionaries, lists, tuples (frame identities), numbers
 ## Operations
 
 - [precision_recall](api/precision_recall.md): Dictionary: `tp`, `fp`, `fn`, `precision`, `recall`, `f1`, `mean_iou`.
+- [f1_score](api/f1_score.md): Dictionary: `f1`, `precision`, `recall`.
 - [map_score](api/map_score.md): Dictionary: `map`, optional `map_50` and `map_75` when those thresholds are requested, `per_class`, and `per_iou`.
 - [confusion_matrix](api/confusion_matrix.md): Dictionary: `labels`, `background_index`, and `matrix` as a list of count rows.
 - [match_boxes](api/match_boxes.md): List of frame dictionaries: `identity`, `matches`, `unmatched_pred`, `unmatched_target`.

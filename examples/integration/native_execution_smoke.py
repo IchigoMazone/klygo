@@ -21,7 +21,7 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 import numpy as np
 from PIL import Image
 
-from klygo import files, media, models, outputs, visual
+from klygo import files, media, models, outputs, graphics
 
 
 class HuggingFaceDetector(models.Detector):
@@ -157,7 +157,7 @@ def run_one(backend, source, root):
     if "klygo.models.backend" in sys.modules:
         raise AssertionError("Removed backend package was imported")
 
-    preview = visual.draw_bboxes(positive, result[0])
+    preview = graphics.draw_bboxes(positive, result[0])
     media.save(files.join(root, f"{backend}.jpg"), preview, overwrite=True, verbose=False)
     report = {
         "backend": backend, "model": detector.model_id, "device": device,

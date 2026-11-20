@@ -73,7 +73,7 @@ class TestCOCO15Workflow(unittest.TestCase):
             sources = "\n".join(cell.source for cell in notebook.cells)
             for module in (
                 "archive", "config", "datasets", "files", "media", "models", "outputs",
-                "postprocessing", "preprocessing", "utils", "validators", "visual",
+                "postprocessing", "preprocessing", "utils", "validators", "graphics",
             ):
                 self.assertIn(module, sources)
             target_id = next(index for index in range(15) if f"_{index:02d}_" in path.name)

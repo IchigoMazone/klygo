@@ -200,6 +200,14 @@ def cluster(
     )
 
 
+_CONFIDENCE_AGGREGATORS = {
+    "mean": lambda values: float(sum(values) / len(values)),
+    "min": lambda values: float(min(values)),
+    "max": lambda values: float(max(values)),
+    "median": lambda values: float(median(values)),
+}
+
+
 def select(
     data: Detections,
     *,
@@ -208,6 +216,8 @@ def select(
     classes: Optional[Sequence[str]] = None,
     match: str = "any",
     threshold: float = 0.5,
+    aggregate: str = "mean",
+    order: str = "desc",
     min_boxes: int = 0,
     max_boxes: Optional[int] = None,
     min_area_ratio: float = 0.0,
@@ -220,10 +230,11 @@ def select(
 ) -> Detections:
     """Select whole images from a dataset using specialized curation strategies.
 
-    Supports 9 distinct selection strategies:
+    Supports 10 distinct selection strategies:
     - `'random'`: reproducible uniform random sampling without replacement using `seed`.
     - `'weighted'`: rank images by multi-criteria composite scores from :func:`score`.
     - `'quality'`: filter images exceeding a minimum quality score `threshold`.
+    - `'confidence'`: filter and rank images by aggregated bounding-box confidence scores.
     - `'rare_first'`: prioritize images containing the least frequent class labels.
     - `'diversity'`: sample visual cluster representatives across K-Means groups.
     - `'boxes'`: filter images by annotation box count and relative area constraints.
@@ -235,7 +246,7 @@ def select(
     ----------
     data : Detections
         Materialized detection collection.
-    method : {'weighted', 'random', 'quality', 'rare_first', 'diversity', 'boxes', 'quota', 'coverage', 'class'}, default='weighted'
+    method : {'weighted', 'random', 'quality', 'confidence', 'rare_first', 'diversity', 'boxes', 'quota', 'coverage', 'class'}, default='weighted'
         Selection strategy to execute.
     limit : int, optional
         Maximum number of images to return. If None, returns all matching frames.
@@ -248,7 +259,14 @@ def select(
         - `'only'`: image must contain only requested classes (no other classes).
         - `'exclude'`: image must not contain any of the requested classes.
     threshold : float, default=0.5
-        Minimum composite quality score required when `method='quality'`.
+        Minimum composite quality score required when `method='quality'`, or
+        minimum aggregated box confidence score required when `method='confidence'`.
+    aggregate : {'mean', 'min', 'max', 'median'}, default='mean'
+        Aggregation function applied to per-frame box confidence scores when
+        `method='confidence'`.
+    order : {'desc', 'asc'}, default='desc'
+        Ranking direction when `method='confidence'` (`'desc'` for highest
+        confidence first, `'asc'` for lowest confidence first).
     min_boxes : int, default=0
         Minimum annotation box count required when `method='boxes'`.
     max_boxes : int, optional
@@ -357,34 +375,92 @@ def select(
     elif method == "diversity":
         if per_cluster <= 0:
             raise ValueError("per_cluster must be positive")
-
-        result = cluster_result or cluster(
-            data,
-            clusters=min(len(data), limit or min(100, len(data))),
-            verbose=verbose,
-        )
-        if len(result.labels) != len(data):
-            raise ValueError("cluster_result length must match data length")
-
-        chosen = []
-        for key in sorted(result.groups):
-            representative = result.representatives[key]
-            chosen.extend(
-                [representative]
-                + [index for index in result.groups[key] if index != representative][:per_cluster - 1]
+        if not len(data):
+            indices = []
+        else:
+            result = cluster_result or cluster(
+                data,
+                clusters=min(len(data), limit or min(100, len(data))),
+                verbose=verbose,
             )
-        if limit is not None:
-            chosen = chosen[:limit]
-        indices = sorted(chosen)
+            if len(result.labels) != len(data):
+                raise ValueError("cluster_result length must match data length")
+
+            buckets: list[list[int]] = []
+            for key in sorted(result.groups):
+                group = result.groups[key]
+                if not group:
+                    continue
+                representative = result.representatives.get(key, group[0])
+                ordered = (
+                    [representative] + [index for index in group if index != representative]
+                    if representative in group
+                    else list(group)
+                )
+                buckets.append(ordered)
+
+            if limit is None:
+                chosen = [index for bucket in buckets for index in bucket[:per_cluster]]
+            else:
+                target = min(limit, len(data))
+                if target == 0 or not buckets:
+                    chosen = []
+                elif len(buckets) > target:
+                    # Evenly sample target distinct clusters and take each cluster's representative
+                    selected_clusters = [int(i * len(buckets) / target) for i in range(target)]
+                    chosen = [buckets[idx][0] for idx in selected_clusters]
+                else:
+                    # Round-robin across clusters from round 0 (representatives first, then extras/backfill)
+                    chosen = []
+                    offset = 0
+                    while len(chosen) < target:
+                        added = False
+                        for bucket in buckets:
+                            if offset < len(bucket):
+                                chosen.append(bucket[offset])
+                                added = True
+                                if len(chosen) >= target:
+                                    break
+                        if not added:
+                            break
+                        offset += 1
+            indices = sorted(chosen)
+
+    # 7. Box confidence aggregation and ranking
+    elif method == "confidence":
+        if not 0.0 <= threshold <= 1.0:
+            raise ValueError("threshold must be between 0.0 and 1.0 for confidence selection")
+        agg_key = aggregate.lower()
+        aggregator = _CONFIDENCE_AGGREGATORS.get(agg_key)
+        if aggregator is None:
+            raise ValueError("aggregate must be 'mean', 'min', 'max', or 'median'")
+        order_key = order.lower()
+        if order_key not in {"desc", "asc"}:
+            raise ValueError("order must be 'desc' or 'asc'")
+
+        candidates: list[tuple[int, float]] = []
+        for index, frame in enumerate(_iter_progress(data, verbose, "Selecting images")):
+            frame_scores = frame.scores
+            if not frame_scores:
+                continue
+            value = aggregator(frame_scores)
+            if value >= threshold:
+                candidates.append((index, value))
+
+        ranked = sorted(
+            candidates,
+            key=lambda item: (-item[1] if order_key == "desc" else item[1], item[0]),
+        )
+        indices = [index for index, _ in ranked[:limit]]
 
     else:
         raise ValueError(
-            "method must be class, quality, boxes, random, quota, rare_first, coverage, diversity, or weighted"
+            "method must be class, quality, confidence, boxes, random, quota, rare_first, coverage, diversity, or weighted"
         )
 
     # Apply global limit if not already applied
     if limit is not None and method not in {
-        "random", "weighted", "quality", "rare_first", "quota", "coverage", "diversity"
+        "random", "weighted", "quality", "confidence", "rare_first", "quota", "coverage", "diversity"
     }:
         indices = indices[:limit]
 

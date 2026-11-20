@@ -6,7 +6,7 @@ from torchvision.models import get_model, get_model_weights
 
 from klygo import (
     archive, config, datasets, files, media, outputs,
-    postprocessing, preprocessing, utils, visual,
+    postprocessing, preprocessing, utils, graphics,
 )
 from klygo.models.detection import Detector
 
@@ -102,7 +102,7 @@ def evaluate(dataset_root=None, artifact_root=None):
                 rows.append({"class": label, "image_id": image_id,
                              "tp": tp, "fp": fp, "fn": len(unmatched)})
                 if image_id == positive:
-                    overlay = visual.draw_bboxes(
+                    overlay = graphics.draw_bboxes(
                         image.to_pil(), predicted.boxes, predicted.labels, predicted.scores
                     )
                     media.save(files.join(preview_root, f"{label}.jpg"), overlay, overwrite=True)

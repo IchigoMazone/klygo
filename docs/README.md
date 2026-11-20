@@ -33,7 +33,7 @@ Klygo is a modular, composable Python toolkit for filesystem operations, multi-f
 │ 4. Standardized Outputs, Postprocessing & Visualization Layer               │
 │    klygo.outputs (Box, Detection, Detections)                               │
 │    klygo.postprocessing (NMS, threshold, clip, box_iou)                     │
-│    klygo.visual (draw_bboxes, show_image, plot_dataset_stats)               │
+│    klygo.graphics (draw_bboxes, show_image, plot_dataset_stats)               │
 │    klygo.mining (stats, duplicates, clustering, selection, balance)         │
 └─────────────────────────────────────────────────────────────────────────────┘
   Shared Foundation: klygo.utils (ProgressBar, human_size) • klygo.validators
@@ -58,7 +58,7 @@ Every public Klygo module provides verified reference documentation (`docs/<modu
 | **[`klygo.outputs`](outputs/README.md)** | 7 | 2 | [Docs](outputs/README.md) | [`examples/outputs/`](../examples/outputs) | [`Document_Outputs_Overview.ipynb`](../tutorials/outputs/Document_Outputs_Overview.ipynb) | [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/outputs/Document_Outputs_Overview.ipynb) |
 | **[`klygo.postprocessing`](postprocessing/README.md)** | 20 | 2 | [Docs](postprocessing/README.md) | [`examples/postprocessing/`](../examples/postprocessing) | [`Document_Postprocessing_Overview.ipynb`](../tutorials/postprocessing/Document_Postprocessing_Overview.ipynb) | [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/postprocessing/Document_Postprocessing_Overview.ipynb) |
 | **[`klygo.mining`](mining/README.md)** | 13 | 1 | [Docs](mining/README.md) | [`examples/mining/`](../examples/mining) | [`Document_Mining_Overview.ipynb`](../tutorials/mining/Document_Mining_Overview.ipynb) | [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/mining/Document_Mining_Overview.ipynb) |
-| **[`klygo.visual`](visual/README.md)** | 4 | 4 | [Docs](visual/README.md) | [`examples/visual/`](../examples/visual) | [`Document_Visual_Overview.ipynb`](../tutorials/visual/Document_Visual_Overview.ipynb) | [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/visual/Document_Visual_Overview.ipynb) |
+| **[`klygo.graphics`](graphics/README.md)** | 4 | 4 | [Docs](graphics/README.md) | [`examples/graphics/`](../examples/graphics) | [`Document_Graphics_Overview.ipynb`](../tutorials/graphics/Document_Graphics_Overview.ipynb) | [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/graphics/Document_Graphics_Overview.ipynb) |
 | **[`klygo.utils`](utils/README.md)** | 5 | 2 | [Docs](utils/README.md) | [`examples/utils/`](../examples/utils) | [`Document_Utils_Overview.ipynb`](../tutorials/utils/Document_Utils_Overview.ipynb) | [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/utils/Document_Utils_Overview.ipynb) |
 | **[`klygo.validators`](validators/README.md)** | 1 | 1 | [Docs](validators/README.md) | [`examples/validators/`](../examples/validators) | [`Document_Validators_Overview.ipynb`](../tutorials/validators/Document_Validators_Overview.ipynb) | [Open in Colab](https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/validators/Document_Validators_Overview.ipynb) |
 
@@ -87,7 +87,7 @@ See [`docs/integration/README.md`](integration/README.md) for cross-module evalu
 
 ## 5. Conventions
 
-- **Package Facades**: Import public APIs from their top-level package facade (`from klygo import files, archive, config, datasets, media, preprocessing, models, outputs, postprocessing, visual, utils, validators`).
+- **Package Facades**: Import public APIs from their top-level package facade (`from klygo import files, archive, config, datasets, media, preprocessing, models, outputs, postprocessing, graphics, utils, validators`).
 - **Immutability by Default**: Functional configuration, mapping, and postprocessing operations return independent values unless an API explicitly documents in-place mutation.
 - **Path Interoperability**: All file, archive, dataset, and media APIs accept `str` and text-returning `os.PathLike[str]` objects. Use `klygo.files` (`files.path`, `files.join`, `files.mkdir`, `files.save`, `files.load`) for runtime path and I/O operations.
 - **Safe Publication**: Pass `overwrite=True` when replacing existing destination files or archives.

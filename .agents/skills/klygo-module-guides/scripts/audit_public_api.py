@@ -27,9 +27,10 @@ ALL_MODULES = [
     "outputs",
     "postprocessing",
     "preprocessing",
+    "reports",
     "utils",
     "validators",
-    "visual",
+    "graphics",
 ]
 
 COLAB_BASE = "https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials"

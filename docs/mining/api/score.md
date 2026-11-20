@@ -4,7 +4,7 @@
 score(data, *, weights=None, verbose=False)
 ```
 
-Returns one normalized score per image. `weights` may contain `quality`, `rarity`, `coverage`, and `boxes`; omitted weights use a practical default blend.
+Returns one normalized score per image. `weights` may contain `quality`, `rarity`, `coverage`, and `boxes` (all finite non-negative numbers summing to `> 0`); `weights=None` uses the default blend (`quality=0.4`, `rarity=0.3`, `coverage=0.2`, `boxes=0.1`), whereas passing `{}` raises `ValueError`. All six quality metrics (`brightness`, `sharpness`, `contrast`, `entropy`, `1 - noise`, `exposure`) are min-max normalized onto `[0, 1]`, and `coverage` is measured against classes actually present in the dataset.
 
 ```python
 from klygo import mining

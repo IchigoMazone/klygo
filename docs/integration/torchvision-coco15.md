@@ -1,6 +1,6 @@
 # Torchvision COCO15 workflow
 
-This workflow checks the Torchvision backend and the handoffs among `config`, `datasets`, `media`, `preprocessing`, `models`, `outputs`, `postprocessing`, `visual`, `files`, `archive`, and `utils` on real COCO128 images. It evaluates one positive and one negative image for each of `person`, `car`, `elephant`, and `umbrella`. This is an integration smoke run, not a generalization benchmark.
+This workflow checks the Torchvision backend and the handoffs among `config`, `datasets`, `media`, `preprocessing`, `models`, `outputs`, `postprocessing`, `graphics`, `files`, `archive`, and `utils` on real COCO128 images. It evaluates one positive and one negative image for each of `person`, `car`, `elephant`, and `umbrella`. This is an integration smoke run, not a generalization benchmark.
 
 Build the existing COCO15 fixture (it stays ignored), install `klygo[torchvision]`, then run:
 

@@ -4,7 +4,7 @@ from typing import Any
 from klygo import validators
 from ._core import _MISSING, _Metric, _dispatch, _unit, _thresholds
 
-__all__ = ["precision_recall", "map_score", "confusion_matrix", "match_boxes",
+__all__ = ["precision_recall", "f1_score", "map_score", "confusion_matrix", "match_boxes",
            "per_class", "per_image", "error_analysis", "size_breakdown",
            "calibration", "threshold_sweep", "iou_sweep"]
 
@@ -40,6 +40,64 @@ def precision_recall(pred=_MISSING, target=_MISSING, *, iou=0.5, verbose=False) 
     See docs/metrics/api/precision_recall.md for the exact output schema and conventions.
     """
     return _dispatch("precision_recall", pred, target, verbose=verbose, iou=_unit(iou, "iou"))
+
+
+def f1_score(
+    pred=_MISSING,
+    target=_MISSING,
+    *,
+    precision=None,
+    recall=None,
+    iou=0.5,
+    verbose=False,
+) -> dict[str, Any] | list[Any] | _Metric:
+    """Compute F1 score from precision and recall.
+
+    Supports both direct numeric calculation via ``precision`` and ``recall``
+    and object-detection evaluation via ``pred`` and ``target`` (or deferred
+    composition when both ``pred`` and ``target`` are omitted).
+
+    Parameters
+    ----------
+    pred, target : Detection or Detections, optional
+        Same-type, same-source inputs. Supply both to execute; omit both to configure.
+    precision, recall : float, optional
+        Direct precision and recall values in [0, 1]. Supply both to compute F1
+        directly without ``pred`` or ``target``.
+    iou : float, optional
+        Matching IoU in [0, 1] when evaluating ``pred`` and ``target``. Default is 0.5.
+    verbose : bool, default=False
+        Display progress during direct execution. Deferred configurations stay silent;
+        use evaluate(..., verbose=True) to control composed evaluation.
+
+    Returns
+    -------
+    dict or configuration
+        Dictionary with ``f1``, ``precision``, and ``recall`` for direct calls,
+        or an immutable deferred configuration.
+
+    Raises
+    ------
+    TypeError
+        Inputs or parameter types are unsupported, or only one of ``pred``/``target`` is supplied.
+    ValueError
+        Parameters, frame identities, image sizes, devices, or stream inputs are invalid.
+
+    Notes
+    -----
+    See docs/metrics/api/f1_score.md for the exact output schema and conventions.
+    """
+    if precision is not None or recall is not None:
+        if pred is not _MISSING or target is not _MISSING:
+            raise ValueError("Cannot pass pred/target together with precision/recall")
+        if precision is None or recall is None:
+            raise ValueError("Both precision and recall must be provided")
+        validators.validate_type(verbose, bool, "verbose")
+        p = _unit(precision, "precision")
+        r = _unit(recall, "recall")
+        score = 2.0 * p * r / (p + r) if (p + r) > 0 else 0.0
+        return {"f1": score, "precision": p, "recall": r}
+    return _dispatch("f1_score", pred, target, verbose=verbose, iou=_unit(iou, "iou"))
 
 
 def map_score(pred=_MISSING, target=_MISSING, *, thresholds=None, verbose=False) -> dict[str, Any] | list[Any] | _Metric:

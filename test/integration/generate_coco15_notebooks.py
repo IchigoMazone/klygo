@@ -27,7 +27,7 @@ def notebook(class_id: int, class_name: str, source_id: int):
         markdown(f"""
         # COCO15 · {class_name}
 
-        This notebook evaluates **{class_name}** (COCO15 class `{class_id}`, original COCO class `{source_id}`) on real COCO128 photographs. It exercises Klygo's `files`, `config`, `archive`, `datasets`, `media`, `preprocessing`, `models`, `outputs`, `postprocessing`, `visual`, `validators`, and `utils` in one workflow.
+        This notebook evaluates **{class_name}** (COCO15 class `{class_id}`, original COCO class `{source_id}`) on real COCO128 photographs. It exercises Klygo's `files`, `config`, `archive`, `datasets`, `media`, `preprocessing`, `models`, `outputs`, `postprocessing`, `graphics`, `validators`, and `utils` in one workflow.
 
         Sign in to Google Colab, choose **Runtime → Change runtime type → GPU**, and upload `klygo_coco15_bundle.zip` once to `MyDrive/Klygo/`. The notebook asks you to authorize Drive access. A GPU speeds up inference; it falls back to CPU if none is assigned. The bundle contains this checkout's Klygo source and the 15-class dataset, so its behavior does not depend on unpushed Git changes.
 
@@ -75,7 +75,7 @@ def notebook(class_id: int, class_name: str, source_id: int):
         import json
         import torch
         from klygo import archive, config, datasets, files, media, models, outputs
-        from klygo import postprocessing, preprocessing, utils, validators, visual
+        from klygo import postprocessing, preprocessing, utils, validators, graphics
 
         WORK_ROOT = files.path(WORK_ROOT)
         DATASET_ROOT = files.path(DATASET_ROOT)
@@ -162,7 +162,7 @@ def notebook(class_id: int, class_name: str, source_id: int):
         preview = predictions.get(preview_id)
         if preview is not None:
             original = media.load(files.join(DATASET_ROOT, "images", f"{preview_id}.jpg"), verbose=False)[0].to_pil()
-            overlay = visual.draw_bboxes(original, preview.boxes, preview.labels, preview.scores)
+            overlay = graphics.draw_bboxes(original, preview.boxes, preview.labels, preview.scores)
             media.save(files.join(RESULT_ROOT, f"{preview_id}_prediction.jpg"), overlay, overwrite=True)
             display(overlay)
         report = {"class_id": TARGET_ID, "class_name": TARGET_CLASS,

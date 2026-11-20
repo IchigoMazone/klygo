@@ -4,7 +4,7 @@
 stats(data, *, quality=True, cooccurrence=True, verbose=False)
 ```
 
-Returns a [`MiningStats`](MiningStats.md) report for materialized `Detections`. Class counts use both images and bounding boxes. Quality metrics decode source images only when `quality=True`.
+Returns a [`MiningStats`](MiningStats.md) report for materialized `Detections`. Class counts use both images and bounding boxes, report `present_classes` and `missing_classes`, compute `imbalance_ratio` and `box_imbalance_ratio`, and summarize `box_area` percentiles (`p25`, `p50`, `p75`, `p90`). Quality metrics decode source images only when `quality=True` and skip unreadable images while recording `failed_quality_images`.
 
 ```python
 from klygo import mining, utils

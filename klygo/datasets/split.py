@@ -10,6 +10,7 @@ from pathlib import Path
 from klygo import config, files
 from klygo.validators.datasets import Split
 
+from ._partitioning import _stratified_split
 from ._structure import (
     copy_entry,
     flattened_name,
@@ -53,12 +54,13 @@ def split(
     verbose: bool = True,
     shuffle: bool = True,
     seed: int = 42,
+    stratify: bool = False,
 ) -> None:
     """Split a YOLO dataset into independent directories or ZIP archives.
 
     Exactly one strategy is selected: ``by_class=True`` creates one dataset
     per class, ``class_groups`` creates one dataset per named group, and
-    ``ratios`` creates parts using optional shuffling and seed.
+    ``ratios`` creates parts using optional shuffling, seed, and stratification.
 
     Parameters
     ----------
@@ -86,6 +88,9 @@ def split(
         Whether to shuffle samples before ratio splitting.
     seed : int, default=42
         Random seed used when shuffling.
+    stratify : bool, default=False
+        Whether to preserve per-class label proportions across ratio splits
+        using iterative multi-label stratification.
 
     Returns
     -------
@@ -119,6 +124,7 @@ def split(
         verbose,
         shuffle=shuffle,
         seed=seed,
+        stratify=stratify,
     )
     files.mkdir(params.output_dir)
 
@@ -183,11 +189,26 @@ def split(
             shuffled = list(pairs)
             if params.shuffle:
                 random.Random(params.seed).shuffle(shuffled)
+            part_ratios = list(params.ratios or ())
+            if params.stratify:
+                targets = {
+                    str(i): (
+                        len(shuffled) - sum(int(len(shuffled) * r) for r in part_ratios[:-1])
+                        if i == len(part_ratios) - 1
+                        else int(len(shuffled) * r)
+                    )
+                    for i, r in enumerate(part_ratios)
+                }
+                ratio_map = {str(i): r for i, r in enumerate(part_ratios)}
+                stratified_groups = _stratified_split(shuffled, targets, ratio_map)
             cursor = 0
-            for index, ratio in enumerate(params.ratios or ()):
-                end = len(shuffled) if index == len(params.ratios) - 1 else cursor + int(len(shuffled) * ratio)
-                selected = shuffled[cursor:end]
-                cursor = end
+            for index, ratio in enumerate(part_ratios):
+                if params.stratify:
+                    selected = stratified_groups[str(index)]
+                else:
+                    end = len(shuffled) if index == len(part_ratios) - 1 else cursor + int(len(shuffled) * ratio)
+                    selected = shuffled[cursor:end]
+                    cursor = end
                 output_name = (
                     params.output_pattern.replace("*", str(index))
                     if params.output_pattern else f"split_part_{index}"

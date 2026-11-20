@@ -85,10 +85,10 @@ when no source is available, or FileNotFoundError when a source path is missing.
 
 ```python
 image = frame.image
-visual.compare_images(frame, other_frame)
+graphics.compare_images(frame, other_frame)
 ```
 
-[Compare images](../../visual/api/compare_images.md) supports display and saving
+[Compare images](../../graphics/api/compare_images.md) supports display and saving
 directly from two Detection frames, without passing their images separately.
 
 ## Device-preserving annotation arrays

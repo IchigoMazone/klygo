@@ -15,6 +15,7 @@ class Partition:
         verbose: bool,
         shuffle: bool = True,
         seed: int = 42,
+        stratify: bool = False,
     ) -> None:
 
         """Validate and normalize partition arguments."""
@@ -25,6 +26,7 @@ class Partition:
         validate_type(verbose, bool, "verbose")
         validate_type(shuffle, bool, "shuffle")
         validate_type(seed, int, "seed")
+        validate_type(stratify, bool, "stratify")
 
         if not all(isinstance(x, float) for x in ratios):
             raise TypeError(
@@ -67,6 +69,7 @@ class Partition:
         self.verbose = verbose
         self.shuffle = shuffle
         self.seed = seed
+        self.stratify = stratify
 
 
 class Repartition(Partition):
@@ -120,6 +123,7 @@ class Split:
         verbose: bool = True,
         shuffle: bool = True,
         seed: int = 42,
+        stratify: bool = False,
     ) -> None:
         """Validate and normalize split arguments."""
         validate_type(source, (str, os.PathLike), "source")
@@ -129,6 +133,7 @@ class Split:
         validate_type(verbose, bool, "verbose")
         validate_type(shuffle, bool, "shuffle")
         validate_type(seed, int, "seed")
+        validate_type(stratify, bool, "stratify")
 
         if class_groups is not None:
             validate_type(class_groups, list, "class_groups")
@@ -166,6 +171,7 @@ class Split:
         self.verbose = verbose
         self.shuffle = shuffle
         self.seed = seed
+        self.stratify = stratify
 
         if not files.exists(self.source):
             raise FileNotFoundError(f"source does not exist: {self.source}")
@@ -179,6 +185,8 @@ class Split:
             raise ValueError("Must specify either by_class=True, class_groups, or ratios.")
         if sum((self.by_class, self.class_groups is not None, self.ratios is not None)) != 1:
             raise ValueError("exactly one split strategy must be specified")
+        if self.stratify and self.ratios is None:
+            raise ValueError("stratify=True requires ratios to be specified")
 
 
 class RemapClasses:
