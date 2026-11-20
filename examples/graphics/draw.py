@@ -6,7 +6,7 @@ from klygo import graphics
 
 
 image = np.full((80, 120, 3), 255, dtype=np.uint8)
-annotated = graphics.draw_bboxes(
+annotated = graphics.draw(
     image, [[10, 12, 80, 65]], labels=["sample"], scores=[0.92],
     box_color=(220, 30, 30),
 )

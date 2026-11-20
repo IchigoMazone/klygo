@@ -17,7 +17,7 @@ matplotlib.use("Agg", force=True)
 class TestVisual(unittest.TestCase):
     def test_draw_bboxes_preserves_input_and_output_type(self):
         pixels = np.full((48, 64, 3), 255, dtype=np.uint8)
-        result = graphics.draw_bboxes(pixels, [[10, 10, 30, 30]],
+        result = graphics.draw(pixels, [[10, 10, 30, 30]],
                                     labels=["apple"], scores=[0.95],
                                     box_color=(255, 0, 0))
         self.assertIsInstance(result, np.ndarray)
@@ -26,15 +26,15 @@ class TestVisual(unittest.TestCase):
         self.assertFalse(np.array_equal(result, pixels))
 
         image = Image.fromarray(pixels)
-        annotated = graphics.draw_bboxes(image, [[10, 10, 30, 30]],
+        annotated = graphics.draw(image, [[10, 10, 30, 30]],
                                        show_labels=False, show_scores=False)
         self.assertIsInstance(annotated, Image.Image)
         self.assertEqual(image.getpixel((10, 10)), (255, 255, 255))
 
-    def test_draw_box_alias_and_annotator_integration(self):
+    def test_draw_annotator_integration(self):
         pixels = np.full((100, 100, 3), 200, dtype=np.uint8)
-        self.assertTrue(callable(graphics.draw_box))
-        res = graphics.draw_box(pixels, [[10, 10, 60, 60]], labels=["0 person"], scores=[0.88])
+        self.assertTrue(callable(graphics.draw))
+        res = graphics.draw(pixels, [[10, 10, 60, 60]], labels=["0 person"], scores=[0.88])
         self.assertIsInstance(res, np.ndarray)
         self.assertFalse(np.array_equal(res, pixels))
 
@@ -43,16 +43,16 @@ class TestVisual(unittest.TestCase):
         show_image_module = importlib.import_module("klygo.graphics.show_image")
         with patch.object(show_image_module, "_is_notebook", return_value=False):
             with patch.object(Image.Image, "show") as shown:
-                graphics.show_image(image, title="preview", width=40)
+                graphics.show(image, title="preview", width=40)
         shown.assert_called_once_with(title="preview")
 
     def test_show_image_height_and_mutual_exclusion_with_lazy_image(self):
         image = Image.new("RGB", (20, 10))
         with patch("matplotlib.pyplot.imshow") as imshow, patch("matplotlib.pyplot.show"):
-            graphics.show_image(image, title="by-h", height=20, backend="matplotlib")
+            graphics.show(image, title="by-h", height=20, backend="matplotlib")
             self.assertEqual(imshow.call_args.args[0].size, (40, 20))
         with self.assertRaises(ValueError):
-            graphics.show_image(image, width=40, height=20)
+            graphics.show(image, width=40, height=20)
 
         with tempfile.TemporaryDirectory() as directory:
             path = files.path(directory) / "sample.png"
@@ -75,7 +75,7 @@ class TestVisual(unittest.TestCase):
             files.save(root / "labels" / "sample.txt",
                        "0 0.5 0.5 0.2 0.2\n1 0.3 0.3 0.1 0.1\n0 0.2 0.2 0.1 0.1\n")
             with patch("matplotlib.pyplot.show"), patch("matplotlib.pyplot.bar") as bar:
-                graphics.plot_dataset_stats(root)
+                graphics.dataset_stats(root)
             self.assertEqual(list(bar.call_args.args[0]), ["cat", "dog"])
             self.assertEqual(list(bar.call_args.args[1]), [2, 1])
 
@@ -88,6 +88,6 @@ class TestVisual(unittest.TestCase):
             Image.new("RGB", (8, 8)).save(root / "images" / "sample.png")
             files.save(root / "labels" / "sample.txt", "2 0.5 0.5 0.2 0.2\n5 0.3 0.3 0.1 0.1\n", verbose=False)
             with patch("matplotlib.pyplot.show"), patch("matplotlib.pyplot.bar") as bar:
-                graphics.plot_dataset_stats(root)
+                graphics.dataset_stats(root)
             self.assertEqual(list(bar.call_args.args[0]), ["cat", "dog"])
             self.assertEqual(list(bar.call_args.args[1]), [1, 1])

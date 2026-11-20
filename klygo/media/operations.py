@@ -2502,7 +2502,7 @@ def _lazy_show(
 ) -> None:
     """Display the lazy image using Klygo's visual viewer without caching pixels."""
     from klygo import graphics
-    graphics.show_image(
+    graphics.show(
         self.to_pil(cache=False),
         title="Image" if title is None else title,
         width=width,

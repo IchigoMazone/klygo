@@ -252,7 +252,7 @@ class TestOutputs(unittest.TestCase):
 
     def test_preview_box_draws_candidate_without_adding_it(self):
         item = frame(); before = item.to_dict()
-        with patch("klygo.graphics.show_image") as display:
+        with patch("klygo.graphics.show") as display:
             result = item.preview_box(
                 [20, 15, 30, 25], label="bicycle", score=.75,
                 preview_color=(255, 0, 0),
@@ -266,7 +266,7 @@ class TestOutputs(unittest.TestCase):
 
     def test_preview_box_validates_before_display(self):
         item = frame(); before = item.to_dict()
-        with patch("klygo.graphics.show_image") as display:
+        with patch("klygo.graphics.show") as display:
             with self.assertRaises(ValueError):
                 item.preview_box([20, 20, 10, 10], label="invalid")
         self.assertEqual(item.to_dict(), before)

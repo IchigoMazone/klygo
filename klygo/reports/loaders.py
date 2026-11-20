@@ -1,11 +1,11 @@
-"""Load training runs, dataset partition summaries, and hyperparameters."""
+"""Load training runs and dataset partition summaries."""
 
 from __future__ import annotations
 
 import math
 from os import PathLike
 import tempfile
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional
 
 from klygo import archive, config, datasets, files, mining, validators
 from klygo.outputs import Detections
@@ -90,6 +90,7 @@ def load(
     """
     validators.validate_type(source, (str, PathLike), "source")
     validators.validate_type(format, str, "format")
+    validators.validate_type(best, str, "best")
     validators.validate_type(verbose, bool, "verbose")
 
     if format.lower() != "yolo":
@@ -199,7 +200,11 @@ def _count_split_boxes(images_dir: Any, labels_dir: Any) -> tuple[int, int, int]
     return len(image_files), positive, total_boxes
 
 
-def partition_summary(source: str | PathLike[str] | Mapping[str, Any]) -> list[dict[str, Any]]:
+def partition_summary(
+    source: str | PathLike[str] | Mapping[str, Any],
+    *,
+    format: str = "yolo",
+) -> list[dict[str, Any]]:
     """Summarize image and annotation counts across dataset partitions or splits.
 
     Accepts a directory/archive produced by ``datasets.partition()`` or
@@ -209,6 +214,8 @@ def partition_summary(source: str | PathLike[str] | Mapping[str, Any]) -> list[d
     ----------
     source : str, os.PathLike[str], or Mapping[str, Any]
         Partitioned dataset root, directory of split folders, or explicit mapping.
+    format : {'yolo'}, default='yolo'
+        Dataset annotation format used when scanning directories or archives.
 
     Returns
     -------
@@ -216,6 +223,10 @@ def partition_summary(source: str | PathLike[str] | Mapping[str, Any]) -> list[d
         Rows containing ``split``, ``images``, ``ratio_pct``, ``positive_images``,
         ``background_images``, and ``gt_boxes``.
     """
+    validators.validate_type(format, str, "format")
+    if format.lower() != "yolo":
+        raise ValueError("format must be 'yolo'")
+
     rows: list[dict[str, Any]] = []
 
     if isinstance(source, Mapping):
@@ -260,7 +271,7 @@ def partition_summary(source: str | PathLike[str] | Mapping[str, Any]) -> list[d
                     if not files.is_dir(extracted / "images") and len(sub_dirs) == 1
                     else extracted
                 )
-                return partition_summary(target_root)
+                return partition_summary(target_root, format=format)
 
         images_root = root / "images"
         if files.is_dir(images_root):
@@ -307,57 +318,4 @@ def partition_summary(source: str | PathLike[str] | Mapping[str, Any]) -> list[d
     return rows
 
 
-def extract_hyperparams(
-    run_dirs: Sequence[str | PathLike[str]],
-    *,
-    ignore: Sequence[str] = ("seed", "save_dir", "name"),
-) -> dict[str, Any]:
-    """Extract and cross-check ``args.yaml`` hyperparameters across training runs.
-
-    Parameters
-    ----------
-    run_dirs : Sequence[str or os.PathLike[str]]
-        List of run directories containing ``args.yaml``.
-    ignore : Sequence[str], default=('seed', 'save_dir', 'name')
-        Keys excluded from difference detection.
-
-    Returns
-    -------
-    dict[str, Any]
-        Dictionary with ``common`` (shared values), ``diffs`` (parameters that
-        differ across runs), and ``runs`` (per-run parameter dicts).
-    """
-    validators.validate_type(run_dirs, (list, tuple), "run_dirs")
-    ignored = set(ignore)
-    per_run: dict[str, dict[str, Any]] = {}
-    all_keys: set[str] = set()
-
-    for run_dir in run_dirs:
-        path = files.path(run_dir)
-        args_path = path / "args.yaml"
-        if not files.is_file(args_path):
-            raise FileNotFoundError(f"args.yaml not found in: {path}")
-        cfg = dict(config.load(args_path, verbose=False).to_dict())
-        base_name = files.name(path)
-        run_key = base_name if base_name not in per_run else str(path)
-        per_run[run_key] = cfg
-        all_keys.update(cfg.keys())
-
-    common: dict[str, Any] = {}
-    diffs: dict[str, dict[str, Any]] = {}
-    for key in sorted(all_keys - ignored):
-        values = {name: cfg.get(key) for name, cfg in per_run.items()}
-        unique_repr = {repr(v) for v in values.values()}
-        if len(unique_repr) <= 1:
-            common[key] = next(iter(values.values())) if values else None
-        else:
-            diffs[key] = values
-
-    return {
-        "common": common,
-        "diffs": diffs,
-        "runs": per_run,
-    }
-
-
-__all__ = ["load", "partition_summary", "extract_hyperparams"]
+__all__ = ["load", "partition_summary"]

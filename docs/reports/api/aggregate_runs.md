@@ -1,7 +1,7 @@
 # `reports.aggregate_runs`
 
 ```python
-reports.aggregate_runs(grouped_runs, *, metric_names=('precision', 'recall', 'f1', 'mAP50', 'mAP50-95'), compare_pair=None)
+reports.aggregate_runs(grouped_runs, *, format='yolo', best='auto', metric_names=('precision', 'recall', 'f1', 'mAP50', 'mAP50-95'), compare_pair=None)
 ```
 
 Aggregate multi-seed training runs into summary tables and epoch curves.

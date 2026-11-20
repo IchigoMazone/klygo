@@ -1,5 +1,6 @@
 """Class identity contracts shared by model backend adapters."""
 
+import importlib.util
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -9,8 +10,14 @@ from PIL import Image
 
 from klygo.models._frameworks import keras, ultralytics
 from klygo.models import detection
-from klygo.models.detection.yolo_world import YOLOWorldDetect
-from klygo.models.detection.yolo import YOLODetect
+
+_HAS_ULTRALYTICS = importlib.util.find_spec("ultralytics") is not None
+if _HAS_ULTRALYTICS:
+    from klygo.models.detection.yolo_world import YOLOWorldDetect
+    from klygo.models.detection.yolo import YOLODetect
+else:
+    YOLOWorldDetect = None
+    YOLODetect = None
 
 
 class _Scalar:
@@ -67,6 +74,7 @@ class _YOLO:
 
 
 class TestClassRegistryBackends(unittest.TestCase):
+    @unittest.skipUnless(_HAS_ULTRALYTICS, "ultralytics extra not installed")
     def test_yolo_world_is_a_lazy_detection_export(self):
         self.assertIn("YOLOWorldDetect", detection.__all__)
         self.assertIs(detection.YOLOWorldDetect, YOLOWorldDetect)
@@ -110,6 +118,7 @@ class TestClassRegistryBackends(unittest.TestCase):
         self.assertEqual(result["class_ids"], [6])
         self.assertEqual(result["labels"], ["6"])
 
+    @unittest.skipUnless(_HAS_ULTRALYTICS, "ultralytics extra not installed")
     def test_yolo_world_keeps_a_short_forward_contract(self):
         metadata = {
             "model_id": "fake-world.pt",
@@ -150,6 +159,7 @@ class TestClassRegistryBackends(unittest.TestCase):
         model.forward([Image.new("RGB", (8, 8))])
         self.assertEqual(model.names, model.original_names)
 
+    @unittest.skipUnless(_HAS_ULTRALYTICS, "ultralytics extra not installed")
     def test_fixed_yolo_uses_current_wrapper_and_native_class_ids(self):
         metadata = {
             "model_id": "fake-yolo.pt",

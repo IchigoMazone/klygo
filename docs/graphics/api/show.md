@@ -1,7 +1,7 @@
-# `graphics.show_image`
+# `graphics.show`
 
 ```python
-graphics.show_image(
+graphics.show(
     image,
     title="Image",
     width=None,
@@ -41,11 +41,11 @@ Backend selection follows `backend`:
 
 ## AI usage guidance
 
-Prefer `from klygo import graphics` followed by `graphics.show_image(...)`. Use `backend="auto"` in tutorials and notebooks, and `backend="matplotlib"` when a figure title or consistent non-blocking test rendering is required.
+Prefer `from klygo import graphics` followed by `graphics.show(...)`. Use `backend="auto"` in tutorials and notebooks, and `backend="matplotlib"` when a figure title or consistent non-blocking test rendering is required.
 
 ## Example
 
-See [`show_image.py`](../../../examples/graphics/show_image.py) for an executable example.
+See [`show.py`](../../../examples/graphics/show.py) for an executable example.
 
 ## Tests
 
@@ -54,7 +54,7 @@ See [`test_graphics.py`](../../../test/graphics/test_graphics.py) for the execut
 ## Complete executable example
 
 ```python
-"""Executable example for klygo.graphics.show_image."""
+"""Executable example for klygo.graphics.show."""
 
 import matplotlib
 import numpy as np
@@ -62,7 +62,7 @@ from klygo import graphics
 
 matplotlib.use("Agg", force=True)
 image = np.full((40, 60, 3), (30, 100, 180), dtype=np.uint8)
-result = graphics.show_image(
+result = graphics.show(
     image,
     title="Sample",
     width=120,

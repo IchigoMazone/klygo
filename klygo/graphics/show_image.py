@@ -5,7 +5,7 @@ import numpy as np
 
 from ._render import _finalize_figure
 
-__all__ = ["show_image"]
+__all__ = ["show"]
 
 
 def _is_notebook() -> bool:
@@ -23,7 +23,7 @@ def _is_notebook() -> bool:
         return False
 
 
-def show_image(
+def show(
     image: Union[PIL.Image.Image, np.ndarray],
     title: str = "Image",
     width: Optional[int] = None,

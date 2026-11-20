@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw
 from klygo import files, media, outputs, validators
 
 from ._render import _finalize_figure
-from .draw_bboxes import draw_bboxes
+from .draw_bboxes import draw as _draw
 
 
 @dataclass(frozen=True)
@@ -90,7 +90,7 @@ def _to_pil(source: Any) -> Image.Image:
     if isinstance(source, (str, PathLike)):
         return media.load(files.path(source), verbose=False)[0].to_pil(cache=False).convert("RGB")
     if isinstance(source, outputs.Detection):
-        return draw_bboxes(source.image, source).convert("RGB")
+        return _draw(source.image, source).convert("RGB")
     if isinstance(source, Figure):
         buf = io.BytesIO()
         source.savefig(buf, format="png", bbox_inches="tight", dpi=150)

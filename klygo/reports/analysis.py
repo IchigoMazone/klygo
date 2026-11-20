@@ -14,16 +14,23 @@ from klygo.outputs import Detections
 from .loaders import load
 
 
-def _resolve_run(item: str | PathLike[str] | Mapping[str, Any]) -> dict[str, Any]:
+def _resolve_run(
+    item: str | PathLike[str] | Mapping[str, Any],
+    *,
+    format: str = "yolo",
+    best: str = "auto",
+) -> dict[str, Any]:
     """Accept either a run directory path or an already-loaded run dictionary."""
     if isinstance(item, Mapping):
         return dict(item)
-    return load(item)
+    return load(item, format=format, best=best)
 
 
 def aggregate_runs(
     grouped_runs: Mapping[str, Sequence[str | PathLike[str] | Mapping[str, Any]]],
     *,
+    format: str = "yolo",
+    best: str = "auto",
     metric_names: Sequence[str] = ("precision", "recall", "f1", "mAP50", "mAP50-95"),
     compare_pair: Optional[tuple[str, str]] = None,
 ) -> dict[str, Any]:
@@ -33,6 +40,10 @@ def aggregate_runs(
     ----------
     grouped_runs : Mapping[str, Sequence[str or PathLike or dict]]
         Mapping of configuration name to a sequence of run directories or loaded runs.
+    format : {'yolo'}, default='yolo'
+        Training log format used when loading run directories.
+    best : str, default='auto'
+        Checkpoint selection criterion passed to ``reports.load`` for run directories.
     metric_names : Sequence[str], default=('precision', 'recall', 'f1', 'mAP50', 'mAP50-95')
         Metric keys to summarize from each run's best checkpoint.
     compare_pair : tuple[str, str], optional
@@ -44,6 +55,10 @@ def aggregate_runs(
         Pure-Python dictionary containing ``table``, ``per_seed``, ``groups``, and ``delta``.
     """
     validators.validate_type(grouped_runs, Mapping, "grouped_runs")
+    validators.validate_type(format, str, "format")
+    validators.validate_type(best, str, "best")
+    if format.lower() != "yolo":
+        raise ValueError("format must be 'yolo'")
     if not grouped_runs:
         raise ValueError("grouped_runs must not be empty")
 
@@ -54,7 +69,7 @@ def aggregate_runs(
     for group_name, raw_items in grouped_runs.items():
         if not raw_items:
             raise ValueError(f"grouped_runs['{group_name}'] must not be empty")
-        runs = [_resolve_run(item) for item in raw_items]
+        runs = [_resolve_run(item, format=format, best=best) for item in raw_items]
 
         summary: dict[str, dict[str, float]] = {}
         row: dict[str, Any] = {"strategy": str(group_name), "seeds": len(runs)}
@@ -98,22 +113,45 @@ def aggregate_runs(
         for run in runs:
             all_hist_keys.update(run.get("history", {}).keys())
 
-        history_mean: dict[str, list[float]] = {}
-        history_std: dict[str, list[float]] = {}
+        history_mean: dict[str, list[Optional[float]]] = {}
+        history_std: dict[str, list[Optional[float]]] = {}
         max_len = max((len(run.get("history", {}).get("epoch", [])) for run in runs), default=0)
         if max_len > 0:
             for hkey in sorted(all_hist_keys):
                 series_list = [run.get("history", {}).get(hkey, []) for run in runs]
-                if not any(series_list) or not all(
-                    isinstance(v, (int, float)) for s in series_list for v in s
-                ):
+                if not any(series_list):
+                    continue
+                is_numeric = all(
+                    v is None or (isinstance(v, (int, float)) and not isinstance(v, bool))
+                    for s in series_list
+                    for v in s
+                )
+                has_any_number = any(
+                    isinstance(v, (int, float)) and not isinstance(v, bool)
+                    for s in series_list
+                    for v in s
+                )
+                if not is_numeric or not has_any_number:
                     continue
                 mat = np.full((len(runs), max_len), np.nan, dtype=np.float64)
                 for r_idx, s in enumerate(series_list):
                     if s:
-                        mat[r_idx, :len(s)] = np.asarray(s, dtype=np.float64)
-                history_mean[hkey] = [float(v) for v in np.nanmean(mat, axis=0)]
-                history_std[hkey] = [float(v) for v in np.nanstd(mat, axis=0)]
+                        mat[r_idx, :len(s)] = [
+                            np.nan if v is None else float(v) for v in s
+                        ]
+                means: list[Optional[float]] = []
+                stds: list[Optional[float]] = []
+                for col_idx in range(max_len):
+                    col = mat[:, col_idx]
+                    valid = col[~np.isnan(col)]
+                    if valid.size == 0:
+                        means.append(None)
+                        stds.append(None)
+                    else:
+                        means.append(float(np.mean(valid)))
+                        stds.append(float(np.std(valid, ddof=0)))
+                history_mean[hkey] = means
+                history_std[hkey] = stds
 
         groups[str(group_name)] = {
             "runs": runs,
@@ -168,6 +206,8 @@ def threshold_audit(
     validators.validate_type(pred_calib, Detections, "pred_calib")
     validators.validate_type(target_calib, Detections, "target_calib")
     validators.validate_type(verbose, bool, "verbose")
+    if isinstance(iou, bool) or not isinstance(iou, (int, float)) or not (0.0 <= float(iou) <= 1.0):
+        raise ValueError("iou must be a number in [0.0, 1.0]")
 
     grid = (
         [round(0.30 + 0.05 * i, 2) for i in range(14)]
@@ -206,11 +246,17 @@ def threshold_audit(
     if pred_confirm is not None or target_confirm is not None:
         if pred_confirm is None or target_confirm is None:
             raise ValueError("Both pred_confirm and target_confirm must be provided")
+        validators.validate_type(pred_confirm, Detections, "pred_confirm")
+        validators.validate_type(target_confirm, Detections, "target_confirm")
         filtered_confirm = _filter_by_threshold(pred_confirm, best_tau)
         pr_confirm = klygo_metrics.precision_recall(filtered_confirm, target_confirm, iou=iou, verbose=verbose)
         map_confirm = klygo_metrics.map_score(filtered_confirm, target_confirm, verbose=False)
         confirm_row = {
             "threshold": best_tau,
+            "boxes": int(pr_confirm["tp"] + pr_confirm["fp"]),
+            "tp": int(pr_confirm["tp"]),
+            "fp": int(pr_confirm["fp"]),
+            "fn": int(pr_confirm["fn"]),
             "precision": round(float(pr_confirm["precision"]), 4),
             "recall": round(float(pr_confirm["recall"]), 4),
             "f1": round(float(pr_confirm["f1"]), 4),
@@ -239,10 +285,11 @@ def mining_breakdown(subsets: Mapping[str, Detections]) -> list[dict[str, Any]]:
     validators.validate_type(subsets, Mapping, "subsets")
     rows: list[dict[str, Any]] = []
     for name, subset in subsets.items():
+        validators.validate_type(subset, Detections, f"subsets[{name!r}]")
         st = mining.stats(subset, quality=False, cooccurrence=False)
         pos = int(st.images - st.empty_images)
         neg = int(st.empty_images)
-        scores = [float(s) for frame in subset for s in frame.scores]
+        scores = [float(s) for frame in subset for s in frame.scores if s is not None]
         rows.append({
             "strategy": str(name),
             "images": int(st.images),
@@ -258,51 +305,8 @@ def mining_breakdown(subsets: Mapping[str, Detections]) -> list[dict[str, Any]]:
     return rows
 
 
-def rank_evaluations(
-    evaluations: Sequence[Mapping[str, Any]] | Mapping[str, Mapping[str, Any]],
-    *,
-    sort_by: str = "mAP50-95",
-    baseline: Optional[str] = None,
-) -> list[dict[str, Any]]:
-    """Rank evaluation results descending by ``sort_by`` and compute baseline deltas."""
-    normalized: list[dict[str, Any]] = []
-    if isinstance(evaluations, Mapping):
-        for name, item in evaluations.items():
-            row = dict(item)
-            row.setdefault("strategy", str(name))
-            normalized.append(row)
-    else:
-        for item in evaluations:
-            normalized.append(dict(item))
-
-    if not normalized:
-        return []
-
-    base_val: Optional[float] = None
-    if baseline is not None:
-        for row in normalized:
-            if row.get("strategy") == baseline or row.get("code") == baseline:
-                base_val = float(row.get(sort_by, 0.0))
-                break
-        if base_val is None:
-            raise ValueError(f"baseline '{baseline}' not found in evaluations")
-
-    ranked = sorted(normalized, key=lambda r: float(r.get(sort_by, 0.0)), reverse=True)
-    result: list[dict[str, Any]] = []
-    for idx, row in enumerate(ranked, start=1):
-        entry = {"rank": idx, **row}
-        if base_val is not None:
-            val = float(row.get(sort_by, 0.0))
-            delta = val - base_val
-            entry["delta"] = round(delta, 4)
-            entry["delta_pct"] = round((100.0 * delta / base_val) if base_val else 0.0, 2)
-        result.append(entry)
-    return result
-
-
 __all__ = [
     "aggregate_runs",
     "threshold_audit",
     "mining_breakdown",
-    "rank_evaluations",
 ]

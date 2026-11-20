@@ -16,7 +16,7 @@ Klygo is a modular, composable Python toolkit (`Python >= 3.10`) organized into 
                                 ├── Hugging Face / PyTorch (Grounding DINO, DETR, custom nn.Module)
                                 ├── Torchvision (Faster R-CNN, RetinaNet, FCOS, SSD)
                                 └── Keras 3 / KerasHub (RT-DETR / D-FINE, RetinaNet on torch/jax/tf)
-4. Outputs, Post & Visual     : klygo.outputs • klygo.postprocessing • klygo.visual
+4. Outputs, Post, Reports & Graphics : klygo.outputs • klygo.postprocessing • klygo.metrics • klygo.reports • klygo.graphics
    Shared Foundation          : klygo.utils (ProgressBar, human_size) • klygo.validators
 ```
 
@@ -32,7 +32,8 @@ Klygo is a modular, composable Python toolkit (`Python >= 3.10`) organized into 
 | `models` | `from klygo import models` | 3-tier model wrappers (`BaseModel`, `Detector`), schema builders (`metadata`, `flags`, `priority`, `details`, `configure`), and `load` | [`docs/models/README.md`](docs/models/README.md) |
 | `outputs` | `from klygo import outputs` | Standardized detection containers (`Box`, `Crops`, `Detection`, `Detections`) and `build_detections` | [`docs/outputs/README.md`](docs/outputs/README.md) |
 | `postprocessing` | `from klygo import postprocessing as post` | Composable and direct box operations (`nms`/`suppress`, `threshold`/`filter_score`, `clip`/`clip_boxes`, `box_iou`, `top`) | [`docs/postprocessing/README.md`](docs/postprocessing/README.md) |
-| `visual` | `from klygo import visual` | Non-destructive two-pass box rendering (`draw_bboxes`), adaptive image display (`show_image`), and dataset charts (`plot_dataset_stats`) | [`docs/visual/README.md`](docs/visual/README.md) |
+| `reports` | `from klygo import reports` | Experiment log loading (`load`), `partition_summary`, multi-seed `aggregate_runs`, `threshold_audit`, and `mining_breakdown` | [`docs/reports/README.md`](docs/reports/README.md) |
+| `graphics` | `from klygo import graphics` | Non-destructive rendering (`draw`, `show`, `compare`, `save`), grids (`cell`, `compose`, `grid`), and charts (`dataset_stats`, `partitions`, `curves`, `thresholds`, `mining`, `bars`) | [`docs/graphics/README.md`](docs/graphics/README.md) |
 | `utils` | `from klygo import utils` | Mapping helpers (`exclude_keys`, `invert`), binary byte formatting (`human_size`), and `ProgressBar` | [`docs/utils/README.md`](docs/utils/README.md) |
 | `validators` | `from klygo import validators` | Runtime type validation (`validate_type`) raising standardized `TypeError` messages | [`docs/validators/README.md`](docs/validators/README.md) |
 
@@ -89,7 +90,7 @@ workflow in a user-facing example.
 ### Rule 1: Always Import Public Package Facades
 Import modules from top-level `klygo`:
 ```python
-from klygo import archive, config, datasets, files, media, metrics, mining, models, outputs, postprocessing, preprocessing, utils, validators, visual
+from klygo import archive, config, datasets, files, graphics, media, metrics, mining, models, outputs, postprocessing, preprocessing, reports, utils, validators
 ```
 Never import private internal helpers (`_helper`) in user-facing examples, tutorials, or workflows.
 

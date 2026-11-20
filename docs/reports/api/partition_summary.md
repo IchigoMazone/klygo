@@ -1,7 +1,7 @@
 # `reports.partition_summary`
 
 ```python
-reports.partition_summary(source)
+reports.partition_summary(source, *, format='yolo')
 ```
 
 Summarize image and annotation counts across dataset partitions or splits.

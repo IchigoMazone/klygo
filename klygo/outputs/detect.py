@@ -1665,7 +1665,7 @@ class Detection:
                   if mode == "index"
                   else [f"{uid} {label}" for uid, label in zip(self._uids.tolist(), self._labels)])
         )
-        return graphics.draw_bboxes(
+        return graphics.draw(
             self._resolve_source(), self.boxes, labels=labels, scores=self.scores,
             line_width=line_width, font_size=font_size,
             show_labels=show_labels, show_scores=show_scores,
@@ -1708,17 +1708,17 @@ class Detection:
         source = self._resolve_source()
         annotated = source
         if show_existing and self:
-            annotated = graphics.draw_bboxes(
+            annotated = graphics.draw(
                 source, self.boxes, labels=self.labels, scores=self.scores,
                 line_width=line_width, font_size=font_size,
                 show_labels=show_labels, show_scores=show_scores,
             )
-        annotated = graphics.draw_bboxes(
+        annotated = graphics.draw(
             annotated, [candidate.box], labels=[f"[preview] {candidate.label}"],
             scores=[candidate.score], line_width=line_width, font_size=font_size,
             box_color=preview_color, show_labels=show_labels, show_scores=show_scores,
         )
-        graphics.show_image(annotated, title=title, width=width, height=height, backend=backend)
+        graphics.show(annotated, title=title, width=width, height=height, backend=backend)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize annotations without decoding pixels."""

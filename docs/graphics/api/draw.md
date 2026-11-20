@@ -1,7 +1,7 @@
-# `graphics.draw_bboxes`
+# `graphics.draw`
 
 ```python
-graphics.draw_bboxes(
+graphics.draw(
     image,
     bboxes,
     labels=None,
@@ -54,11 +54,11 @@ Rendering proceeds in two passes:
 
 ## AI usage guidance
 
-Prefer `from klygo import graphics` followed by `graphics.draw_bboxes(...)`. Pass RGB arrays rather than OpenCV BGR arrays so colors render accurately.
+Prefer `from klygo import graphics` followed by `graphics.draw(...)`. Pass RGB arrays rather than OpenCV BGR arrays so colors render accurately.
 
 ## Example
 
-See [`draw_bboxes.py`](../../../examples/graphics/draw_bboxes.py) for an executable example.
+See [`draw.py`](../../../examples/graphics/draw.py) for an executable example.
 
 ## Tests
 
@@ -67,13 +67,13 @@ See [`test_graphics.py`](../../../test/graphics/test_graphics.py) for the execut
 ## Complete executable example
 
 ```python
-"""Executable example for klygo.graphics.draw_bboxes."""
+"""Executable example for klygo.graphics.draw."""
 
 import numpy as np
 from klygo import graphics
 
 image = np.full((80, 120, 3), 255, dtype=np.uint8)
-annotated = graphics.draw_bboxes(
+annotated = graphics.draw(
     image,
     [[10, 12, 80, 65]],
     labels=["sample"],

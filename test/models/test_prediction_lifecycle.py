@@ -5,6 +5,7 @@ from copy import deepcopy
 from io import StringIO
 from threading import current_thread
 from types import SimpleNamespace
+import importlib.util
 import tempfile
 import time
 import unittest
@@ -14,8 +15,14 @@ from PIL import Image
 import numpy as np
 
 from klygo import files, models, outputs
-from klygo.models.detection.yolo import YOLODetect
-from klygo.models.detection.yolo_world import YOLOWorldDetect
+
+_HAS_ULTRALYTICS = importlib.util.find_spec("ultralytics") is not None
+if _HAS_ULTRALYTICS:
+    from klygo.models.detection.yolo import YOLODetect
+    from klygo.models.detection.yolo_world import YOLOWorldDetect
+else:
+    YOLODetect = None
+    YOLOWorldDetect = None
 
 
 def definition(backend="Custom"):
@@ -257,6 +264,8 @@ class TestWrapperLifecycle(unittest.TestCase):
         self.image = Image.new("RGB", (12, 12))
 
     def wrapper(self, cls):
+        if cls is None:
+            self.skipTest("ultralytics extra not installed")
         target = (
             "klygo.models.detection.yolo_world.YOLOWorld"
             if cls is YOLOWorldDetect

@@ -4,52 +4,52 @@ Colab tutorial:
     https://colab.research.google.com/github/IchigoMazone/klygo/blob/v2-release/tutorials/graphics/Document_Graphics_Overview.ipynb
 
 Public API (13 functions):
-    Image rendering & display:
-        1. draw_bboxes(...)                 Render bounding boxes and labels onto an image copy.
-        2. show_image(...)                  Display an image in notebook, GUI, or terminal environments.
-        3. compare_images(...)              Render side-by-side Detection comparisons.
-        4. plot_dataset_stats(...)          Plot class distribution and object counts.
+    Image rendering, display & export:
+        1. draw(...)          Render bounding boxes and labels onto an image copy.
+        2. show(...)          Display an image in notebook, GUI, or terminal environments.
+        3. compare(...)       Render side-by-side Detection comparisons.
+        4. save(...)          Export a Matplotlib figure to PNG, PDF, or SVG.
 
     Composable grid layout:
-        5. cell(...)                        Configure a single cell for compose() and grid().
-        6. compose(...)                     Normalize heterogeneous cell sources into images.
-        7. grid(...)                        Arrange cells or images into a rows x cols grid.
+        5. cell(...)          Configure a single cell for compose() and grid().
+        6. compose(...)       Normalize heterogeneous cell sources into images.
+        7. grid(...)          Arrange cells or images into a rows x cols grid.
 
-    Report charts & export:
-        8. plot_partition_distribution(...) Plot image counts and percentages per split.
-        9. plot_loss_curves(...)            Plot training or validation loss/metric curves.
-       10. plot_threshold_sweep(...)        Plot P/R/F1 curves or TP/FP counts by threshold.
-       11. plot_mining_summary(...)         Plot mining positive/background or confidence bars.
-       12. plot_benchmark_bars(...)         Plot single-metric (± std) or multi-metric bars.
-       13. save_figure(...)                 Export a Matplotlib figure to PNG, PDF, or SVG.
+    Charts:
+        8. dataset_stats(...) Plot class distribution and object counts.
+        9. partitions(...)    Plot image counts and percentages per split.
+       10. curves(...)        Plot training or validation loss/metric curves.
+       11. thresholds(...)    Plot P/R/F1 curves or TP/FP counts by threshold.
+       12. mining(...)        Plot mining positive/background or confidence bars.
+       13. bars(...)          Plot single-metric (± std) or multi-metric bars.
 """
 
-from .draw_bboxes import draw_bboxes, draw_box
-from .plot_dataset_stats import plot_dataset_stats
-from .show_image import show_image
-from .compare_images import compare_images
+from .draw_bboxes import draw
+from .plot_dataset_stats import dataset_stats
+from .show_image import show
+from .compare_images import compare
 from .layout import cell, compose, grid
 from .charts import (
-    plot_partition_distribution,
-    plot_loss_curves,
-    plot_threshold_sweep,
-    plot_mining_summary,
-    plot_benchmark_bars,
+    partitions,
+    curves,
+    thresholds,
+    mining,
+    bars,
 )
-from ._render import save_figure
+from ._render import save
 
 __all__ = [
-    "draw_bboxes",
-    "plot_dataset_stats",
-    "show_image",
-    "compare_images",
+    "draw",
+    "show",
+    "compare",
+    "save",
     "cell",
     "compose",
     "grid",
-    "plot_partition_distribution",
-    "plot_loss_curves",
-    "plot_threshold_sweep",
-    "plot_mining_summary",
-    "plot_benchmark_bars",
-    "save_figure",
+    "dataset_stats",
+    "partitions",
+    "curves",
+    "thresholds",
+    "mining",
+    "bars",
 ]

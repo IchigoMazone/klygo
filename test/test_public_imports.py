@@ -21,12 +21,8 @@ class TestPublicImports(unittest.TestCase):
         assert callable(models.load)
         assert callable(postprocessing.compose)
         assert callable(postprocessing.nms)
-        assert callable(graphics.draw_bboxes)
+        assert callable(graphics.draw)
 
-    def test_deprecated_visual_alias_forwards_to_graphics(self):
-        import warnings
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            from klygo import visual
-            assert visual.draw_bboxes is graphics.draw_bboxes
-            assert any(issubclass(w.category, DeprecationWarning) for w in caught)
+    def test_legacy_visual_module_is_removed(self):
+        self.assertNotIn("visual", klygo.__all__)
+        self.assertFalse(files.exists(files.parent(klygo.__file__) / "visual"))

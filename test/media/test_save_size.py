@@ -104,7 +104,7 @@ class TestSaveSize(unittest.TestCase):
                 self.assertIsNone(results.save_images(destination, extension="png", size=(80, 80)))
                 with media.load(destination / "frame_000001.png") as decoded:
                     actual = media.to_array(decoded[0])
-                expected = preprocessing.letterbox((80, 80))(graphics.draw_bboxes(results[0].image, results[0]))
+                expected = preprocessing.letterbox((80, 80))(graphics.draw(results[0].image, results[0]))
                 np.testing.assert_array_equal(actual, np.asarray(expected))
                 self.assertIsNone(results.save_video(root / f"annotated-{packed}.avi", size=(80, 80), fourcc="MJPG"))
                 self.assertEqual(results.to_dict(), before)

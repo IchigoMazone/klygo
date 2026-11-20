@@ -162,7 +162,7 @@ def notebook(class_id: int, class_name: str, source_id: int):
         preview = predictions.get(preview_id)
         if preview is not None:
             original = media.load(files.join(DATASET_ROOT, "images", f"{preview_id}.jpg"), verbose=False)[0].to_pil()
-            overlay = graphics.draw_bboxes(original, preview.boxes, preview.labels, preview.scores)
+            overlay = graphics.draw(original, preview.boxes, preview.labels, preview.scores)
             media.save(files.join(RESULT_ROOT, f"{preview_id}_prediction.jpg"), overlay, overwrite=True)
             display(overlay)
         report = {"class_id": TARGET_ID, "class_name": TARGET_CLASS,

@@ -3,13 +3,13 @@ from typing import Optional, Union
 from os import PathLike
 from PIL import Image, ImageDraw
 from klygo import media, outputs, validators
-from .draw_bboxes import draw_bboxes
-from .show_image import show_image
+from .draw_bboxes import draw as _draw
+from .show_image import show as _show
 
-__all__ = ["compare_images"]
+__all__ = ["compare"]
 
 
-def compare_images(
+def compare(
     first: outputs.Detection,
     second: outputs.Detection,
     *,
@@ -95,18 +95,18 @@ def compare_images(
         panel = detection.image.convert("RGB")
         if panel.size != detection.image_size:
             raise ValueError("each detection image_size must match its source image")
-        panels.append(draw_bboxes(panel, detection, show_labels=show_labels, show_scores=show_scores))
+        panels.append(_draw(panel, detection, show_labels=show_labels, show_scores=show_scores))
     header, gap = 28, 12
     preview = Image.new("RGB", (panels[0].width + gap + panels[1].width,
                                 max(panel.height for panel in panels) + header), "white")
-    draw = ImageDraw.Draw(preview)
+    canvas = ImageDraw.Draw(preview)
     offset = 0
     for panel, title in zip(panels, titles):
         preview.paste(panel, (offset, header))
-        draw.text((offset + 4, 6), title, fill="black")
+        canvas.text((offset + 4, 6), title, fill="black")
         offset += panel.width + gap
     if mode == "show":
-        show_image(preview, title="Image comparison", backend=backend)
+        _show(preview, title="Image comparison", backend=backend)
     elif mode == "save":
         media.save(output_path, preview, overwrite=overwrite, verbose=False)
     return preview

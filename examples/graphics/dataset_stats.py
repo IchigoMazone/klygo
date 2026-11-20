@@ -16,5 +16,5 @@ with tempfile.TemporaryDirectory() as temporary:
     files.save(root / "data.yaml", "names: [cat, dog]\nnc: 2\n")
     Image.new("RGB", (8, 8)).save(root / "images" / "sample.png")
     files.save(root / "labels" / "sample.txt", "0 0.5 0.5 0.2 0.2\n1 0.3 0.3 0.1 0.1\n")
-    graphics.plot_dataset_stats(root)
+    graphics.dataset_stats(root)
     print("Plotted two class counts")

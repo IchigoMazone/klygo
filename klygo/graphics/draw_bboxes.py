@@ -7,7 +7,7 @@ import PIL.Image
 import PIL.ImageDraw
 import PIL.ImageFont
 
-__all__ = ["draw_bboxes"]
+__all__ = ["draw"]
 
 # Official Ultralytics 20-color hex palette
 ULTRALYTICS_HEX = (
@@ -111,7 +111,7 @@ def _find_badge_position(
     return best_candidate if best_candidate is not None else (bx_base, max(0, iymin - bh if iymin - bh >= 0 else iymin))
 
 
-def draw_bboxes(
+def draw(
     image: Union[PIL.Image.Image, np.ndarray],
     bboxes: Any,
     labels: Optional[List[str]] = None,
@@ -307,7 +307,3 @@ def draw_bboxes(
         return res_np
 
     return annotated
-
-
-# Convenient alias
-draw_box = draw_bboxes

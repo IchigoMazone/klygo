@@ -88,7 +88,7 @@ image = frame.image
 graphics.compare_images(frame, other_frame)
 ```
 
-[Compare images](../../graphics/api/compare_images.md) supports display and saving
+[Compare images](../../graphics/api/compare.md) supports display and saving
 directly from two Detection frames, without passing their images separately.
 
 ## Device-preserving annotation arrays

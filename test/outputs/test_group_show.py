@@ -28,7 +28,7 @@ class TestDetectionGroupShow(unittest.TestCase):
         group.pack()
         before = [member.to_dict() for member in group]
         compare_module = importlib.import_module("klygo.graphics.compare_images")
-        with patch.object(compare_module, "show_image") as display:
+        with patch.object(compare_module, "_show") as display:
             self.assertIsNone(group.show(index))
         display.assert_called_once()
         preview = display.call_args.args[0]
@@ -44,7 +44,7 @@ class TestDetectionGroupShow(unittest.TestCase):
         for selectors, names in (((2, 0), ("truth", "yolo")),
                                  (("truth", "dino"), ("truth", "dino")),
                                  ((-1, "yolo"), ("truth", "yolo"))):
-            with self.subTest(selectors=selectors), patch.object(graphics, "compare_images") as compare:
+            with self.subTest(selectors=selectors), patch.object(graphics, "compare") as compare:
                 group.show(-1, members=selectors)
                 first, second = compare.call_args.args
                 self.assertEqual(first.identity, c[-1].identity)
@@ -54,7 +54,7 @@ class TestDetectionGroupShow(unittest.TestCase):
     def test_defaults_renamed_titles_and_display_options(self):
         group = outputs.DetectionGroup(collection(), collection())
         group.rename({"pred": "model", "truth": "ground_truth"})
-        with patch.object(graphics, "compare_images") as compare:
+        with patch.object(graphics, "compare") as compare:
             group.show()
             self.assertEqual(compare.call_args.kwargs["titles"], ("model", "ground_truth"))
             group.show(1, titles=("Prediction", "GT"), show_labels=False,
@@ -75,7 +75,7 @@ class TestDetectionGroupShow(unittest.TestCase):
             ({"members": (0, True)}, TypeError), ({"members": (None, 1)}, TypeError),
             ({"members": (0, "pred")}, ValueError),
         )
-        with patch.object(graphics, "compare_images") as compare:
+        with patch.object(graphics, "compare") as compare:
             for options, error in cases:
                 with self.subTest(options=options), self.assertRaises(error):
                     group.show(**options)
@@ -88,7 +88,7 @@ class TestDetectionGroupShow(unittest.TestCase):
     def test_source_alignment_is_rechecked_after_external_changes(self):
         group = outputs.DetectionGroup(collection(), collection())
         group[1].pop()
-        with patch.object(graphics, "compare_images") as compare:
+        with patch.object(graphics, "compare") as compare:
             with self.assertRaises(ValueError):
                 group.show()
             compare.assert_not_called()

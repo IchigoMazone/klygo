@@ -1,7 +1,7 @@
 # `reports.load`
 
 ```python
-reports.load(source, *, format='yolo', verbose=False)
+reports.load(source, *, format='yolo', best='auto', verbose=False)
 ```
 
 Load training logs (`results.csv`, `args.yaml`) from a run directory.

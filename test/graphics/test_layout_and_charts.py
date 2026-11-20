@@ -34,7 +34,7 @@ class TestGraphicsLayoutAndCharts(unittest.TestCase):
             image_size=(80, 60),
             names={0: "hat"},
         )
-        fig = graphics.plot_partition_distribution(
+        fig = graphics.partitions(
             [
                 {"split": "train", "images": 300, "ratio_pct": 50.0},
                 {"split": "val", "images": 300, "ratio_pct": 50.0},
@@ -83,9 +83,9 @@ class TestGraphicsLayoutAndCharts(unittest.TestCase):
             ],
             "groups": {
                 "S1": {
-                    "runs": [{"config": {"epochs": 5, "close_mosaic": 2, "seed": 42}, "history": {"epoch": [1, 2, 3, 4, 5], "train/box_loss": [1.5, 1.3, 1.1, 0.9, 0.8]}}],
-                    "history_mean": {"epoch": [1, 2, 3, 4, 5], "train/box_loss": [1.5, 1.3, 1.1, 0.9, 0.8]},
-                    "history_std": {"train/box_loss": [0.1, 0.1, 0.08, 0.05, 0.04]},
+                    "runs": [{"config": {"epochs": 5, "close_mosaic": 2, "seed": 42}, "history": {"epoch": [1, 2, 3, 4, 5], "train/box_loss": [1.5, 1.3, 1.1, 0.9, 0.8], "mAP50-95": [0.3, 0.45, 0.55, 0.62, 0.65]}}],
+                    "history_mean": {"epoch": [1, 2, 3, 4, 5], "train/box_loss": [1.5, 1.3, 1.1, 0.9, 0.8], "mAP50-95": [0.3, 0.45, 0.55, 0.62, 0.65]},
+                    "history_std": {"train/box_loss": [0.1, 0.1, 0.08, 0.05, 0.04], "mAP50-95": [0.02, 0.02, 0.01, 0.01, 0.01]},
                 },
             },
         }
@@ -103,15 +103,77 @@ class TestGraphicsLayoutAndCharts(unittest.TestCase):
 
         out_pdf = self.root / "loss.pdf"
         with patch("matplotlib.pyplot.show") as show_mock:
-            self.assertIsNone(graphics.plot_loss_curves(grouped, metric="box_loss", save_path=out_pdf))
-            self.assertIsNone(graphics.plot_loss_curves(grouped, metric="box_loss", per_seed=True, show=False))
-            self.assertIsNone(graphics.plot_threshold_sweep(audit, kind="curves", show=False))
-            self.assertIsNone(graphics.plot_threshold_sweep(audit, kind="counts", show=False))
-            self.assertIsNone(graphics.plot_mining_summary(mining_rows, kind="counts", show=False))
-            self.assertIsNone(graphics.plot_mining_summary(mining_rows, kind="confidence", show=False))
-            self.assertIsNone(graphics.plot_benchmark_bars(grouped["table"], metrics=("mAP50-95", "mAP50"), show=False))
+            self.assertIsNone(graphics.curves(grouped, metric="box_loss", save_path=out_pdf))
+            self.assertIsNone(graphics.curves(grouped, metric="box_loss", per_seed=True, show=False))
+            map_fig = graphics.curves(grouped, metric="mAP50-95", show=False, return_figure=True)
+            self.assertIsNotNone(map_fig)
+            self.assertGreater(len(map_fig.axes[0].lines), 0)
+            self.assertIsNone(graphics.thresholds(audit, kind="curves", show=False))
+            self.assertIsNone(graphics.thresholds(audit, kind="counts", show=False))
+            self.assertIsNone(graphics.mining(mining_rows, kind="counts", show=False))
+            self.assertIsNone(graphics.mining(mining_rows, kind="confidence", show=False))
+            self.assertIsNone(graphics.bars(grouped["table"], metrics=("mAP50-95", "mAP50"), show=False))
             show_mock.assert_called_once()
         self.assertTrue(files.is_file(out_pdf))
+
+    def test_error_handling_and_format_validation(self) -> None:
+        # graphics.dataset_stats format validation
+        with self.assertRaises(TypeError):
+            graphics.dataset_stats(self.root, format=123, show=False)  # type: ignore[arg-type]
+        with self.assertRaises(ValueError):
+            graphics.dataset_stats(self.root, format="coco", show=False)
+
+        # graphics.save validation
+        fig = graphics.partitions(
+            [{"split": "train", "images": 10, "ratio_pct": 100.0}],
+            show=False,
+            return_figure=True,
+        )
+        assert fig is not None
+        with self.assertRaises(TypeError):
+            graphics.save("not-a-fig", self.root / "out.png")  # type: ignore[arg-type]
+        with self.assertRaises(TypeError):
+            graphics.save(fig, self.root / "out.png", dpi=True)
+        with self.assertRaises(ValueError):
+            graphics.save(fig, self.root / "out.png", dpi=0)
+        with self.assertRaises(TypeError):
+            graphics.save(fig, self.root / "out.png", tight="yes")  # type: ignore[arg-type]
+        saved = graphics.save(fig, self.root / "valid.png", dpi=150)
+        self.assertTrue(files.is_file(saved))
+
+        # Chart input/type/value validation
+        with self.assertRaises(TypeError):
+            graphics.partitions("bad", show=False)  # type: ignore[arg-type]
+        with self.assertRaises(ValueError):
+            graphics.partitions([], show=False)
+        with self.assertRaises(TypeError):
+            graphics.curves([], show=False)  # type: ignore[arg-type]
+        with self.assertRaises(ValueError):
+            graphics.curves({}, show=False)
+        with self.assertRaises(TypeError):
+            graphics.curves({"S1": {}}, mosaic_marker=True, show=False)
+        with self.assertRaises(TypeError):
+            graphics.thresholds([], show=False)  # type: ignore[arg-type]
+        with self.assertRaises(ValueError):
+            graphics.thresholds({"rows": []}, show=False)
+        with self.assertRaises(ValueError):
+            graphics.thresholds({"rows": [{"threshold": 0.5}]}, kind="unknown", show=False)
+        with self.assertRaises(ValueError):
+            graphics.mining([], show=False)
+        with self.assertRaises(ValueError):
+            graphics.mining([{"strategy": "S1"}], kind="unknown", show=False)
+        with self.assertRaises(ValueError):
+            graphics.bars([], show=False)
+        with self.assertRaises(ValueError):
+            graphics.bars([{"strategy": "S1"}], metrics=(), show=False)
+
+        # Layout cell validation
+        with self.assertRaises(ValueError):
+            graphics.cell(Image.new("RGB", (10, 10)), width=0)
+        with self.assertRaises(ValueError):
+            graphics.cell(Image.new("RGB", (10, 10)), height=-5)
+        with self.assertRaises(ValueError):
+            graphics.cell(Image.new("RGB", (10, 10)), offset=(1,))  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":

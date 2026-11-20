@@ -101,7 +101,7 @@ class DetectionGroup:
         show_labels, show_scores : bool, default=True
             Include class names and confidence scores on bounding boxes.
         backend : str, default='auto'
-            Display backend forwarded to graphics.compare_images().
+            Display backend forwarded to graphics.compare().
 
         Returns
         -------
@@ -145,7 +145,7 @@ class DetectionGroup:
         self._validate()
         first = selected[0][index]
         second = selected[1].get_frame(first.frame_index, source_id=first.source_id)
-        graphics.compare_images(
+        graphics.compare(
             first, second,
             titles=tuple(selected_names) if titles is None else titles,
             show_labels=show_labels,

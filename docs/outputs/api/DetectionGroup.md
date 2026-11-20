@@ -126,4 +126,4 @@ errors propagate from the visual API. This method displays exactly two panels;
 it does not evaluate metrics or merge boxes.
 
 [Preview tests](../../../test/outputs/test_group_show.py) ·
-[Visual API](../../graphics/api/compare_images.md)
+[Visual API](../../graphics/api/compare.md)

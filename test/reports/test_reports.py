@@ -46,7 +46,7 @@ class TestReports(unittest.TestCase):
         files.save(run_dir / "results.csv", rows, overwrite=True, verbose=False)
         return str(run_dir)
 
-    def test_load_aggregate_and_hyperparams(self) -> None:
+    def test_load_and_aggregate(self) -> None:
         s1_a = self._make_run("S1_42", 42, 5, 0.55, 150.0)
         s1_b = self._make_run("S1_100", 100, 4, 0.57, 140.0)  # uneven epoch length
         s4_a = self._make_run("S4_42", 42, 5, 0.60, 220.0)
@@ -56,10 +56,6 @@ class TestReports(unittest.TestCase):
         self.assertEqual(loaded["best_epoch"], 5)
         self.assertEqual(loaded["total_time_s"], 150.0)
         self.assertIn("f1", loaded["best_metrics"])
-
-        hp = reports.extract_hyperparams([s1_a, s1_b, s4_a, s4_b])
-        self.assertEqual(hp["diffs"], {})
-        self.assertEqual(hp["common"]["close_mosaic"], 10)
 
         grouped = reports.aggregate_runs(
             {"S1": [s1_a, s1_b], "S4": [s4_a, s4_b]},
@@ -97,17 +93,15 @@ class TestReports(unittest.TestCase):
         self.assertEqual(loaded_fit["best_epoch"], 2)
         self.assertIsNone(loaded_fit["history"]["mAP50"][2])
 
-        # Same-basename run directories do not overwrite in extract_hyperparams
-        dup_a = self.root / "exp_a" / "run"
-        dup_b = self.root / "exp_b" / "run"
-        files.mkdir(dup_a); files.mkdir(dup_b)
-        files.save(dup_a / "args.yaml", {"batch": 16, "seed": 42}, overwrite=True, verbose=False)
-        files.save(dup_b / "args.yaml", {"batch": 32, "seed": 42}, overwrite=True, verbose=False)
-        dup_hp = reports.extract_hyperparams([dup_a, dup_b])
-        self.assertEqual(len(dup_hp["runs"]), 2)
-        self.assertIn("batch", dup_hp["diffs"])
+        # aggregate_runs preserves history curves containing None (NaN/Inf) entries
+        nan_agg = reports.aggregate_runs({"NAN": [nan_run]}, format="yolo", best="fitness")
+        self.assertEqual(nan_agg["per_seed"][0]["best_epoch"], 2)
+        self.assertEqual(nan_agg["groups"]["NAN"]["history_mean"]["mAP50"], [0.7, 0.9, None])
+        self.assertEqual(nan_agg["groups"]["NAN"]["history_std"]["mAP50"], [0.0, 0.0, None])
+        with self.assertRaises(ValueError):
+            reports.aggregate_runs({"NAN": [nan_run]}, format="keras")
 
-    def test_partition_summary_threshold_mining_and_ranking(self) -> None:
+    def test_partition_summary_threshold_and_mining(self) -> None:
         # 1. Partition summary on a partitioned YOLO directory
         part_dir = self.root / "part"
         for split, count, pos in (("train", 4, 3), ("val", 2, 1)):
@@ -151,19 +145,73 @@ class TestReports(unittest.TestCase):
         self.assertEqual(len(audit["rows"]), 3)
         self.assertIn(audit["best_threshold"], (0.5, 0.8))
         self.assertIn("delta", audit["comparison"])
+        for key in ("boxes", "tp", "fp", "fn"):
+            self.assertIn(key, audit["comparison"]["confirm"])
+        with self.assertRaises(TypeError):
+            reports.threshold_audit(pred, target, pred_confirm="invalid", target_confirm=target)
 
-        mb = reports.mining_breakdown({"S4": pred})
+        mb = reports.mining_breakdown({"S4": pred, "GT": target})
         self.assertEqual((mb[0]["positive_images"], mb[0]["background_images"], mb[0]["boxes"]), (1, 1, 2))
+        self.assertEqual((mb[1]["mean_conf"], mb[1]["median_conf"]), (1.0, 1.0))
+        with self.assertRaises(TypeError):
+            reports.mining_breakdown({"bad": "not-detections"})
 
-        ranked = reports.rank_evaluations(
-            [
-                {"code": "S1", "mAP50-95": 0.5696},
-                {"code": "S4", "mAP50-95": 0.5955},
-            ],
-            baseline="S1",
-        )
-        self.assertEqual((ranked[0]["code"], ranked[0]["rank"]), ("S4", 1))
-        self.assertAlmostEqual(ranked[0]["delta"], 0.0259, places=4)
+    def test_error_handling_and_format_validation(self) -> None:
+        # reports.load errors
+        with self.assertRaises(TypeError):
+            reports.load(123)  # type: ignore[arg-type]
+        with self.assertRaises(TypeError):
+            reports.load(self.root, format=123)  # type: ignore[arg-type]
+        with self.assertRaises(TypeError):
+            reports.load(self.root, best=123)  # type: ignore[arg-type]
+        with self.assertRaises(FileNotFoundError):
+            reports.load(self.root / "does_not_exist")
+        empty_run = self.root / "empty_run"
+        files.mkdir(empty_run)
+        with self.assertRaises(FileNotFoundError):
+            reports.load(empty_run)
+
+        # reports.partition_summary format & path errors
+        with self.assertRaises(TypeError):
+            reports.partition_summary(self.root, format=123)  # type: ignore[arg-type]
+        with self.assertRaises(ValueError):
+            reports.partition_summary(self.root, format="coco")
+        with self.assertRaises(FileNotFoundError):
+            reports.partition_summary(self.root / "missing_ds")
+        with self.assertRaises(TypeError):
+            reports.partition_summary(123)  # type: ignore[arg-type]
+
+        # reports.aggregate_runs errors
+        with self.assertRaises(TypeError):
+            reports.aggregate_runs([])  # type: ignore[arg-type]
+        with self.assertRaises(ValueError):
+            reports.aggregate_runs({})
+        with self.assertRaises(ValueError):
+            reports.aggregate_runs({"S1": []})
+        with self.assertRaises(TypeError):
+            reports.aggregate_runs({"S1": []}, format=123)  # type: ignore[arg-type]
+        with self.assertRaises(TypeError):
+            reports.aggregate_runs({"S1": []}, best=123)  # type: ignore[arg-type]
+        dummy = {"config": {"seed": 1}, "best_epoch": 1, "total_time_s": 1.0, "best_metrics": {"mAP50-95": 0.5}, "history": {"epoch": [1]}}
+        with self.assertRaises(ValueError):
+            reports.aggregate_runs({"S1": [dummy]}, compare_pair=("S1", "S2"))
+
+        # reports.threshold_audit errors
+        empty_det = Detections([], names={0: "hat"})
+        with self.assertRaises(TypeError):
+            reports.threshold_audit("bad", empty_det)  # type: ignore[arg-type]
+        with self.assertRaises(ValueError):
+            reports.threshold_audit(empty_det, empty_det, thresholds=[])
+        with self.assertRaises(ValueError):
+            reports.threshold_audit(empty_det, empty_det, iou=1.5)
+        with self.assertRaises(ValueError):
+            reports.threshold_audit(empty_det, empty_det, iou=True)  # type: ignore[arg-type]
+        with self.assertRaises(ValueError):
+            reports.threshold_audit(empty_det, empty_det, pred_confirm=empty_det)
+
+        # reports.mining_breakdown errors
+        with self.assertRaises(TypeError):
+            reports.mining_breakdown(["not-a-mapping"])  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":

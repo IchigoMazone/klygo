@@ -12,7 +12,7 @@ from matplotlib.figure import Figure
 from klygo import files, validators
 
 
-def save_figure(
+def save(
     fig: Figure,
     path: str | PathLike[str],
     *,
@@ -39,9 +39,11 @@ def save_figure(
     """
     validators.validate_type(fig, Figure, "fig")
     validators.validate_type(path, (str, PathLike), "path")
-    validators.validate_type(dpi, int, "dpi")
+    if isinstance(dpi, bool) or not isinstance(dpi, int):
+        raise TypeError(f"dpi must be int, got {type(dpi).__name__}")
     if dpi <= 0:
         raise ValueError("dpi must be positive")
+    validators.validate_type(tight, bool, "tight")
 
     dest = files.path(path)
     files.mkdir(files.parent(dest))
@@ -66,7 +68,7 @@ def _finalize_figure(
     validators.validate_type(return_figure, bool, "return_figure")
 
     if save_path is not None:
-        save_figure(fig, save_path, dpi=dpi, tight=True)
+        save(fig, save_path, dpi=dpi, tight=True)
     if show:
         plt.show()
     if return_figure:
@@ -75,4 +77,4 @@ def _finalize_figure(
     return None
 
 
-__all__ = ["save_figure", "_finalize_figure"]
+__all__ = ["save", "_finalize_figure"]

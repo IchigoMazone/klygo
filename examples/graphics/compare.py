@@ -13,7 +13,7 @@ second = outputs.Detection(
     source_id="image-b", image_size=(280, 200),
 )
 output = files.path("artifacts/examples/graphics/comparison.png")
-preview = graphics.compare_images(
+preview = graphics.compare(
     first, second, mode="save", output_path=output,
     titles=("Image A", "Image B"), overwrite=True,
 )

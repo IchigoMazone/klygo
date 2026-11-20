@@ -5,18 +5,19 @@ from typing import Optional, Tuple, Union
 
 from klygo.archive import extract
 from klygo.datasets import info as get_dataset_info
-from klygo import files
+from klygo import files, validators
 from klygo.datasets._structure import find_dataset_root, scan_dataset_files
 
 from ._render import _finalize_figure
 
-__all__ = ["plot_dataset_stats"]
+__all__ = ["dataset_stats"]
 
 
-def plot_dataset_stats(
+def dataset_stats(
     source: Union[str, Path],
     figsize: Tuple[int, int] = (10, 6),
     *,
+    format: str = "yolo",
     title: Optional[str] = None,
     show: bool = True,
     save_path: Optional[Union[str, PathLike[str]]] = None,
@@ -31,6 +32,8 @@ def plot_dataset_stats(
         Dataset directory or supported archive.
     figsize : tuple of int
         Matplotlib figure size in inches.
+    format : {'yolo'}, default='yolo'
+        Dataset annotation format. Currently only ``'yolo'`` is supported.
 
     Returns
     -------
@@ -42,6 +45,10 @@ def plot_dataset_stats(
     Counts class IDs found in label files under ``images`` and ``labels``.
     An archive is extracted to a temporary directory before scanning.
     """
+    validators.validate_type(format, str, "format")
+    if format.lower() != "yolo":
+        raise ValueError("format must be 'yolo'")
+
     info = get_dataset_info(source)
     classes = info.get("classes", [])
     class_ids = info.get("class_ids", list(range(len(classes))))

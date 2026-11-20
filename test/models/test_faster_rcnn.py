@@ -1,5 +1,6 @@
 """Registered Torchvision Faster R-CNN behavior without downloading weights."""
 
+import importlib.util
 import unittest
 from unittest.mock import patch
 
@@ -8,6 +9,8 @@ import torch
 
 from klygo import models, outputs
 from klygo.models import detection
+
+_HAS_TORCHVISION = importlib.util.find_spec("torchvision") is not None
 
 
 class FakeFasterRCNN(torch.nn.Module):
@@ -26,6 +29,7 @@ class FakeFasterRCNN(torch.nn.Module):
         ]
 
 
+@unittest.skipUnless(_HAS_TORCHVISION, "torchvision extra not installed")
 class TestFasterRCNN(unittest.TestCase):
     def test_lazy_detection_export(self):
         self.assertIn("FasterRCNNDetect", detection.__all__)

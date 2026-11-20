@@ -1,7 +1,7 @@
-# graphics.compare_images
+# graphics.compare
 
 ```python
-compare_images(first, second, *, mode="show", output_path=None,
+compare(first, second, *, mode="show", output_path=None,
                titles=("A", "B"), show_scores=True, backend="auto", overwrite=False)
 ```
 
@@ -17,14 +17,14 @@ label sets on the same image, give both frames that image as their source.
 - `output_path`: required in save mode; prohibited in other modes. Accepts str and os.PathLike.
 - `titles`: list or tuple of two strings, displayed above the panels.
 - `show_scores`: include confidence scores in annotation captions.
-- `backend`: display backend passed to show_image in show mode (auto, matplotlib, or opencv).
+- `backend`: display backend passed to show in show mode (auto, matplotlib, or opencv).
 - `overwrite`: allow replacing an existing saved file; defaults to False.
 
 ## Result and source access
 
 Every mode returns a new RGB PIL image at original image scales, with a 28-pixel
 header, 12-pixel gap, and white padding below the shorter panel. Annotations and
-source pixels are unchanged. Colors follow draw_bboxes independently per panel.
+source pixels are unchanged. Colors follow draw independently per panel.
 Detection.image resolves in-memory sources or loads source_path lazily; video
 frames use frame_index. Source resolution may cache pixels on the Detection.
 The decoded image dimensions must agree with that frame's image_size.
@@ -40,11 +40,11 @@ Other image conversion and encoding errors propagate from the media APIs.
 ## Display or save
 
 ```python
-graphics.compare_images(first, second)
-graphics.compare_images(first, second, mode="save", output_path="artifacts/comparison.jpg")
+graphics.compare(first, second)
+graphics.compare(first, second, mode="save", output_path="artifacts/comparison.jpg")
 ```
 
-Save mode never opens a viewer. Show mode follows show_image behavior;
+Save mode never opens a viewer. Show mode follows show behavior;
 desktop auto display can open a viewer and OpenCV waits for a key.
 
 ## Complete example
@@ -65,13 +65,13 @@ second = outputs.Detection(
     source_id="image-b", image_size=(280, 200),
 )
 output = files.path("artifacts/examples/graphics/comparison.png")
-preview = graphics.compare_images(
+preview = graphics.compare(
     first, second, mode="save", output_path=output,
     titles=("Image A", "Image B"), overwrite=True,
 )
 print(output, preview.size)
 ```
 
-[Standalone example](../../../examples/graphics/compare_images.py) ·
+[Standalone example](../../../examples/graphics/compare.py) ·
 [Tests](../../../test/graphics/test_compare_images.py) ·
 [Module](../README.md) · [Detection](../../outputs/api/Detection.md)

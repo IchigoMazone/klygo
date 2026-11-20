@@ -36,7 +36,7 @@ from klygo import (
     outputs,
     preprocessing,
     utils,
-    visual,
+    graphics,
 )
 
 
@@ -302,7 +302,7 @@ def main() -> None:
                 save_out = tmp_root / "saved_imgs"
                 rows.append({"operation": "media.save_images_letterbox", "median_ms": _measure(lambda: media.save_images(save_out, frames[:12], size=(256, 256), overwrite=True, verbose=False), repeats=args.repeats)["median_ms"], "status": "passed"})
                 cmp_out = tmp_root / "compare.png"
-                rows.append({"operation": "visual.compare_images", "median_ms": _measure(lambda: visual.compare_images(truth_dets[0], truth_dets[0], mode="save", output_path=cmp_out, overwrite=True), repeats=args.repeats)["median_ms"], "status": "passed"})
+                rows.append({"operation": "graphics.compare", "median_ms": _measure(lambda: graphics.compare(truth_dets[0], truth_dets[0], mode="save", output_path=cmp_out, overwrite=True), repeats=args.repeats)["median_ms"], "status": "passed"})
                 def _silent_tab():
                     with redirect_stdout(io.StringIO()):
                         utils.tabulate(rows)

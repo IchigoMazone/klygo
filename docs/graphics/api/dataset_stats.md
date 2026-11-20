@@ -1,7 +1,7 @@
-# `graphics.plot_dataset_stats`
+# `graphics.dataset_stats`
 
 ```python
-graphics.plot_dataset_stats(
+graphics.dataset_stats(
     source,
     figsize=(10, 6),
 )
@@ -32,11 +32,11 @@ First, `datasets.info(source)` is called to retrieve the dataset's `classes` lis
 
 ## AI usage guidance
 
-Prefer `from klygo import graphics` followed by `graphics.plot_dataset_stats(...)` to visually audit class balance before training or after running `klygo.datasets` transformations.
+Prefer `from klygo import graphics` followed by `graphics.dataset_stats(...)` to visually audit class balance before training or after running `klygo.datasets` transformations.
 
 ## Example
 
-See [`plot_dataset_stats.py`](../../../examples/graphics/plot_dataset_stats.py) for an executable example.
+See [`dataset_stats.py`](../../../examples/graphics/dataset_stats.py) for an executable example.
 
 ## Tests
 
@@ -45,7 +45,7 @@ See [`test_graphics.py`](../../../test/graphics/test_graphics.py) for the execut
 ## Complete executable example
 
 ```python
-"""Executable example for klygo.graphics.plot_dataset_stats."""
+"""Executable example for klygo.graphics.dataset_stats."""
 
 import tempfile
 import matplotlib
@@ -64,7 +64,7 @@ with tempfile.TemporaryDirectory() as temporary:
         "0 0.5 0.5 0.2 0.2\n1 0.3 0.3 0.1 0.1\n",
         verbose=False,
     )
-    result = graphics.plot_dataset_stats(root, figsize=(8, 4))
+    result = graphics.dataset_stats(root, figsize=(8, 4))
     print("Plotted two class counts")
     assert result is None
 ```

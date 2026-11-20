@@ -14,7 +14,7 @@ from klygo import validators
 from ._render import _finalize_figure
 
 
-def plot_partition_distribution(
+def partitions(
     summary: Sequence[Mapping[str, Any]],
     *,
     title: Optional[str] = None,
@@ -52,7 +52,7 @@ def plot_partition_distribution(
     return _finalize_figure(fig, show=show, save_path=save_path, dpi=dpi, return_figure=return_figure)
 
 
-def plot_loss_curves(
+def curves(
     grouped_runs: Mapping[str, Any],
     *,
     metric: str = "box_loss",
@@ -69,11 +69,38 @@ def plot_loss_curves(
 ) -> Optional[Figure]:
     """Plot a single training or validation loss/metric curve across grouped runs."""
     validators.validate_type(grouped_runs, Mapping, "grouped_runs")
+    validators.validate_type(metric, str, "metric")
+    validators.validate_type(split, str, "split")
+    validators.validate_type(band, bool, "band")
+    validators.validate_type(per_seed, bool, "per_seed")
+    if isinstance(mosaic_marker, bool) or (
+        mosaic_marker is not None and not isinstance(mosaic_marker, (int, str))
+    ):
+        raise TypeError("mosaic_marker must be 'auto', an int epoch, or None")
     groups = grouped_runs.get("groups", grouped_runs)
     if not groups:
         raise ValueError("grouped_runs must contain at least one group")
 
-    key = metric if "/" in metric else f"{split}/{metric}"
+    def _resolve_metric_key(mapping: Mapping[str, Any]) -> Optional[str]:
+        if metric in mapping:
+            return metric
+        prefixed = f"{split}/{metric}"
+        if prefixed in mapping:
+            return prefixed
+        return None
+
+    display_key = metric if "/" in metric else f"{split}/{metric}"
+    for group in groups.values():
+        sample_hist = (
+            group.get("runs", [{}])[0].get("history", {})
+            if per_seed and group.get("runs")
+            else group.get("history_mean", {})
+        )
+        resolved = _resolve_metric_key(sample_hist)
+        if resolved is not None:
+            display_key = resolved
+            break
+
     fig, ax = plt.subplots(figsize=figsize or (7.2, 4.5))
     mosaic_epoch: Optional[int] = None
 
@@ -90,7 +117,8 @@ def plot_loss_curves(
             line_styles = ["-", "--", ":"]
             for idx, run in enumerate(runs):
                 hist = run.get("history", {})
-                if key not in hist:
+                key = _resolve_metric_key(hist)
+                if key is None:
                     continue
                 xs = hist.get("epoch", list(range(1, len(hist[key]) + 1)))
                 seed_lbl = run.get("config", {}).get("seed", idx)
@@ -98,7 +126,8 @@ def plot_loss_curves(
         else:
             hmean = group.get("history_mean", {})
             hstd = group.get("history_std", {})
-            if key not in hmean:
+            key = _resolve_metric_key(hmean)
+            if key is None:
                 continue
             ys = np.asarray(hmean[key], dtype=np.float64)
             xs = np.asarray(hmean.get("epoch", list(range(1, len(ys) + 1))), dtype=np.float64)
@@ -113,15 +142,15 @@ def plot_loss_curves(
         ax.axvline(mosaic_epoch, color="#555555", linestyle=":", linewidth=1.2, label=f"close_mosaic (epoch {mosaic_epoch})")
 
     ax.set_xlabel("Epoch")
-    ax.set_ylabel(key)
-    ax.set_title(key if title is None else title)
+    ax.set_ylabel(display_key)
+    ax.set_title(display_key if title is None else title)
     ax.grid(True, linestyle="--", alpha=0.35)
     ax.legend(fontsize=8)
     fig.tight_layout()
     return _finalize_figure(fig, show=show, save_path=save_path, dpi=dpi, return_figure=return_figure)
 
 
-def plot_threshold_sweep(
+def thresholds(
     audit_result: Mapping[str, Any],
     *,
     kind: str = "curves",
@@ -134,6 +163,7 @@ def plot_threshold_sweep(
 ) -> Optional[Figure]:
     """Plot Precision/Recall/F1 curves or TP/FP stacked bars across thresholds."""
     validators.validate_type(audit_result, Mapping, "audit_result")
+    validators.validate_type(kind, str, "kind")
     rows = audit_result.get("rows", [])
     if not rows:
         raise ValueError("audit_result['rows'] must not be empty")
@@ -172,7 +202,7 @@ def plot_threshold_sweep(
     return _finalize_figure(fig, show=show, save_path=save_path, dpi=dpi, return_figure=return_figure)
 
 
-def plot_mining_summary(
+def mining(
     mining_rows: Sequence[Mapping[str, Any]],
     *,
     kind: str = "counts",
@@ -185,6 +215,7 @@ def plot_mining_summary(
 ) -> Optional[Figure]:
     """Plot positive/background image breakdown or confidence statistics across mining strategies."""
     validators.validate_type(mining_rows, (list, tuple), "mining_rows")
+    validators.validate_type(kind, str, "kind")
     if not mining_rows:
         raise ValueError("mining_rows must not be empty")
     kind_key = kind.lower()
@@ -223,7 +254,7 @@ def plot_mining_summary(
     return _finalize_figure(fig, show=show, save_path=save_path, dpi=dpi, return_figure=return_figure)
 
 
-def plot_benchmark_bars(
+def bars(
     rows: Sequence[Mapping[str, Any]],
     *,
     metrics: Sequence[str] = ("mAP50-95",),
@@ -237,6 +268,8 @@ def plot_benchmark_bars(
 ) -> Optional[Figure]:
     """Plot single-metric bars with optional std error bars or multi-metric grouped bars."""
     validators.validate_type(rows, (list, tuple), "rows")
+    validators.validate_type(metrics, (list, tuple), "metrics")
+    validators.validate_type(error_bars, bool, "error_bars")
     if not rows:
         raise ValueError("rows must not be empty")
     if not metrics:
@@ -282,9 +315,9 @@ def plot_benchmark_bars(
 
 
 __all__ = [
-    "plot_partition_distribution",
-    "plot_loss_curves",
-    "plot_threshold_sweep",
-    "plot_mining_summary",
-    "plot_benchmark_bars",
+    "partitions",
+    "curves",
+    "thresholds",
+    "mining",
+    "bars",
 ]
