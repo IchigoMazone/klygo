@@ -42,6 +42,14 @@ See [`download.py`](../../../examples/files/download.py) for an executable examp
 
 See [`test_download.py`](../../../test/files/test_download.py) for the executable behavioral contract.
 
+## Common pitfalls and troubleshooting
+
+> [!WARNING] Destination path must be a directory, not a target file path
+> `output_dir` specifies the *containing directory* where the downloaded file will reside. Do not pass a full target file path like `files.download(url, "folder/archive.zip")`, as this will create a directory named `archive.zip` and place the file inside it (`folder/archive.zip/archive.zip`), causing subsequent archive extraction to fail. Always pass `output_dir="folder"`.
+
+> [!NOTE] COCO dataset and S3 hostname mismatch
+> S3-hosted mirrors like `images.cocodataset.org` do not serve a custom TLS certificate matching that subdomain. When downloading COCO images or annotations, use `http://images.cocodataset.org/...` rather than `https://` to prevent `URLError: [SSL: CERTIFICATE_VERIFY_FAILED: Hostname mismatch]`.
+
 ## Complete executable example
 
 ```python
