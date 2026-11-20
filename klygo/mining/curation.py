@@ -61,6 +61,7 @@ class ClusterResult(_Report):
     clusters: int
     seed: int
     feature_vectors: np.ndarray = field(repr=False, compare=False)
+    identities: list[list[Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible dictionary including cached features."""
@@ -72,6 +73,7 @@ class ClusterResult(_Report):
             "clusters": self.clusters,
             "seed": self.seed,
             "feature_vectors": self.feature_vectors.tolist(),
+            "identities": self.identities,
         }
 
     def _rows(self) -> list[dict[str, Any]]:
@@ -197,6 +199,7 @@ def cluster(
         clusters=clusters,
         seed=seed,
         feature_vectors=matrix,
+        identities=[[frame.source_id, frame.frame_index] for frame in data],
     )
 
 
@@ -336,6 +339,8 @@ def select(
         report = scores or score(data, weights={"quality": 1.0} if method == "quality" else None, verbose=verbose)
         if len(report.values) != len(data):
             raise ValueError("scores length must match data length")
+        if scores is not None and report.identities != [[frame.source_id, frame.frame_index] for frame in data]:
+            raise ValueError("scores identities must match data")
 
         key = "rarity" if method == "rare_first" else None
         ranked = sorted(
@@ -385,6 +390,8 @@ def select(
             )
             if len(result.labels) != len(data):
                 raise ValueError("cluster_result length must match data length")
+            if cluster_result is not None and result.identities and result.identities != [[frame.source_id, frame.frame_index] for frame in data]:
+                raise ValueError("cluster_result identities must match data")
 
             buckets: list[list[int]] = []
             for key in sorted(result.groups):
@@ -577,7 +584,7 @@ def balance(
         raise ValueError("target must be non-negative")
 
     quotas = {label: min(resolved, value) for label, value in counts.items()}
-    indices = _quota(data, quotas, None, count_by=count_by, verbose=verbose)
+    indices = _quota(data, quotas, None, count_by=count_by, seed=seed, verbose=verbose)
     result = _subset(data, indices, f"balance:{strategy}")
 
     # Record actual versus target counts in metadata

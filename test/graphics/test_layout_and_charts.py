@@ -49,7 +49,7 @@ class TestGraphicsLayoutAndCharts(unittest.TestCase):
             graphics.cell(det, height=120, align="top-left", offset=(6, 4), title="(b) Det"),
             graphics.cell(fig, width=180, height=110, align="bottom-right", title="(c) Fig"),
             graphics.cell(np.zeros((40, 60, 3), dtype=np.uint8), align=(10, 10), title="(d) Array"),
-            graphics.cell(Image.new("RGB", (50, 50), (10, 120, 220)), align="center"),
+            graphics.cell(np.zeros((40, 60, 1), dtype=np.uint8), align="center", title="(e) Gray1"),
             graphics.cell(Image.new("RGB", (50, 50), (30, 180, 60))),
         ])
         self.assertEqual(len(cells), 6)

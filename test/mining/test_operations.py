@@ -346,6 +346,30 @@ class MiningOperationsTest(unittest.TestCase):
             [sum(len(frame) for frame in selected)],
         )
 
+    def test_mismatched_identities_and_balance_seed(self) -> None:
+        reordered = Detections(list(reversed(list(self.data.copy()))), names=self.data.names)
+        scores = mining.score(self.data)
+        clusters = mining.cluster(self.data, features=("histogram",), clusters=2)
+
+        with self.assertRaisesRegex(ValueError, "identities"):
+            mining.select(reordered, method="weighted", scores=scores, limit=2)
+        with self.assertRaisesRegex(ValueError, "identities"):
+            mining.select(reordered, method="diversity", cluster_result=clusters, limit=2)
+
+        # Equal-gain tie-breaking in balance() respects seed
+        tied = Detections(
+            [
+                Detection([Box((2, 3, 20, 25), label="car", class_id=0)], source_id=str(self.paths[0]), source_path=str(self.paths[0]), frame_index=0, image_size=(64, 48), names={0: "car"}),
+                Detection([Box((2, 3, 20, 25), label="car", class_id=0)], source_id=str(self.paths[1]), source_path=str(self.paths[1]), frame_index=0, image_size=(64, 48), names={0: "car"}),
+                Detection([Box((2, 3, 20, 25), label="car", class_id=0)], source_id=str(self.paths[2]), source_path=str(self.paths[2]), frame_index=0, image_size=(64, 48), names={0: "car"}),
+            ],
+            names={0: "car"},
+        )
+        b1 = mining.balance(tied, target=1, seed=1)
+        b2 = mining.balance(tied, target=1, seed=2)
+        self.assertEqual((len(b1), len(b2)), (1, 1))
+        self.assertNotEqual([f.source_id for f in b1], [f.source_id for f in b2])
+
     def test_balance_and_compare(self) -> None:
         balanced = mining.balance(self.data, target="min")
         comparison = mining.compare(self.data, balanced)

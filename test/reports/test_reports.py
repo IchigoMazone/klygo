@@ -79,6 +79,34 @@ class TestReports(unittest.TestCase):
         with self.assertRaises(ValueError):
             reports.load(s1_a, format="keras")
 
+        # NaN/Inf handling + best="fitness"
+        nan_run = self.root / "nan_run"
+        files.mkdir(nan_run)
+        files.save(nan_run / "args.yaml", {"epochs": 3, "seed": 1}, overwrite=True, verbose=False)
+        files.save(
+            nan_run / "results.csv",
+            [
+                {"epoch": 1, "metrics/mAP50(B)": 0.70, "metrics/mAP50-95(B)": 0.50, "time": 5.0},
+                {"epoch": 2, "metrics/mAP50(B)": 0.90, "metrics/mAP50-95(B)": 0.55, "time": 10.0},
+                {"epoch": 3, "metrics/mAP50(B)": "nan", "metrics/mAP50-95(B)": "inf", "time": 15.0},
+            ],
+            overwrite=True,
+            verbose=False,
+        )
+        loaded_fit = reports.load(nan_run, best="fitness")
+        self.assertEqual(loaded_fit["best_epoch"], 2)
+        self.assertIsNone(loaded_fit["history"]["mAP50"][2])
+
+        # Same-basename run directories do not overwrite in extract_hyperparams
+        dup_a = self.root / "exp_a" / "run"
+        dup_b = self.root / "exp_b" / "run"
+        files.mkdir(dup_a); files.mkdir(dup_b)
+        files.save(dup_a / "args.yaml", {"batch": 16, "seed": 42}, overwrite=True, verbose=False)
+        files.save(dup_b / "args.yaml", {"batch": 32, "seed": 42}, overwrite=True, verbose=False)
+        dup_hp = reports.extract_hyperparams([dup_a, dup_b])
+        self.assertEqual(len(dup_hp["runs"]), 2)
+        self.assertIn("batch", dup_hp["diffs"])
+
     def test_partition_summary_threshold_mining_and_ranking(self) -> None:
         # 1. Partition summary on a partitioned YOLO directory
         part_dir = self.root / "part"
@@ -94,6 +122,12 @@ class TestReports(unittest.TestCase):
         ps = reports.partition_summary(part_dir)
         self.assertEqual(sum(r["images"] for r in ps), 6)
         self.assertAlmostEqual(sum(r["ratio_pct"] for r in ps), 100.0, places=1)
+
+        from klygo import archive
+        zip_path = self.root / "part.zip"
+        archive.compress(part_dir, zip_path, overwrite=True, verbose=False)
+        ps_zip = reports.partition_summary(zip_path)
+        self.assertEqual(sum(r["images"] for r in ps_zip), 6)
 
         # 2. Threshold audit & mining breakdown
         img_p = self.root / "sample.png"

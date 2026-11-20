@@ -80,7 +80,12 @@ def _to_pil(source: Any) -> Image.Image:
     if isinstance(source, Image.Image):
         return source.convert("RGB")
     if isinstance(source, np.ndarray):
-        arr = source if source.ndim == 2 or source.shape[2] == 3 else source[:, :, :3]
+        if source.ndim == 3 and source.shape[2] == 1:
+            arr = source[:, :, 0]
+        elif source.ndim == 2 or source.shape[2] == 3:
+            arr = source
+        else:
+            arr = source[:, :, :3]
         return Image.fromarray(arr).convert("RGB")
     if isinstance(source, (str, PathLike)):
         return media.load(files.path(source), verbose=False)[0].to_pil(cache=False).convert("RGB")

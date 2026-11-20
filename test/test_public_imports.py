@@ -22,3 +22,11 @@ class TestPublicImports(unittest.TestCase):
         assert callable(postprocessing.compose)
         assert callable(postprocessing.nms)
         assert callable(graphics.draw_bboxes)
+
+    def test_deprecated_visual_alias_forwards_to_graphics(self):
+        import warnings
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            from klygo import visual
+            assert visual.draw_bboxes is graphics.draw_bboxes
+            assert any(issubclass(w.category, DeprecationWarning) for w in caught)

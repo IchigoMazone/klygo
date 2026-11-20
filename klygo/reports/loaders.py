@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import math
 from os import PathLike
-from typing import Any, Mapping, Sequence
+import tempfile
+from typing import Any, Mapping, Optional, Sequence
 
-from klygo import config, datasets, files, mining, validators
+from klygo import archive, config, datasets, files, mining, validators
 from klygo.outputs import Detections
 
 
@@ -23,24 +25,38 @@ _METRIC_ALIASES = {
 
 
 def _to_number(raw: Any) -> Any:
-    """Convert numeric strings to int or float while preserving other values."""
+    """Convert numeric strings to finite int or float while preserving other values."""
     if isinstance(raw, (int, float)) and not isinstance(raw, bool):
-        return raw
+        return None if (isinstance(raw, float) and not math.isfinite(raw)) else raw
     text = str(raw).strip()
     if not text:
         return 0.0
     try:
-        if "." not in text and "e" not in text.lower():
+        if "." not in text and "e" not in text.lower() and text.lower() not in {"nan", "inf", "-inf", "+inf"}:
             return int(text)
-        return float(text)
+        value = float(text)
+        return None if not math.isfinite(value) else value
     except ValueError:
         return text
+
+
+def _row_selection_score(row: Mapping[str, Any], best: str) -> Optional[float]:
+    """Compute the scalar selection score for a single epoch row."""
+    if best == "fitness":
+        m50 = row.get("mAP50")
+        m95 = row.get("mAP50-95")
+        if isinstance(m50, (int, float)) and isinstance(m95, (int, float)):
+            return 0.1 * float(m50) + 0.9 * float(m95)
+        return None
+    val = row.get(best)
+    return float(val) if isinstance(val, (int, float)) else None
 
 
 def load(
     source: str | PathLike[str],
     *,
     format: str = "yolo",
+    best: str = "auto",
     verbose: bool = False,
 ) -> dict[str, Any]:
     """Load training logs and hyperparameters from a run directory.
@@ -51,6 +67,9 @@ def load(
         Run directory containing ``results.csv`` and optional ``args.yaml``.
     format : {'yolo'}, default='yolo'
         Training log format. Currently only ``'yolo'`` (Ultralytics) is supported.
+    best : str, default='auto'
+        Criterion to select ``best_epoch``: ``'auto'`` (``mAP50-95`` then ``mAP50``),
+        ``'fitness'`` (``0.1 * mAP50 + 0.9 * mAP50-95``), ``'last'``, or a metric name.
     verbose : bool, default=False
         Display progress when loading run files.
 
@@ -114,18 +133,29 @@ def load(
         for key, value in row.items():
             history.setdefault(key, []).append(value)
 
-    score_key = (
-        "mAP50-95"
-        if "mAP50-95" in history
-        else ("mAP50" if "mAP50" in history else None)
-    )
-    if score_key is not None:
-        best_idx = max(
-            range(len(cleaned_rows)),
-            key=lambda idx: float(cleaned_rows[idx].get(score_key, 0.0) or 0.0),
-        )
-    else:
+    best_key = best.strip()
+    if best_key == "last":
         best_idx = len(cleaned_rows) - 1
+    else:
+        if best_key == "auto":
+            candidate_keys = ("mAP50-95", "mAP50")
+            score_key = next((k for k in candidate_keys if k in history), None)
+        else:
+            score_key = best_key
+
+        if score_key is not None:
+            scored_indices = [
+                (idx, _row_selection_score(cleaned_rows[idx], score_key))
+                for idx in range(len(cleaned_rows))
+            ]
+            finite_indices = [(idx, val) for idx, val in scored_indices if val is not None]
+            best_idx = (
+                max(finite_indices, key=lambda item: item[1])[0]
+                if finite_indices
+                else len(cleaned_rows) - 1
+            )
+        else:
+            best_idx = len(cleaned_rows) - 1
 
     best_row = cleaned_rows[best_idx]
     best_epoch = int(best_row.get("epoch", best_idx + 1))
@@ -220,6 +250,18 @@ def partition_summary(source: str | PathLike[str] | Mapping[str, Any]) -> list[d
         if not files.exists(root):
             raise FileNotFoundError(f"source does not exist: {root}")
 
+        if files.is_file(root) and archive.is_archive(root):
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                archive.extract(root, tmp_dir, overwrite=True, verbose=False)
+                extracted = files.path(tmp_dir)
+                sub_dirs = [d for d in files.list_entries(extracted) if files.is_dir(d)]
+                target_root = (
+                    sub_dirs[0]
+                    if not files.is_dir(extracted / "images") and len(sub_dirs) == 1
+                    else extracted
+                )
+                return partition_summary(target_root)
+
         images_root = root / "images"
         if files.is_dir(images_root):
             split_dirs = [d for d in files.list_entries(images_root) if files.is_dir(d)]
@@ -296,7 +338,9 @@ def extract_hyperparams(
         if not files.is_file(args_path):
             raise FileNotFoundError(f"args.yaml not found in: {path}")
         cfg = dict(config.load(args_path, verbose=False).to_dict())
-        per_run[files.name(path)] = cfg
+        base_name = files.name(path)
+        run_key = base_name if base_name not in per_run else str(path)
+        per_run[run_key] = cfg
         all_keys.update(cfg.keys())
 
     common: dict[str, Any] = {}

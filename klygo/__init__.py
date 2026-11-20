@@ -40,11 +40,16 @@ __version__ = "2.1.2"
 __author__ = "IchigoMazone"
 
 _LAZY_MODULES = {"models"}
+_DEPRECATED_ALIASES = {"visual": "graphics"}
 
 
 def __getattr__(name: str):
     """Load optional high-level packages only when they are requested."""
     if name in _LAZY_MODULES:
+        module = importlib.import_module(f".{name}", __name__)
+        globals()[name] = module
+        return module
+    if name in _DEPRECATED_ALIASES:
         module = importlib.import_module(f".{name}", __name__)
         globals()[name] = module
         return module

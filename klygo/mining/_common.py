@@ -476,6 +476,7 @@ def _quota(
     limit: Optional[int],
     *,
     count_by: str = "images",
+    seed: Optional[int] = None,
     verbose: bool = False,
 ) -> list[int]:
     """Greedily select frames to fulfill specified per-class target quotas.
@@ -507,6 +508,11 @@ def _quota(
     counts: Counter[str] = Counter()
     remaining = set(range(len(data)))
     chosen: list[int] = []
+    tie_ranks = (
+        np.random.default_rng(seed).permutation(len(data)).tolist()
+        if seed is not None and len(data) > 0
+        else None
+    )
 
     for _ in _iter_progress(range(len(data) if limit is None else min(len(data), limit)), verbose, "Selecting class quotas"):
         if not remaining:
@@ -527,7 +533,7 @@ def _quota(
             remaining,
             key=lambda index: (
                 sum(min(deficits.get(label, 0), amount) for label, amount in contribution(index).items()),
-                -index,
+                -(tie_ranks[index] if tie_ranks is not None else index),
             ),
         )
 
