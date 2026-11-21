@@ -78,12 +78,6 @@ class MiningStats(_Report):
     box_imbalance_ratio: float = 0.0
     failed_quality_images: int = 0
 
-    @property
-    def class_counts(self) -> dict[str, int]:
-        """Alias for boxes_per_class to maintain intuitive class distribution access."""
-        return self.boxes_per_class
-
-
 @dataclass
 class MiningScores(_Report):
     """Composite and component-level score distributions for every image.
