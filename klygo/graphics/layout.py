@@ -343,8 +343,10 @@ def grid(
     ax.imshow(np.asarray(canvas))
     ax.axis("off")
     if title:
-        title_fontsize = max(12, int(round(fig_w_inches * 0.9)))
-        title_pad = max(8, int(round(fig_w_inches * 0.6)))
+        # Sub-figures render at 150 dpi (12pt title ≈ 25px); 19pt at 100 dpi ≈ 26.4px (+~2px larger).
+        # PIL image cells use smaller caption text; 12pt at 100 dpi ≈ 16.7px keeps it proportional.
+        title_fontsize = 12 if caption_h > 0 else 19
+        title_pad = 8 if caption_h > 0 else 10
         ax.set_title(title, fontsize=title_fontsize, fontweight="normal", pad=title_pad)
     fig.tight_layout(pad=0.2)
 
