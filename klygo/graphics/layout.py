@@ -147,9 +147,22 @@ def compose(cells: Sequence[GridCell]) -> list[GridCell]:
     for idx, item in enumerate(cells):
         if not isinstance(item, GridCell):
             raise TypeError(f"compose expects GridCell items; got {type(item).__name__} at index {idx}")
-        pil_img = _to_pil(item.source)
+        source = item.source
+        cell_title = item.title
+        if isinstance(source, Figure):
+            if cell_title is not None:
+                if source.axes:
+                    source.axes[0].set_title(cell_title)
+                    for extra_ax in source.axes[1:]:
+                        extra_ax.set_title("")
+                if hasattr(source, "_suptitle") and source._suptitle is not None:
+                    source._suptitle.set_text("")
+                cell_title = None
+            pil_img = _to_pil(source)
+        else:
+            pil_img = _to_pil(source)
         resized = _resize_cell_image(pil_img, item.width, item.height)
-        resolved.append(replace(item, source=resized))
+        resolved.append(replace(item, source=resized, title=cell_title))
     return resolved
 
 
@@ -295,11 +308,15 @@ def grid(
         px, py = _resolve_position(cell_w, cell_h, img.width, img.height, item.align, item.offset)
         canvas.paste(img, (origin_x + px, origin_y + caption_h + py))
 
-    fig, ax = plt.subplots(figsize=(max(4.0, total_w / 100.0), max(3.0, total_h / 100.0)), dpi=100)
+    fig_w_inches = max(4.0, total_w / 100.0)
+    fig_h_inches = max(3.0, total_h / 100.0)
+    fig, ax = plt.subplots(figsize=(fig_w_inches, fig_h_inches), dpi=100)
     ax.imshow(np.asarray(canvas))
     ax.axis("off")
     if title:
-        ax.set_title(title, fontsize=13, pad=10)
+        title_fontsize = max(13, int(round(fig_w_inches * 1.5)))
+        title_pad = max(12, int(round(fig_w_inches * 1.0)))
+        ax.set_title(title, fontsize=title_fontsize, fontweight="bold", pad=title_pad)
     fig.tight_layout(pad=0.2)
 
     return _finalize_figure(

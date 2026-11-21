@@ -292,17 +292,37 @@ def tabulate(
                 if col_str not in columns:
                     columns.append(col_str)
         for idx, col in enumerate(columns):
-            justify = "right" if _is_numeric_column(data, col) else "left"
+            is_num = _is_numeric_column(data, col)
+            justify = "right" if is_num else "left"
             table.add_column(
                 col,
                 justify=justify,
-                no_wrap=(idx == 0),
+                no_wrap=is_num or (idx == 0),
             )
         for row in data:
             table.add_row(*(_format_table_value(row.get(col)) for col in columns))
 
+    if is_mapping:
+        needed_w = max(
+            len(key_header) + len(value_header) + 20,
+            max((len(str(k)) + len(str(v)) + 12 for k, v in _flatten_mapping(data)), default=60),
+        )
+    else:
+        col_widths = {}
+        for col in columns:
+            max_col_w = len(str(col))
+            for row in data:
+                val = row.get(col)
+                val_len = len(str(val)) if val is not None else 1
+                if val_len > max_col_w:
+                    max_col_w = val_len
+            col_widths[col] = max_col_w
+        needed_w = sum(col_widths.values()) + len(columns) * 3 + 6
+
     if show:
-        Console().print(table)
+        active_console = Console()
+        console_width = max(active_console.width or 80, needed_w)
+        Console(width=console_width).print(table)
         return None
     return table
 
