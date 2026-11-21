@@ -1,11 +1,30 @@
 from os import PathLike
-from typing import Tuple, Union, Optional
+from typing import Tuple, Union, Optional, Any
 import PIL.Image
 import numpy as np
 
 from ._render import _finalize_figure
 
-__all__ = ["show"]
+__all__ = ["show", "close"]
+
+
+def close(*figures: Any) -> None:
+    """Close one or more Matplotlib figures to free resources.
+
+    Parameters
+    ----------
+    *figures : Any
+        One or more Matplotlib ``Figure`` instances to close. If no arguments are
+        provided, all open figures are closed.
+    """
+    import matplotlib.pyplot as plt
+
+    if not figures:
+        plt.close("all")
+        return
+    for fig in figures:
+        if fig is not None:
+            plt.close(fig)
 
 
 def _is_notebook() -> bool:

@@ -91,3 +91,15 @@ class TestVisual(unittest.TestCase):
                 graphics.dataset_stats(root)
             self.assertEqual(list(bar.call_args.args[0]), ["cat", "dog"])
             self.assertEqual(list(bar.call_args.args[1]), [1, 1])
+
+    def test_close_figures(self):
+        import matplotlib.pyplot as plt
+        fig1 = plt.figure()
+        fig2 = plt.figure()
+        self.assertTrue(plt.fignum_exists(fig1.number))
+        self.assertTrue(plt.fignum_exists(fig2.number))
+        graphics.close(fig1)
+        self.assertFalse(plt.fignum_exists(fig1.number))
+        self.assertTrue(plt.fignum_exists(fig2.number))
+        graphics.close()
+        self.assertFalse(plt.fignum_exists(fig2.number))

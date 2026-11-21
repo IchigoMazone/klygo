@@ -64,9 +64,10 @@ Local Tutorial Notebooks (`tutorials/graphics/`, 1-to-1 with `klygo/graphics/` s
 </details>
 
 <details open>
-<summary><b>Image display — <code>show.py</code> (1 function)</b> <i>(Click to expand)</i></summary>
+<summary><b>Image display & resource cleanup — <code>show.py</code> (2 functions)</b> <i>(Click to expand)</i></summary>
 
 - [`show(image, title='Image', width=None, backend='auto', figsize=(10, 10))`](api/show.md): Display a PIL image or RGB NumPy array inline in notebooks, in a desktop viewer, or via Matplotlib/OpenCV ([example](../../examples/graphics/show.py)).
+- [`close(*figures)`](api/close.md): Close one or more open Matplotlib figures to free resources ([example](../../examples/graphics/close.py)).
 
 </details>
 

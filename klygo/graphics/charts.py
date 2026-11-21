@@ -265,6 +265,7 @@ def bars(
     *,
     metrics: Sequence[str] = ("mAP50-95",),
     error_bars: bool = True,
+    show_values: Optional[bool] = None,
     title: Optional[str] = None,
     figsize: Optional[tuple[float, float]] = None,
     show: bool = True,
@@ -276,6 +277,8 @@ def bars(
     validators.validate_type(rows, (list, tuple), "rows")
     validators.validate_type(metrics, (list, tuple), "metrics")
     validators.validate_type(error_bars, bool, "error_bars")
+    if show_values is not None:
+        validators.validate_type(show_values, bool, "show_values")
     if not rows:
         raise ValueError("rows must not be empty")
     if not metrics:
@@ -285,6 +288,11 @@ def bars(
     fig, ax = plt.subplots(figsize=figsize or (8.5, 4.6))
     x = np.arange(len(labels))
     width = 0.72 / len(metrics)
+    render_values = (
+        show_values
+        if show_values is not None
+        else (len(metrics) == 1 and len(labels) <= 15)
+    )
 
     for idx, metric in enumerate(metrics):
         offset = (idx - (len(metrics) - 1) / 2.0) * width
@@ -297,16 +305,20 @@ def bars(
             if error_bars and any(f"{metric}_std" in r for r in rows)
             else None
         )
-        bars = ax.bar(x + offset, vals, width, yerr=stds, capsize=4 if stds else 0, label=metric)
-        for bar, val in zip(bars, vals):
-            ax.text(
-                bar.get_x() + bar.get_width() / 2,
-                bar.get_height() + 0.012,
-                f"{val:.4f}",
-                ha="center",
-                va="bottom",
-                fontsize=8,
-            )
+        bars_items = ax.bar(x + offset, vals, width, yerr=stds, capsize=4 if stds else 0, label=metric)
+        if render_values:
+            for bar, val in zip(bars_items, vals):
+                rotation = 90 if width < 0.22 else 0
+                fontsize = max(6, min(8, int(width * 45))) if width < 0.22 else 8
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    bar.get_height() + 0.012,
+                    f"{val:.4f}",
+                    ha="center",
+                    va="bottom",
+                    rotation=rotation,
+                    fontsize=fontsize,
+                )
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=12, ha="right")
@@ -314,7 +326,10 @@ def bars(
         (float(r[f"{m}_mean"] if f"{m}_mean" in r else r.get(m, 0.0)) for r in rows for m in metrics),
         default=1.0,
     )
-    top_y = max(1.15, max_val * 1.15 if max_val > 1.0 else 1.12)
+    top_y = max(
+        1.15 if render_values else 1.05,
+        max_val * (1.15 if render_values else 1.08) if max_val > 1.0 else (1.12 if render_values else 1.05),
+    )
     ax.set_ylim(0.0, top_y)
     ax.set_ylabel("Score")
     ax.set_title("Model Benchmark Comparison" if title is None else title, pad=12)

@@ -187,6 +187,7 @@ def compose(cells: Sequence[GridCell]) -> list[GridCell]:
                     source._suptitle.set_text("")
                 cell_title = None
             pil_img = _to_pil(source)
+            plt.close(source)
         else:
             pil_img = _to_pil(source)
         resized = _resize_cell_image(pil_img, item.width, item.height, letterbox=item.letterbox)
