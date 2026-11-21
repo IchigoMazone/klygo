@@ -154,12 +154,3 @@ __all__ = [
     "is_absolute",
 ]
 
-
-def __getattr__(attr_name: str):
-    """Provide helpful aliases for common file operation names."""
-    if attr_name == "list_files":
-        return find
-    if attr_name == "checksum":
-        return hash
-    raise AttributeError(f"module '{__name__}' has no attribute '{attr_name}'")
-

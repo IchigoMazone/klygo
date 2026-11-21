@@ -473,7 +473,7 @@ def _benchmark_strided_image_access(
 ) -> list[dict[str, Any]]:
     """Benchmark strided/random-access image loading across thousands of real JPEGs."""
     rows: list[dict[str, Any]] = []
-    src_imgs = sorted(files.list_files(source_root / img_sub, extensions=(".jpg", ".jpeg", ".png")))
+    src_imgs = sorted([p for p in files.find(source_root / img_sub) if files.extension(p).lower() in (".jpg", ".jpeg", ".png")])
     src_lbls = source_root / lbl_sub
     if not src_imgs:
         return rows

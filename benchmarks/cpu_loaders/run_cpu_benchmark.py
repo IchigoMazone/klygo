@@ -100,7 +100,7 @@ def _benchmark_strided_image_access(
     target_images: int = 2048,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    src_imgs = sorted(files.list_files(source_root / img_sub, extensions=(".jpg", ".jpeg", ".png")))
+    src_imgs = sorted([p for p in files.find(source_root / img_sub) if files.extension(p).lower() in (".jpg", ".jpeg", ".png")])
     src_lbls = source_root / lbl_sub
     if not src_imgs:
         return rows
@@ -297,7 +297,7 @@ def main() -> None:
         if args.include_cpu_utils:
             with tempfile.TemporaryDirectory() as tmp:
                 tmp_root = files.path(tmp)
-                first_img = files.list_files(img_dir, extensions=(".jpg", ".jpeg", ".png"))[0]
+                first_img = next(p for p in files.find(img_dir) if files.extension(p).lower() in (".jpg", ".jpeg", ".png"))
                 rows.append({"operation": "media.info", "median_ms": _measure(lambda: media.info(first_img), repeats=args.repeats)["median_ms"], "status": "passed"})
                 save_out = tmp_root / "saved_imgs"
                 rows.append({"operation": "media.save_images_letterbox", "median_ms": _measure(lambda: media.save_images(save_out, frames[:12], size=(256, 256), overwrite=True, verbose=False), repeats=args.repeats)["median_ms"], "status": "passed"})
