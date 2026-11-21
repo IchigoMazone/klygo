@@ -1,10 +1,10 @@
 # `graphics.bars`
 
 ```python
-graphics.bars(rows, *, metrics=('mAP50-95',), error_bars=True, title=None, figsize=None, show=True, save_path=None, dpi=300, return_figure=False)
+graphics.bars(rows, *, metrics=('mAP50-95',), error_bars=True, show_values=None, title=None, figsize=None, show=True, save_path=None, dpi=300, return_figure=False)
 ```
 
-Plot single-metric bars with optional std error bars or multi-metric grouped bars.
+Plot single-metric bars with optional std error bars or multi-metric grouped bars. Pass `show_values=False` to always hide numeric labels above bars, `show_values=True` to force displaying them, or `None` (default) to automatically show them only on single-metric plots with at most 15 items.
 
 ```python
 from klygo import graphics
