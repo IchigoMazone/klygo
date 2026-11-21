@@ -2659,9 +2659,16 @@ class Detections:
     def __iter__(self) -> Iterator[Detection]:
         return self._iterate_stream() if self._stream_mode else iter(self._frames)
 
-    def __getitem__(self, index: int | slice) -> Detection | tuple[Detection, ...]:
+    def __getitem__(self, index: int | slice) -> Detection | "Detections":
         self._require_materialized("indexing")
-        return tuple(self._frames[index]) if isinstance(index, slice) else self._frames[index]
+        if isinstance(index, slice):
+            return Detections(
+                self._frames[index],
+                metadata=self.metadata,
+                names=self._registry,
+                packed=self.is_packed,
+            )
+        return self._frames[index]
 
     def copy(self) -> "Detections":
         """Return an independent annotation copy sharing lazy source handles."""
