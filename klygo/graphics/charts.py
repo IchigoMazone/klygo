@@ -181,9 +181,9 @@ def thresholds(
         ax.plot(taus, [r["f1"] for r in rows], marker="^", label="F1-Score")
         if best_tau is not None:
             ax.axvline(float(best_tau), color="#C0392B", linestyle="--", label=f"T* = {best_tau}")
-        ax.set_ylim(0.0, 1.05)
+        ax.set_ylim(0.0, 1.15)
         ax.set_ylabel("Score")
-        ax.set_title("Precision / Recall / F1 vs Confidence Threshold" if title is None else title)
+        ax.set_title("Precision / Recall / F1 vs Confidence Threshold" if title is None else title, pad=12)
     else:
         labels = [f"{t:.2f}" for t in taus]
         tps = [int(r["tp"]) for r in rows]
@@ -192,8 +192,11 @@ def thresholds(
         ax.bar(labels, fps, bottom=tps, color="#E74C3C", label="False Positives (FP)")
         for idx, (tp, fp) in enumerate(zip(tps, fps)):
             ax.text(idx, tp + fp + max(tps, default=1) * 0.02, str(tp + fp), ha="center", va="bottom", fontsize=8)
+        totals = [tp + fp for tp, fp in zip(tps, fps)]
+        max_total = max(totals, default=1)
+        ax.set_ylim(0, max(max_total * 1.20, max_total + 5))
         ax.set_ylabel("Pseudo-box Count")
-        ax.set_title("Pseudo-box TP vs FP by Confidence Threshold" if title is None else title)
+        ax.set_title("Pseudo-box TP vs FP by Confidence Threshold" if title is None else title, pad=12)
 
     ax.set_xlabel("Confidence Threshold (tau)")
     ax.grid(True, linestyle="--", alpha=0.35)
@@ -233,8 +236,11 @@ def mining(
         ax.bar(names, neg, bottom=pos, color="#95A5A6", label="Background Images")
         for idx, (p, n, b) in enumerate(zip(pos, neg, boxes)):
             ax.text(idx, p + n + max(p + n, 1) * 0.02, f"{p + n}\n({b} boxes)", ha="center", va="bottom", fontsize=8)
+        totals = [p + n for p, n in zip(pos, neg)]
+        max_total = max(totals, default=1)
+        ax.set_ylim(0, max(max_total * 1.25, max_total + 10))
         ax.set_ylabel("Selected Images")
-        ax.set_title("Selected Images (Positive vs Background)" if title is None else title)
+        ax.set_title("Selected Images (Positive vs Background)" if title is None else title, pad=14)
     else:
         x = np.arange(len(names))
         width = 0.35
@@ -244,9 +250,9 @@ def mining(
         ax.bar(x + width / 2, medians, width, color="#F39C12", label="Median Confidence")
         ax.set_xticks(x)
         ax.set_xticklabels(names)
-        ax.set_ylim(0.0, 1.05)
+        ax.set_ylim(0.0, 1.15)
         ax.set_ylabel("Confidence Score")
-        ax.set_title("Confidence Distribution by Mining Strategy" if title is None else title)
+        ax.set_title("Confidence Distribution by Mining Strategy" if title is None else title, pad=12)
 
     ax.grid(axis="y", linestyle="--", alpha=0.35)
     ax.legend(fontsize=8)
@@ -304,9 +310,14 @@ def bars(
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=12, ha="right")
-    ax.set_ylim(0.0, 1.05)
+    max_val = max(
+        (float(r[f"{m}_mean"] if f"{m}_mean" in r else r.get(m, 0.0)) for r in rows for m in metrics),
+        default=1.0,
+    )
+    top_y = max(1.15, max_val * 1.15 if max_val > 1.0 else 1.12)
+    ax.set_ylim(0.0, top_y)
     ax.set_ylabel("Score")
-    ax.set_title("Model Benchmark Comparison" if title is None else title)
+    ax.set_title("Model Benchmark Comparison" if title is None else title, pad=12)
     ax.grid(axis="y", linestyle="--", alpha=0.35)
     if len(metrics) > 1:
         ax.legend(fontsize=8)
