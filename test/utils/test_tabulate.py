@@ -114,6 +114,14 @@ class TabulateTestCase(unittest.TestCase):
             utils.tabulate({"a": 1}, padding=(1, 2, 3))  # type: ignore[arg-type]
         with self.assertRaises(TypeError):
             utils.tabulate({"a": 1}, box_style="ROUNDED")
+        with self.assertRaises(TypeError):
+            utils.tabulate({"a": 1}, orient=123)  # type: ignore[arg-type]
+        with self.assertRaises(ValueError):
+            utils.tabulate({"a": 1}, orient="diagonal")
+
+        t_horiz = utils.tabulate({"gpu": "L4", "vram": "24GB"}, orient="horizontal", show=False)
+        self.assertIsNotNone(t_horiz)
+        self.assertEqual([c.header for c in t_horiz.columns], ["gpu", "vram"])
 
 
 if __name__ == "__main__":
