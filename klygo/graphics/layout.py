@@ -343,9 +343,9 @@ def grid(
     ax.imshow(np.asarray(canvas))
     ax.axis("off")
     if title:
-        title_fontsize = max(13, int(round(fig_w_inches * 1.5)))
-        title_pad = max(12, int(round(fig_w_inches * 1.0)))
-        ax.set_title(title, fontsize=title_fontsize, fontweight="bold", pad=title_pad)
+        title_fontsize = max(12, int(round(fig_w_inches * 0.9)))
+        title_pad = max(8, int(round(fig_w_inches * 0.6)))
+        ax.set_title(title, fontsize=title_fontsize, fontweight="semibold", pad=title_pad)
     fig.tight_layout(pad=0.2)
 
     return _finalize_figure(
