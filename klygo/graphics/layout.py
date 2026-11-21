@@ -345,7 +345,7 @@ def grid(
     if title:
         title_fontsize = max(12, int(round(fig_w_inches * 0.9)))
         title_pad = max(8, int(round(fig_w_inches * 0.6)))
-        ax.set_title(title, fontsize=title_fontsize, fontweight="semibold", pad=title_pad)
+        ax.set_title(title, fontsize=title_fontsize, fontweight="normal", pad=title_pad)
     fig.tight_layout(pad=0.2)
 
     return _finalize_figure(
