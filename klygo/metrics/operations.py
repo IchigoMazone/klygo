@@ -42,6 +42,48 @@ def precision_recall(pred=_MISSING, target=_MISSING, *, iou=0.5, verbose=False) 
     return _dispatch("precision_recall", pred, target, verbose=verbose, iou=_unit(iou, "iou"))
 
 
+class F1Score(float):
+    """Harmonic mean F1 score supporting both direct float operations and dict-like indexing."""
+
+    def __new__(cls, value: float, precision: float = 0.0, recall: float = 0.0):
+        obj = super().__new__(cls, float(value))
+        obj._precision = float(precision)
+        obj._recall = float(recall)
+        return obj
+
+    @property
+    def precision(self) -> float:
+        """Return precision component used to calculate F1."""
+        return self._precision
+
+    @property
+    def recall(self) -> float:
+        """Return recall component used to calculate F1."""
+        return self._recall
+
+    def __getitem__(self, item: str) -> float:
+        if item == "f1":
+            return float(self)
+        if item == "precision":
+            return self._precision
+        if item == "recall":
+            return self._recall
+        raise KeyError(item)
+
+    def get(self, item: str, default: Any = None) -> Any:
+        try:
+            return self[item]
+        except KeyError:
+            return default
+
+    def to_dict(self) -> dict[str, float]:
+        """Convert F1Score to dictionary representation."""
+        return {"f1": float(self), "precision": self._precision, "recall": self._recall}
+
+    def __repr__(self) -> str:
+        return f"F1Score({float(self):.4f}, precision={self._precision:.4f}, recall={self._recall:.4f})"
+
+
 def f1_score(
     pred=_MISSING,
     target=_MISSING,
@@ -50,17 +92,19 @@ def f1_score(
     recall=None,
     iou=0.5,
     verbose=False,
-) -> dict[str, Any] | list[Any] | _Metric:
+) -> F1Score | dict[str, Any] | list[Any] | _Metric:
     """Compute F1 score from precision and recall.
 
     Supports both direct numeric calculation via ``precision`` and ``recall``
-    and object-detection evaluation via ``pred`` and ``target`` (or deferred
-    composition when both ``pred`` and ``target`` are omitted).
+    (positionally or as keywords) and object-detection evaluation via ``pred``
+    and ``target`` (or deferred composition when both ``pred`` and ``target``
+    are omitted).
 
     Parameters
     ----------
-    pred, target : Detection or Detections, optional
-        Same-type, same-source inputs. Supply both to execute; omit both to configure.
+    pred, target : Detection or Detections, or float, optional
+        Same-type, same-source inputs. Can also supply direct numeric precision and
+        recall values positionally.
     precision, recall : float, optional
         Direct precision and recall values in [0, 1]. Supply both to compute F1
         directly without ``pred`` or ``target``.
@@ -72,9 +116,10 @@ def f1_score(
 
     Returns
     -------
-    dict or configuration
-        Dictionary with ``f1``, ``precision``, and ``recall`` for direct calls,
-        or an immutable deferred configuration.
+    F1Score, dict, or configuration
+        F1Score (subclass of float supporting both direct float usage and dict access)
+        for direct calls, dictionary for detection evaluation, or an immutable deferred
+        configuration.
 
     Raises
     ------
@@ -87,6 +132,17 @@ def f1_score(
     -----
     See docs/metrics/api/f1_score.md for the exact output schema and conventions.
     """
+    if isinstance(pred, (int, float)) and not isinstance(pred, bool):
+        if precision is not None:
+            raise ValueError("precision passed both positionally and as keyword argument")
+        precision = pred
+        if isinstance(target, (int, float)) and not isinstance(target, bool):
+            if recall is not None:
+                raise ValueError("recall passed both positionally and as keyword argument")
+            recall = target
+        pred = _MISSING
+        target = _MISSING
+
     if precision is not None or recall is not None:
         if pred is not _MISSING or target is not _MISSING:
             raise ValueError("Cannot pass pred/target together with precision/recall")
@@ -96,7 +152,7 @@ def f1_score(
         p = _unit(precision, "precision")
         r = _unit(recall, "recall")
         score = 2.0 * p * r / (p + r) if (p + r) > 0 else 0.0
-        return {"f1": score, "precision": p, "recall": r}
+        return F1Score(score, precision=p, recall=r)
     return _dispatch("f1_score", pred, target, verbose=verbose, iou=_unit(iou, "iou"))
 
 

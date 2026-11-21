@@ -374,7 +374,17 @@ def select(
             if isinstance(per_class, int)
             else {str(k): int(v) for k, v in per_class.items()}
         )
-        indices = _quota(data, quotas, limit, verbose=verbose)
+        indices = _quota(data, quotas, limit, verbose=verbose, seed=seed)
+        if method == "coverage" and limit is not None and len(indices) < min(limit, len(data)):
+            remaining_set = set(range(len(data))) - set(indices)
+            if remaining_set:
+                target_need = min(limit, len(data)) - len(indices)
+                remaining_candidates = sorted(
+                    remaining_set,
+                    key=lambda idx: (len(data[idx].boxes), -idx),
+                    reverse=True,
+                )
+                indices.extend(remaining_candidates[:target_need])
 
     # 6. Cluster-based visual diversity sampling
     elif method == "diversity":
