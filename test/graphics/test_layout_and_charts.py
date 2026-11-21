@@ -174,6 +174,20 @@ class TestGraphicsLayoutAndCharts(unittest.TestCase):
             graphics.cell(Image.new("RGB", (10, 10)), height=-5)
         with self.assertRaises(ValueError):
             graphics.cell(Image.new("RGB", (10, 10)), offset=(1,))  # type: ignore[arg-type]
+        with self.assertRaises(ValueError):
+            graphics.cell(Image.new("RGB", (10, 10)), letterbox=True, resize=True)
+
+        c_letter = graphics.cell(Image.new("RGB", (100, 50)), width=100, height=100, letterbox=True)
+        self.assertTrue(c_letter.letterbox)
+        self.assertFalse(c_letter.resize)
+        comp_letter = graphics.compose([c_letter])
+        self.assertEqual(comp_letter[0].source.size, (100, 100))
+
+        c_resize = graphics.cell(Image.new("RGB", (100, 50)), width=60, height=30, resize=True)
+        self.assertFalse(c_resize.letterbox)
+        self.assertTrue(c_resize.resize)
+        comp_resize = graphics.compose([c_resize])
+        self.assertEqual(comp_resize[0].source.size, (60, 30))
 
 
 if __name__ == "__main__":

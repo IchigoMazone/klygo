@@ -298,6 +298,7 @@ def tabulate(
                 col,
                 justify=justify,
                 no_wrap=is_num or (idx == 0),
+                overflow="fold",
             )
         for row in data:
             table.add_row(*(_format_table_value(row.get(col)) for col in columns))
@@ -317,7 +318,8 @@ def tabulate(
                 if val_len > max_col_w:
                     max_col_w = val_len
             col_widths[col] = max_col_w
-        needed_w = sum(col_widths.values()) + len(columns) * 3 + 6
+        pad_h = padding if isinstance(padding, int) else padding[1]
+        needed_w = sum(col_widths.values()) + len(columns) * (pad_h * 2 + 1) + 6
 
     if show:
         active_console = Console()

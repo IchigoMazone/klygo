@@ -37,6 +37,10 @@ class GridCell:
         Additional ``(dx, dy)`` pixel offset applied after alignment.
     title : str, optional
         Optional caption rendered above the cell.
+    letterbox : bool, default=True
+        Whether to preserve aspect ratio and pad with background color when both width and height are set.
+    resize : bool, default=False
+        Whether to stretch/resize directly to (width, height) without preserving aspect ratio.
     """
 
     source: Any
@@ -45,6 +49,8 @@ class GridCell:
     align: Optional[str | tuple[int, int]] = None
     offset: Optional[tuple[int, int]] = None
     title: Optional[str] = None
+    letterbox: bool = True
+    resize: bool = False
 
 
 def cell(
@@ -55,6 +61,8 @@ def cell(
     align: Optional[str | tuple[int, int]] = None,
     offset: Optional[tuple[int, int]] = None,
     title: Optional[str] = None,
+    letterbox: Optional[bool] = None,
+    resize: Optional[bool] = None,
 ) -> GridCell:
     """Create a per-cell layout specification for :func:`compose` and :func:`grid`."""
     if width is not None and (isinstance(width, bool) or not isinstance(width, int) or width <= 0):
@@ -65,6 +73,13 @@ def cell(
         if not isinstance(offset, (tuple, list)) or len(offset) != 2:
             raise ValueError("offset must be a (dx, dy) tuple of two integers")
         offset = (int(offset[0]), int(offset[1]))
+
+    if letterbox is True and resize is True:
+        raise ValueError("Cannot set both letterbox=True and resize=True; choose one")
+
+    use_resize = bool(resize)
+    use_letterbox = True if letterbox is True else (False if use_resize or letterbox is False else True)
+
     return GridCell(
         source=source,
         width=width,
@@ -72,6 +87,8 @@ def cell(
         align=align,
         offset=offset,
         title=title,
+        letterbox=use_letterbox,
+        resize=use_resize,
     )
 
 
@@ -107,12 +124,23 @@ def _resize_cell_image(
     img: Image.Image,
     width: Optional[int],
     height: Optional[int],
+    *,
+    letterbox: bool = True,
+    bg_color: str | tuple[int, int, int] = "white",
 ) -> Image.Image:
-    """Resize a PIL image honoring explicit width/height overrides."""
+    """Resize or letterbox a PIL image honoring explicit width/height overrides."""
     w0, h0 = img.size
     if width is None and height is None:
         return img
     if width is not None and height is not None:
+        if letterbox:
+            scale = min(width / max(1, w0), height / max(1, h0))
+            new_w = max(1, int(round(w0 * scale)))
+            new_h = max(1, int(round(h0 * scale)))
+            scaled = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            canvas = Image.new("RGB", (width, height), bg_color)
+            canvas.paste(scaled, ((width - new_w) // 2, (height - new_h) // 2))
+            return canvas
         target_w, target_h = width, height
     elif width is not None:
         target_w = width
@@ -161,7 +189,7 @@ def compose(cells: Sequence[GridCell]) -> list[GridCell]:
             pil_img = _to_pil(source)
         else:
             pil_img = _to_pil(source)
-        resized = _resize_cell_image(pil_img, item.width, item.height)
+        resized = _resize_cell_image(pil_img, item.width, item.height, letterbox=item.letterbox)
         resolved.append(replace(item, source=resized, title=cell_title))
     return resolved
 

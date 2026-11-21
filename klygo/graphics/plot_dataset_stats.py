@@ -82,12 +82,21 @@ def dataset_stats(
     import matplotlib.pyplot as plt
 
     class_names = list(classes)
+    counts = [class_counts.get(cid, 0) for cid in class_ids]
     fig = plt.figure(figsize=figsize)
-    plt.bar(class_names, list(class_counts.values()), color="royalblue")
-    plt.xlabel("Classes")
+    plt.bar(class_names, counts, color="#2E86C1", edgecolor="#1B4F72", alpha=0.9, width=0.7)
+    plt.xlabel("Classes", labelpad=8)
     plt.ylabel("Object Count")
-    plt.title("Class Distribution in Dataset" if title is None else title)
-    plt.xticks(rotation=45)
+    plt.title("Class Distribution in Dataset" if title is None else title, pad=14)
+    plt.grid(axis="y", linestyle="--", alpha=0.35)
+    max_c = max(counts, default=1)
+    plt.ylim(0, max_c * 1.15)
+
+    n_cls = len(class_names)
+    rot = 75 if n_cls > 35 else (45 if n_cls > 12 else 0)
+    ha = "right" if rot > 0 else "center"
+    fontsize = max(6, min(9, int(260 / n_cls))) if n_cls > 25 else 9
+    plt.xticks(range(n_cls), class_names, rotation=rot, ha=ha, fontsize=fontsize)
     plt.tight_layout()
     return _finalize_figure(
         fig,
