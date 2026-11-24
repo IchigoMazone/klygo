@@ -153,6 +153,7 @@ def _is_numeric_column(rows: Sequence[Mapping[str, Any]], column: str) -> bool:
 def tabulate(
     data: Mapping[str, Any] | Sequence[Mapping[str, Any]],
     *,
+    orient: str = "vertical",
     title: str | None = None,
     key_header: str = "Property",
     value_header: str = "Value",
@@ -171,8 +172,11 @@ def tabulate(
     Parameters
     ----------
     data : Mapping[str, Any] or Sequence[Mapping[str, Any]]
-        Either a single key-value mapping (rendered as two columns) or a sequence
-        of row mappings (rendered as a multi-column table with one column per key).
+        Either a single key-value mapping or a sequence of row mappings.
+    orient : {'vertical', 'horizontal'}, default='vertical'
+        Layout orientation when ``data`` is a single mapping. In ``'vertical'`` mode,
+        it renders as two columns (``key_header``, ``value_header``). In ``'horizontal'``
+        mode, keys become column headers and values are displayed in a single row.
     title : str or None, default=None
         Optional table title displayed above the header.
     key_header : str, default='Property'
@@ -217,7 +221,17 @@ def tabulate(
     >>> from klygo import utils
     >>> table = utils.tabulate({"classes": ["apple", "banana"], "nc": 2}, title="Dataset", show=False)
     """
+    if not isinstance(orient, str):
+        raise TypeError(f"orient must be str, got {type(orient).__name__}")
+    if orient not in ("vertical", "horizontal"):
+        raise ValueError(f"orient must be 'vertical' or 'horizontal', got {orient!r}")
+
     is_mapping = isinstance(data, Mapping)
+    if is_mapping and orient == "horizontal":
+        flat_items = _flatten_mapping(data)
+        data = [{k: v for k, v in flat_items}]
+        is_mapping = False
+
     is_row_seq = (
         not is_mapping
         and isinstance(data, Sequence)
@@ -292,17 +306,39 @@ def tabulate(
                 if col_str not in columns:
                     columns.append(col_str)
         for idx, col in enumerate(columns):
-            justify = "right" if _is_numeric_column(data, col) else "left"
+            is_num = _is_numeric_column(data, col)
+            justify = "right" if is_num else "left"
             table.add_column(
                 col,
                 justify=justify,
-                no_wrap=(idx == 0),
+                no_wrap=is_num or (idx == 0),
+                overflow="fold",
             )
         for row in data:
             table.add_row(*(_format_table_value(row.get(col)) for col in columns))
 
+    if is_mapping:
+        needed_w = max(
+            len(key_header) + len(value_header) + 20,
+            max((len(str(k)) + len(str(v)) + 12 for k, v in _flatten_mapping(data)), default=60),
+        )
+    else:
+        col_widths = {}
+        for col in columns:
+            max_col_w = len(str(col))
+            for row in data:
+                val = row.get(col)
+                val_len = len(str(val)) if val is not None else 1
+                if val_len > max_col_w:
+                    max_col_w = val_len
+            col_widths[col] = max_col_w
+        pad_h = padding if isinstance(padding, int) else padding[1]
+        needed_w = sum(col_widths.values()) + len(columns) * (pad_h * 2 + 1) + 6
+
     if show:
-        Console().print(table)
+        active_console = Console()
+        console_width = max(active_console.width or 80, needed_w)
+        Console(width=console_width).print(table)
         return None
     return table
 

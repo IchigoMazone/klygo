@@ -56,6 +56,7 @@ class MiningOperationsTest(unittest.TestCase):
             (mining.find_duplicates, {}), (mining.deduplicate, {"keep": "first"}),
             (mining.cluster, {"features": ("histogram",), "clusters": 2}),
             (mining.select, {"method": "quality", "limit": 2}),
+            (mining.select, {"method": "confidence", "threshold": 0.0, "limit": 2}),
             (mining.select, {"method": "diversity", "limit": 2}),
             (mining.balance, {}),
         ]
@@ -131,10 +132,243 @@ class MiningOperationsTest(unittest.TestCase):
             mining.select(self.data, method="coverage", per_class=1),
             mining.select(self.data, method="diversity", cluster_result=result),
             mining.select(self.data, method="weighted", limit=2),
+            mining.select(self.data, method="confidence", threshold=0.5, limit=2),
         ]
         self.assertEqual([len(value) for value in cases[:4]], [2, 2, 2, 1])
         self.assertTrue(all(isinstance(value, Detections) for value in cases))
         self.assertTrue(all(set(value.names.values()) <= set(self.data.names.values()) for value in cases))
+
+    def test_confidence_selection_modes_and_validation(self) -> None:
+        names = {0: "car", 1: "person"}
+        score_groups = [
+            [0.9],          # idx 0: mean=0.9, min=0.9, max=0.9, median=0.9
+            [0.2, 0.8],     # idx 1: mean=0.5, min=0.2, max=0.8, median=0.5
+            [0.4, 0.6, 0.8],  # idx 2: mean=0.6, min=0.4, max=0.8, median=0.6
+            [],             # idx 3: empty frame -> excluded
+            [0.3],          # idx 4: mean=0.3, min=0.3, max=0.3, median=0.3
+        ]
+        frames = []
+        for idx, frame_scores in enumerate(score_groups):
+            boxes = [
+                Box((2 + i, 3 + i, 20 + i, 25 + i), label="car", class_id=0, score=value)
+                for i, value in enumerate(frame_scores)
+            ]
+            frames.append(
+                Detection(
+                    boxes,
+                    source_id=str(self.paths[idx]),
+                    source_path=str(self.paths[idx]),
+                    frame_index=0,
+                    image_size=(64, 48),
+                    names=names,
+                )
+            )
+        scored = Detections(frames, names=names)
+
+        # Default desc + mean with threshold=0.55 -> idx 0 (0.9) and idx 2 (0.6)
+        high = mining.select(scored, method="confidence", threshold=0.55)
+        self.assertEqual([frame.source_id for frame in high], [str(self.paths[0]), str(self.paths[2])])
+
+        # Top-1 highest confidence with limit=1
+        top_one = mining.select(scored, method="confidence", threshold=0.0, limit=1)
+        self.assertEqual([frame.source_id for frame in top_one], [str(self.paths[0])])
+
+        # Asc order (lowest confidence first) excludes empty frame idx 3 -> idx 4 (0.3), idx 1 (0.5)
+        low_two = mining.select(scored, method="confidence", threshold=0.0, order="asc", limit=2)
+        self.assertEqual([frame.source_id for frame in low_two], [str(self.paths[1]), str(self.paths[4])])
+
+        # Min aggregator with threshold=0.4 -> idx 0 (0.9) and idx 2 (0.4)
+        min_sel = mining.select(scored, method="confidence", threshold=0.4, aggregate="min")
+        self.assertEqual([frame.source_id for frame in min_sel], [str(self.paths[0]), str(self.paths[2])])
+
+        # Max aggregator with threshold=0.8 -> idx 0 (0.9), idx 1 (0.8), idx 2 (0.8)
+        max_sel = mining.select(scored, method="confidence", threshold=0.8, aggregate="max")
+        self.assertEqual([frame.source_id for frame in max_sel], [str(self.paths[i]) for i in (0, 1, 2)])
+
+        # Median aggregator with threshold=0.6 -> idx 0 (0.9), idx 2 (0.6)
+        med_sel = mining.select(scored, method="confidence", threshold=0.6, aggregate="median")
+        self.assertEqual([frame.source_id for frame in med_sel], [str(self.paths[0]), str(self.paths[2])])
+
+        with self.assertRaisesRegex(ValueError, "threshold"):
+            mining.select(scored, method="confidence", threshold=1.5)
+        with self.assertRaisesRegex(ValueError, "aggregate"):
+            mining.select(scored, method="confidence", aggregate="sum")
+        with self.assertRaisesRegex(ValueError, "order"):
+            mining.select(scored, method="confidence", order="invalid")
+
+    def test_diversity_backfills_to_limit(self) -> None:
+        from klygo.mining.curation import ClusterResult
+
+        clusters = mining.cluster(self.data, features=("histogram", "classes"), clusters=2, seed=42)
+
+        # 1. limit=None -> at most per_cluster per cluster
+        no_limit = mining.select(self.data, method="diversity", cluster_result=clusters, per_cluster=1)
+        self.assertEqual(len(no_limit), 2)
+
+        # 2. limit > clusters * per_cluster -> round-robin backfill to limit
+        filled = mining.select(self.data, method="diversity", cluster_result=clusters, per_cluster=1, limit=5)
+        self.assertEqual(len(filled), 5)
+        self.assertEqual(len({frame.source_id for frame in filled}), 5)
+
+        # 3. limit < number of representatives -> evenly spaced across clusters (not first-cluster biased)
+        custom_clusters = ClusterResult(
+            labels=[0, 0, 1, 2, 3, 3],
+            groups={0: [0, 1], 1: [2], 2: [], 3: [3], 4: [4, 5]},
+            representatives={0: 0, 1: 2, 2: 0, 3: 3, 4: 4},
+            features=("histogram",),
+            clusters=5,
+            seed=42,
+            feature_vectors=np.zeros((6, 1), dtype=np.float32),
+        )
+        # Non-empty buckets: [0, 1], [2], [3], [4, 5] (4 buckets). limit=2 -> buckets 0 (idx 0) and 2 (idx 3)
+        sub_rep = mining.select(self.data, method="diversity", cluster_result=custom_clusters, per_cluster=2, limit=2)
+        self.assertEqual([frame.source_id for frame in sub_rep], [str(self.paths[0]), str(self.paths[3])])
+
+        # 4. limit < clusters * per_cluster (4 buckets, per_cluster=2, limit=5) -> all 4 representatives + 1 extra
+        partial = mining.select(self.data, method="diversity", cluster_result=custom_clusters, per_cluster=2, limit=5)
+        partial_ids = {frame.source_id for frame in partial}
+        self.assertEqual(len(partial), 5)
+        for rep_idx in (0, 2, 3, 4):
+            self.assertIn(str(self.paths[rep_idx]), partial_ids)
+
+        # 5, 6, 7. Empty cluster skipped, small clusters handled, limit > len(data) capped at len(data)
+        capped = mining.select(self.data, method="diversity", cluster_result=custom_clusters, per_cluster=3, limit=10)
+        self.assertEqual(len(capped), len(self.data))
+
+    def test_score_coverage_weights_validation_and_edge_cases(self) -> None:
+        # 1. Coverage uses present classes rather than unused classes in data.names
+        names = {0: "car", 1: "person", 2: "unused_a", 3: "unused_b"}
+        frames = [
+            Detection(
+                [Box((2, 3, 20, 25), label="car", class_id=0),
+                 Box((10, 10, 30, 30), label="person", class_id=1)],
+                source_id=str(self.paths[0]), source_path=str(self.paths[0]),
+                frame_index=0, image_size=(64, 48), names=names,
+            ),
+            Detection(
+                [],
+                source_id=str(self.paths[1]), source_path=str(self.paths[1]),
+                frame_index=0, image_size=(64, 48), names=names,
+            ),
+        ]
+        subset = Detections(frames, names=names)
+        scored = mining.score(subset)
+        self.assertEqual(scored.details[0]["coverage"], 1.0)
+        self.assertEqual(scored.details[1]["coverage"], 0.0)
+        self.assertEqual(scored.details[1]["boxes"], 0.0)
+        self.assertTrue(all(0.0 <= v <= 1.0 for v in scored.values))
+
+        # 2. Empty dataset and single-image dataset
+        empty_data = Detections([], names=names)
+        empty_scores = mining.score(empty_data)
+        self.assertEqual((empty_scores.values, empty_scores.details, empty_scores.identities), ([], [], []))
+
+        single_data = Detections([frames[0]], names=names)
+        single_scores = mining.score(single_data)
+        self.assertEqual(len(single_scores.values), 1)
+        self.assertTrue(0.0 <= single_scores.values[0] <= 1.0)
+        self.assertEqual(single_scores.details[0]["coverage"], 1.0)
+
+        # 3. Strict weights validation
+        for bad_weights in (
+            {},
+            {"unknown": 1.0},
+            {"quality": -0.1, "rarity": 1.0},
+            {"quality": float("nan")},
+            {"quality": float("inf")},
+            {"quality": 0.0, "rarity": 0.0},
+        ):
+            with self.assertRaises(ValueError):
+                mining.score(self.data, weights=bad_weights)
+
+        for bad_type in (["quality"], {"quality": True}, {"quality": "0.5"}):
+            with self.assertRaises(TypeError):
+                mining.score(self.data, weights=bad_type)  # type: ignore[arg-type]
+
+    def test_stats_missing_classes_box_imbalance_percentiles_and_bad_image(self) -> None:
+        names = {0: "car", 1: "person", 2: "truck"}
+        bad_path = files.path(self.temporary.name) / "missing_image.png"
+        frames = [
+            Detection(
+                [
+                    Box((0, 0, 16, 12), label="car", class_id=0),
+                    Box((2, 2, 18, 14), label="car", class_id=0),
+                    Box((4, 4, 20, 16), label="car", class_id=0),
+                ],
+                source_id=str(self.paths[0]), source_path=str(self.paths[0]),
+                frame_index=0, image_size=(64, 48), names=names,
+            ),
+            Detection(
+                [Box((0, 0, 32, 24), label="person", class_id=1)],
+                source_id=str(bad_path), source_path=str(bad_path),
+                frame_index=0, image_size=(64, 48), names=names,
+            ),
+        ]
+        dataset = Detections(frames, names=names, metadata={"names": names})
+        report = mining.stats(dataset, quality=True)
+
+        self.assertEqual(report.classes, 3)
+        self.assertEqual(report.present_classes, 2)
+        self.assertEqual(report.missing_classes, ["truck"])
+        self.assertEqual(report.imbalance_ratio, 1.0)
+        self.assertEqual(report.box_imbalance_ratio, 3.0)
+        self.assertEqual(report.failed_quality_images, 1)
+        for key in ("mean", "median", "min", "max", "p25", "p50", "p75", "p90"):
+            self.assertIn(key, report.box_area)
+
+        # Co-occurrence on single-class and empty datasets
+        single_class = Detections([frames[0]], names={0: "car"})
+        self.assertEqual(mining.stats(single_class, quality=False).cooccurrence, {})
+        self.assertEqual(mining.stats(Detections([], names={}), quality=False).cooccurrence, {})
+
+    def test_end_to_end_pipeline_stats_score_select_export_and_empty_consistency(self) -> None:
+        from klygo import datasets
+
+        empty = Detections([], names=self.data.names)
+        self.assertEqual(len(mining.select(empty, method="weighted", limit=5)), 0)
+        self.assertEqual(len(mining.select(empty, method="diversity", limit=5)), 0)
+        self.assertEqual(len(mining.select(empty, method="random", limit=5)), 0)
+        self.assertEqual(len(mining.select(empty, method="confidence", limit=5)), 0)
+
+        before = mining.stats(self.data, quality=True)
+        scores = mining.score(self.data)
+        selected = mining.select(self.data, method="weighted", scores=scores, limit=3)
+        after = mining.stats(selected, quality=True)
+        self.assertEqual(after.images, 3)
+        self.assertLessEqual(after.images, before.images)
+
+        export_dir = files.path(self.temporary.name) / "exported_subset"
+        selected.export(export_dir, format="yolo", overwrite=True)
+        reloaded = datasets.load(export_dir, format="yolo", verbose=False)
+        self.assertEqual(len(reloaded), 3)
+        self.assertEqual(
+            sorted(sum(len(frame) for frame in reloaded) for _ in [0]),
+            [sum(len(frame) for frame in selected)],
+        )
+
+    def test_mismatched_identities_and_balance_seed(self) -> None:
+        reordered = Detections(list(reversed(list(self.data.copy()))), names=self.data.names)
+        scores = mining.score(self.data)
+        clusters = mining.cluster(self.data, features=("histogram",), clusters=2)
+
+        with self.assertRaisesRegex(ValueError, "identities"):
+            mining.select(reordered, method="weighted", scores=scores, limit=2)
+        with self.assertRaisesRegex(ValueError, "identities"):
+            mining.select(reordered, method="diversity", cluster_result=clusters, limit=2)
+
+        # Equal-gain tie-breaking in balance() respects seed
+        tied = Detections(
+            [
+                Detection([Box((2, 3, 20, 25), label="car", class_id=0)], source_id=str(self.paths[0]), source_path=str(self.paths[0]), frame_index=0, image_size=(64, 48), names={0: "car"}),
+                Detection([Box((2, 3, 20, 25), label="car", class_id=0)], source_id=str(self.paths[1]), source_path=str(self.paths[1]), frame_index=0, image_size=(64, 48), names={0: "car"}),
+                Detection([Box((2, 3, 20, 25), label="car", class_id=0)], source_id=str(self.paths[2]), source_path=str(self.paths[2]), frame_index=0, image_size=(64, 48), names={0: "car"}),
+            ],
+            names={0: "car"},
+        )
+        b1 = mining.balance(tied, target=1, seed=1)
+        b2 = mining.balance(tied, target=1, seed=2)
+        self.assertEqual((len(b1), len(b2)), (1, 1))
+        self.assertNotEqual([f.source_id for f in b1], [f.source_id for f in b2])
 
     def test_balance_and_compare(self) -> None:
         balanced = mining.balance(self.data, target="min")

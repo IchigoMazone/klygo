@@ -54,6 +54,24 @@ See [`ProgressBar.py`](../../../examples/utils/ProgressBar.py) for an executable
 
 See [`test_ProgressBar.py`](../../../test/utils/test_ProgressBar.py) for the executable behavioral contract.
 
+## Common pitfalls and troubleshooting
+
+> [!WARNING] Context manager, not an iterable wrapper
+> `ProgressBar` is a context manager (`with ProgressBar(total=N, desc="...") as pbar:`), NOT an iterable wrapper like `tqdm(iterable)`. Passing an iterable as the first positional argument while specifying `total=...` raises `TypeError: ProgressBar.__init__() got multiple values for argument 'total'`.
+>
+> **Recommended pattern for concurrent execution:**
+> ```python
+> from concurrent.futures import ThreadPoolExecutor, as_completed
+> from klygo import utils
+>
+> with ThreadPoolExecutor(max_workers=8) as executor:
+>     futures = [executor.submit(worker, task) for task in tasks]
+>     with utils.ProgressBar(total=len(futures), desc="Processing") as pbar:
+>         for f in as_completed(futures):
+>             f.result()
+>             pbar.update(1)
+> ```
+
 ## Complete executable example
 
 ```python

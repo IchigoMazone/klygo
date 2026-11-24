@@ -27,7 +27,7 @@ $$\text{files} \rightarrow \text{datasets (info \& load)} \rightarrow \text{mode
 5. klygo.postprocessing: NMS operation (`nms`) and IoU matching (`box_iou`)
         │
         ▼
-6. klygo.visual & utils: Bounding box drawing (`draw_bboxes`) & Rich metrics table
+6. klygo.graphics & utils: Bounding box drawing (`draw_bboxes`) & Rich metrics table
 ```
 
 ## Hardware Acceleration (Colab GPU & Local CPU)

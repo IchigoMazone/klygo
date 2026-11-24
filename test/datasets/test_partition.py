@@ -140,3 +140,85 @@ class TestPartition(unittest.TestCase):
             )
             seeded3_train = sorted(os.listdir(os.path.join(out_seeded3, "images", "train")))
             self.assertNotEqual(seeded1_train, seeded3_train)
+
+    def test_partition_stratified_preserves_class_proportions(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as td:
+            src = os.path.join(td, "src")
+            os.makedirs(os.path.join(src, "images"), exist_ok=True)
+            os.makedirs(os.path.join(src, "labels"), exist_ok=True)
+            with open(os.path.join(src, "data.yaml"), "w", encoding="utf-8") as fh:
+                fh.write("names:\n  0: majority\n  1: rare\n")
+
+            # 14 majority-only images, 4 rare-only images, 2 background images = 20 total
+            for i in range(20):
+                Image.new("RGB", (16, 16), (i * 10, 0, 0)).save(os.path.join(src, "images", f"img_{i:02d}.png"))
+                label_file = os.path.join(src, "labels", f"img_{i:02d}.txt")
+                if i < 14:
+                    with open(label_file, "w", encoding="utf-8") as fh:
+                        fh.write("0 0.5 0.5 0.2 0.2\n")
+                elif i < 18:
+                    with open(label_file, "w", encoding="utf-8") as fh:
+                        fh.write("1 0.5 0.5 0.2 0.2\n")
+                else:
+                    with open(label_file, "w", encoding="utf-8") as fh:
+                        fh.write("")
+
+            out = os.path.join(td, "out")
+            partition(
+                source=src,
+                target=out,
+                ratios=(0.5, 0.25, 0.25),
+                stratify=True,
+                shuffle=True,
+                seed=42,
+                overwrite=True,
+                verbose=False,
+            )
+
+            def _split_class_counts(split: str):
+                counts = {"0": 0, "1": 0, "bg": 0}
+                lbl_dir = os.path.join(out, "labels", split)
+                for name in os.listdir(lbl_dir):
+                    with open(os.path.join(lbl_dir, name), encoding="utf-8") as fh:
+                        lines = [ln.strip() for ln in fh if ln.strip()]
+                    if not lines:
+                        counts["bg"] += 1
+                    else:
+                        for cls in {ln.split()[0] for ln in lines}:
+                            counts[cls] += 1
+                return counts
+
+            train_c = _split_class_counts("train")
+            val_c = _split_class_counts("val")
+            test_c = _split_class_counts("test")
+
+            self.assertEqual(sum(train_c.values()), 10)
+            self.assertEqual(sum(val_c.values()), 5)
+            self.assertEqual(sum(test_c.values()), 5)
+            # Rare class (4 images) split 2 / 1 / 1 across 0.5 / 0.25 / 0.25
+            self.assertEqual((train_c["1"], val_c["1"], test_c["1"]), (2, 1, 1))
+            # Majority class (14 images) split 7 / 3-4 / 3-4
+            self.assertEqual(train_c["0"], 7)
+
+            with self.assertRaises(TypeError):
+                partition(source=src, target=out, ratios=(0.8, 0.2, 0.0), stratify="yes", overwrite=True)  # type: ignore[arg-type]
+
+            from klygo.datasets import repartition
+            repart_out = os.path.join(td, "repart_out")
+            repartition(
+                source=out,
+                target=repart_out,
+                ratios=(0.5, 0.25, 0.25),
+                stratify=True,
+                shuffle=True,
+                seed=7,
+                overwrite=True,
+                verbose=False,
+            )
+            repart_rare = 0
+            for name in os.listdir(os.path.join(repart_out, "labels", "train")):
+                with open(os.path.join(repart_out, "labels", "train", name), encoding="utf-8") as fh:
+                    if "1 0.5" in fh.read():
+                        repart_rare += 1
+            self.assertEqual(repart_rare, 2)

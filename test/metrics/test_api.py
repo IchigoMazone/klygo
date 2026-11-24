@@ -194,6 +194,33 @@ class TestMetrics(unittest.TestCase):
             saved = files.load(path,verbose=False)
             self.assertEqual(saved['precision_recall'],report['precision_recall'])
 
+    def test_f1_score_direct_and_detection_evaluation(self):
+        direct = metrics.f1_score(precision=0.8, recall=0.5)
+        self.assertAlmostEqual(direct['f1'], 2 * 0.8 * 0.5 / (0.8 + 0.5))
+        self.assertEqual((direct['precision'], direct['recall']), (0.8, 0.5))
+
+        zero = metrics.f1_score(precision=0.0, recall=0.0)
+        self.assertEqual(zero['f1'], 0.0)
+
+        pooled = metrics.precision_recall(self.pred, self.target)
+        det_f1 = metrics.f1_score(self.pred, self.target)
+        self.assertAlmostEqual(det_f1['f1'], pooled['f1'])
+        self.assertAlmostEqual(det_f1['precision'], pooled['precision'])
+        self.assertAlmostEqual(det_f1['recall'], pooled['recall'])
+
+        composed = metrics.evaluate(self.pred, self.target, metrics.compose(metrics.f1_score()))
+        self.assertAlmostEqual(composed['f1_score']['f1'], pooled['f1'])
+
+        for bad in (
+            lambda: metrics.f1_score(precision=0.5),
+            lambda: metrics.f1_score(recall=0.5),
+            lambda: metrics.f1_score(precision=1.2, recall=0.5),
+            lambda: metrics.f1_score(precision=True, recall=0.5),
+            lambda: metrics.f1_score(self.pred, self.target, precision=0.5, recall=0.5),
+        ):
+            with self.assertRaises(ValueError):
+                bad()
+
 
 if __name__=='__main__':
     unittest.main()

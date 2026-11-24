@@ -97,7 +97,7 @@ to change class labels inside all members.
 `show(index=0, *, members=(0, 1), titles=None, show_labels=True,
 show_scores=True, backend="auto") -> None`
 
-Displays one side-by-side comparison through `visual.compare_images()`.
+Displays one side-by-side comparison through `graphics.compare_images()`.
 `index` is an image position in the first selected member, not a member index.
 The second frame is found by the same `(source_id, frame_index)` identity,
 so independently shuffled collections are supported without reordering them.
@@ -126,4 +126,4 @@ errors propagate from the visual API. This method displays exactly two panels;
 it does not evaluate metrics or merge boxes.
 
 [Preview tests](../../../test/outputs/test_group_show.py) ·
-[Visual API](../../visual/api/compare_images.md)
+[Visual API](../../graphics/api/compare.md)

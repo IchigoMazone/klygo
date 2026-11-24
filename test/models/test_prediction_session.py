@@ -84,6 +84,9 @@ class TestPredictionSession(unittest.TestCase):
             self.assertEqual(len(detector.predict(self.images, verbose=False)), 3)
 
     def test_builtin_yolo_does_not_use_legacy_result_dispatch(self):
+        import importlib.util
+        if importlib.util.find_spec("ultralytics") is None:
+            self.skipTest("ultralytics extra not installed")
         from types import SimpleNamespace
         from klygo.models.detection.yolo import YOLODetect
         from klygo.models.detection.yolo_world import YOLOWorldDetect

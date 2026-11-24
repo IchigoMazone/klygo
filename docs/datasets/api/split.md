@@ -4,7 +4,7 @@
 datasets.split(
     source, output_dir, format="yolo", by_class=False,
     class_groups=None, ratios=None, overwrite=False, verbose=True,
-    shuffle=True, seed=42,
+    shuffle=True, seed=42, stratify=False,
 ) -> None
 ```
 
@@ -46,7 +46,7 @@ not a custom per-part name.
   their indices are not reassigned.
 - `ratios=(...)`: two or more finite ratios between zero and one summing to one.
   Original class names and IDs are preserved. Default names are `split_part_<i>`.
-- `shuffle=True`, `seed=42`: control reproducible ratio splitting.
+- `shuffle=True`, `seed=42`, `stratify=False`: control reproducible ratio splitting; `stratify=True` preserves per-class label proportions across splits.
 - `overwrite=False`: reject existing destinations; `True` replaces each output.
 - `verbose=True`: display archive progress.
 

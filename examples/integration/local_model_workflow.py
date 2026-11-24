@@ -12,7 +12,7 @@ from klygo import (
     media,
     models,
     postprocessing,
-    visual,
+    graphics,
 )
 from klygo.models.detection.base import Detector
 from klygo.outputs.detect import Detection, Detections
@@ -147,11 +147,11 @@ def evaluate_local_detector(
 
             metrics_per_class[cls]["fn"] += len(unmatched_gt)
 
-        # 8. Render visual previews with visual.draw_bboxes
+        # 8. Render visual previews with graphics.draw_bboxes
         if pred_frame:
             overlay_boxes = [[box.xmin, box.ymin, box.xmax, box.ymax] for box in pred_frame]
             overlay_labels = [f"Pred: {box.label} ({box.score:.2f})" for box in pred_frame]
-            rendered = visual.draw_bboxes(
+            rendered = graphics.draw_bboxes(
                 media.load(gt_frame.source_path, verbose=False)[0],
                 overlay_boxes,
                 labels=overlay_labels,

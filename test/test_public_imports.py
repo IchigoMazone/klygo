@@ -1,15 +1,15 @@
 import unittest
 import klygo
-from klygo import Config, archive, config, files, media, models, postprocessing, preprocessing, visual
+from klygo import Config, archive, config, files, media, models, postprocessing, preprocessing, graphics
 
 class TestPublicImports(unittest.TestCase):
     def test_top_level_imports(self):
         assert klygo.Config is Config
-        assert klygo.visual is visual
+        assert klygo.graphics is graphics
         assert all(hasattr(klygo, name) for name in klygo.__all__)
 
     def test_module_exports_are_present(self):
-        for module in (archive, config, files, media, models, postprocessing, preprocessing, visual):
+        for module in (archive, config, files, media, models, postprocessing, preprocessing, graphics):
             for name in module.__all__:
                 assert hasattr(module, name), f"{module.__name__}.{name} is missing"
 
@@ -21,4 +21,8 @@ class TestPublicImports(unittest.TestCase):
         assert callable(models.load)
         assert callable(postprocessing.compose)
         assert callable(postprocessing.nms)
-        assert callable(visual.draw_bboxes)
+        assert callable(graphics.draw)
+
+    def test_legacy_visual_module_is_removed(self):
+        self.assertNotIn("visual", klygo.__all__)
+        self.assertFalse(files.exists(files.parent(klygo.__file__) / "visual"))

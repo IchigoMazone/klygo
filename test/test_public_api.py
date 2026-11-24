@@ -2,12 +2,12 @@
 import unittest
 from PIL import Image
 import klygo
-from klygo import archive, config, datasets, files, media, models, outputs, postprocessing, preprocessing, visual
+from klygo import archive, config, datasets, files, media, models, outputs, postprocessing, preprocessing, graphics
 
 class TestPublicApi(unittest.TestCase):
     def test_public_modules(self):
         self.assertEqual(klygo.__version__, "2.1.2")
-        for module in (archive, config, datasets, files, media, models, outputs, postprocessing, preprocessing, visual):
+        for module in (archive, config, datasets, files, media, models, outputs, postprocessing, preprocessing, graphics):
             self.assertIsNotNone(module)
 
     def test_model_and_media_exports(self):

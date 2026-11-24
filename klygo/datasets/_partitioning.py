@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections import Counter, defaultdict
 import random
 from pathlib import Path
+from typing import Any
 
 from klygo import config, files
 
@@ -24,6 +26,89 @@ def normalized_ratios(ratios: tuple[float, ...]) -> tuple[float, float, float]:
     return round(train, 8), round(validation, 8), round(test, 8)
 
 
+def _read_label_classes(label_path: Any) -> frozenset[str]:
+    """Return unique YOLO class tokens present in a label file."""
+    if label_path is None or not files.is_file(label_path):
+        return frozenset()
+    text = files.load(label_path, verbose=False)
+    classes: set[str] = set()
+    for line in str(text).splitlines():
+        parts = line.strip().split()
+        if parts:
+            classes.add(parts[0])
+    return frozenset(classes)
+
+
+def _stratified_split(
+    pairs: list[tuple[Any, Any, Any, Any]],
+    targets: dict[str, int],
+    ratios: dict[str, float],
+) -> dict[str, list[tuple[Any, Any, Any, Any]]]:
+    """Distribute image/label pairs across splits while preserving class proportions."""
+    groups: dict[str, list[tuple[Any, Any, Any, Any]]] = {name: [] for name in targets}
+    remaining = dict(targets)
+    split_order = [name for name, count in targets.items() if count > 0]
+    if not pairs or not split_order:
+        return groups
+
+    item_classes = [_read_label_classes(pair[1]) for pair in pairs]
+    class_to_items: dict[str, list[int]] = defaultdict(list)
+    for idx, cls_set in enumerate(item_classes):
+        for cls in cls_set:
+            class_to_items[cls].append(idx)
+
+    desired: dict[str, dict[str, float]] = {
+        split: {cls: len(indices) * ratios[split] for cls, indices in class_to_items.items()}
+        for split in split_order
+    }
+    unassigned = set(range(len(pairs)))
+
+    # Assign images containing the rarest remaining class first (iterative stratification)
+    while unassigned and class_to_items:
+        active_classes = [
+            (sum(1 for i in indices if i in unassigned), cls)
+            for cls, indices in class_to_items.items()
+        ]
+        active_classes = [(count, cls) for count, cls in active_classes if count > 0]
+        if not active_classes:
+            break
+        _, rarest = min(active_classes, key=lambda item: (item[0], item[1]))
+
+        for idx in class_to_items[rarest]:
+            if idx not in unassigned:
+                continue
+            candidates = [split for split in split_order if remaining[split] > 0]
+            if not candidates:
+                break
+            chosen = max(
+                candidates,
+                key=lambda split: (
+                    desired[split][rarest],
+                    remaining[split],
+                    -split_order.index(split),
+                ),
+            )
+            groups[chosen].append(pairs[idx])
+            remaining[chosen] -= 1
+            unassigned.remove(idx)
+            for cls in item_classes[idx]:
+                desired[chosen][cls] -= 1.0
+
+    # Distribute remaining background (label-free) images proportionally by remaining capacity
+    for idx in sorted(unassigned):
+        candidates = [split for split in split_order if remaining[split] > 0]
+        if not candidates:
+            break
+        chosen = max(
+            candidates,
+            key=lambda split: (remaining[split], -split_order.index(split)),
+        )
+        groups[chosen].append(pairs[idx])
+        remaining[chosen] -= 1
+
+    return groups
+
+
 def execute_partition(
     source: str | Path,
     target: str | Path,
@@ -33,6 +118,7 @@ def execute_partition(
     verbose: bool,
     shuffle: bool = True,
     seed: int = 42,
+    stratify: bool = False,
 ) -> Path:
     """Create a deterministic train/validation/test dataset."""
     destination = files.path(target)
@@ -47,13 +133,25 @@ def execute_partition(
 
         train_count = int(len(pairs) * train_ratio)
         validation_count = int(len(pairs) * validation_ratio)
-        groups = {
-            "train": pairs[:train_count],
-            "val": pairs[train_count:train_count + validation_count],
-            "test": pairs[train_count + validation_count:] if test_ratio > 0 else [],
-        }
-        if test_ratio == 0:
-            groups["val"] = pairs[train_count:]
+        if stratify:
+            if test_ratio > 0:
+                test_count = len(pairs) - train_count - validation_count
+            else:
+                validation_count = len(pairs) - train_count
+                test_count = 0
+            groups = _stratified_split(
+                pairs,
+                {"train": train_count, "val": validation_count, "test": test_count},
+                {"train": train_ratio, "val": validation_ratio, "test": test_ratio},
+            )
+        else:
+            groups = {
+                "train": pairs[:train_count],
+                "val": pairs[train_count:train_count + validation_count],
+                "test": pairs[train_count + validation_count:] if test_ratio > 0 else [],
+            }
+            if test_ratio == 0:
+                groups["val"] = pairs[train_count:]
 
         for split_name, split_pairs in groups.items():
             for image_path, label_path, relative_image, relative_label in split_pairs:
@@ -80,4 +178,4 @@ def execute_partition(
         return write_output(workspace, destination, overwrite=overwrite, verbose=verbose)
 
 
-__all__ = ["execute_partition", "normalized_ratios"]
+__all__ = ["execute_partition", "normalized_ratios", "_stratified_split"]

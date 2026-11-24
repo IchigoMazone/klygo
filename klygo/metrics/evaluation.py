@@ -189,6 +189,13 @@ def _run(context, metric):
     iou = options.get('iou', .5)
     if name == 'precision_recall':
         return _pooled(context, iou)
+    if name == 'f1_score':
+        summary = _pooled(context, iou)
+        precision = summary['precision']
+        recall = summary['recall']
+        denom = precision + recall
+        f1_value = xp.where(denom > 0, 2 * precision * recall / xp.maximum(denom, 1e-12), 0.0)
+        return {"f1": f1_value, "precision": precision, "recall": recall}
     if name == 'per_class':
         return _class_rows(context, iou)
     if name == 'map_score':

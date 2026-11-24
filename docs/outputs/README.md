@@ -61,4 +61,4 @@ Display matching annotations from a group with `collections.show(0)` or select
 members by name/index with `collections.show(5, members=(0, 1))`. The image index
 uses the first selected member's order; the other frame is matched by identity,
 so independent shuffling is supported. Titles use member names. The method
-returns `None` and delegates rendering to `visual.compare_images()`.
+returns `None` and delegates rendering to `graphics.compare_images()`.

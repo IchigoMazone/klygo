@@ -1657,7 +1657,7 @@ class Detection:
         if mode not in {"default", "index", "uid"}:
             raise ValueError("mode must be 'default', 'index', or 'uid'")
         validators.validate_type(show_labels, bool, "show_labels")
-        from klygo import visual
+        from klygo import graphics
         labels = (
             self.labels
             if mode == "default"
@@ -1665,7 +1665,7 @@ class Detection:
                   if mode == "index"
                   else [f"{uid} {label}" for uid, label in zip(self._uids.tolist(), self._labels)])
         )
-        return visual.draw_bboxes(
+        return graphics.draw(
             self._resolve_source(), self.boxes, labels=labels, scores=self.scores,
             line_width=line_width, font_size=font_size,
             show_labels=show_labels, show_scores=show_scores,
@@ -1704,21 +1704,21 @@ class Detection:
                        or not 0 <= value <= 255 for value in preview_color)):
             raise ValueError("preview_color must be an RGB tuple with values from 0 to 255")
 
-        from klygo import visual
+        from klygo import graphics
         source = self._resolve_source()
         annotated = source
         if show_existing and self:
-            annotated = visual.draw_bboxes(
+            annotated = graphics.draw(
                 source, self.boxes, labels=self.labels, scores=self.scores,
                 line_width=line_width, font_size=font_size,
                 show_labels=show_labels, show_scores=show_scores,
             )
-        annotated = visual.draw_bboxes(
+        annotated = graphics.draw(
             annotated, [candidate.box], labels=[f"[preview] {candidate.label}"],
             scores=[candidate.score], line_width=line_width, font_size=font_size,
             box_color=preview_color, show_labels=show_labels, show_scores=show_scores,
         )
-        visual.show_image(annotated, title=title, width=width, height=height, backend=backend)
+        graphics.show(annotated, title=title, width=width, height=height, backend=backend)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize annotations without decoding pixels."""
@@ -2659,9 +2659,16 @@ class Detections:
     def __iter__(self) -> Iterator[Detection]:
         return self._iterate_stream() if self._stream_mode else iter(self._frames)
 
-    def __getitem__(self, index: int | slice) -> Detection | tuple[Detection, ...]:
+    def __getitem__(self, index: int | slice) -> Detection | "Detections":
         self._require_materialized("indexing")
-        return tuple(self._frames[index]) if isinstance(index, slice) else self._frames[index]
+        if isinstance(index, slice):
+            return Detections(
+                self._frames[index],
+                metadata=self.metadata,
+                names=self._registry,
+                packed=self.is_packed,
+            )
+        return self._frames[index]
 
     def copy(self) -> "Detections":
         """Return an independent annotation copy sharing lazy source handles."""

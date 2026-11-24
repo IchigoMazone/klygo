@@ -2501,8 +2501,8 @@ def _lazy_show(
     figsize: Tuple[int, int] = (10, 10),
 ) -> None:
     """Display the lazy image using Klygo's visual viewer without caching pixels."""
-    from klygo import visual
-    visual.show_image(
+    from klygo import graphics
+    graphics.show(
         self.to_pil(cache=False),
         title="Image" if title is None else title,
         width=width,

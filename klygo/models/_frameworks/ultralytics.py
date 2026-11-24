@@ -39,21 +39,33 @@ def format_results(ultra_results: Any) -> List[Dict[str, Any]]:
                     boxes_data = packed[:, :4]
                     scores_data = packed[:, 4]
                     class_ids = packed[:, 5].astype(np.int32, copy=False)
+                    valid_mask = (boxes_data[:, 2] > boxes_data[:, 0]) & (boxes_data[:, 3] > boxes_data[:, 1])
+                    if not valid_mask.all():
+                        boxes_data = boxes_data[valid_mask]
+                        scores_data = scores_data[valid_mask]
+                        class_ids = class_ids[valid_mask]
                     labels_data = [res_names.get(cid, str(cid)) for cid in class_ids.tolist()]
                 elif hasattr(boxes, "xyxy"):
                     boxes_data = boxes.xyxy.detach().cpu().numpy()
                     scores_data = boxes.conf.detach().cpu().numpy()
                     class_ids = boxes.cls.detach().to(dtype=torch_runtime.torch.int32).cpu().numpy()
+                    valid_mask = (boxes_data[:, 2] > boxes_data[:, 0]) & (boxes_data[:, 3] > boxes_data[:, 1])
+                    if not valid_mask.all():
+                        boxes_data = boxes_data[valid_mask]
+                        scores_data = scores_data[valid_mask]
+                        class_ids = class_ids[valid_mask]
                     labels_data = [res_names.get(cid, str(cid)) for cid in class_ids.tolist()]
                 else:
-                    boxes_list, scores_list, cids_list = [], [], []
+                    boxes_list, scores_list, cids_list, labels_list = [], [], [], []
                     for box in boxes:
-                        boxes_list.append(box.xyxy[0].tolist())
-                        scores_list.append(float(box.conf[0].item()))
-                        class_id = int(box.cls[0].item())
-                        cids_list.append(class_id)
-                        labels_data.append(res_names.get(class_id, str(class_id)))
-                    boxes_data, scores_data, class_ids = boxes_list, scores_list, cids_list
+                        coords = box.xyxy[0].tolist()
+                        if coords[2] > coords[0] and coords[3] > coords[1]:
+                            boxes_list.append(coords)
+                            scores_list.append(float(box.conf[0].item()))
+                            class_id = int(box.cls[0].item())
+                            cids_list.append(class_id)
+                            labels_list.append(res_names.get(class_id, str(class_id)))
+                    boxes_data, scores_data, class_ids, labels_data = boxes_list, scores_list, cids_list, labels_list
             raw_list.append(
                 {
                     "boxes": boxes_data,

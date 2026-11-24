@@ -18,6 +18,7 @@ def repartition(
     verbose: bool = True,
     shuffle: bool = True,
     seed: int = 42,
+    stratify: bool = False,
 ) -> None:
     """Flatten existing splits and create a new deterministic partition.
 
@@ -43,6 +44,9 @@ def repartition(
         Whether to shuffle samples before assigning to partitions.
     seed : int, default=42
         Random seed used when shuffling.
+    stratify : bool, default=False
+        Whether to preserve per-class label proportions across splits using
+        iterative multi-label stratification.
 
     Returns
     -------
@@ -65,7 +69,16 @@ def repartition(
     >>> datasets.repartition("old", "new", (0.7, 0.2, 0.1), shuffle=True, seed=42)
     """
     validate_dataset_format(format)
-    params = Repartition(source, target, ratios, overwrite, verbose, shuffle=shuffle, seed=seed)
+    params = Repartition(
+        source,
+        target,
+        ratios,
+        overwrite,
+        verbose,
+        shuffle=shuffle,
+        seed=seed,
+        stratify=stratify,
+    )
     execute_partition(
         params.source,
         params.target,
@@ -74,6 +87,7 @@ def repartition(
         verbose=params.verbose,
         shuffle=params.shuffle,
         seed=params.seed,
+        stratify=params.stratify,
     )
 
 

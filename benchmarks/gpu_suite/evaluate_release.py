@@ -2,7 +2,7 @@
 
 Reuses ``benchmarks/gpu_suite/run.py`` for 6-mode model inference (fp16/fp32)
 and benchmarks ``klygo.metrics``, ``DetectionGroup``, ``postprocessing``,
-``datasets.load``, ``media``, ``visual.compare_images``, and ``utils.tabulate``
+``datasets.load``, ``media``, ``graphics.compare``, and ``utils.tabulate``
 on CPU and CUDA with ``utils.tabulate`` console summaries.
 
 Usage:
@@ -40,7 +40,7 @@ from klygo import (
     postprocessing,
     preprocessing,
     utils,
-    visual,
+    graphics,
 )
 
 
@@ -473,7 +473,7 @@ def _benchmark_strided_image_access(
 ) -> list[dict[str, Any]]:
     """Benchmark strided/random-access image loading across thousands of real JPEGs."""
     rows: list[dict[str, Any]] = []
-    src_imgs = sorted(files.list_files(source_root / img_sub, extensions=(".jpg", ".jpeg", ".png")))
+    src_imgs = sorted([p for p in files.find(source_root / img_sub) if files.extension(p).lower() in (".jpg", ".jpeg", ".png")])
     src_lbls = source_root / lbl_sub
     if not src_imgs:
         return rows
@@ -714,10 +714,10 @@ def benchmark_datasets_media_visual(
 
             cmp_out = root / "compare.png"
             cmp_stats = _measure(
-                lambda: visual.compare_images(loaded_grp["truth"][0], loaded_grp["pred"][0], mode="save", output_path=cmp_out, overwrite=True),
+                lambda: graphics.compare(loaded_grp["truth"][0], loaded_grp["pred"][0], mode="save", output_path=cmp_out, overwrite=True),
                 repeats=repeats, warmup=1, use_cuda=False,
             )
-            rows.append({"operation": "visual.compare_images", "median_ms": cmp_stats["median_ms"], "status": "passed"})
+            rows.append({"operation": "graphics.compare", "median_ms": cmp_stats["median_ms"], "status": "passed"})
 
             def _silent_tab():
                 buf = io.StringIO()

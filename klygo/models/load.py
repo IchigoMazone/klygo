@@ -131,6 +131,37 @@ def _resolve(name: Any) -> Optional[Dict[str, Any]]:
                     continue
 
                 return entry
+
+    if isinstance(name, (str, os.PathLike)) and str(name).strip().lower().endswith(".pt"):
+        name_str = str(name).strip()
+        return {
+            "class": "klygo.models.detection.YOLODetect",
+            "details": {
+                "backend": "Ultralytics",
+                "library": "ultralytics",
+                "name": "YOLO",
+                "num_params": "Custom",
+                "task": "Object-Detection",
+            },
+            "flags": {"model": False, "post": True},
+            "model": {"weights": name_str},
+            "model_id": name_str,
+            "post": {"iou": 0.7, "threshold": 0.25},
+            "priority": {
+                "model": [
+                    "weights",
+                    "device",
+                    "imgsz",
+                    "half",
+                    "classes",
+                    "max_det",
+                    "nms",
+                    "agnostic_nms",
+                ],
+                "post": ["threshold", "iou"],
+            },
+        }
+
     return None
 
 

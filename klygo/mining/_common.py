@@ -136,7 +136,12 @@ def _pil_rgb(frame: Any) -> Image.Image:
     return _image(frame).to_pil(cache=False).convert("RGB")
 
 
-def _quality(data: Detections, verbose: bool = False) -> list[dict[str, float]]:
+def _quality(
+    data: Detections,
+    verbose: bool = False,
+    *,
+    ignore_errors: bool = False,
+) -> list[Optional[dict[str, float]]]:
     """Compute six classical image-quality metrics for every frame in a dataset.
 
     Calculates brightness, contrast, sharpness, entropy, noise, and exposure
@@ -146,11 +151,16 @@ def _quality(data: Detections, verbose: bool = False) -> list[dict[str, float]]:
     ----------
     data : Detections
         Materialized detection collection.
+    verbose : bool, default=False
+        Display throttled progress for image quality evaluation.
+    ignore_errors : bool, default=False
+        When True, return None for frames whose image cannot be read or decoded
+        instead of raising an exception.
 
     Returns
     -------
-    list[dict[str, float]]
-        Per-frame dictionary of computed metric scores.
+    list[dict[str, float] | None]
+        Per-frame dictionary of computed metric scores, or None when skipped.
     """
     metrics = {
         "brightness": preprocessing.brightness_score(),
@@ -161,9 +171,14 @@ def _quality(data: Detections, verbose: bool = False) -> list[dict[str, float]]:
         "exposure": preprocessing.exposure_score(),
     }
 
-    def _score_one(frame: Any) -> dict[str, float]:
-        image = _pil_rgb(frame)
-        return {name: float(metric(image)) for name, metric in metrics.items()}
+    def _score_one(frame: Any) -> Optional[dict[str, float]]:
+        try:
+            image = _pil_rgb(frame)
+            return {name: float(metric(image)) for name, metric in metrics.items()}
+        except (OSError, RuntimeError, ValueError, cv2.error):
+            if ignore_errors:
+                return None
+            raise
 
     if len(data) >= 16 and not verbose:
         workers = min(8, os.cpu_count() or 4, len(data))
@@ -339,41 +354,41 @@ def _feature_matrix(data: Detections, features: tuple[str, ...], verbose: bool =
     )
 
     labels = [data.names[key] for key in sorted(data.names)]
+    needs_pixels = bool({"histogram", "hog", "quality"} & set(features))
+    needs_resized = "histogram" in features or "hog" in features
+    cell_offsets = np.arange(64, dtype=np.int32)[:, None] * 9
 
     def _extract_one(frame: Any) -> np.ndarray:
-        pil_image = _pil_rgb(frame)
-        image = np.asarray(pil_image)
+        pil_image = _pil_rgb(frame) if needs_pixels else None
+        resized = (
+            cv2.resize(np.asarray(pil_image), (64, 64))
+            if needs_resized and pil_image is not None
+            else None
+        )
         parts: list[np.ndarray] = []
 
         # 1. HSV Color Histogram (64 bins)
-        if "histogram" in features:
-            hsv = cv2.cvtColor(cv2.resize(image, (64, 64)), cv2.COLOR_RGB2HSV)
+        if "histogram" in features and resized is not None:
+            hsv = cv2.cvtColor(resized, cv2.COLOR_RGB2HSV)
             hist = cv2.calcHist([hsv], [0, 1], None, [8, 8], [0, 180, 0, 256]).ravel()
             parts.append(cv2.normalize(hist, None).ravel())
 
-        # 2. Histogram of Oriented Gradients (HOG) (72 features)
-        if "hog" in features:
-            gray = cv2.cvtColor(cv2.resize(image, (64, 64)), cv2.COLOR_RGB2GRAY)
+        # 2. Histogram of Oriented Gradients (HOG) (576 features: 64 cells x 9 bins)
+        if "hog" in features and resized is not None:
+            gray = cv2.cvtColor(resized, cv2.COLOR_RGB2GRAY)
             gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0)
             gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1)
             magnitude, angle = cv2.cartToPolar(gx, gy, angleInDegrees=True)
             angle %= 180.0
 
-            cells = []
-            for top in range(0, 64, 8):
-                for left in range(0, 64, 8):
-                    cells.append(
-                        np.histogram(
-                            angle[top:top + 8, left:left + 8],
-                            bins=9,
-                            range=(0, 180),
-                            weights=magnitude[top:top + 8, left:left + 8],
-                        )[0]
-                    )
-            parts.append(np.concatenate(cells).astype(np.float32))
+            bins = np.clip((angle / 20.0).astype(np.int32), 0, 8)
+            cell_bins = bins.reshape(8, 8, 8, 8).transpose(0, 2, 1, 3).reshape(64, 64)
+            cell_mags = magnitude.reshape(8, 8, 8, 8).transpose(0, 2, 1, 3).reshape(64, 64)
+            flat_idx = (cell_offsets + cell_bins).ravel()
+            parts.append(np.bincount(flat_idx, weights=cell_mags.ravel(), minlength=576).astype(np.float32))
 
         # 3. Quality Metrics (6 features)
-        if "quality" in features:
+        if "quality" in features and pil_image is not None:
             parts.append(
                 np.asarray([metric(pil_image) for metric in quality_metrics], dtype=np.float32)
             )
@@ -461,6 +476,7 @@ def _quota(
     limit: Optional[int],
     *,
     count_by: str = "images",
+    seed: Optional[int] = None,
     verbose: bool = False,
 ) -> list[int]:
     """Greedily select frames to fulfill specified per-class target quotas.
@@ -492,6 +508,11 @@ def _quota(
     counts: Counter[str] = Counter()
     remaining = set(range(len(data)))
     chosen: list[int] = []
+    tie_ranks = (
+        np.random.default_rng(seed).permutation(len(data)).tolist()
+        if seed is not None and len(data) > 0
+        else None
+    )
 
     for _ in _iter_progress(range(len(data) if limit is None else min(len(data), limit)), verbose, "Selecting class quotas"):
         if not remaining:
@@ -512,7 +533,7 @@ def _quota(
             remaining,
             key=lambda index: (
                 sum(min(deficits.get(label, 0), amount) for label, amount in contribution(index).items()),
-                -index,
+                -(tie_ranks[index] if tie_ranks is not None else index),
             ),
         )
 
