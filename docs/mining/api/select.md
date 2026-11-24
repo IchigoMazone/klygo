@@ -4,11 +4,11 @@
 select(data, *, method="weighted", limit=None, **criteria, verbose=False)
 ```
 
-Selects complete images and returns an independent `Detections`. Methods are `class`, `quality`, `confidence`, `boxes`, `random`, `quota`, `rare_first`, `coverage`, `diversity`, and `weighted`. Unknown class names raise an error instead of being ignored.
+Selects complete images and returns an independent `Detections`. Methods are `quality`, `confidence`, `random`, `quota`, `rare_first`, `coverage`, `diversity`, and `weighted`.
 
 ```python
 from klygo import mining
-cars = mining.select(data, method="class", classes=["car"], match="any")
+top_weighted = mining.select(data, method="weighted", limit=100)
 confident = mining.select(data, method="confidence", threshold=0.6, aggregate="mean", limit=100)
 diverse = mining.select(data, method="diversity", limit=100)
 ```

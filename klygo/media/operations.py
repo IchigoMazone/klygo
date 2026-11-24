@@ -4,6 +4,7 @@ import math
 from numbers import Integral
 import os
 import random
+import tempfile
 import threading
 import uuid
 import weakref
@@ -16,7 +17,7 @@ from PIL import Image
 
 from klygo.utils.progress import ProgressBar
 from klygo.validators import validate_type, validate_count
-from klygo import files
+from klygo import archive, files
 
 __all__ = [
     "load", "save", "convert", "copy", "save_video", "save_images",
@@ -581,7 +582,7 @@ class LazyImage(Image.Image):
 # 0C. MediaFrames: Unified Streaming & Materialized Container
 # =========================================================================
 
-class MediaFrames(list):
+class MediaFrames:
     """Represent media as indexed lazy frames or a bounded-memory stream.
 
     Parameters
@@ -619,7 +620,7 @@ class MediaFrames(list):
     def __new__(cls, *args: Any, stream: bool = False, **kwargs: Any) -> Any:
         if cls is MediaFrames and not stream:
             return load(*args, stream=False, **kwargs)
-        return list.__new__(cls)
+        return object.__new__(cls)
 
     def __init__(
         self,
@@ -637,7 +638,7 @@ class MediaFrames(list):
         if getattr(self, "_initialized", False):
             return
         self._initialized = True
-        list.__init__(self)
+        self._items: List[Any] = []
         validate_type(source, (str, os.PathLike), "source")
         validate_count(sample_rate, "sample_rate")
         validate_type(recursive, bool, "recursive")
@@ -695,6 +696,18 @@ class MediaFrames(list):
                         self.width, self.height = image.size
                 except Exception:
                     pass
+            elif suffix == ".zip":
+                temp_dir = _extract_zip_to_temp(path, verbose=verbose)
+                self._temp_dir = temp_dir
+                self._temp_finalize = weakref.finalize(self, temp_dir.cleanup)
+                self.source_type = "folder"
+                self.path = files.path(temp_dir.name)
+                image_paths = _find_image_paths(self.path, recursive=recursive or True)
+                if not image_paths:
+                    self.close()
+                    raise ValueError(f"No supported image files found in archive: {path}")
+                self._cached_paths = tuple(image_paths)
+                source_total = len(self._cached_paths)
             else:
                 raise ValueError(f"source is not a supported image or video file: {path}")
         elif files.is_dir(path):
@@ -725,8 +738,8 @@ class MediaFrames(list):
         reader: Optional[VideoReader] = None,
     ) -> "MediaFrames":
         """Build materialized storage without reloading the source."""
-        instance = list.__new__(cls)
-        list.__init__(instance, items)
+        instance = object.__new__(cls)
+        instance._items = list(items)
         instance._initialized = True
         instance.fps = float(fps) if fps else 30.0
         instance.source_path = str(source_path) if source_path is not None else None
@@ -760,8 +773,8 @@ class MediaFrames(list):
         reader: Optional[VideoReader] = None,
     ) -> "MediaFrames":
         """Build path-backed indexed storage without creating frame proxies."""
-        instance = list.__new__(cls)
-        list.__init__(instance)
+        instance = object.__new__(cls)
+        instance._items = []
         instance._initialized = True
         instance.fps = float(fps) if fps else 30.0
         instance.source_path = str(source_path) if source_path is not None else None
@@ -866,7 +879,7 @@ class MediaFrames(list):
         if not getattr(self, "is_stream", False):
             if getattr(self, "is_indexed", False):
                 return len(self._indexed_entries)
-            return list.__len__(self)
+            return len(self._items)
         return getattr(self, "_total_frames", None)
 
     @total_frames.setter
@@ -926,17 +939,17 @@ class MediaFrames(list):
                 raise TypeError("frame index must be an integer or slice")
             return self._indexed_proxy(index)
         if isinstance(index, slice):
-            sub_items = list.__getitem__(self, index)
+            sub_items = self._items[index]
             step = index.step or 1
             new_fps = self.fps / abs(step) if abs(step) > 1 else self.fps
             return self._new(sub_items, fps=new_fps)
-        return list.__getitem__(self, index)
+        return self._items[index]
 
     def __len__(self) -> int:
         self._require_materialized("len()")
         if getattr(self, "is_indexed", False):
             return len(self._indexed_entries)
-        return list.__len__(self)
+        return len(self._items)
 
     def __contains__(self, item: Any) -> bool:
         self._require_materialized("membership testing")
@@ -949,14 +962,6 @@ class MediaFrames(list):
             return list(self) == list(other)
         except TypeError:
             return False
-
-    def __add__(self, other: Iterable[Any]) -> list[Any]:
-        self._require_materialized("concatenation")
-        return list(self) + list(other)
-
-    def __iadd__(self, other: Iterable[Any]) -> "MediaFrames":
-        self.extend(other)
-        return self
 
     def __reversed__(self) -> Iterator[Any]:
         self._require_materialized("reversed iteration")
@@ -983,7 +988,7 @@ class MediaFrames(list):
             self._indexed_entries.reverse()
             self._invalidate_index_cache()
             return
-        list.reverse(self)
+        self._items.reverse()
 
     def shuffle(self, seed: Optional[int] = None) -> None:
         """Shuffle frames in place.
@@ -1014,7 +1019,7 @@ class MediaFrames(list):
             rng.shuffle(self._indexed_entries)
             self._invalidate_index_cache()
             return
-        rng.shuffle(self)
+        rng.shuffle(self._items)
 
     def sort(self, *, key: Optional[Callable[[Any], Any]] = None, reverse: bool = False) -> None:
         """Sort frames in place using list-compatible semantics."""
@@ -1025,21 +1030,28 @@ class MediaFrames(list):
             self._indexed_entries = [entry for _item, entry in decorated]
             self._invalidate_index_cache()
             return
-        list.sort(self, key=key, reverse=reverse)
+        self._items.sort(key=key, reverse=reverse)
 
     def append(self, item: Any) -> None:
         self._require_materialized("append()")
         if getattr(self, "is_indexed", False):
             self._indexed_entries.append(item)
             return
-        list.append(self, item)
+        self._items.append(item)
 
     def extend(self, items: Iterable[Any]) -> None:
         self._require_materialized("extend()")
         if getattr(self, "is_indexed", False):
-            self._indexed_entries.extend(items)
+            if (
+                isinstance(items, MediaFrames)
+                and getattr(items, "is_indexed", False)
+                and (items.reader is None or items.reader is self.reader)
+            ):
+                self._indexed_entries.extend(items._indexed_entries)
+            else:
+                self._indexed_entries.extend(items)
             return
-        list.extend(self, items)
+        self._items.extend(items)
 
     def insert(self, index: int, item: Any) -> None:
         self._require_materialized("insert()")
@@ -1047,7 +1059,7 @@ class MediaFrames(list):
             self._indexed_entries.insert(index, item)
             self._invalidate_index_cache()
             return
-        list.insert(self, index, item)
+        self._items.insert(index, item)
 
     def pop(self, index: int = -1) -> Union["LazyImage", Image.Image, np.ndarray]:
         self._require_materialized("pop()")
@@ -1056,7 +1068,7 @@ class MediaFrames(list):
             self._indexed_entries.pop(index)
             self._invalidate_index_cache()
             return item
-        return list.pop(self, index)
+        return self._items.pop(index)
 
     def remove(self, item: Any) -> None:
         self._require_materialized("remove()")
@@ -1067,7 +1079,7 @@ class MediaFrames(list):
                     self._invalidate_index_cache()
                     return
             raise ValueError("MediaFrames.remove(x): x not in collection")
-        list.remove(self, item)
+        self._items.remove(item)
 
     def clear(self) -> None:
         self._require_materialized("clear()")
@@ -1075,7 +1087,7 @@ class MediaFrames(list):
             self._indexed_entries.clear()
             self._invalidate_index_cache()
             return
-        list.clear(self)
+        self._items.clear()
 
     def __setitem__(self, index: Any, value: Any) -> None:
         self._require_materialized("item assignment")
@@ -1086,7 +1098,7 @@ class MediaFrames(list):
                 self._indexed_entries[index] = value
             self._invalidate_index_cache()
             return
-        list.__setitem__(self, index, value)
+        self._items[index] = value
 
     def __delitem__(self, index: Any) -> None:
         self._require_materialized("item deletion")
@@ -1094,7 +1106,7 @@ class MediaFrames(list):
             del self._indexed_entries[index]
             self._invalidate_index_cache()
             return
-        list.__delitem__(self, index)
+        del self._items[index]
 
     def _iter_image_paths(self) -> Iterator[Path]:
         iterator = files.iter_find(self.path, recursive=self.recursive)
@@ -1104,8 +1116,9 @@ class MediaFrames(list):
     def _clone(self) -> "MediaFrames":
         # Reuse validated source metadata instead of scanning a large folder or
         # probing a video again whenever a lazy stream operation is attached.
-        cloned = list.__new__(MediaFrames)
+        cloned = object.__new__(MediaFrames)
         cloned.__dict__.update(self.__dict__)
+        cloned._items = list(self._items)
         cloned._active_readers = []
         cloned._preprocessing_ops = list(self._preprocessing_ops)
         cloned._predicates = list(self._predicates)
@@ -1288,7 +1301,7 @@ class MediaFrames(list):
                 for index in range(len(self._indexed_entries)):
                     yield self._indexed_proxy(index)
                 return
-            yield from list.__iter__(self)
+            yield from self._items
             return
         previous_frame: Optional[LazyImage] = None
 
@@ -1395,6 +1408,10 @@ class MediaFrames(list):
                 unload = getattr(item, "unload", None)
                 if callable(unload):
                     unload()
+        temp_dir = getattr(self, "_temp_dir", None)
+        if temp_dir is not None:
+            temp_dir.cleanup()
+            self._temp_dir = None
 
     def __enter__(self) -> "MediaFrames":
         return self
@@ -1559,6 +1576,30 @@ def _read_video_frames(
     )
 
 
+def _extract_zip_to_temp(archive_path: Path, *, verbose: bool = False) -> tempfile.TemporaryDirectory:
+    """Extract a .zip archive into a managed temporary directory."""
+    temp_dir = tempfile.TemporaryDirectory(prefix="klygo_media_")
+    try:
+        archive.extract(archive_path, temp_dir.name, overwrite=True, verbose=verbose)
+    except Exception:
+        temp_dir.cleanup()
+        raise
+    return temp_dir
+
+
+def _find_image_paths(root: Path, *, recursive: bool = False) -> List[Path]:
+    """Return sorted image file paths inside a directory."""
+    iterator = files.iter_find(root, recursive=recursive)
+    return sorted(
+        (
+            f
+            for f in iterator
+            if files.is_file(f) and files.extension(f).lower() in IMAGE_SUFFIXES
+        ),
+        key=lambda f: str(f).lower(),
+    )
+
+
 def load(
     source: Union[str, os.PathLike[str]],
     recursive: bool = False,
@@ -1651,6 +1692,8 @@ def load(
     if not files.exists(p):
         raise FileNotFoundError(f"source does not exist: {p}")
 
+    temp_dir: Optional[tempfile.TemporaryDirectory] = None
+    source_type = "folder" if files.is_dir(p) else "image"
     if files.is_file(p):
         suf = files.extension(p).lower()
         if suf in VIDEO_SUFFIXES:
@@ -1673,39 +1716,49 @@ def load(
             return _read_video_frames(p, backend=backend, verbose=verbose)
         elif suf in IMAGE_SUFFIXES:
             image_paths = [p]
+        elif suf == ".zip":
+            source_type = "folder"
+            temp_dir = _extract_zip_to_temp(p, verbose=verbose)
+            image_paths = _find_image_paths(files.path(temp_dir.name), recursive=True)
+            if not image_paths:
+                temp_dir.cleanup()
+                raise ValueError(f"No supported image files found in archive: {p}")
         else:
             raise ValueError(f"source is not a supported image or video file: {p}")
     elif files.is_dir(p):
-        iterator = files.iter_find(p, recursive=recursive)
-        image_paths = sorted(
-            (
-                f
-                for f in iterator
-                if files.is_file(f) and files.extension(f).lower() in IMAGE_SUFFIXES
-            ),
-            key=lambda f: str(f).lower(),
-        )
+        image_paths = _find_image_paths(p, recursive=recursive)
         if not image_paths:
             raise ValueError(f"No supported image files found in directory: {p}")
     else:
         raise ValueError(f"source must be a file or directory: {p}")
 
     if indexed:
-        return MediaFrames._from_index(
+        result = MediaFrames._from_index(
             image_paths,
             source_path=p,
-            source_type="folder" if files.is_dir(p) else "image",
+            source_type=source_type,
             backend=backend,
         )
+        if temp_dir is not None:
+            result._temp_dir = temp_dir
+            result._temp_finalize = weakref.finalize(result, temp_dir.cleanup)
+        return result
 
     # Lazy pixel loading: proxies are materialized while pixels remain deferred.
     lazy_frames = [LazyImage(f, backend=backend) for f in image_paths]
+    if temp_dir is not None:
+        for frame in lazy_frames:
+            frame._temp_dir = temp_dir
 
-    return MediaFrames._from_items(
+    result = MediaFrames._from_items(
         lazy_frames,
         source_path=p,
-        source_type="folder" if files.is_dir(p) else "image",
+        source_type=source_type,
     )
+    if temp_dir is not None:
+        result._temp_dir = temp_dir
+        result._temp_finalize = weakref.finalize(result, temp_dir.cleanup)
+    return result
 
 
 def save(
@@ -2191,6 +2244,29 @@ def save_images(
     validate_type(verbose, bool, "verbose")
 
     out_p = files.path(output_dir)
+    if files.extension(out_p).lower() == ".zip":
+        if files.exists(out_p) and not overwrite:
+            raise FileExistsError(f"output path already exists: {out_p}")
+        with tempfile.TemporaryDirectory(prefix="klygo_media_out_") as temp_dir:
+            save_images(
+                temp_dir,
+                images,
+                prefix=prefix,
+                extension=extension,
+                overwrite=True,
+                verbose=verbose,
+                size=size,
+            )
+            archive.compress(
+                temp_dir,
+                out_p,
+                format="zip",
+                overwrite=overwrite,
+                verbose=verbose,
+                include_root=False,
+            )
+        return
+
     files.mkdir(out_p)
 
     if not extension.startswith("."):

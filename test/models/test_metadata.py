@@ -483,9 +483,9 @@ class TestModelMetadata(unittest.TestCase):
         self.assertEqual(detector.metadata.post.threshold, 0.4)
         self.assertEqual(detector.details.library, "ultralytics")
 
-    def test_load_does_not_auto_detect_local_yolo_weights(self):
+    def test_load_rejects_non_detection_yolo_weights(self):
         with TemporaryDirectory() as directory:
-            weight_path = files.join(directory, "yolo11n.pt")
+            weight_path = files.join(directory, "yolo11n-seg.pt")
             files.copy(__file__, weight_path)
             with self.assertRaisesRegex(ValueError, "does not exist in registry"):
                 models.load(weight_path)

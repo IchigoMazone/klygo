@@ -425,7 +425,7 @@ def resolve_images(
                     else:
                         if isinstance(item, (str, Path)):
                             loaded = media.load(item, backend=pixel_backend, verbose=False)
-                            item = loaded[0] if isinstance(loaded, list) else loaded
+                            item = loaded[0] if isinstance(loaded, (list, media.MediaFrames)) else loaded
                             if isinstance(item, media.LazyImage):
                                 yield item
                                 continue
@@ -506,7 +506,7 @@ def resolve_images(
             continue
         if isinstance(item, (str, Path)):
             loaded = media.load(item, backend=pixel_backend, verbose=False)
-            item = loaded[0] if isinstance(loaded, list) else loaded
+            item = loaded[0] if isinstance(loaded, (list, media.MediaFrames)) else loaded
             if isinstance(item, media.LazyImage):
                 cleaned_images.append(item)
                 continue

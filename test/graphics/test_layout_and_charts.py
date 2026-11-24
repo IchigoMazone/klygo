@@ -116,6 +116,18 @@ class TestGraphicsLayoutAndCharts(unittest.TestCase):
             show_mock.assert_called_once()
         self.assertTrue(files.is_file(out_pdf))
 
+    def test_grid_accepts_media_frames_directly(self) -> None:
+        from klygo import media
+
+        img_dir = self.root / "grid_media"
+        files.mkdir(img_dir)
+        for idx, color in enumerate(("red", "green", "blue")):
+            Image.new("RGB", (32, 24), color).save(img_dir / f"{idx}.png")
+        frames = media.load(img_dir, indexed=True)
+        out_png = self.root / "media_grid.png"
+        graphics.grid(frames, cols=2, show=False, save_path=out_png)
+        self.assertTrue(files.is_file(out_png))
+
     def test_error_handling_and_format_validation(self) -> None:
         # graphics.dataset_stats format validation
         with self.assertRaises(TypeError):

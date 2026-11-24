@@ -7,6 +7,7 @@ import cv2 as cv
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
+from klygo import validators
 from .core import Compose, Operation, _to_array, _to_pil, compose, execute_operation
 
 
@@ -1680,6 +1681,9 @@ def seed(value: int) -> Operation:
     Operation
         A reusable image transform; execution is deferred for lazy images.
     """
+    validators.validate_type(value, int, "value")
+    if value < 0:
+        raise ValueError("seed must be non-negative")
     return Operation("seed", {"value": int(value)}, "auto", False)
 
 
@@ -1729,8 +1733,15 @@ def _resolve_other(value: Any) -> Any:
     return value
 
 
-def execute_builtin(value: Any, operation: Operation, trace: List[Dict[str, Any]]) -> Any:
+def execute_builtin(
+    value: Any,
+    operation: Operation,
+    trace: List[Dict[str, Any]],
+    *,
+    rng: Optional[random.Random] = None,
+) -> Any:
     name, p = operation.name, operation.params
+    active_rng = rng if rng is not None else random
     before = _size(value) if operation.changes_geometry and name != "tile" else None
 
     if name == "pil_method":
@@ -2034,54 +2045,54 @@ def execute_builtin(value: Any, operation: Operation, trace: List[Dict[str, Any]
         np.random.seed(p["value"])
         return value
     if name in ("random_apply", "random_choice"):
-        selected = p["operation"] if name == "random_apply" and random.random() < p["probability"] else None
+        selected = p["operation"] if name == "random_apply" and active_rng.random() < p["probability"] else None
         if name == "random_choice":
-            selected = random.choice(p["operations"])
+            selected = active_rng.choice(p["operations"])
         if selected is None:
             return value
         operations = selected.operations if isinstance(selected, Compose) else (selected,)
         result = value
         for selected_operation in operations:
-            result = execute_operation(result, selected_operation, trace)
+            result = execute_operation(result, selected_operation, trace, rng=rng)
         return result
     if name == "random_crop":
         image, target = _to_pil(value), p["size"]
-        left = random.randint(0, max(0, image.width - target[0]))
-        top = random.randint(0, max(0, image.height - target[1]))
+        left = active_rng.randint(0, max(0, image.width - target[0]))
+        top = active_rng.randint(0, max(0, image.height - target[1]))
         result = image.crop((left, top, left + target[0], top + target[1]))
         _trace(trace, operation, before, result.size, box=(left, top, left + target[0], top + target[1]))
         return result
     if name == "random_resize":
-        width = random.randint(p["min_size"][0], p["max_size"][0])
-        height = random.randint(p["min_size"][1], p["max_size"][1])
+        width = active_rng.randint(p["min_size"][0], p["max_size"][0])
+        height = active_rng.randint(p["min_size"][1], p["max_size"][1])
         result = _to_pil(value).resize((width, height), Image.Resampling.BILINEAR)
         _trace(trace, operation, before, result.size, scale=(width / before[0], height / before[1]))
         return result
     if name == "random_flip":
-        if random.random() >= p["probability"]:
+        if active_rng.random() >= p["probability"]:
             return value
         selected = flip(p["horizontal"], p["vertical"])
-        return execute_builtin(value, selected, trace)
+        return execute_builtin(value, selected, trace, rng=rng)
     if name == "random_rotate":
-        selected = rotate(random.uniform(*p["angle_range"]), p["expand"])
-        return execute_builtin(value, selected, trace)
+        selected = rotate(active_rng.uniform(*p["angle_range"]), p["expand"])
+        return execute_builtin(value, selected, trace, rng=rng)
     if name == "color_jitter":
         result = _to_pil(value)
         for key, enhancer in (("brightness", ImageEnhance.Brightness), ("contrast", ImageEnhance.Contrast), ("saturation", ImageEnhance.Color)):
             amount = p[key]
             if amount:
-                result = enhancer(result).enhance(random.uniform(max(0, 1 - amount), 1 + amount))
+                result = enhancer(result).enhance(active_rng.uniform(max(0, 1 - amount), 1 + amount))
         if p["hue"]:
-            result = execute_builtin(result, globals()["hue"](random.uniform(-p["hue"], p["hue"])), trace)
+            result = execute_builtin(result, globals()["hue"](active_rng.uniform(-p["hue"], p["hue"])), trace, rng=rng)
         return result
     if name == "random_erasing":
         array = _to_array(value).copy()
-        if random.random() >= p["probability"]:
+        if active_rng.random() >= p["probability"]:
             return array
-        area = array.shape[0] * array.shape[1] * random.uniform(*p["scale"])
+        area = array.shape[0] * array.shape[1] * active_rng.uniform(*p["scale"])
         side = max(1, int(area ** 0.5))
         height, width = min(side, array.shape[0]), min(side, array.shape[1])
-        top, left = random.randint(0, array.shape[0] - height), random.randint(0, array.shape[1] - width)
+        top, left = active_rng.randint(0, array.shape[0] - height), active_rng.randint(0, array.shape[1] - width)
         array[top : top + height, left : left + width] = p["value"]
         return array
 

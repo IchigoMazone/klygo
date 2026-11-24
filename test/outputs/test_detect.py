@@ -548,6 +548,30 @@ class TestOutputs(unittest.TestCase):
             )
             self.assertEqual(results.to_dict(), before)
 
+    def test_export_and_save_images_zip(self):
+        from klygo import archive
+
+        with tempfile.TemporaryDirectory() as root:
+            item = frame(labels=("car",))
+            item._source = Image.new("RGBA", item.image_size)
+            results = outputs.Detections([item])
+
+            zip_export = files.join(root, "dataset.zip")
+            results.export(zip_export, format="yolo")
+            self.assertTrue(files.is_file(zip_export))
+            members = archive.list_files(zip_export)
+            self.assertTrue(any(m.endswith("data.yaml") for m in members))
+            self.assertTrue(any(m.endswith(".txt") for m in members))
+            self.assertTrue(any(m.endswith(".jpg") for m in members))
+
+            with self.assertRaises(FileExistsError):
+                results.export(zip_export, format="yolo", overwrite=False)
+
+            zip_images = files.join(root, "previews.zip")
+            results.save_images(zip_images, prefix="det", extension=".png")
+            self.assertTrue(files.is_file(zip_images))
+            self.assertEqual(len(archive.list_files(zip_images)), 1)
+
     def test_columnar_lazy_box_materialization_and_slots(self):
         built = outputs.build_detections(
             [Image.new("RGB", (64, 48))],

@@ -145,6 +145,25 @@ class TestDetectionsShuffle(unittest.TestCase):
         stream = Detections([], stream=True)
         with self.assertRaisesRegex(TypeError, "stream"):
             stream.shuffle()
+        with self.assertRaisesRegex(TypeError, "stream"):
+            stream.reverse()
+        with self.assertRaisesRegex(TypeError, "stream"):
+            stream.sort()
+
+    def test_reverse_and_sort_unpacked_and_packed(self) -> None:
+        for packed in (False, True):
+            dets = self._make_sample_detections(5, packed=packed)
+            dets.reverse()
+            self.assertEqual([f.frame_index for f in dets], [4, 3, 2, 1, 0])
+            self.assertEqual(dets.is_packed, packed)
+
+            dets.sort()
+            self.assertEqual([f.frame_index for f in dets], [0, 1, 2, 3, 4])
+            self.assertEqual(dets.is_packed, packed)
+
+            dets.sort(key=lambda f: f.frame_index, reverse=True)
+            self.assertEqual([f.frame_index for f in dets], [4, 3, 2, 1, 0])
+            self.assertEqual(dets.get_frame(2, source_id="test_source").frame_index, 2)
 
 
 if __name__ == "__main__":

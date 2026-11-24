@@ -22,7 +22,9 @@ diverse.export("artifacts/mining/dataset", format="yolo")
 - [`find_duplicates`](api/find_duplicates.md) groups exact and near-duplicate images across the dataset.
 - [`deduplicate`](api/deduplicate.md) removes complete duplicate frames from a copy.
 - [`cluster`](api/cluster.md) groups images with classical visual and annotation features.
-- [`select`](api/select.md) selects images by class, quality, confidence, boxes, random sampling, quota, rarity, coverage, diversity, or weighted score.
+- [`classes`](api/classes.md) filters images by class label inclusion or exclusion rules.
+- [`boxes`](api/boxes.md) filters images by bounding-box count and relative area constraints.
+- [`select`](api/select.md) selects images by quality, confidence, random sampling, quota, rarity, coverage, diversity, or weighted score.
 - [`balance`](api/balance.md) reduces class imbalance without synthesizing images.
 - [`compare`](api/compare.md) describes changes between two datasets.
 - [`MiningStats`](api/MiningStats.md), [`MiningScores`](api/MiningScores.md), [`DuplicateReport`](api/DuplicateReport.md), [`ClusterResult`](api/ClusterResult.md), and [`MiningComparison`](api/MiningComparison.md) are serializable report types with `show()`, `to_dict()`, and `save()`.

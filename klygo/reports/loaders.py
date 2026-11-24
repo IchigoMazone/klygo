@@ -100,18 +100,38 @@ def load(
     if not files.exists(run_dir):
         raise FileNotFoundError(f"run directory does not exist: {run_dir}")
 
-    results_path = run_dir / "results.csv"
-    if not files.is_file(results_path):
-        raise FileNotFoundError(f"results.csv not found in: {run_dir}")
+    if files.is_file(run_dir) and files.extension(run_dir).lower() == ".zip":
+        with tempfile.TemporaryDirectory(prefix="klygo_report_") as temp_dir:
+            archive.extract(run_dir, temp_dir, overwrite=True, verbose=verbose)
+            extracted_root = files.path(temp_dir)
+            if not files.is_file(extracted_root / "results.csv"):
+                candidates = files.find(extracted_root, "results.csv", recursive=True)
+                if len(candidates) == 1:
+                    extracted_root = candidates[0].parent
+            results_path = extracted_root / "results.csv"
+            if not files.is_file(results_path):
+                raise FileNotFoundError(f"results.csv not found in: {run_dir}")
+            args_path = extracted_root / "args.yaml"
+            run_config = (
+                dict(config.load(args_path, verbose=verbose).to_dict())
+                if files.is_file(args_path)
+                else {}
+            )
+            raw_rows = files.load(results_path, verbose=verbose)
+    else:
+        results_path = run_dir / "results.csv"
+        if not files.is_file(results_path):
+            raise FileNotFoundError(f"results.csv not found in: {run_dir}")
 
-    args_path = run_dir / "args.yaml"
-    run_config = (
-        dict(config.load(args_path, verbose=verbose).to_dict())
-        if files.is_file(args_path)
-        else {}
-    )
+        args_path = run_dir / "args.yaml"
+        run_config = (
+            dict(config.load(args_path, verbose=verbose).to_dict())
+            if files.is_file(args_path)
+            else {}
+        )
 
-    raw_rows = files.load(results_path, verbose=verbose)
+        raw_rows = files.load(results_path, verbose=verbose)
+
     if not raw_rows:
         raise ValueError(f"results.csv is empty: {results_path}")
 

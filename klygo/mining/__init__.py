@@ -25,7 +25,7 @@ Public API (8 functions, 5 report classes across 3 submodules):
 """
 
 from .analysis import MiningComparison, MiningScores, MiningStats, compare, score, stats
-from .curation import ClusterResult, balance, cluster, select
+from .curation import ClusterResult, balance, boxes, classes, cluster, select
 from .duplicates import DuplicateReport, deduplicate, find_duplicates
 
 __all__ = [
@@ -39,6 +39,8 @@ __all__ = [
     "find_duplicates",
     "deduplicate",
     "cluster",
+    "classes",
+    "boxes",
     "select",
     "balance",
     "compare",

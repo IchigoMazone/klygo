@@ -119,14 +119,16 @@ class MiningOperationsTest(unittest.TestCase):
         self.assertEqual(first.labels, second.labels)
         np.testing.assert_array_equal(first.feature_vectors, second.feature_vectors)
         self.assertEqual(sorted(index for group in first.groups.values() for index in group), list(range(6)))
+        with self.assertRaises(ValueError):
+            mining.cluster(self.data, features=("histogram",), clusters=2, seed=-1)
 
     def test_all_selection_modes_return_whole_images(self) -> None:
         result = mining.cluster(self.data, features=("histogram", "classes"), clusters=2)
         cases = [
-            mining.select(self.data, method="class", classes=["person"]),
+            mining.classes(self.data, ["person"]),
             mining.select(self.data, method="random", limit=2, seed=1),
             mining.select(self.data, method="quality", threshold=0.0, limit=2),
-            mining.select(self.data, method="boxes", min_boxes=2),
+            mining.boxes(self.data, min_boxes=2),
             mining.select(self.data, method="quota", per_class=1),
             mining.select(self.data, method="rare_first", limit=2),
             mining.select(self.data, method="coverage", per_class=1),
@@ -137,6 +139,17 @@ class MiningOperationsTest(unittest.TestCase):
         self.assertEqual([len(value) for value in cases[:4]], [2, 2, 2, 1])
         self.assertTrue(all(isinstance(value, Detections) for value in cases))
         self.assertTrue(all(set(value.names.values()) <= set(self.data.names.values()) for value in cases))
+
+    def test_quota_and_coverage_per_class_none_and_early_stop(self) -> None:
+        for method in ("quota", "coverage"):
+            full_budget = mining.select(self.data, method=method, limit=5, seed=42)
+            self.assertEqual(len(full_budget), 5)
+
+            early_quota = mining.select(self.data, method=method, per_class=1, limit=5, seed=42)
+            self.assertLess(len(early_quota), 5)
+
+            early_limit = mining.select(self.data, method=method, per_class=10, limit=3, seed=42)
+            self.assertEqual(len(early_limit), 3)
 
     def test_confidence_selection_modes_and_validation(self) -> None:
         names = {0: "car", 1: "person"}
@@ -169,12 +182,12 @@ class MiningOperationsTest(unittest.TestCase):
         high = mining.select(scored, method="confidence", threshold=0.55)
         self.assertEqual([frame.source_id for frame in high], [str(self.paths[0]), str(self.paths[2])])
 
-        # Top-1 highest confidence with limit=1
-        top_one = mining.select(scored, method="confidence", threshold=0.0, limit=1)
+        # Top-1 highest confidence with limit=1 (threshold=None by default)
+        top_one = mining.select(scored, method="confidence", limit=1)
         self.assertEqual([frame.source_id for frame in top_one], [str(self.paths[0])])
 
         # Asc order (lowest confidence first) excludes empty frame idx 3 -> idx 4 (0.3), idx 1 (0.5)
-        low_two = mining.select(scored, method="confidence", threshold=0.0, order="asc", limit=2)
+        low_two = mining.select(scored, method="confidence", order="asc", limit=2)
         self.assertEqual([frame.source_id for frame in low_two], [str(self.paths[1]), str(self.paths[4])])
 
         # Min aggregator with threshold=0.4 -> idx 0 (0.9) and idx 2 (0.4)
@@ -205,10 +218,12 @@ class MiningOperationsTest(unittest.TestCase):
         no_limit = mining.select(self.data, method="diversity", cluster_result=clusters, per_cluster=1)
         self.assertEqual(len(no_limit), 2)
 
-        # 2. limit > clusters * per_cluster -> round-robin backfill to limit
-        filled = mining.select(self.data, method="diversity", cluster_result=clusters, per_cluster=1, limit=5)
+        # 2. per_cluster=None with limit -> round-robin backfill to limit; explicit per_cluster caps each cluster
+        filled = mining.select(self.data, method="diversity", cluster_result=clusters, limit=5)
         self.assertEqual(len(filled), 5)
         self.assertEqual(len({frame.source_id for frame in filled}), 5)
+        capped_per_cluster = mining.select(self.data, method="diversity", cluster_result=clusters, per_cluster=1, limit=5)
+        self.assertEqual(len(capped_per_cluster), 2)
 
         # 3. limit < number of representatives -> evenly spaced across clusters (not first-cluster biased)
         custom_clusters = ClusterResult(
@@ -380,9 +395,9 @@ class MiningOperationsTest(unittest.TestCase):
 
     def test_invalid_requests_are_explicit(self) -> None:
         with self.assertRaisesRegex(ValueError, "unknown classes"):
-            mining.select(self.data, method="class", classes=["plane"])
+            mining.classes(self.data, ["plane"])
         with self.assertRaisesRegex(ValueError, "at least one"):
-            mining.select(self.data, method="class", classes=[])
+            mining.classes(self.data, [])
         with self.assertRaisesRegex(ValueError, "strategy"):
             mining.balance(self.data, strategy="oversample")
         with self.assertRaisesRegex(ValueError, "clusters"):

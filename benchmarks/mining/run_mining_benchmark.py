@@ -131,7 +131,7 @@ def _build_all_methods(
     per_cls_cov = max(1, budget // num_classes)
     per_cls_quota = max(2, (budget * 2) // num_classes)
 
-    boxes_raw = mining.select(pool, method="boxes", min_boxes=2, min_area_ratio=0.002, limit=budget)
+    boxes_raw = mining.boxes(pool, min_boxes=2, min_area_ratio=0.002, limit=budget)
     boxes_sub = _pad_or_trim_to_budget(boxes_raw, pool, budget, b_scores)
 
     bal_sel_med = _pad_or_trim_to_budget(

@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from statistics import median
+import threading
 from typing import Any, Mapping, Optional, Sequence
 
 import cv2
@@ -21,6 +22,9 @@ from klygo.utils.progress import _iter_progress
 
 from ._common import _Report, _class_filter, _feature_matrix, _quota, _require, _subset
 from .analysis import MiningScores, score, stats
+
+
+_OPENCV_KMEANS_LOCK = threading.Lock()
 
 
 @dataclass
@@ -156,23 +160,27 @@ def cluster(
 
     if method != "kmeans":
         raise ValueError("method must be 'kmeans'")
+    validators.validate_type(seed, int, "seed")
+    if seed < 0:
+        raise ValueError("seed must be non-negative")
     if not 1 <= clusters <= len(data):
         raise ValueError("clusters must be between 1 and the number of images")
 
     names = tuple(features)
     matrix = _feature_matrix(data, names, verbose=verbose)
 
-    # Deterministic K-Means clustering with OpenCV
-    cv2.setRNGSeed(int(seed))
-    for _ in _iter_progress(range(1), verbose, "K-Means clustering", unit="stage"):
-        _, labels, centers = cv2.kmeans(
-            matrix.astype(np.float32),
-            clusters,
-            None,
-            (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-4),
-            1,
-            cv2.KMEANS_PP_CENTERS,
-        )
+    # Deterministic K-Means clustering with OpenCV (serialized for thread safety)
+    with _OPENCV_KMEANS_LOCK:
+        cv2.setRNGSeed(int(seed))
+        for _ in _iter_progress(range(1), verbose, "K-Means clustering", unit="stage"):
+            _, labels, centers = cv2.kmeans(
+                matrix.astype(np.float32),
+                clusters,
+                None,
+                (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-4),
+                1,
+                cv2.KMEANS_PP_CENTERS,
+            )
 
     values = labels.ravel().astype(int).tolist()
     groups: dict[int, list[int]] = defaultdict(list)
@@ -211,23 +219,108 @@ _CONFIDENCE_AGGREGATORS = {
 }
 
 
+def classes(
+    data: Detections,
+    classes: Sequence[str],
+    *,
+    match: str = "any",
+    limit: Optional[int] = None,
+    verbose: bool = False,
+) -> Detections:
+    """Filter images by class label inclusion or exclusion rules.
+
+    Parameters
+    ----------
+    data : Detections
+        Materialized detection collection.
+    classes : Sequence[str]
+        Target class names to match.
+    match : {'any', 'all', 'only', 'exclude'}, default='any'
+        Matching condition: ``'any'``, ``'all'``, ``'only'``, or ``'exclude'``.
+    limit : int, optional
+        Maximum number of images to return.
+    verbose : bool, default=False
+        Display throttled progress for processing stages; disabled by default.
+
+    Returns
+    -------
+    Detections
+        New, independent detection collection containing matching images.
+    """
+    validators.validate_type(verbose, bool, "verbose")
+    _require(data)
+    if limit is not None and limit < 0:
+        raise ValueError("limit must be non-negative or None")
+    if not classes:
+        raise ValueError("classes must contain at least one class for class selection")
+    indices = _class_filter(data, classes, match, verbose=verbose)
+    if limit is not None:
+        indices = indices[:limit]
+    return _subset(data, sorted(indices), "classes")
+
+
+def boxes(
+    data: Detections,
+    *,
+    min_boxes: int = 0,
+    max_boxes: Optional[int] = None,
+    min_area_ratio: float = 0.0,
+    limit: Optional[int] = None,
+    verbose: bool = False,
+) -> Detections:
+    """Filter images by bounding-box count and relative area constraints.
+
+    Parameters
+    ----------
+    data : Detections
+        Materialized detection collection.
+    min_boxes : int, default=0
+        Minimum annotation box count required.
+    max_boxes : int, optional
+        Maximum annotation box count allowed.
+    min_area_ratio : float, default=0.0
+        Minimum relative box area required (fraction of image area).
+    limit : int, optional
+        Maximum number of images to return.
+    verbose : bool, default=False
+        Display throttled progress for processing stages; disabled by default.
+
+    Returns
+    -------
+    Detections
+        New, independent detection collection containing matching images.
+    """
+    validators.validate_type(verbose, bool, "verbose")
+    _require(data)
+    if limit is not None and limit < 0:
+        raise ValueError("limit must be non-negative or None")
+    indices: list[int] = []
+    for index, frame in enumerate(_iter_progress(data, verbose, "Filtering by boxes")):
+        width, height = frame.image_size
+        areas = [box.width * box.height / (width * height) for box in frame]
+        if (
+            len(frame) >= min_boxes
+            and (max_boxes is None or len(frame) <= max_boxes)
+            and (min_area_ratio <= 0 or max(areas, default=0) >= min_area_ratio)
+        ):
+            indices.append(index)
+    if limit is not None:
+        indices = indices[:limit]
+    return _subset(data, sorted(indices), "boxes")
+
+
 def select(
     data: Detections,
     *,
     method: str = "weighted",
     limit: Optional[int] = None,
-    classes: Optional[Sequence[str]] = None,
-    match: str = "any",
-    threshold: float = 0.5,
+    threshold: Optional[float] = None,
     aggregate: str = "mean",
     order: str = "desc",
-    min_boxes: int = 0,
-    max_boxes: Optional[int] = None,
-    min_area_ratio: float = 0.0,
-    per_class: int | Mapping[str, int] = 1,
+    per_class: Optional[int | Mapping[str, int]] = None,
     scores: Optional[MiningScores] = None,
     cluster_result: Optional[ClusterResult] = None,
-    per_cluster: int = 1,
+    per_cluster: Optional[int] = None,
     seed: int = 42,
     verbose: bool = False,
 ) -> Detections:
@@ -261,9 +354,11 @@ def select(
         - `'all'`: image must contain all requested classes.
         - `'only'`: image must contain only requested classes (no other classes).
         - `'exclude'`: image must not contain any of the requested classes.
-    threshold : float, default=0.5
+    threshold : float, optional
         Minimum composite quality score required when `method='quality'`, or
         minimum aggregated box confidence score required when `method='confidence'`.
+        When ``None`` (default), no threshold filter is applied and images are
+        ranked directly up to ``limit``.
     aggregate : {'mean', 'min', 'max', 'median'}, default='mean'
         Aggregation function applied to per-frame box confidence scores when
         `method='confidence'`.
@@ -276,14 +371,20 @@ def select(
         Maximum annotation box count allowed when `method='boxes'`.
     min_area_ratio : float, default=0.0
         Minimum relative box area required when `method='boxes'`.
-    per_class : int or Mapping[str, int], default=1
+    per_class : int or Mapping[str, int], optional
         Target quota per class when `method='quota'` or `method='coverage'`.
+        When ``None`` and ``limit`` is provided, balanced quota rounds repeat
+        until ``limit`` images are selected. When ``None`` and ``limit`` is
+        also ``None``, defaults to 1 image per class.
     scores : MiningScores, optional
         Pre-computed scores instance to avoid re-evaluating metrics.
     cluster_result : ClusterResult, optional
         Pre-computed clustering instance used when `method='diversity'`.
-    per_cluster : int, default=1
-        Number of representative samples to draw per cluster in diversity selection.
+    per_cluster : int, optional
+        Maximum number of samples to draw per cluster in diversity selection.
+        When ``None`` and ``limit`` is provided, round-robin selection continues
+        across clusters until ``limit`` images are selected. When both are
+        ``None``, defaults to 1 per cluster.
     seed : int, default=42
         RNG seed for reproducible random or diversity sampling.
 
@@ -321,14 +422,8 @@ def select(
 
     method = method.lower()
 
-    # 1. Class-based filtering
-    if method == "class":
-        if not classes:
-            raise ValueError("classes must contain at least one class for class selection")
-        indices = _class_filter(data, classes, match, verbose=verbose)
-
-    # 2. Random uniform sampling
-    elif method == "random":
+    # 1. Random uniform sampling
+    if method == "random":
         count = min(len(data), len(data) if limit is None else limit)
         indices = sorted(
             np.random.default_rng(seed).choice(len(data), count, replace=False).tolist()
@@ -350,45 +445,34 @@ def select(
                 index,
             ),
         )
-        if method == "quality":
+        if method == "quality" and threshold is not None:
             ranked = [index for index in ranked if report.values[index] >= threshold]
         indices = ranked[:limit]
 
-    # 4. Box geometry and count constraints
-    elif method == "boxes":
-        indices = []
-        for index, frame in enumerate(_iter_progress(data, verbose, "Selecting images")):
-            width, height = frame.image_size
-            areas = [box.width * box.height / (width * height) for box in frame]
-            if (
-                len(frame) >= min_boxes
-                and (max_boxes is None or len(frame) <= max_boxes)
-                and (min_area_ratio <= 0 or max(areas, default=0) >= min_area_ratio)
-            ):
-                indices.append(index)
-
     # 5. Class quota and coverage optimization
     elif method in {"quota", "coverage"}:
-        quotas = (
-            {label: int(per_class) for label in data.names.values()}
-            if isinstance(per_class, int)
-            else {str(k): int(v) for k, v in per_class.items()}
+        if per_class is None:
+            quotas = {label: 1 for label in data.names.values()}
+            repeat_rounds = limit is not None
+        else:
+            quotas = (
+                {label: int(per_class) for label in data.names.values()}
+                if isinstance(per_class, int)
+                else {str(k): int(v) for k, v in per_class.items()}
+            )
+            repeat_rounds = False
+        indices = _quota(
+            data,
+            quotas,
+            limit,
+            verbose=verbose,
+            seed=seed,
+            repeat_rounds=repeat_rounds,
         )
-        indices = _quota(data, quotas, limit, verbose=verbose, seed=seed)
-        if method == "coverage" and limit is not None and len(indices) < min(limit, len(data)):
-            remaining_set = set(range(len(data))) - set(indices)
-            if remaining_set:
-                target_need = min(limit, len(data)) - len(indices)
-                remaining_candidates = sorted(
-                    remaining_set,
-                    key=lambda idx: (len(data[idx].boxes), -idx),
-                    reverse=True,
-                )
-                indices.extend(remaining_candidates[:target_need])
 
     # 6. Cluster-based visual diversity sampling
     elif method == "diversity":
-        if per_cluster <= 0:
+        if per_cluster is not None and per_cluster <= 0:
             raise ValueError("per_cluster must be positive")
         if not len(data):
             indices = []
@@ -414,20 +498,19 @@ def select(
                     if representative in group
                     else list(group)
                 )
-                buckets.append(ordered)
+                buckets.append(ordered[:per_cluster] if per_cluster is not None else ordered)
 
             if limit is None:
-                chosen = [index for bucket in buckets for index in bucket[:per_cluster]]
+                cap = 1 if per_cluster is None else per_cluster
+                chosen = [index for bucket in buckets for index in bucket[:cap]]
             else:
                 target = min(limit, len(data))
                 if target == 0 or not buckets:
                     chosen = []
                 elif len(buckets) > target:
-                    # Evenly sample target distinct clusters and take each cluster's representative
                     selected_clusters = [int(i * len(buckets) / target) for i in range(target)]
                     chosen = [buckets[idx][0] for idx in selected_clusters]
                 else:
-                    # Round-robin across clusters from round 0 (representatives first, then extras/backfill)
                     chosen = []
                     offset = 0
                     while len(chosen) < target:
@@ -445,7 +528,7 @@ def select(
 
     # 7. Box confidence aggregation and ranking
     elif method == "confidence":
-        if not 0.0 <= threshold <= 1.0:
+        if threshold is not None and not 0.0 <= threshold <= 1.0:
             raise ValueError("threshold must be between 0.0 and 1.0 for confidence selection")
         agg_key = aggregate.lower()
         aggregator = _CONFIDENCE_AGGREGATORS.get(agg_key)
@@ -461,7 +544,7 @@ def select(
             if not frame_scores:
                 continue
             value = aggregator(frame_scores)
-            if value >= threshold:
+            if threshold is None or value >= threshold:
                 candidates.append((index, value))
 
         ranked = sorted(
@@ -472,7 +555,7 @@ def select(
 
     else:
         raise ValueError(
-            "method must be class, quality, confidence, boxes, random, quota, rare_first, coverage, diversity, or weighted"
+            "method must be quality, confidence, random, quota, rare_first, coverage, diversity, or weighted"
         )
 
     # Apply global limit if not already applied
@@ -485,11 +568,12 @@ def select(
 
     # Record unmet quotas in metadata for auditability
     if method in {"quota", "coverage"}:
-        quotas = (
-            {label: int(per_class) for label in data.names.values()}
-            if isinstance(per_class, int)
-            else {str(k): int(v) for k, v in per_class.items()}
-        )
+        if per_class is None:
+            quotas = {label: 1 for label in data.names.values()}
+        elif isinstance(per_class, int):
+            quotas = {label: int(per_class) for label in data.names.values()}
+        else:
+            quotas = {str(k): int(v) for k, v in per_class.items()}
         actual = Counter(label for frame in result for label in set(frame.labels))
         result.metadata["mining"]["unmet_quotas"] = {
             label: target - actual[label]

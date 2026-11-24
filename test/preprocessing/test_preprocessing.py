@@ -206,3 +206,26 @@ class TestPreprocessing(unittest.TestCase):
         assert isinstance(p.percentile(50, image), float)
         assert isinstance(p.perceptual_hash(image), str)
         assert p.similarity_score(image)(image) == 1.0
+
+    def test_compose_local_seed_is_reproducible_and_isolated(self):
+        import random
+
+        image = Image.new("RGB", (64, 48))
+        for x in range(64):
+            for y in range(48):
+                image.putpixel((x, y), (x * 3 % 256, y * 5 % 256, (x + y) % 256))
+
+        random.seed(12345)
+        expected_global_next = random.random()
+        random.seed(12345)
+
+        pipe1 = p.compose(p.seed(42), p.random_crop((16, 16)), p.random_flip(horizontal=True, probability=0.5))
+        pipe2 = p.compose(p.seed(42), p.random_crop((16, 16)), p.random_flip(horizontal=True, probability=0.5))
+
+        out1 = p.materialize(pipe1(image), output="native")
+        self.assertEqual(random.random(), expected_global_next)
+        out2 = p.materialize(pipe2(image), output="native")
+        self.assertEqual(list(out1.getdata()), list(out2.getdata()))
+
+        with self.assertRaises(ValueError):
+            p.seed(-1)

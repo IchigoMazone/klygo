@@ -478,6 +478,7 @@ def _quota(
     count_by: str = "images",
     seed: Optional[int] = None,
     verbose: bool = False,
+    repeat_rounds: bool = False,
 ) -> list[int]:
     """Greedily select frames to fulfill specified per-class target quotas.
 
@@ -508,25 +509,29 @@ def _quota(
     counts: Counter[str] = Counter()
     remaining = set(range(len(data)))
     chosen: list[int] = []
+    active_quotas = dict(quotas)
     tie_ranks = (
         np.random.default_rng(seed).permutation(len(data)).tolist()
         if seed is not None and len(data) > 0
         else None
     )
 
+    def contribution(index: int) -> Counter[str]:
+        return (
+            Counter(data[index].labels)
+            if count_by == "boxes"
+            else Counter(set(data[index].labels))
+        )
+
     for _ in _iter_progress(range(len(data) if limit is None else min(len(data), limit)), verbose, "Selecting class quotas"):
         if not remaining:
             break
-        deficits = {label: max(0, target - counts[label]) for label, target in quotas.items()}
+        deficits = {label: max(0, target - counts[label]) for label, target in active_quotas.items()}
         if not any(deficits.values()):
-            break
-
-        def contribution(index: int) -> Counter[str]:
-            return (
-                Counter(data[index].labels)
-                if count_by == "boxes"
-                else Counter(set(data[index].labels))
-            )
+            if not repeat_rounds:
+                break
+            active_quotas = {label: target + 1 for label, target in active_quotas.items()}
+            deficits = {label: max(0, target - counts[label]) for label, target in active_quotas.items()}
 
         # Greedily pick the candidate maximizing deficit fulfillment
         candidate = max(
@@ -540,7 +545,24 @@ def _quota(
         values = contribution(candidate)
         gain = sum(min(deficits.get(label, 0), amount) for label, amount in values.items())
         if gain <= 0:
-            break
+            if not repeat_rounds:
+                break
+            remaining_labels = {lbl for idx in remaining for lbl in data[idx].labels}
+            if remaining_labels:
+                for lbl in remaining_labels:
+                    active_quotas[lbl] = max(active_quotas.get(lbl, 0), counts[lbl]) + 1
+                deficits = {label: max(0, target - counts[label]) for label, target in active_quotas.items()}
+                candidate = max(
+                    remaining,
+                    key=lambda index: (
+                        sum(min(deficits.get(label, 0), amount) for label, amount in contribution(index).items()),
+                        -(tie_ranks[index] if tie_ranks is not None else index),
+                    ),
+                )
+                values = contribution(candidate)
+            else:
+                candidate = min(remaining, key=lambda idx: tie_ranks[idx] if tie_ranks is not None else idx)
+                values = Counter()
 
         chosen.append(candidate)
         counts.update(values)

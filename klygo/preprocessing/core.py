@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import random
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, Union
 
 import cv2 as cv
@@ -456,7 +457,13 @@ def _image_size(value: Any) -> Tuple[int, int]:
     return int(array.shape[1]), int(array.shape[0])
 
 
-def execute_operation(value: Any, operation: Operation, trace: List[Dict[str, Any]]) -> Any:
+def execute_operation(
+    value: Any,
+    operation: Operation,
+    trace: List[Dict[str, Any]],
+    *,
+    rng: Optional[random.Random] = None,
+) -> Any:
     if "function" in operation.params:
         before = _image_size(value) if operation.changes_geometry else None
         result = operation.params["function"](value, **operation.params.get("kwargs", {}))
@@ -472,7 +479,7 @@ def execute_operation(value: Any, operation: Operation, trace: List[Dict[str, An
     if executor is None:
         from .transforms import execute_builtin
 
-        executor = execute_builtin
+        return execute_builtin(value, operation, trace, rng=rng)
     return executor(value, operation, trace)
 
 
@@ -480,6 +487,8 @@ def execute_pipeline(
     value: Any,
     operations: Sequence[Operation],
     trace: Optional[List[Dict[str, Any]]] = None,
+    *,
+    rng: Optional[random.Random] = None,
 ) -> Tuple[Any, List[Dict[str, Any]]]:
     """Create or execute execute pipeline for an image preprocessing pipeline.
 
@@ -491,6 +500,8 @@ def execute_pipeline(
         Ordered preprocessing operations to compose or execute.
     trace : Optional[List[Dict[str, Any]]]
         Recorded geometry transformations.
+    rng : Optional[random.Random], default=None
+        Optional local random generator scoped to this pipeline run.
 
     Returns
     -------
@@ -498,9 +509,13 @@ def execute_pipeline(
         An operation, pipeline, predicate, metric, or evaluated image result.
     """
     active_trace = trace if trace is not None else []
+    active_rng = rng
     result = value
     for operation in operations:
-        result = execute_operation(result, operation, active_trace)
+        if operation.name == "seed":
+            active_rng = random.Random(int(operation.params["value"]))
+            continue
+        result = execute_operation(result, operation, active_trace, rng=active_rng)
     return result, active_trace
 
 

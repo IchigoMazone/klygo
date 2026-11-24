@@ -57,6 +57,15 @@ class TestReports(unittest.TestCase):
         self.assertEqual(loaded["total_time_s"], 150.0)
         self.assertIn("f1", loaded["best_metrics"])
 
+        from klygo import archive
+
+        zip_run = self.root / "S1_42.zip"
+        archive.compress(s1_a, zip_run, format="zip", verbose=False)
+        loaded_zip = reports.load(zip_run, format="yolo")
+        self.assertEqual(loaded_zip["best_epoch"], loaded["best_epoch"])
+        self.assertEqual(loaded_zip["total_time_s"], loaded["total_time_s"])
+        self.assertEqual(loaded_zip["best_metrics"], loaded["best_metrics"])
+
         grouped = reports.aggregate_runs(
             {"S1": [s1_a, s1_b], "S4": [s4_a, s4_b]},
             compare_pair=("S4", "S1"),

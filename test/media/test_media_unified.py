@@ -46,7 +46,7 @@ class TestMediaUnified(unittest.TestCase):
 
         # One public container type represents both modes.
         self.assertIs(type(loaded), media.MediaFrames)
-        self.assertIsInstance(loaded, list)
+        self.assertNotIsInstance(loaded, list)
 
         self.assertIs(type(streamed), media.MediaFrames)
 
@@ -56,7 +56,7 @@ class TestMediaUnified(unittest.TestCase):
         self.assertFalse(indexed.is_stream)
         self.assertTrue(indexed.is_indexed)
         self.assertEqual(len(indexed), 5)
-        self.assertEqual(list.__len__(indexed), 0)
+        self.assertEqual(len(indexed._items), 0)
         self.assertEqual(indexed.loaded_count, 0)
 
         first = indexed[0]
@@ -77,7 +77,7 @@ class TestMediaUnified(unittest.TestCase):
         indexed = media.load(self.img_dir, indexed=True)
         transformed = indexed.transform(preprocessing.resize((10, 8)))
         self.assertTrue(transformed.is_indexed)
-        self.assertEqual(list.__len__(transformed), 0)
+        self.assertEqual(len(transformed._items), 0)
         self.assertEqual(transformed[0].size, (10, 8))
 
         replacement = Image.new("RGB", (7, 7), "red")
@@ -96,13 +96,20 @@ class TestMediaUnified(unittest.TestCase):
         copied.reverse()
         self.assertEqual(list(reversed(copied)), list(indexed))
 
+        other_indexed = media.load(self.img_dir, indexed=True)
+        before_count = len(indexed)
+        indexed.extend(other_indexed)
+        self.assertEqual(len(indexed), before_count + len(other_indexed))
+        self.assertEqual(len(indexed._items), 0)
+        self.assertEqual(indexed.loaded_count, 0)
+
     def test_indexed_video_keeps_frame_numbers_without_proxies(self):
         indexed = media.load(self.video_path, indexed=True)
         self.addCleanup(indexed.close)
 
         self.assertTrue(indexed.is_indexed)
         self.assertEqual(len(indexed), 6)
-        self.assertEqual(list.__len__(indexed), 0)
+        self.assertEqual(len(indexed._items), 0)
         self.assertEqual(indexed[3].frame_index, 3)
         self.assertIs(indexed[3], indexed[3])
         with self.assertRaisesRegex(ValueError, "mutually exclusive"):
@@ -167,7 +174,7 @@ class TestMediaUnified(unittest.TestCase):
 
         materialized = media.MediaFrames(self.video_path, stream=False)
         self.assertIs(type(materialized), media.MediaFrames)
-        self.assertIsInstance(materialized, list)
+        self.assertNotIsInstance(materialized, list)
         self.assertFalse(materialized.is_stream)
 
         default_mode = media.MediaFrames(self.video_path)
@@ -306,6 +313,27 @@ class TestMediaUnified(unittest.TestCase):
             self.assertTrue(stream.is_stream)
             first = next(iter(stream))
             self.assertIsNotNone(first)
+
+    def test_save_images_and_load_zip_all_modes(self):
+        zip_path = self.img_dir.parent / "batch.zip"
+        loaded = media.load(self.img_dir, stream=False)
+        media.save_images(zip_path, loaded, extension=".png")
+        self.assertTrue(zip_path.is_file())
+
+        with self.assertRaises(FileExistsError):
+            media.save_images(zip_path, loaded, extension=".png", overwrite=False)
+
+        with media.load(zip_path, stream=False) as eager_zip:
+            self.assertEqual(len(eager_zip), 5)
+            self.assertEqual(eager_zip[0].load().size, (32, 24))
+
+        with media.load(zip_path, indexed=True) as indexed_zip:
+            self.assertEqual(len(indexed_zip), 5)
+            self.assertEqual(indexed_zip[2].load().size, (32, 24))
+
+        with media.load(zip_path, stream=True) as stream_zip:
+            self.assertTrue(stream_zip.is_stream)
+            self.assertEqual(len(list(stream_zip)), 5)
 
 
 if __name__ == "__main__":

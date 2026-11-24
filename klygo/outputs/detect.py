@@ -2732,6 +2732,54 @@ class Detections:
             self._baseline_identities = tuple(frame.identity for frame in self._frames)
         self._record("shuffle", seed=seed)
 
+    def reverse(self) -> None:
+        """Reverse collection frames in place."""
+        self._require_materialized("reverse()")
+        if len(self) <= 1:
+            return
+        if self._packed_store is not None:
+            if self._packed_store.permutation is None:
+                self._packed_store.permutation = list(range(len(self._packed_store)))
+            self._packed_store.permutation.reverse()
+            self._baseline_identities = tuple(self._packed_store.identities)
+        else:
+            self._frames.reverse()
+            self._identity_map = {frame.identity: frame for frame in self._frames}
+            self._baseline_identities = tuple(frame.identity for frame in self._frames)
+        self._record("reverse")
+
+    def sort(self, *, key: Optional[Callable[[Detection], Any]] = None, reverse: bool = False) -> None:
+        """Sort collection frames in place.
+
+        Parameters
+        ----------
+        key : callable or None, default=None
+            Sort key accepting a ``Detection`` frame. Defaults to
+            ``(frame.source_id, frame.frame_index)``.
+        reverse : bool, default=False
+            Sort in descending order when True.
+        """
+        self._require_materialized("sort()")
+        if key is not None and not callable(key):
+            raise TypeError("key must be callable or None")
+        validators.validate_type(reverse, bool, "reverse")
+        if len(self) <= 1:
+            return
+        sort_key = key if key is not None else (lambda frame: (frame.source_id, frame.frame_index))
+        if self._packed_store is not None:
+            perm = self._packed_store.permutation
+            if perm is None:
+                perm = list(range(len(self._packed_store)))
+            decorated = [(sort_key(self[index]), perm[index]) for index in range(len(self))]
+            decorated.sort(key=lambda pair: pair[0], reverse=reverse)
+            self._packed_store.permutation = [pair[1] for pair in decorated]
+            self._baseline_identities = tuple(self._packed_store.identities)
+        else:
+            self._frames.sort(key=sort_key, reverse=reverse)
+            self._identity_map = {frame.identity: frame for frame in self._frames}
+            self._baseline_identities = tuple(frame.identity for frame in self._frames)
+        self._record("sort", reverse=reverse)
+
     def get_frame(self, frame_index: int, *, source_id: Optional[str] = None) -> Detection:
         """Return a frame by stable source identity."""
         self._require_materialized("get_frame()")
@@ -3285,6 +3333,31 @@ class Detections:
         if format != "yolo": raise ValueError("format must be 'yolo' or 'json'")
 
         output_dir = files.path(path)
+        if files.extension(output_dir).lower() == ".zip":
+            if files.exists(output_dir) and not overwrite:
+                raise FileExistsError(f"output path already exists: {output_dir}")
+            import tempfile
+            from klygo import archive
+
+            with tempfile.TemporaryDirectory(prefix="klygo_export_") as temp_dir:
+                self.export(
+                    temp_dir,
+                    format="yolo",
+                    image=image,
+                    images_dir=images_dir,
+                    labels_dir=labels_dir,
+                    yaml_name=yaml_name,
+                    overwrite=True,
+                )
+                archive.compress(
+                    temp_dir,
+                    output_dir,
+                    format="zip",
+                    overwrite=overwrite,
+                    verbose=False,
+                    include_root=False,
+                )
+            return
         labels_root = files.join(output_dir, resolved_labels_dir)
         yaml_path = files.join(output_dir, resolved_yaml_name)
         targets = [labels_root, yaml_path]

@@ -132,9 +132,13 @@ def _resolve(name: Any) -> Optional[Dict[str, Any]]:
 
                 return entry
 
-    if isinstance(name, (str, os.PathLike)) and str(name).strip().lower().endswith(".pt"):
+    if isinstance(name, (str, os.PathLike)):
         name_str = str(name).strip()
-        return {
+        lower_name = name_str.lower()
+        if lower_name.endswith(".pt") and not lower_name.endswith(
+            ("-seg.pt", "-cls.pt", "-pose.pt", "-obb.pt")
+        ):
+            return {
             "class": "klygo.models.detection.YOLODetect",
             "details": {
                 "backend": "Ultralytics",

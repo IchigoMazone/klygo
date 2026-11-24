@@ -89,6 +89,6 @@ class TestCrossModules(unittest.TestCase):
 
         # Verify files.load and media.load behavior differences
         # files.load on config -> returns dict/Box
-        # media.load on image -> returns list of images
+        # media.load on image -> returns MediaFrames collection
         assert isinstance(files.load(txt_file), str)
-        assert isinstance(media.load(img_file), list)
+        assert isinstance(media.load(img_file), media.MediaFrames)

@@ -281,8 +281,10 @@ def grid(
     return_figure : bool, default=False
         Return the underlying Matplotlib ``Figure`` instead of closing it.
     """
-    validators.validate_type(items, (list, tuple), "items")
-    if not items:
+    if isinstance(items, (str, bytes, bytearray)):
+        raise TypeError(f"items must be a Sequence or MediaFrames, got {type(items).__name__}")
+    validators.validate_type(items, (Sequence, media.MediaFrames), "items")
+    if not len(items):
         raise ValueError("items must not be empty")
 
     cells: list[GridCell] = [
