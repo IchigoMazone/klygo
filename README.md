@@ -4,8 +4,9 @@
   <a href="https://pypi.org/project/klygo/"><img src="https://img.shields.io/pypi/v/klygo.svg" alt="PyPI version"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+"></a>
   <a href="https://github.com/IchigoMazone/klygo/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
-  <a href="https://github.com/IchigoMazone/klygo/actions"><img src="https://img.shields.io/badge/tests-passing-success.svg" alt="Test Suite"></a>
   <a href="https://deepwiki.com/IchigoMazone/klygo"><img src="https://img.shields.io/badge/Ask-DeepWiki-blue.svg" alt="Ask DeepWiki"></a>
+  <a href="https://hub.xerj.org/contributors/IchigoMazone"><img src="https://hub.xerj.org/contributors/IchigoMazone/badge.svg" alt="XERJ Corpus Hub contributor"></a>
+  <a href="https://pypistats.com/packages/klygo"><img src="https://pypistats.com/api/badges/klygo?period=month" alt="PyPI Stats"></a>
 </p>
 
 <p align="center">
